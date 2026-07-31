@@ -96,6 +96,11 @@ class WorkPackageCrewRunner:
                 "Rules:\n"
                 "- Use only tracked paths or explicit new paths under an "
                 "approved directory.\n"
+                "- Every NEW file path in file_scope.allowed_files MUST have "
+                "its parent directory listed in file_scope.allowed_directories. "
+                "For example, a new file src/main.py requires "
+                "allowed_directories = [\"src\"]. Never leave "
+                "allowed_directories empty when any new file is proposed.\n"
                 "- Never allow .git, .env, credentials, host configuration, "
                 "Docker socket access or system directories.\n"
                 "- Default network policy to none.\n"
@@ -117,7 +122,8 @@ class WorkPackageCrewRunner:
                 "Independently review the proposed work package.\n\n"
                 "Reject or correct:\n"
                 "- excessive scope;\n"
-                "- missing file boundaries;\n"
+                "- missing file boundaries (every NEW file's parent "
+                "directory must be declared in file_scope.allowed_directories);\n"
                 "- shell command strings;\n"
                 "- privileged operations;\n"
                 "- unnecessary network access;\n"
@@ -151,8 +157,8 @@ class WorkPackageCrewRunner:
                 }
             ],
             "file_scope": {
-                "allowed_files": ["relative/path.py"],
-                "allowed_directories": [],
+                "allowed_files": ["src/main.py"],
+                "allowed_directories": ["src"],
                 "forbidden_files": [".env"],
                 "forbidden_directories": [".git"],
                 "maximum_changed_files": 12,
