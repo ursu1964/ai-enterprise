@@ -38,8 +38,10 @@ class WorkPackageCrewRunner:
             temperature=0.0,
             timeout=900,
             additional_params={
-                "num_ctx": 16384,
-                "num_predict": 8192,
+                "extra_body": {
+                    "num_ctx": 16384,
+                    "num_predict": 8192,
+                },
             },
         )
 
