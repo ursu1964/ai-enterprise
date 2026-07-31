@@ -1104,6 +1104,24 @@ class ProjectWorkflowService:
             )
 
             parsed = parse_model_json(result.raw_json)
+
+            # Identity fields are assigned by the system of record. The
+            # crew cannot redirect the work package to different artifacts.
+            parsed["project_id"] = str(project.id)
+            parsed["base_commit_sha"] = repository.commit_sha
+            parsed["source_requirements_artifact_id"] = str(
+                requirements_artifact.id
+            )
+            parsed["source_requirements_hash"] = (
+                requirements_artifact.content_hash
+            )
+            parsed["source_architecture_artifact_id"] = str(
+                architecture_artifact.id
+            )
+            parsed["source_architecture_hash"] = (
+                architecture_artifact.content_hash
+            )
+
             contract = WorkPackageContract.model_validate(parsed)
 
             if contract.project_id != str(project.id):
