@@ -37,6 +37,10 @@ class WorkPackageCrewRunner:
             base_url=self._settings.ollama_base_url,
             temperature=0.0,
             timeout=900,
+            additional_params={
+                "num_ctx": 16384,
+                "num_predict": 8192,
+            },
         )
 
         planner = Agent(
@@ -119,8 +123,11 @@ class WorkPackageCrewRunner:
 
         review_task = Task(
             description=(
-                "Independently review the proposed work package.\n\n"
-                "Reject or correct:\n"
+                "Review the proposed work-package contract. If any defect "
+                "exists, FIX it inside the JSON contract.\n\n"
+                "The contract must match this shape:\n"
+                "{contract_schema}\n\n"
+                "Check and correct:\n"
                 "- excessive scope;\n"
                 "- missing file boundaries (every NEW file's parent "
                 "directory must be declared in file_scope.allowed_directories);\n"
@@ -131,9 +138,13 @@ class WorkPackageCrewRunner:
                 "- vague acceptance criteria;\n"
                 "- source artifact IDs or hashes that changed;\n"
                 "- modifications to secrets, .git or host configuration.\n\n"
-                "Return only the corrected final JSON object."
+                "You must ALWAYS return the complete corrected contract as a "
+                "single JSON object. Never return a rejection object, a "
+                "\"status\" field, lists, Markdown, or any other shape."
             ),
-            expected_output="A corrected valid JSON object only.",
+            expected_output=(
+                "The complete corrected JSON work-package contract only."
+            ),
             agent=boundary_reviewer,
             context=[planning_task],
         )
