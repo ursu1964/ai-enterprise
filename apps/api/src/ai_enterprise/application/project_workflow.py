@@ -232,25 +232,25 @@ class ProjectWorkflowService:
 
         project = await self._get_project(run.project_id)
 
-        run.status = RunStatus.RUNNING
-        run.started_at = datetime.now(UTC)
-        run.error_message = None
-        project.status = ProjectStatus.REQUIREMENTS_RUNNING
-
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="requirements.run.started",
-                actor_type="system",
-                actor_id="requirements-worker",
-                payload={"run_id": str(run.id)},
-            )
-        )
-
-        await self._session.commit()
-
         try:
+            run.status = RunStatus.RUNNING
+            run.started_at = datetime.now(UTC)
+            run.error_message = None
+            project.status = ProjectStatus.REQUIREMENTS_RUNNING
+
+            self._session.add(
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="requirements.run.started",
+                    actor_type="system",
+                    actor_id="requirements-worker",
+                    payload={"run_id": str(run.id)},
+                )
+            )
+
+            await self._session.commit()
+
             runner = RequirementsCrewRunner(self._settings)
 
             crew_result = await asyncio.to_thread(
@@ -311,6 +311,14 @@ class ProjectWorkflowService:
             await self._session.commit()
 
         except Exception as exc:
+            await self._session.rollback()
+
+            run = await self._session.get(CrewRunModel, run_id)
+            project = await self._session.get(
+                ProjectModel,
+                run.project_id,
+            )
+
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
             run.error_message = str(exc)
@@ -550,75 +558,75 @@ class ProjectWorkflowService:
 
         project = await self._get_project(run.project_id)
 
-        artifact_id = uuid.UUID(
-            run.input_payload["requirements_artifact_id"]
-        )
-
-        artifact_result = await self._session.execute(
-            select(ArtifactModel).where(
-                ArtifactModel.id == artifact_id,
-                ArtifactModel.project_id == project.id,
-                ArtifactModel.artifact_type
-                == ArtifactType.REQUIREMENTS_SPECIFICATION,
-            )
-        )
-
-        requirements_artifact = artifact_result.scalar_one_or_none()
-
-        if requirements_artifact is None:
-            raise ArtifactNotFoundError(str(artifact_id))
-
-        expected_hash = run.input_payload[
-            "requirements_artifact_hash"
-        ]
-
-        actual_hash = hash_text(requirements_artifact.content)
-
-        if actual_hash != expected_hash:
-            raise RuntimeError(
-                "Requirements artifact integrity check failed"
-            )
-
-        approval_result = await self._session.execute(
-            select(ApprovalModel).where(
-                ApprovalModel.project_id == project.id,
-                ApprovalModel.artifact_id == requirements_artifact.id,
-                ApprovalModel.decision == ApprovalDecision.APPROVED,
-            )
-        )
-
-        if approval_result.scalar_one_or_none() is None:
-            raise InvalidProjectStateError(
-                "Architecture cannot run without approved requirements"
-            )
-
-        run.status = RunStatus.RUNNING
-        run.started_at = datetime.now(UTC)
-        run.error_message = None
-        project.status = ProjectStatus.ARCHITECTURE_RUNNING
-
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="architecture.run.started",
-                actor_type="system",
-                actor_id="architecture-worker",
-                payload={
-                    "run_id": str(run.id),
-                    "requirements_artifact_id": str(
-                        requirements_artifact.id
-                    ),
-                    "requirements_artifact_hash": (
-                        requirements_artifact.content_hash
-                    ),
-                },
-            )
-        )
-
-        await self._session.commit()
-
         try:
+            artifact_id = uuid.UUID(
+                run.input_payload["requirements_artifact_id"]
+            )
+
+            artifact_result = await self._session.execute(
+                select(ArtifactModel).where(
+                    ArtifactModel.id == artifact_id,
+                    ArtifactModel.project_id == project.id,
+                    ArtifactModel.artifact_type
+                    == ArtifactType.REQUIREMENTS_SPECIFICATION,
+                )
+            )
+
+            requirements_artifact = artifact_result.scalar_one_or_none()
+
+            if requirements_artifact is None:
+                raise ArtifactNotFoundError(str(artifact_id))
+
+            expected_hash = run.input_payload[
+                "requirements_artifact_hash"
+            ]
+
+            actual_hash = hash_text(requirements_artifact.content)
+
+            if actual_hash != expected_hash:
+                raise RuntimeError(
+                    "Requirements artifact integrity check failed"
+                )
+
+            approval_result = await self._session.execute(
+                select(ApprovalModel).where(
+                    ApprovalModel.project_id == project.id,
+                    ApprovalModel.artifact_id == requirements_artifact.id,
+                    ApprovalModel.decision == ApprovalDecision.APPROVED,
+                )
+            )
+
+            if approval_result.scalar_one_or_none() is None:
+                raise InvalidProjectStateError(
+                    "Architecture cannot run without approved requirements"
+                )
+
+            run.status = RunStatus.RUNNING
+            run.started_at = datetime.now(UTC)
+            run.error_message = None
+            project.status = ProjectStatus.ARCHITECTURE_RUNNING
+
+            self._session.add(
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="architecture.run.started",
+                    actor_type="system",
+                    actor_id="architecture-worker",
+                    payload={
+                        "run_id": str(run.id),
+                        "requirements_artifact_id": str(
+                            requirements_artifact.id
+                        ),
+                        "requirements_artifact_hash": (
+                            requirements_artifact.content_hash
+                        ),
+                    },
+                )
+            )
+
+            await self._session.commit()
+
             runner = ArchitectureCrewRunner(self._settings)
 
             crew_result = await asyncio.to_thread(
@@ -712,6 +720,14 @@ class ProjectWorkflowService:
             await self._session.commit()
 
         except Exception as exc:
+            await self._session.rollback()
+
+            run = await self._session.get(CrewRunModel, run_id)
+            project = await self._session.get(
+                ProjectModel,
+                run.project_id,
+            )
+
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
             run.error_message = str(exc)
@@ -971,87 +987,93 @@ class ProjectWorkflowService:
 
         project = await self._get_project(run.project_id)
 
-        requirements_artifact_id = uuid.UUID(
-            run.input_payload["requirements_artifact_id"]
-        )
-
-        architecture_artifact_id = uuid.UUID(
-            run.input_payload["architecture_artifact_id"]
-        )
-
-        requirements_artifact = await self._session.get(
-            ArtifactModel,
-            requirements_artifact_id,
-        )
-
-        architecture_artifact = await self._session.get(
-            ArtifactModel,
-            architecture_artifact_id,
-        )
-
-        if requirements_artifact is None:
-            raise ArtifactNotFoundError(
-                str(requirements_artifact_id)
-            )
-
-        if architecture_artifact is None:
-            raise ArtifactNotFoundError(
-                str(architecture_artifact_id)
-            )
-
-        expected_requirements_hash = run.input_payload[
-            "requirements_artifact_hash"
-        ]
-
-        expected_architecture_hash = run.input_payload[
-            "architecture_artifact_hash"
-        ]
-
-        if hash_text(requirements_artifact.content) != expected_requirements_hash:
-            raise RuntimeError(
-                "Requirements artifact integrity check failed"
-            )
-
-        if hash_text(architecture_artifact.content) != expected_architecture_hash:
-            raise RuntimeError(
-                "Architecture artifact integrity check failed"
-            )
-
-        inspector = GitRepositoryInspector(
-            allowed_root=self._settings.repository_allowed_root,
-        )
-
-        repository = await inspector.inspect(
-            project.repository_path
-        )
-
-        if not repository.is_clean:
-            raise InvalidProjectStateError(
-                "Repository must be clean before work-package planning"
-            )
-
-        run.status = RunStatus.RUNNING
-        run.started_at = datetime.now(UTC)
-        run.error_message = None
-        project.status = ProjectStatus.WORK_PACKAGE_PLANNING
-
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="work_package.planning.started",
-                actor_type="system",
-                actor_id="work-package-worker",
-                payload={
-                    "run_id": str(run.id),
-                    "base_commit_sha": repository.commit_sha,
-                },
-            )
-        )
-
-        await self._session.commit()
-
         try:
+            requirements_artifact_id = uuid.UUID(
+                run.input_payload["requirements_artifact_id"]
+            )
+
+            architecture_artifact_id = uuid.UUID(
+                run.input_payload["architecture_artifact_id"]
+            )
+
+            requirements_artifact = await self._session.get(
+                ArtifactModel,
+                requirements_artifact_id,
+            )
+
+            architecture_artifact = await self._session.get(
+                ArtifactModel,
+                architecture_artifact_id,
+            )
+
+            if requirements_artifact is None:
+                raise ArtifactNotFoundError(
+                    str(requirements_artifact_id)
+                )
+
+            if architecture_artifact is None:
+                raise ArtifactNotFoundError(
+                    str(architecture_artifact_id)
+                )
+
+            expected_requirements_hash = run.input_payload[
+                "requirements_artifact_hash"
+            ]
+
+            expected_architecture_hash = run.input_payload[
+                "architecture_artifact_hash"
+            ]
+
+            if (
+                hash_text(requirements_artifact.content)
+                != expected_requirements_hash
+            ):
+                raise RuntimeError(
+                    "Requirements artifact integrity check failed"
+                )
+
+            if (
+                hash_text(architecture_artifact.content)
+                != expected_architecture_hash
+            ):
+                raise RuntimeError(
+                    "Architecture artifact integrity check failed"
+                )
+
+            inspector = GitRepositoryInspector(
+                allowed_root=self._settings.repository_allowed_root,
+            )
+
+            repository = await inspector.inspect(
+                project.repository_path
+            )
+
+            if not repository.is_clean:
+                raise InvalidProjectStateError(
+                    "Repository must be clean before work-package planning"
+                )
+
+            run.status = RunStatus.RUNNING
+            run.started_at = datetime.now(UTC)
+            run.error_message = None
+            project.status = ProjectStatus.WORK_PACKAGE_PLANNING
+
+            self._session.add(
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="work_package.planning.started",
+                    actor_type="system",
+                    actor_id="work-package-worker",
+                    payload={
+                        "run_id": str(run.id),
+                        "base_commit_sha": repository.commit_sha,
+                    },
+                )
+            )
+
+            await self._session.commit()
+
             runner = WorkPackageCrewRunner(self._settings)
 
             result = await asyncio.to_thread(
@@ -1225,6 +1247,14 @@ class ProjectWorkflowService:
             await self._session.commit()
 
         except Exception as exc:
+            await self._session.rollback()
+
+            run = await self._session.get(CrewRunModel, run_id)
+            project = await self._session.get(
+                ProjectModel,
+                run.project_id,
+            )
+
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
             run.error_message = str(exc)
