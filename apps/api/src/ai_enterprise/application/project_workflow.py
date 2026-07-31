@@ -1227,9 +1227,11 @@ class ProjectWorkflowService:
                 ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
             )
 
+            self._session.add(artifact)
+            await self._session.flush()
+
             self._session.add_all(
                 [
-                    artifact,
                     work_package,
                     AuditEventModel(
                         id=uuid.uuid4(),
