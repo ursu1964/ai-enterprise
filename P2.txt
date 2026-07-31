@@ -1,0 +1,5236 @@
+
+P3 — Controlled Integration and Revision Loop
+
+It should introduce:
+
+accepted patch eligibility
+human integration approval
+fresh integration snapshot
+patch application verification
+merge-commit creation
+protected target branch
+post-merge test execution
+rollback metadata
+changes-requested revision loop
+new execution attempt derived from review findings
+strict attempt lineage
+
+The correct future flow is:
+
+Accepted patch
+      │
+      ▼
+Human integration approval
+      │
+      ▼
+Fresh integration snapshot
+      │
+      ▼
+Verify patch hash and tree hash
+      │
+      ▼
+Apply patch
+      │
+      ▼
+Run post-integration tests
+      │
+      ▼
+Create controlled Git commit
+      │
+      ▼
+Push through restricted Git identity
+      │
+      ▼
+Record commit and audit evidence
+
+The system should still never allow an implementation or reviewer agent to push directly to the authoritative branch.
+
+P3 — Controlled Integration and Revision Loop
+
+P3 adds the only permitted path from an independently accepted patch into the authoritative Git repository.
+
+The central rule is:
+
+    Implementation agents and reviewer agents may create, inspect, test, and recommend patches, but they never receive credentials or permissions capable of modifying the authoritative repository.
+
+Only a dedicated Integration Worker, operating after explicit human approval, may create and push a controlled commit.
+1. P3 security boundary
+
+The system now has four distinct trust zones:
+
+┌─────────────────────────────────────────────────────────────┐
+│ Control Plane                                               │
+│                                                             │
+│ FastAPI API                                                 │
+│ PostgreSQL                                                  │
+│ Approval records                                            │
+│ Audit log                                                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ signed integration command
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Integration Worker                                          │
+│                                                             │
+│ Fresh clone                                                 │
+│ Patch verification                                          │
+│ Patch application                                           │
+│ Post-integration tests                                      │
+│ Controlled commit                                           │
+│ Restricted Git push                                         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ restricted Git identity
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Authoritative Git Repository                                │
+│                                                             │
+│ Protected target branch                                     │
+│ No agent credentials                                        │
+│ No direct implementation-agent push                         │
+│ No direct reviewer-agent push                               │
+└─────────────────────────────────────────────────────────────┘
+
+The disposable implementation runtime remains outside the authoritative repository trust boundary.
+2. Correct P3 lifecycle
+
+The full lifecycle should be:
+
+Work package approved
+        │
+        ▼
+Execution attempt created
+        │
+        ▼
+Implementation runtime executes
+        │
+        ▼
+Patch generated
+        │
+        ▼
+Independent patch review
+        │
+        ├───────────────► Changes requested
+        │                       │
+        │                       ▼
+        │              Revision findings recorded
+        │                       │
+        │                       ▼
+        │              New execution attempt created
+        │                       │
+        │                       ▼
+        │              Revised patch generated
+        │
+        ▼
+Patch accepted
+        │
+        ▼
+Patch becomes integration-eligible
+        │
+        ▼
+Human integration approval
+        │
+        ▼
+Fresh integration snapshot
+        │
+        ▼
+Verify patch hash
+        │
+        ▼
+Verify expected repository tree hash
+        │
+        ▼
+Apply patch
+        │
+        ▼
+Verify resulting tree
+        │
+        ▼
+Run post-integration tests
+        │
+        ▼
+Create controlled Git commit
+        │
+        ▼
+Push using restricted Git identity
+        │
+        ▼
+Record commit, test and audit evidence
+
+3. Core invariants
+
+P3 should enforce the following invariants in code and database constraints.
+3.1 Patch eligibility
+
+A patch is integration-eligible only when:
+
+patch.status == accepted
+review.decision == accepted
+review is independent
+execution attempt completed successfully
+approved work package matches patch work package
+patch base commit matches approved execution base commit
+patch hash exists
+changed-file scope validation passed
+required execution tests passed
+no unresolved review findings exist
+
+Eligibility must be computed by the server. It must never be accepted directly from an API request.
+
+Do not expose an endpoint such as:
+
+POST /patches/{id}/mark-eligible
+
+Instead, eligibility is derived and persisted after accepted review.
+3.2 Human approval
+
+Human integration approval must be separate from:
+
+    requirements approval;
+
+    architecture approval;
+
+    work-package approval;
+
+    patch review;
+
+    patch acceptance.
+
+A reviewer accepting a patch does not authorize repository modification.
+
+The approval record must identify:
+
+    approver identity;
+
+    approver role;
+
+    patch ID;
+
+    exact patch SHA-256;
+
+    target repository;
+
+    target branch;
+
+    expected base commit;
+
+    expected base tree hash;
+
+    approved post-integration test commands;
+
+    approval timestamp;
+
+    approval reason;
+
+    approval policy version.
+
+Changing any protected field invalidates the approval.
+3.3 Fresh integration snapshot
+
+The Integration Worker must not reuse:
+
+    the implementation container;
+
+    the implementation snapshot;
+
+    the reviewer snapshot;
+
+    a previous integration working directory;
+
+    an unverified cached Git worktree.
+
+Every integration attempt starts from a fresh clone or fresh trusted mirror checkout.
+
+git clone --no-checkout <authoritative-remote>
+git checkout --detach <approved-base-commit>
+
+Then the worker verifies:
+
+HEAD commit == approved base commit
+HEAD tree   == approved base tree hash
+working tree is clean
+no unexpected submodule state
+remote URL matches repository policy
+
+3.4 Protected target branch
+
+The target branch should be protected at two levels.
+Repository-level protection
+
+Examples:
+
+    no force push;
+
+    no branch deletion;
+
+    required status checks;
+
+    restricted push identity;
+
+    signed commits where supported;
+
+    linear or controlled merge policy;
+
+    no direct developer-agent credentials.
+
+Application-level protection
+
+The Integration Worker must allow only configured branches:
+
+repositories:
+  ai-enterprise:
+    remote: git@github.com:example/ai-enterprise.git
+    integration_target_branches:
+      - main
+    push_identity: enterprise-integration-bot
+
+A request containing an arbitrary target branch must be rejected.
+4. Domain model additions
+
+Add these aggregates and entities.
+
+Patch
+PatchReview
+ReviewFinding
+IntegrationEligibility
+IntegrationApproval
+IntegrationAttempt
+IntegrationSnapshot
+IntegrationTestRun
+IntegrationCommit
+RollbackRecord
+ExecutionAttemptLineage
+
+A useful aggregate boundary is:
+
+IntegrationRequest aggregate
+├── IntegrationEligibility
+├── IntegrationApproval
+├── IntegrationAttempt[]
+├── IntegrationSnapshot
+├── IntegrationTestRun[]
+├── IntegrationCommit
+└── RollbackRecord
+
+Execution revision lineage remains associated with the work package:
+
+WorkPackage
+└── ExecutionAttempt[]
+    ├── parent_attempt_id
+    ├── revision_source_review_id
+    └── revision_findings[]
+
+5. State machines
+5.1 Patch state machine
+
+generated
+   │
+   ▼
+under_review
+   │
+   ├────────► changes_requested
+   │                │
+   │                └────► superseded
+   │
+   ├────────► rejected
+   │
+   ▼
+accepted
+   │
+   ▼
+integration_eligible
+   │
+   ├────────► approval_revoked
+   │
+   ▼
+integration_approved
+   │
+   ▼
+integrating
+   │
+   ├────────► integration_failed
+   │
+   ▼
+integrated
+
+A patch with changes requested should not be edited in place. It becomes superseded when a new revision attempt produces a replacement patch.
+5.2 Integration attempt state machine
+
+queued
+  │
+  ▼
+verifying
+  │
+  ├────────► verification_failed
+  ▼
+snapshot_ready
+  │
+  ▼
+applying_patch
+  │
+  ├────────► patch_apply_failed
+  ▼
+patch_applied
+  │
+  ▼
+testing
+  │
+  ├────────► tests_failed
+  ▼
+commit_creating
+  │
+  ├────────► commit_failed
+  ▼
+commit_created
+  │
+  ▼
+pushing
+  │
+  ├────────► push_failed
+  ▼
+integrated
+
+Do not collapse all failures into a single failed status. The precise failure stage is important for auditability and recovery.
+5.3 Review decision state machine
+
+pending
+  │
+  ├────────► accepted
+  ├────────► changes_requested
+  └────────► rejected
+
+A completed review decision is immutable. A subsequent assessment creates a new review record.
+6. PostgreSQL schema
+
+Create a migration such as:
+
+alembic/versions/0008_controlled_integration.py
+
+6.1 Patch review findings
+
+CREATE TABLE review_findings (
+    id UUID PRIMARY KEY,
+    patch_review_id UUID NOT NULL
+        REFERENCES patch_reviews(id),
+
+    finding_code TEXT NOT NULL,
+    severity TEXT NOT NULL
+        CHECK (severity IN ('info', 'minor', 'major', 'critical')),
+
+    category TEXT NOT NULL,
+    file_path TEXT,
+    line_start INTEGER,
+    line_end INTEGER,
+
+    description TEXT NOT NULL,
+    required_change TEXT,
+    status TEXT NOT NULL
+        CHECK (status IN ('open', 'addressed', 'waived')),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CHECK (
+        line_start IS NULL
+        OR line_start > 0
+    ),
+
+    CHECK (
+        line_end IS NULL
+        OR line_end >= line_start
+    )
+);
+
+6.2 Integration eligibility
+
+CREATE TABLE integration_eligibilities (
+    id UUID PRIMARY KEY,
+    patch_id UUID NOT NULL UNIQUE
+        REFERENCES patches(id),
+
+    eligible BOOLEAN NOT NULL,
+    evaluated_at TIMESTAMPTZ NOT NULL,
+    policy_version TEXT NOT NULL,
+
+    patch_sha256 TEXT NOT NULL,
+    base_commit_sha TEXT NOT NULL,
+    base_tree_sha TEXT NOT NULL,
+
+    accepted_review_id UUID
+        REFERENCES patch_reviews(id),
+
+    failure_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+    evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+The failure_reasons field may contain values such as:
+
+[
+  {
+    "code": "OPEN_REVIEW_FINDINGS",
+    "message": "Patch has unresolved major review findings."
+  }
+]
+
+6.3 Integration approvals
+
+CREATE TABLE integration_approvals (
+    id UUID PRIMARY KEY,
+
+    patch_id UUID NOT NULL
+        REFERENCES patches(id),
+
+    eligibility_id UUID NOT NULL
+        REFERENCES integration_eligibilities(id),
+
+    approver_subject TEXT NOT NULL,
+    approver_role TEXT NOT NULL,
+
+    repository_id UUID NOT NULL
+        REFERENCES repositories(id),
+
+    target_branch TEXT NOT NULL,
+
+    approved_patch_sha256 TEXT NOT NULL,
+    approved_base_commit_sha TEXT NOT NULL,
+    approved_base_tree_sha TEXT NOT NULL,
+
+    approved_test_commands JSONB NOT NULL,
+
+    decision TEXT NOT NULL
+        CHECK (decision IN ('approved', 'denied', 'revoked')),
+
+    reason TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+
+    approved_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CHECK (
+        (decision = 'approved' AND approved_at IS NOT NULL)
+        OR decision <> 'approved'
+    )
+);
+
+Approvals should be append-only. Revocation should create a new audit event and update only the permitted decision fields through a guarded command handler.
+6.4 Integration attempts
+
+CREATE TABLE integration_attempts (
+    id UUID PRIMARY KEY,
+
+    patch_id UUID NOT NULL
+        REFERENCES patches(id),
+
+    integration_approval_id UUID NOT NULL
+        REFERENCES integration_approvals(id),
+
+    attempt_number INTEGER NOT NULL,
+
+    status TEXT NOT NULL,
+
+    repository_id UUID NOT NULL
+        REFERENCES repositories(id),
+
+    target_branch TEXT NOT NULL,
+
+    expected_patch_sha256 TEXT NOT NULL,
+    expected_base_commit_sha TEXT NOT NULL,
+    expected_base_tree_sha TEXT NOT NULL,
+
+    actual_base_commit_sha TEXT,
+    actual_base_tree_sha TEXT,
+    resulting_tree_sha TEXT,
+
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+
+    failure_code TEXT,
+    failure_message TEXT,
+
+    worker_id TEXT,
+    correlation_id UUID NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE (patch_id, attempt_number)
+);
+
+6.5 Integration snapshots
+
+CREATE TABLE integration_snapshots (
+    id UUID PRIMARY KEY,
+
+    integration_attempt_id UUID NOT NULL UNIQUE
+        REFERENCES integration_attempts(id),
+
+    repository_remote_fingerprint TEXT NOT NULL,
+    checkout_commit_sha TEXT NOT NULL,
+    checkout_tree_sha TEXT NOT NULL,
+
+    clean_worktree_verified BOOLEAN NOT NULL,
+    submodules_verified BOOLEAN NOT NULL,
+    git_config_fingerprint TEXT NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+Do not persist the local snapshot path as durable business data. It is ephemeral worker runtime information.
+6.6 Post-integration test runs
+
+CREATE TABLE integration_test_runs (
+    id UUID PRIMARY KEY,
+
+    integration_attempt_id UUID NOT NULL
+        REFERENCES integration_attempts(id),
+
+    command_index INTEGER NOT NULL,
+    command JSONB NOT NULL,
+
+    status TEXT NOT NULL
+        CHECK (status IN (
+            'pending',
+            'running',
+            'passed',
+            'failed',
+            'timed_out',
+            'infrastructure_error'
+        )),
+
+    exit_code INTEGER,
+    stdout_artifact_id UUID,
+    stderr_artifact_id UUID,
+
+    duration_ms BIGINT,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+
+    UNIQUE (integration_attempt_id, command_index)
+);
+
+Commands must come from the approval record, not from the patch or an agent-generated response.
+6.7 Integration commits
+
+CREATE TABLE integration_commits (
+    id UUID PRIMARY KEY,
+
+    integration_attempt_id UUID NOT NULL UNIQUE
+        REFERENCES integration_attempts(id),
+
+    repository_id UUID NOT NULL
+        REFERENCES repositories(id),
+
+    target_branch TEXT NOT NULL,
+
+    parent_commit_sha TEXT NOT NULL,
+    commit_sha TEXT NOT NULL,
+    commit_tree_sha TEXT NOT NULL,
+
+    commit_message TEXT NOT NULL,
+    author_identity TEXT NOT NULL,
+    committer_identity TEXT NOT NULL,
+
+    signature_verified BOOLEAN,
+    pushed_at TIMESTAMPTZ,
+    remote_verified_commit_sha TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+6.8 Rollback metadata
+
+CREATE TABLE rollback_records (
+    id UUID PRIMARY KEY,
+
+    integration_commit_id UUID NOT NULL
+        REFERENCES integration_commits(id),
+
+    rollback_strategy TEXT NOT NULL
+        CHECK (rollback_strategy IN (
+            'revert_commit',
+            'forward_fix',
+            'manual_recovery'
+        )),
+
+    original_commit_sha TEXT NOT NULL,
+    parent_commit_sha TEXT NOT NULL,
+
+    generated_revert_patch_sha256 TEXT,
+    rollback_commit_sha TEXT,
+
+    status TEXT NOT NULL
+        CHECK (status IN (
+            'available',
+            'requested',
+            'approved',
+            'executing',
+            'completed',
+            'failed'
+        )),
+
+    requested_by TEXT,
+    approved_by TEXT,
+    reason TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+
+P3 initially needs to record sufficient rollback metadata. Automated rollback execution can be a later increment.
+6.9 Strict execution-attempt lineage
+
+Add lineage fields to execution_attempts:
+
+ALTER TABLE execution_attempts
+ADD COLUMN parent_attempt_id UUID
+    REFERENCES execution_attempts(id);
+
+ALTER TABLE execution_attempts
+ADD COLUMN revision_source_review_id UUID
+    REFERENCES patch_reviews(id);
+
+ALTER TABLE execution_attempts
+ADD COLUMN lineage_depth INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE execution_attempts
+ADD COLUMN root_attempt_id UUID
+    REFERENCES execution_attempts(id);
+
+Add a lineage table for explicit finding-to-attempt mapping:
+
+CREATE TABLE execution_attempt_revision_findings (
+    execution_attempt_id UUID NOT NULL
+        REFERENCES execution_attempts(id),
+
+    review_finding_id UUID NOT NULL
+        REFERENCES review_findings(id),
+
+    PRIMARY KEY (
+        execution_attempt_id,
+        review_finding_id
+    )
+);
+
+Rules:
+
+Initial attempt:
+    parent_attempt_id = NULL
+    revision_source_review_id = NULL
+    lineage_depth = 0
+    root_attempt_id = self
+
+Revision attempt:
+    parent_attempt_id = immediately preceding attempt
+    revision_source_review_id = changes-requested review
+    lineage_depth = parent.lineage_depth + 1
+    root_attempt_id = parent.root_attempt_id
+
+A revision attempt must never point to an unrelated work package or project.
+7. Revision loop
+
+When a reviewer selects changes_requested, the platform should not reopen the existing execution attempt.
+
+It should create a new immutable attempt.
+
+Attempt 1
+  ├── Patch 1
+  └── Review 1: changes requested
+          ├── Finding A
+          └── Finding B
+                 │
+                 ▼
+Attempt 2
+  parent_attempt_id = Attempt 1
+  revision_source_review_id = Review 1
+  revision_findings = [A, B]
+  ├── Patch 2
+  └── Review 2: accepted
+
+Revision execution input
+
+The new implementation runtime receives:
+
+    original approved work package;
+
+    original architectural constraints;
+
+    parent attempt metadata;
+
+    parent patch;
+
+    review findings;
+
+    approved repository base;
+
+    permitted file scope;
+
+    permitted tests;
+
+    revision-specific instructions.
+
+It must not receive permission to expand the work-package scope.
+
+A suitable revision instruction envelope is:
+
+{
+  "execution_attempt_id": "uuid",
+  "parent_attempt_id": "uuid",
+  "work_package_id": "uuid",
+  "base_commit_sha": "abc123",
+  "review_findings": [
+    {
+      "finding_id": "uuid",
+      "severity": "major",
+      "file_path": "app/services/integration.py",
+      "description": "Patch does not verify the expected tree hash.",
+      "required_change": "Reject integration when the checked-out tree differs."
+    }
+  ],
+  "allowed_paths": [
+    "app/services/integration.py",
+    "tests/integration/test_integration_service.py"
+  ],
+  "approved_test_commands": [
+    ["pytest", "tests/integration/test_integration_service.py"]
+  ]
+}
+
+8. API endpoints
+8.1 Review decision
+
+POST /api/v1/patch-reviews/{review_id}/decision
+
+Request:
+
+{
+  "decision": "changes_requested",
+  "summary": "Tree verification is incomplete.",
+  "findings": [
+    {
+      "finding_code": "TREE_HASH_NOT_VERIFIED",
+      "severity": "major",
+      "category": "integrity",
+      "file_path": "app/services/integration.py",
+      "description": "The expected base tree hash is not checked.",
+      "required_change": "Verify git rev-parse HEAD^{tree} before applying the patch."
+    }
+  ]
+}
+
+For acceptance:
+
+{
+  "decision": "accepted",
+  "summary": "Patch satisfies the work package and passes independent review.",
+  "findings": []
+}
+
+8.2 Create revision attempt
+
+POST /api/v1/patch-reviews/{review_id}/revision-attempts
+
+The server derives:
+
+    parent execution attempt;
+
+    root attempt;
+
+    work package;
+
+    review findings;
+
+    lineage depth;
+
+    approved base commit;
+
+    approved command set.
+
+The request should contain no arbitrary lineage identifiers.
+
+Response:
+
+{
+  "execution_attempt_id": "uuid",
+  "parent_attempt_id": "uuid",
+  "root_attempt_id": "uuid",
+  "lineage_depth": 1,
+  "status": "queued"
+}
+
+8.3 Retrieve patch eligibility
+
+GET /api/v1/patches/{patch_id}/integration-eligibility
+
+Response:
+
+{
+  "patch_id": "uuid",
+  "eligible": true,
+  "patch_sha256": "sha256-value",
+  "base_commit_sha": "commit",
+  "base_tree_sha": "tree",
+  "accepted_review_id": "uuid",
+  "evaluated_at": "2026-07-31T03:00:00Z",
+  "failure_reasons": []
+}
+
+8.4 Human integration approval
+
+POST /api/v1/patches/{patch_id}/integration-approvals
+
+Request:
+
+{
+  "decision": "approved",
+  "target_branch": "main",
+  "reason": "Patch was independently reviewed and is ready for controlled integration."
+}
+
+The server fills all integrity-sensitive fields from authoritative records.
+
+Response:
+
+{
+  "integration_approval_id": "uuid",
+  "patch_id": "uuid",
+  "target_branch": "main",
+  "approved_patch_sha256": "sha256-value",
+  "approved_base_commit_sha": "commit",
+  "approved_base_tree_sha": "tree",
+  "decision": "approved"
+}
+
+8.5 Start integration
+
+POST /api/v1/integration-approvals/{approval_id}/attempts
+
+This endpoint should only enqueue a durable command.
+
+Response:
+
+{
+  "integration_attempt_id": "uuid",
+  "status": "queued"
+}
+
+The API process must not execute Git operations directly.
+8.6 Integration status
+
+GET /api/v1/integration-attempts/{attempt_id}
+
+Response:
+
+{
+  "id": "uuid",
+  "status": "testing",
+  "patch_id": "uuid",
+  "target_branch": "main",
+  "expected_base_commit_sha": "abc123",
+  "actual_base_commit_sha": "abc123",
+  "expected_base_tree_sha": "def456",
+  "actual_base_tree_sha": "def456",
+  "test_runs": [
+    {
+      "command_index": 0,
+      "status": "passed",
+      "exit_code": 0
+    }
+  ]
+}
+
+9. Commands and events
+Commands
+
+EvaluatePatchIntegrationEligibility
+ApprovePatchIntegration
+RevokeIntegrationApproval
+CreateIntegrationAttempt
+PrepareFreshIntegrationSnapshot
+VerifyIntegrationInputs
+ApplyApprovedPatch
+RunPostIntegrationTests
+CreateControlledCommit
+PushControlledCommit
+CompleteIntegrationAttempt
+FailIntegrationAttempt
+CreateRevisionExecutionAttempt
+RecordRollbackMetadata
+
+Events
+
+PatchIntegrationEligibilityEvaluated
+PatchBecameIntegrationEligible
+PatchIntegrationApprovalGranted
+PatchIntegrationApprovalDenied
+PatchIntegrationApprovalRevoked
+IntegrationAttemptCreated
+IntegrationSnapshotPrepared
+IntegrationBaseVerified
+IntegrationPatchVerified
+IntegrationPatchApplied
+PostIntegrationTestStarted
+PostIntegrationTestPassed
+PostIntegrationTestFailed
+ControlledCommitCreated
+ControlledCommitPushed
+PatchIntegrated
+IntegrationAttemptFailed
+PatchChangesRequested
+RevisionExecutionAttemptCreated
+RollbackMetadataRecorded
+
+Every state transition should produce an audit event in the same database transaction as the state change.
+10. Integration Worker algorithm
+
+The Integration Worker should implement this exact sequence.
+
+def execute_integration(attempt_id: UUID) -> None:
+    attempt = load_and_lock_attempt(attempt_id)
+
+    verify_attempt_is_queued(attempt)
+    mark_verifying(attempt)
+
+    approval = load_approval(attempt.integration_approval_id)
+    patch = load_patch(attempt.patch_id)
+    eligibility = load_eligibility(patch.id)
+    repository = load_repository(attempt.repository_id)
+
+    verify_approval_is_active(approval)
+    verify_patch_is_eligible(patch, eligibility)
+    verify_approval_matches_patch(approval, patch)
+    verify_target_branch_is_allowed(repository, attempt.target_branch)
+
+    with fresh_integration_workspace() as workspace:
+        clone_authoritative_repository(repository, workspace)
+
+        verify_remote_identity(workspace, repository)
+        fetch_target_branch(workspace, attempt.target_branch)
+
+        checkout_approved_base_commit(
+            workspace,
+            approval.approved_base_commit_sha,
+        )
+
+        actual_commit = read_head_commit(workspace)
+        actual_tree = read_head_tree(workspace)
+
+        verify_equal(
+            actual_commit,
+            approval.approved_base_commit_sha,
+            "BASE_COMMIT_MISMATCH",
+        )
+
+        verify_equal(
+            actual_tree,
+            approval.approved_base_tree_sha,
+            "BASE_TREE_MISMATCH",
+        )
+
+        verify_clean_worktree(workspace)
+
+        patch_bytes = artifact_store.read(patch.artifact_id)
+        actual_patch_hash = sha256(patch_bytes)
+
+        verify_equal(
+            actual_patch_hash,
+            approval.approved_patch_sha256,
+            "PATCH_HASH_MISMATCH",
+        )
+
+        apply_patch_with_git(workspace, patch_bytes)
+        verify_clean_patch_application(workspace)
+        verify_changed_paths(workspace, patch.allowed_paths)
+
+        resulting_tree = calculate_candidate_tree(workspace)
+
+        run_approved_tests(
+            workspace=workspace,
+            commands=approval.approved_test_commands,
+        )
+
+        commit_sha = create_controlled_commit(
+            workspace=workspace,
+            identity=repository.integration_identity,
+            message=build_commit_message(attempt, patch),
+        )
+
+        verify_commit_parent(
+            workspace,
+            commit_sha,
+            approval.approved_base_commit_sha,
+        )
+
+        push_commit(
+            workspace=workspace,
+            remote=repository.remote,
+            target_branch=attempt.target_branch,
+            expected_remote_head=approval.approved_base_commit_sha,
+        )
+
+        verify_remote_commit(
+            repository,
+            attempt.target_branch,
+            commit_sha,
+        )
+
+        record_success(
+            attempt=attempt,
+            commit_sha=commit_sha,
+            resulting_tree=resulting_tree,
+        )
+
+11. Preventing race conditions
+
+The authoritative branch may change between approval and integration.
+
+P3 must not silently rebase or apply the patch to a newer base.
+
+Use a lease-style push:
+
+git push \
+  --force-with-lease=refs/heads/main:<approved-base-commit> \
+  origin \
+  HEAD:refs/heads/main
+
+However, because force operations are undesirable on protected branches, the preferred operation is:
+
+git push origin HEAD:refs/heads/main
+
+combined with:
+
+    checkout exact approved base;
+
+    create a commit whose parent is that base;
+
+    branch protection rejects non-fast-forward updates;
+
+    verify the remote head immediately before push;
+
+    fail when the target branch moved.
+
+The failure should be:
+
+TARGET_BRANCH_ADVANCED
+
+The platform then requires:
+
+    a new base snapshot;
+
+    potentially a new execution attempt;
+
+    new review;
+
+    new integration eligibility;
+
+    new human approval.
+
+Do not automatically transplant the accepted patch onto the changed branch.
+12. Commit construction
+
+The controlled commit message should be deterministic.
+
+integrate(work-package): <short work-package title>
+
+Project: <project-id>
+Work package: <work-package-id>
+Execution attempt: <execution-attempt-id>
+Patch: <patch-id>
+Patch SHA-256: <patch-sha256>
+Review: <accepted-review-id>
+Integration approval: <approval-id>
+Integration attempt: <integration-attempt-id>
+
+Git identity:
+
+user.name = Enterprise Integration Bot
+user.email = integration-bot@internal.invalid
+
+Credentials must be injected only into the Integration Worker and only during the push stage.
+
+The implementation container must not contain:
+
+    SSH private keys;
+
+    GitHub or GitLab tokens;
+
+    credential helper configuration;
+
+    writable authoritative repository mounts;
+
+    host SSH agent sockets.
+
+13. Post-integration tests
+
+There are two test phases.
+Execution tests
+
+Run inside the disposable implementation environment before patch review.
+
+Purpose:
+
+    validate implementation behavior;
+
+    verify the work package;
+
+    produce review evidence.
+
+Post-integration tests
+
+Run from the fresh integration snapshot after applying the exact approved patch.
+
+Purpose:
+
+    ensure the patch still applies;
+
+    ensure the approved base is correct;
+
+    verify integration-context behavior;
+
+    detect omitted files or generated artifacts;
+
+    validate the exact candidate tree that will be committed.
+
+Only commands explicitly approved in the work package and integration approval may run.
+
+Example command representation:
+
+[
+  {
+    "argv": [
+      "pytest",
+      "tests/integration/test_controlled_integration.py",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "environment": {
+      "PYTHONHASHSEED": "0"
+    }
+  }
+]
+
+Do not store shell commands as uncontrolled strings such as:
+
+{
+  "command": "pytest ... && curl ..."
+}
+
+Use argument arrays and a strict executable allowlist.
+14. Rollback metadata
+
+Immediately after successful integration, record:
+
+original commit SHA
+parent commit SHA
+tree SHA
+patch SHA-256
+target branch
+integration attempt
+test evidence
+revert feasibility
+rollback strategy
+
+For a normal single-parent commit, the future rollback operation can create:
+
+git revert --no-edit <integrated-commit-sha>
+
+Rollback must still require:
+
+    rollback request;
+
+    human approval;
+
+    fresh snapshot;
+
+    target-branch verification;
+
+    post-revert tests;
+
+    controlled Integration Worker execution.
+
+Never implement rollback as:
+
+git reset --hard
+git push --force
+
+15. Repository structure
+
+Extend the current application approximately as follows:
+
+app/
+├── api/
+│   └── v1/
+│       ├── patch_reviews.py
+│       ├── patch_eligibility.py
+│       ├── integration_approvals.py
+│       └── integration_attempts.py
+│
+├── application/
+│   ├── commands/
+│   │   ├── evaluate_patch_eligibility.py
+│   │   ├── approve_patch_integration.py
+│   │   ├── create_integration_attempt.py
+│   │   ├── create_revision_attempt.py
+│   │   └── revoke_integration_approval.py
+│   │
+│   ├── handlers/
+│   │   ├── patch_eligibility_handler.py
+│   │   ├── integration_approval_handler.py
+│   │   ├── integration_attempt_handler.py
+│   │   └── revision_attempt_handler.py
+│   │
+│   └── policies/
+│       ├── patch_eligibility_policy.py
+│       ├── integration_authorization_policy.py
+│       └── revision_lineage_policy.py
+│
+├── domain/
+│   ├── integration/
+│   │   ├── entities.py
+│   │   ├── enums.py
+│   │   ├── events.py
+│   │   ├── exceptions.py
+│   │   └── services.py
+│   │
+│   └── execution/
+│       └── lineage.py
+│
+├── infrastructure/
+│   ├── persistence/
+│   │   ├── integration_repository.py
+│   │   └── execution_lineage_repository.py
+│   │
+│   ├── git/
+│   │   ├── git_client.py
+│   │   ├── snapshot_manager.py
+│   │   ├── patch_applier.py
+│   │   ├── commit_creator.py
+│   │   └── restricted_pusher.py
+│   │
+│   └── artifacts/
+│       └── integration_evidence_store.py
+│
+└── workers/
+    └── integration/
+        ├── worker.py
+        ├── processor.py
+        ├── test_runner.py
+        └── cleanup.py
+
+16. Docker Compose addition
+
+Add a separate worker service.
+
+services:
+  integration-worker:
+    build:
+      context: .
+      dockerfile: docker/integration-worker.Dockerfile
+
+    command:
+      - python
+      - -m
+      - app.workers.integration.worker
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ARTIFACT_STORE_ROOT: /artifacts
+      INTEGRATION_WORK_ROOT: /integration-work
+      GIT_SSH_COMMAND: ssh -F /run/secrets/integration_ssh_config
+
+    volumes:
+      - integration-work:/integration-work
+      - artifact-store:/artifacts:ro
+
+    secrets:
+      - integration_git_private_key
+      - integration_ssh_config
+
+    read_only: true
+
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+
+    networks:
+      - control-plane
+      - git-egress
+
+The implementation worker must not be attached to git-egress.
+
+A stronger deployment separates the worker into a dedicated host or Kubernetes namespace with narrow egress to the Git server only.
+17. Audit evidence
+
+For every integration attempt, preserve:
+
+    command ID;
+
+    correlation ID;
+
+    patch ID;
+
+    patch SHA-256;
+
+    accepted review ID;
+
+    approval ID;
+
+    approver identity;
+
+    repository identity;
+
+    target branch;
+
+    expected and actual base commit;
+
+    expected and actual base tree;
+
+    patch application output;
+
+    changed-file list;
+
+    resulting tree hash;
+
+    every test command;
+
+    every test exit code;
+
+    stdout and stderr artifact hashes;
+
+    commit SHA;
+
+    commit tree SHA;
+
+    Git identity;
+
+    push result;
+
+    remote verification result;
+
+    worker identity;
+
+    timestamps;
+
+    failure stage and code;
+
+    cleanup confirmation.
+
+Audit events should be append-only.
+
+Sensitive credentials, token values, private keys, and complete environment dumps must never enter audit artifacts.
+18. Required tests for P3
+Eligibility tests
+
+accepted patch becomes eligible
+unreviewed patch remains ineligible
+changes-requested patch remains ineligible
+rejected patch remains ineligible
+patch with failed tests remains ineligible
+patch with scope violations remains ineligible
+patch with unresolved findings remains ineligible
+
+Approval tests
+
+human approver can approve eligible patch
+agent identity cannot approve integration
+ineligible patch cannot be approved
+approval captures exact patch hash
+approval captures exact base tree hash
+modified patch invalidates approval
+revoked approval cannot start integration
+
+Snapshot tests
+
+fresh snapshot checks out exact base commit
+base commit mismatch fails
+base tree mismatch fails
+dirty worktree fails
+wrong repository remote fails
+unexpected submodule state fails
+
+Patch tests
+
+patch hash mismatch fails
+patch that no longer applies fails
+patch changing unauthorized path fails
+patch introducing unexpected symlink fails
+patch modifying Git metadata fails
+
+Integration tests
+
+approved tests execute
+unapproved command cannot execute
+failed test prevents commit
+timed-out test prevents commit
+successful tests allow commit
+commit parent equals approved base
+commit tree equals tested candidate tree
+
+Push tests
+
+restricted identity is used
+implementation agent cannot push
+review agent cannot push
+advanced target branch causes failure
+non-fast-forward push is rejected
+remote commit is verified after push
+
+Revision lineage tests
+
+revision attempt references parent attempt
+revision attempt references changes-requested review
+revision attempt includes all open findings
+revision attempt retains same work package
+revision attempt cannot change project
+lineage depth increments exactly once
+root attempt remains stable
+accepted patch supersedes prior patch
+cyclic lineage is rejected
+
+19. Implementation order
+
+Implement P3 in this order:
+
+1. Add review findings and changes-requested decision
+2. Add strict execution-attempt lineage
+3. Implement revision-attempt creation
+4. Implement integration-eligibility policy
+5. Add human integration approval
+6. Add integration-attempt persistence
+7. Build fresh Git snapshot manager
+8. Implement patch and tree verification
+9. Implement approved post-integration test runner
+10. Implement controlled commit creation
+11. Implement restricted push with branch protection
+12. Record remote commit verification
+13. Record rollback metadata
+14. Add complete audit events
+15. Add end-to-end tests
+
+20. P3 completion criteria
+
+P3 is complete when the platform can demonstrate this scenario:
+
+1. An implementation attempt produces Patch A.
+2. An independent reviewer requests changes.
+3. Findings are stored immutably.
+4. A new execution attempt is derived from those findings.
+5. The new attempt produces Patch B.
+6. A different independent review accepts Patch B.
+7. The system computes Patch B as integration-eligible.
+8. A human approves integration of the exact Patch B hash.
+9. An Integration Worker creates a fresh snapshot.
+10. The worker verifies the approved commit and tree.
+11. The worker verifies and applies the exact patch.
+12. The worker runs only approved tests.
+13. The worker creates a controlled commit.
+14. The worker pushes through its restricted identity.
+15. The system verifies the remote commit.
+16. Complete audit and rollback evidence is stored.
+17. No implementation or reviewer agent receives push access.
+
+Updated milestone status:
+
+Create project                         complete
+Immutable manifest                     complete
+Requirements Crew                      complete
+Requirements approval                  complete
+Architecture Crew                      complete
+Architecture approval                  complete
+Durable PostgreSQL worker              complete
+One bounded work package               complete
+Work-package approval                  complete
+Disposable execution container         complete / P2
+Test execution                         complete / P2
+Patch generation                       complete / P2
+Independent patch review               complete / P2
+Accepted patch eligibility             next
+Changes-requested revision loop        next
+Strict attempt lineage                 next
+Human integration approval             next
+Fresh integration snapshot             next
+Controlled Git integration             next
+Post-integration tests                 next
+Restricted Git push                    next
+Rollback metadata                      next
+Complete audit-query API               partial
+No uncontrolled host change            enforced by architecture
+
+The first concrete P3 implementation should therefore be the review-findings and revision-lineage migration, followed by the eligibility policy. This establishes the immutable revision chain before granting any component controlled repository-write authority.
+
+P3.4 — Verified Patch Application, Post-Integration Tests, and Controlled Commit Creation
+
+This is the most security-critical stage of P3.
+
+For the first time, the platform modifies a Git working tree.
+
+The modification is still isolated:
+
+    not in the authoritative repository
+
+    not on the protected branch
+
+    not pushed
+
+    not visible to developers
+
+    completely reversible by deleting the disposable workspace
+
+The purpose of P3.4 is to transform:
+
+Verified snapshot
+        │
+        ▼
+Verified patch
+        │
+        ▼
+Verified filesystem
+        │
+        ▼
+Verified repository
+        │
+        ▼
+Verified tests
+        │
+        ▼
+Verified Git commit
+
+No network write occurs in this stage.
+1. Complete execution flow
+
+The worker already owns:
+
+verified snapshot
+verified repository
+verified base commit
+verified base tree
+clean workspace
+valid claim
+
+The next execution becomes:
+
+Load approved patch artifact
+        │
+        ▼
+Verify artifact hash
+        │
+        ▼
+Verify patch binding
+        │
+        ▼
+Apply patch
+        │
+        ▼
+Verify resulting filesystem
+        │
+        ▼
+Verify changed paths
+        │
+        ▼
+Run approved tests only
+        │
+        ▼
+Verify exit codes
+        │
+        ▼
+Capture evidence
+        │
+        ▼
+Calculate new Git tree
+        │
+        ▼
+Create controlled commit
+        │
+        ▼
+Record commit metadata
+
+The worker still has no push permission.
+2. Security invariants
+
+P3.4 introduces several non-negotiable invariants.
+
+The worker must never:
+
+execute arbitrary shell
+run arbitrary commands
+modify files outside repository
+modify Git configuration
+modify hooks
+change remote configuration
+create merge commits
+rewrite history
+perform fetch/pull/push
+
+The worker may only:
+
+apply one approved patch
+run approved tests
+create one deterministic commit
+
+3. Patch artifact verification
+
+The patch artifact already exists from P2.
+
+Before using it:
+
+read artifact
+calculate SHA-256
+compare with approval
+compare with patch record
+compare with audit evidence
+
+All hashes must match.
+
+Patch table
+        │
+Approval
+        │
+Audit event
+        │
+Artifact storage
+        │
+Worker calculation
+
+All five values must be identical.
+
+Otherwise:
+
+PATCH_ARTIFACT_MISMATCH
+
+4. Patch binding verification
+
+Recalculate:
+
+patch SHA
+approval binding
+expected base commit
+expected tree
+
+Nothing is trusted simply because it was verified earlier.
+
+Before applying:
+
+verify_patch_hash()
+
+verify_binding_hash()
+
+verify_snapshot_hash()
+
+verify_repository_policy()
+
+5. Patch application strategy
+
+Never use shell.
+
+Never execute:
+
+sh patch.sh
+
+Never:
+
+bash apply_patch.sh
+
+Never:
+
+python generated_script.py
+
+Use only:
+
+git apply
+
+or
+
+libgit2
+
+For V1:
+
+git apply --index
+
+6. Safe git apply
+
+Recommended command:
+
+git \
+  apply \
+  --index \
+  --whitespace=error \
+  --recount \
+  --unsafe-paths=off \
+  approved.patch
+
+Never enable:
+
+--reject
+--unsafe-paths
+
+Reject partial application.
+
+Patch application must be atomic.
+7. Patch validation before apply
+
+Before invoking Git:
+
+Verify patch metadata.
+
+Reject if patch:
+
+contains absolute paths
+
+contains ../
+
+contains .git/
+
+contains .gitmodules
+
+contains hooks
+
+contains symlink escape
+
+contains binary executable outside allowlist
+
+contains Git metadata
+
+contains device files
+
+contains FIFOs
+
+contains sockets
+
+8. Filesystem policy
+
+Only repository files may change.
+
+Forbidden:
+
+/etc
+
+/usr
+
+/home
+
+/var
+
+/tmp outside workspace
+
+Docker socket
+
+SSH directories
+
+Git config
+
+.git/config
+
+.git/hooks
+
+Allowed:
+
+tracked repository files
+new repository files
+deleted repository files
+renames inside repository
+
+9. Path normalization
+
+Every changed path:
+
+resolved = (
+    repository_root / patch_path
+).resolve()
+
+Must satisfy:
+
+resolved.is_relative_to(repository_root)
+
+Otherwise:
+
+PATH_ESCAPE_DETECTED
+
+Never rely on string prefix checks.
+10. Symlink protection
+
+Reject creation of symlink:
+
+repository/file
+    ->
+../../etc/passwd
+
+Reject:
+
+repository/file
+    ->
+/root/key
+
+Tracked symlinks already recorded during P3.3.
+
+Compare:
+
+before inventory
+after inventory
+
+Unexpected changes:
+
+SYMLINK_POLICY_VIOLATION
+
+11. Changed-path verification
+
+Immediately after patch:
+
+git diff --name-status HEAD
+
+Collect:
+
+added
+
+modified
+
+deleted
+
+renamed
+
+Compare against:
+
+approved work package
+
+Every changed file must belong to:
+
+allowed path prefixes
+
+Otherwise:
+
+PATCH_SCOPE_VIOLATION
+
+12. Scope verification
+
+Example.
+
+Work package:
+
+app/services/auth/*
+
+Patch changes:
+
+app/services/auth/login.py
+
+Allowed.
+
+Patch changes:
+
+app/api/users.py
+
+Reject.
+
+The worker must enforce architectural boundaries.
+13. Git status verification
+
+After apply:
+
+git status --porcelain
+
+Expected:
+
+only intended modifications
+
+Unexpected:
+
+untracked temporary files
+
+editor backups
+
+pyc
+
+cache
+
+logs
+
+test outputs
+
+Reject.
+14. Approved test execution
+
+Only approved commands.
+
+Never:
+
+pytest tests
+
+if approval specifies:
+
+pytest tests/unit/test_auth.py
+
+The worker must execute exactly:
+
+ApprovedTestCommand.argv
+
+No substitutions.
+
+No concatenation.
+
+No shell.
+15. Test runner
+
+subprocess.run(
+    command.argv,
+    shell=False,
+    cwd=repository,
+    timeout=command.timeout,
+)
+
+Allowed environment:
+
+PYTHONHASHSEED
+
+TZ
+
+LANG
+
+LC_ALL
+
+Everything else must be explicit.
+16. Test sandbox
+
+Tests should execute with:
+
+network disabled
+
+limited CPU
+
+limited RAM
+
+limited PID count
+
+readonly system mounts
+
+writable repository only
+
+temporary HOME
+
+temporary TMPDIR
+
+The test environment should be equivalent to P2 execution isolation.
+17. Test evidence
+
+Persist:
+
+stdout
+
+stderr
+
+exit code
+
+duration
+
+start time
+
+end time
+
+CPU
+
+memory
+
+command hash
+
+Never persist:
+
+temporary credentials
+
+environment secrets
+
+SSH keys
+
+18. Multiple commands
+
+Approval may contain:
+
+[
+    {
+        "argv":["ruff","check","app"]
+    },
+    {
+        "argv":["pytest","tests/unit"]
+    },
+    {
+        "argv":["mypy","app"]
+    }
+]
+
+Execution order:
+
+1
+
+2
+
+3
+
+Stop immediately after first failure.
+19. Failure behavior
+
+Example:
+
+ruff fails
+
+Do not continue:
+
+pytest
+
+mypy
+
+Attempt becomes:
+
+TEST_FAILURE
+
+Evidence remains complete.
+20. Tree calculation
+
+After successful tests:
+
+git write-tree
+
+Returns:
+
+new tree SHA
+
+Store:
+
+candidate_tree_sha
+
+21. Commit creation
+
+The worker creates exactly one commit.
+
+Command:
+
+git commit \
+--no-gpg-sign \
+--no-verify
+
+Hooks must never execute.
+22. Parent verification
+
+Parent must equal:
+
+approved base commit
+
+No merge.
+
+No second parent.
+
+Verify:
+
+git rev-list --parents -n 1 HEAD
+
+Expected:
+
+commit parent
+
+Exactly:
+
+2 SHAs
+
+Not:
+
+3 SHAs
+
+23. Commit identity
+
+Dedicated integration identity.
+
+Example:
+
+AI Enterprise Integration Worker
+
+integration@example.internal
+
+Never use:
+
+developer identity
+
+implementation agent
+
+review agent
+
+24. Commit message
+
+Deterministic.
+
+Example:
+
+Apply approved work package WP-0042
+
+Patch: <patch-id>
+
+Attempt: <integration-attempt>
+
+Review: accepted
+
+Generated by Controlled Integration Worker
+
+25. Commit metadata
+
+Persist:
+
+commit SHA
+
+tree SHA
+
+parent SHA
+
+author
+
+committer
+
+timestamp
+
+message SHA
+
+26. Commit verification
+
+Immediately verify:
+
+git cat-file -p commit
+
+Confirm:
+
+tree matches
+
+parent matches
+
+message matches
+
+27. Commit state
+
+Worker status:
+
+COMMIT_CREATED
+
+Still:
+
+not pushed
+
+28. Failure codes
+
+PATCH_HASH_MISMATCH
+
+PATCH_BINDING_INVALID
+
+PATCH_SCOPE_VIOLATION
+
+PATH_ESCAPE_DETECTED
+
+PATCH_APPLY_FAILED
+
+UNEXPECTED_FILESYSTEM_CHANGE
+
+TEST_FAILED
+
+TEST_TIMEOUT
+
+TREE_HASH_MISMATCH
+
+COMMIT_CREATION_FAILED
+
+COMMIT_VERIFICATION_FAILED
+
+29. Worker state machine
+
+P3.4 extends:
+
+snapshot_ready
+      │
+      ▼
+verifying_patch
+      │
+      ▼
+applying_patch
+      │
+      ▼
+verifying_changes
+      │
+      ▼
+running_tests
+      │
+      ▼
+creating_commit
+      │
+      ▼
+commit_created
+
+Failure transitions:
+
+patch_failed
+
+test_failed
+
+commit_failed
+
+30. Audit events
+
+Important events:
+
+PatchVerified
+
+PatchApplied
+
+FilesystemVerified
+
+TestsStarted
+
+TestsCompleted
+
+TreeCalculated
+
+CommitCreated
+
+CommitVerified
+
+Every event:
+
+correlation ID
+
+attempt ID
+
+worker ID
+
+timestamps
+
+31. Acceptance criteria
+
+✓ Patch hash verified
+
+✓ Binding verified again
+
+✓ No path escape
+
+✓ Scope validated
+
+✓ Patch applied atomically
+
+✓ Git metadata protected
+
+✓ Filesystem verified
+
+✓ Only approved commands executed
+
+✓ No shell execution
+
+✓ Test evidence persisted
+
+✓ Candidate tree recorded
+
+✓ One-parent commit created
+
+✓ Commit metadata verified
+
+✓ Commit not pushed
+
+✓ Complete audit evidence recorded
+
+32. P3 status after this increment
+
+Review findings                           complete
+Revision loop                             complete
+Eligibility                               complete
+Human approval                            complete
+Integration attempt                       complete
+Fresh snapshot                            complete
+Repository verification                   complete
+Patch verification                        complete
+Verified patch application                complete
+Filesystem verification                   complete
+Scope verification                        complete
+Approved test execution                   complete
+Candidate tree generation                 complete
+Controlled Git commit                     complete
+Restricted Git push                       next (P3.5)
+Remote verification                       next (P3.5)
+Rollback metadata                         next (P3.6)
+
+Architecture improvement before P3.5
+
+One architectural enhancement is worth adding before implementing the restricted push phase.
+
+Currently, the IntegrationProcessor performs snapshot preparation, patch application, testing, and commit creation in one long method. Before introducing push logic, refactor it into explicit pipeline stages:
+
+IntegrationProcessor
+    │
+    ├── SnapshotStage
+    ├── PatchVerificationStage
+    ├── PatchApplicationStage
+    ├── TestExecutionStage
+    ├── CommitCreationStage
+    └── (next) PushStage
+
+Each stage should expose a uniform interface, for example:
+
+class IntegrationStage(Protocol):
+    async def execute(
+        self,
+        context: IntegrationContext,
+    ) -> IntegrationContext:
+        ...
+
+This makes the integration pipeline modular, independently testable, and extensible. Future features such as code signing, SBOM generation, security scanning, artifact publishing, or deployment gates can be inserted as additional stages without modifying the existing pipeline, aligning with the project's goal of a modular, enterprise-grade autonomous software factory.
+
+continue
+
+P3.5 — Restricted Push, Remote Verification, and Immutable Integration Completion
+
+This is the first point where the platform modifies the authoritative repository.
+
+Up to now, everything has happened in an isolated disposable workspace.
+
+P3.5 crosses the final trust boundary.
+
+Because of that, this stage must satisfy stronger guarantees than any previous stage.
+1. High-level objective
+
+Transform:
+
+Verified commit
+        │
+        ▼
+Restricted authenticated push
+        │
+        ▼
+Remote verification
+        │
+        ▼
+Persistent integration evidence
+        │
+        ▼
+Immutable integration completion
+
+If any verification fails:
+
+No integration success
+No completed state
+No silent retry
+
+2. Final trust boundary
+
+The architecture now consists of four security zones.
+
+                     Control Plane
+                           │
+               (commands + approvals)
+                           │
+                           ▼
+              Integration Worker (P3)
+                           │
+             restricted Git credentials
+                           │
+                           ▼
+             Authoritative Repository
+                           │
+                     Protected Branch
+
+Only one component may possess write credentials:
+
+Integration Worker
+
+Not:
+
+API
+
+Requirements Crew
+
+Architecture Crew
+
+Implementation Crew
+
+Review Crew
+
+Disposable execution runtime
+
+Human web client
+
+3. Credential separation
+
+Introduce two independent credentials.
+Read credential
+
+Purpose:
+
+clone
+
+fetch
+
+verify
+
+Never:
+
+push
+
+Push credential
+
+Purpose:
+
+push exactly one protected branch
+
+Capabilities:
+
+cannot delete branches
+
+cannot force push
+
+cannot modify tags
+
+cannot create repositories
+
+cannot administer repository
+
+Use least privilege.
+4. Push credential lifetime
+
+Credential should exist only during:
+
+PushStage
+
+Not:
+
+snapshot
+
+patch apply
+
+tests
+
+commit creation
+
+Sequence:
+
+Load credential
+
+Push
+
+Destroy credential
+
+5. Push workflow
+
+Commit created
+        │
+        ▼
+Acquire push credential
+        │
+        ▼
+Verify approval again
+        │
+        ▼
+Verify remote HEAD again
+        │
+        ▼
+Push commit
+        │
+        ▼
+Read remote
+        │
+        ▼
+Verify commit
+        │
+        ▼
+Verify tree
+        │
+        ▼
+Verify parent
+        │
+        ▼
+Complete integration
+
+Notice:
+
+Remote verification occurs after push.
+6. Why verify twice?
+
+Between:
+
+snapshot verification
+
+and
+
+push
+
+another actor may have updated:
+
+main
+
+Therefore:
+
+Before pushing:
+
+git ls-remote origin refs/heads/main
+
+must again equal:
+
+approved base commit
+
+Otherwise:
+
+TARGET_BRANCH_ADVANCED
+
+7. Never force push
+
+Reject:
+
+git push --force
+
+Reject:
+
+git push --force-with-lease
+
+Reject:
+
+git push origin HEAD:main --force
+
+Allowed:
+
+git push origin HEAD:refs/heads/main
+
+Fast-forward only.
+8. Push process
+
+Git invocation:
+
+git \
+-c credential.helper= \
+-c core.hooksPath=/dev/null \
+push \
+origin \
+HEAD:refs/heads/main
+
+No shell.
+
+No interactive prompt.
+9. Credential broker
+
+Instead of storing credentials inside:
+
+database
+
+config
+
+repository
+
+environment forever
+
+Introduce:
+
+CredentialBroker
+
+Interface:
+
+class CredentialBroker:
+
+    def acquire_push_credentials(
+        self,
+        repository_id,
+    ):
+        ...
+
+    def release(
+        self,
+        credential,
+    ):
+        ...
+
+Worker never persists secrets.
+10. Push stage
+
+Pipeline becomes:
+
+SnapshotStage
+
+PatchStage
+
+FilesystemStage
+
+TestStage
+
+CommitStage
+
+PushStage
+
+Each stage:
+
+execute(context)
+
+returns updated context.
+11. Push context
+
+Input:
+
+verified commit
+
+approval
+
+repository
+
+claim
+
+worker identity
+
+Output:
+
+remote commit
+
+push evidence
+
+integration evidence
+
+12. Push verification
+
+Immediately after push:
+
+Read:
+
+git ls-remote origin refs/heads/main
+
+Must equal:
+
+local commit
+
+Then:
+
+git fetch origin
+
+Verify:
+
+git cat-file
+
+13. Remote commit verification
+
+Verify:
+
+remote commit SHA
+
+remote tree SHA
+
+remote parent SHA
+
+All must match local.
+14. Parent verification
+
+Parent:
+
+approved base commit
+
+Exactly.
+
+Reject if:
+
+merge commit
+
+different parent
+
+unexpected rewrite
+
+15. Tree verification
+
+Tree:
+
+candidate tree
+
+must equal
+
+remote tree
+
+Otherwise:
+
+REMOTE_TREE_MISMATCH
+
+16. Integration completion
+
+Only after:
+
+push verified
+
+commit verified
+
+tree verified
+
+parent verified
+
+transition:
+
+commit_created
+        │
+        ▼
+integrated
+
+Never earlier.
+17. Persist integration record
+
+Store:
+
+integration id
+
+commit SHA
+
+tree SHA
+
+parent SHA
+
+branch
+
+approval
+
+attempt
+
+worker
+
+timestamps
+
+repository fingerprint
+
+Immutable.
+18. Patch status
+
+Patch:
+
+accepted
+
+becomes:
+
+integrated
+
+19. Approval status
+
+Already:
+
+consumed
+
+No further changes.
+20. Attempt status
+
+Transition:
+
+commit_created
+        │
+        ▼
+pushing
+        │
+        ▼
+verifying_remote
+        │
+        ▼
+integrated
+
+21. Failure after push
+
+Suppose:
+
+push succeeded
+
+verification failed
+
+Never:
+
+pretend push failed
+
+Instead:
+
+REMOTE_VERIFICATION_FAILED
+
+Human intervention required.
+
+Repository has already changed.
+
+Audit must record this.
+22. Failure before push
+
+If:
+
+credential failure
+
+network failure
+
+authentication failure
+
+Repository unchanged.
+
+Retry possible.
+23. Audit events
+
+PushStarted
+
+PushCompleted
+
+RemoteVerified
+
+IntegrationCompleted
+
+24. Remote evidence
+
+Persist:
+
+remote HEAD
+
+commit
+
+tree
+
+parent
+
+Git version
+
+repository fingerprint
+
+25. Acceptance criteria
+
+✓ Push credential isolated
+
+✓ Push credential temporary
+
+✓ No force push
+
+✓ Remote checked twice
+
+✓ Push verified
+
+✓ Tree verified
+
+✓ Parent verified
+
+✓ Commit verified
+
+✓ Patch marked integrated
+
+✓ Immutable integration evidence stored
+
+✓ Complete audit trail
+
+26. P3 status
+
+Review lifecycle                    complete
+Revision lifecycle                  complete
+Eligibility                         complete
+Approval                            complete
+Integration attempt                 complete
+Snapshot verification               complete
+Patch application                   complete
+Filesystem verification             complete
+Approved testing                    complete
+Controlled commit                   complete
+Restricted push                     complete
+Remote verification                 complete
+Integration completion              complete
+Rollback metadata                   next (P3.6)
+
+Before P3.6: a recommended architectural refinement
+
+At this point, the implementation has accumulated several long-running worker operations. Rather than keeping all runtime state in a single IntegrationAttempt, introduce a finer-grained execution model:
+
+IntegrationAttempt
+        │
+        ├── Run 1
+        │     ├── SnapshotStage
+        │     ├── PatchStage
+        │     ├── TestStage
+        │     ├── CommitStage
+        │     └── PushStage
+        │
+        ├── Run 2 (if infrastructure retry allowed)
+        └── ...
+
+This adds an integration_attempt_runs aggregate that records each execution of an attempt separately. The business decision ("integrate this approved patch") remains immutable, while operational retries (worker crash, transient network outage, container restart) become independently auditable.
+
+Benefits include:
+
+    Clear separation between business state and runtime state.
+
+    Safe worker restart after infrastructure failures.
+
+    Detailed timing and resource metrics per run.
+
+    Easier diagnosis of intermittent issues.
+
+    Foundation for future distributed execution across multiple integration workers.
+
+With this refinement in place, P3.6 can focus entirely on rollback metadata, recovery procedures, failure classification, and long-term operational resilience without overloading the IntegrationAttempt aggregate.
+
+continue
+
+P3.6 — Rollback Metadata, Recovery Procedures, and Operational Resilience
+
+P3.6 completes the controlled integration lifecycle.
+
+The objective is not to promise that every integration can be automatically reversed. The objective is to preserve enough verified evidence to:
+
+    determine exactly what changed;
+
+    classify the failure;
+
+    identify whether the authoritative branch changed;
+
+    construct a safe rollback candidate;
+
+    require appropriate human authorization;
+
+    execute recovery without rewriting history;
+
+    preserve the complete incident trail.
+
+The default rollback strategy is:
+
+forward-only recovery through a new revert commit
+
+Never:
+
+force push
+reset protected branch
+rewrite published history
+delete the integration commit
+silently alter audit records
+
+1. P3.6 execution model
+
+After successful integration:
+
+Approved patch
+      │
+      ▼
+Controlled commit
+      │
+      ▼
+Restricted push
+      │
+      ▼
+Verified remote commit
+      │
+      ▼
+Integration completed
+      │
+      ▼
+Rollback metadata generated
+
+If a later problem is reported:
+
+Incident detected
+      │
+      ▼
+Create rollback assessment
+      │
+      ▼
+Verify remote repository state
+      │
+      ▼
+Determine recovery strategy
+      │
+      ├── no rollback required
+      │
+      ├── revert commit possible
+      │
+      ├── compensating patch required
+      │
+      └── manual recovery required
+      │
+      ▼
+Human rollback approval
+      │
+      ▼
+Fresh recovery attempt
+      │
+      ▼
+Tests
+      │
+      ▼
+Controlled recovery commit
+      │
+      ▼
+Restricted push
+      │
+      ▼
+Remote verification
+
+Rollback must be implemented as a new governed workflow, not as a direct administrative Git operation.
+2. Core principle: rollback is not deletion
+
+Once the integration commit exists on the protected branch, it is part of the repository history.
+
+The platform must preserve:
+
+base commit
+integration commit
+candidate tree
+remote verification
+approval
+review
+tests
+worker run
+push evidence
+
+Recovery creates additional history:
+
+Base commit A
+      │
+      ▼
+Integration commit B
+      │
+      ▼
+Rollback or recovery commit C
+
+It must never transform history into:
+
+Base commit A
+
+by deleting commits B and C.
+3. Recovery strategy categories
+
+Use explicit categories.
+
+# app/domain/recovery/enums.py
+
+from enum import StrEnum
+
+
+class RecoveryStrategy(StrEnum):
+    NO_ACTION = "no_action"
+    REVERT_COMMIT = "revert_commit"
+    COMPENSATING_PATCH = "compensating_patch"
+    MANUAL_RECOVERY = "manual_recovery"
+
+
+class RecoveryAssessmentStatus(StrEnum):
+    PENDING = "pending"
+    EVALUATING = "evaluating"
+    REVERTIBLE = "revertible"
+    COMPENSATION_REQUIRED = "compensation_required"
+    MANUAL_INTERVENTION_REQUIRED = (
+        "manual_intervention_required"
+    )
+    NO_ACTION_REQUIRED = "no_action_required"
+    FAILED = "failed"
+
+
+class RollbackApprovalStatus(StrEnum):
+    ACTIVE = "active"
+    DENIED = "denied"
+    REVOKED = "revoked"
+    CONSUMED = "consumed"
+    EXPIRED = "expired"
+
+
+class RecoveryAttemptStatus(StrEnum):
+    QUEUED = "queued"
+    CLAIMED = "claimed"
+    VERIFYING_REMOTE = "verifying_remote"
+    PREPARING_WORKSPACE = "preparing_workspace"
+    CREATING_REVERT = "creating_revert"
+    APPLYING_COMPENSATION = "applying_compensation"
+    RUNNING_TESTS = "running_tests"
+    CREATING_COMMIT = "creating_commit"
+    PUSHING = "pushing"
+    VERIFYING_REMOTE_RESULT = "verifying_remote_result"
+    RECOVERED = "recovered"
+
+    REMOTE_STATE_CHANGED = "remote_state_changed"
+    REVERT_CONFLICT = "revert_conflict"
+    TEST_FAILED = "test_failed"
+    COMMIT_FAILED = "commit_failed"
+    PUSH_FAILED = "push_failed"
+    REMOTE_VERIFICATION_FAILED = (
+        "remote_verification_failed"
+    )
+    CANCELLED = "cancelled"
+
+4. When a normal revert is safe
+
+A direct revert commit is usually possible when:
+
+the integration commit exists in protected-branch history
+the repository can construct an inverse diff
+the revert applies without conflicts
+the resulting paths remain within authorized recovery scope
+required tests pass
+repository policy permits recovery commits
+
+A normal revert may be unsafe or insufficient when the integration changed:
+
+database schemas
+external data
+message formats
+deployed infrastructure
+cloud resources
+secrets
+external APIs
+irreversible migrations
+published packages
+user-generated data
+
+In those cases, the Git revert may be only one component of a larger recovery plan.
+5. Rollback metadata generated at integration completion
+
+P3.5 should be extended so every successful integration generates a RollbackRecord.
+
+The record captures what would be needed to assess or reverse the change.
+
+It must include:
+
+integration attempt ID
+integration commit SHA
+parent commit SHA
+integration tree SHA
+parent tree SHA
+target branch
+changed paths
+file modes
+rename information
+patch artifact hash
+inverse-diff artifact hash
+approved tests
+repository policy version
+recovery policy version
+migration-risk classification
+external-side-effect declaration
+
+6. New aggregates
+
+Add:
+
+RollbackRecord
+RecoveryIncident
+RecoveryAssessment
+RollbackApproval
+RecoveryAttempt
+RecoveryAttemptRun
+RecoveryTestRun
+RecoveryCommit
+RecoveryRemoteVerification
+
+These aggregates must remain separate from the original integration attempt.
+
+The original integration evidence is immutable.
+7. Files to add
+
+app/
+├── api/
+│   └── v1/
+│       ├── recovery_incidents.py
+│       ├── recovery_assessments.py
+│       ├── rollback_approvals.py
+│       └── recovery_attempts.py
+│
+├── application/
+│   ├── commands/
+│   │   ├── create_recovery_incident.py
+│   │   ├── assess_recovery.py
+│   │   ├── approve_rollback.py
+│   │   ├── create_recovery_attempt.py
+│   │   └── execute_recovery_attempt.py
+│   │
+│   ├── handlers/
+│   │   ├── create_recovery_incident_handler.py
+│   │   ├── assess_recovery_handler.py
+│   │   ├── approve_rollback_handler.py
+│   │   └── create_recovery_attempt_handler.py
+│   │
+│   ├── policies/
+│   │   ├── recovery_strategy_policy.py
+│   │   ├── rollback_approval_policy.py
+│   │   ├── revert_scope_policy.py
+│   │   └── recovery_remote_state_policy.py
+│   │
+│   └── services/
+│       ├── inverse_diff_service.py
+│       ├── recovery_binding_service.py
+│       └── recovery_risk_classifier.py
+│
+├── domain/
+│   └── recovery/
+│       ├── entities.py
+│       ├── enums.py
+│       ├── events.py
+│       ├── exceptions.py
+│       └── state_machine.py
+│
+├── infrastructure/
+│   ├── git/
+│   │   ├── revert_builder.py
+│   │   └── recovery_repository_verifier.py
+│   │
+│   └── persistence/
+│       ├── models/
+│       │   ├── rollback_record.py
+│       │   ├── recovery_incident.py
+│       │   ├── recovery_assessment.py
+│       │   ├── rollback_approval.py
+│       │   ├── recovery_attempt.py
+│       │   └── recovery_commit.py
+│       └── repositories/
+│           ├── rollback_record_repository.py
+│           ├── recovery_incident_repository.py
+│           └── recovery_attempt_repository.py
+│
+└── workers/
+    └── recovery/
+        ├── worker.py
+        └── processor.py
+
+Migration:
+
+alembic/versions/0011_recovery_and_rollback.py
+
+8. Rollback record schema
+
+# app/infrastructure/persistence/models/rollback_record.py
+
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import Boolean, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.infrastructure.persistence.base import Base
+
+
+class RollbackRecordModel(Base):
+    __tablename__ = "rollback_records"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+    )
+
+    integration_attempt_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "integration_attempts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    integration_commit_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "integration_commits.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    repository_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "repositories.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    target_branch: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    integration_commit_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    parent_commit_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    integration_tree_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    parent_tree_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    changed_paths: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    changed_paths_sha256: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    inverse_diff_artifact_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    inverse_diff_sha256: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    original_patch_sha256: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    approved_test_commands: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    approved_test_commands_sha256: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    external_side_effects_declared: Mapped[bool] = (
+        mapped_column(
+            Boolean,
+            nullable=False,
+        )
+    )
+
+    database_change_detected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    deployment_change_detected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    recovery_policy_version: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    rollback_binding_sha256: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+9. Why store an inverse diff artifact
+
+A revert can be generated later using:
+
+git revert
+
+However, preserving an inverse diff at integration time provides independent evidence.
+
+It allows the platform to prove:
+
+what the exact inverse of the integrated change was
+at the moment integration completed
+
+Generate it from the trusted repository state:
+
+git diff <integration-commit>^ <integration-commit>
+
+The inverse can be represented as:
+
+git diff -R <parent> <integration>
+
+or equivalently:
+
+git diff <integration> <parent>
+
+Store the result as an immutable artifact with SHA-256.
+
+The inverse diff is evidence, not automatic authorization to apply it.
+10. Creating rollback metadata after integration
+
+Extend the final P3.5 stage:
+
+class RollbackMetadataService:
+    RECOVERY_POLICY_VERSION = "recovery-v1"
+
+    def build(
+        self,
+        *,
+        repository_path,
+        integration_attempt,
+        integration_commit,
+        approved_test_commands,
+    ):
+        parent_commit_sha = self._git.run(
+            "rev-parse",
+            f"{integration_commit.commit_sha}^",
+            cwd=repository_path,
+        ).stdout.strip()
+
+        parent_tree_sha = self._git.run(
+            "rev-parse",
+            f"{parent_commit_sha}^{{tree}}",
+            cwd=repository_path,
+        ).stdout.strip()
+
+        inverse_diff = self._git.run(
+            "diff",
+            "--binary",
+            "--full-index",
+            integration_commit.commit_sha,
+            parent_commit_sha,
+            cwd=repository_path,
+        ).stdout.encode("utf-8")
+
+        changed_paths = self._collect_changed_paths(
+            repository_path=repository_path,
+            parent_commit_sha=parent_commit_sha,
+            integration_commit_sha=(
+                integration_commit.commit_sha
+            ),
+        )
+
+        inverse_artifact = self._artifact_store.write_bytes(
+            artifact_type="integration_inverse_diff",
+            content=inverse_diff,
+            media_type="text/x-diff",
+        )
+
+        payload = {
+            "integration_attempt_id": str(
+                integration_attempt.id
+            ),
+            "integration_commit_sha": (
+                integration_commit.commit_sha
+            ),
+            "parent_commit_sha": parent_commit_sha,
+            "integration_tree_sha": (
+                integration_commit.tree_sha
+            ),
+            "parent_tree_sha": parent_tree_sha,
+            "changed_paths_sha256": sha256_json(
+                changed_paths
+            ),
+            "inverse_diff_sha256": (
+                inverse_artifact.sha256
+            ),
+            "original_patch_sha256": (
+                integration_attempt.expected_patch_sha256
+            ),
+            "approved_test_commands_sha256": (
+                integration_attempt
+                .expected_test_commands_sha256
+            ),
+            "recovery_policy_version": (
+                self.RECOVERY_POLICY_VERSION
+            ),
+        }
+
+        return RollbackMetadata(
+            parent_commit_sha=parent_commit_sha,
+            parent_tree_sha=parent_tree_sha,
+            changed_paths=changed_paths,
+            inverse_artifact=inverse_artifact,
+            rollback_binding_sha256=sha256_json(payload),
+        )
+
+11. Recovery incident
+
+A recovery workflow begins with an incident record.
+
+An incident is not itself an approval or recovery attempt.
+
+It documents:
+
+what was observed
+when it was observed
+who reported it
+which integration is implicated
+severity
+affected environment
+known symptoms
+external incident reference
+
+Schema:
+
+# app/domain/recovery/entities.py
+
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryIncident:
+    id: UUID
+    integration_attempt_id: UUID
+    reported_by: str
+    severity: str
+    summary: str
+    details: str
+    affected_environment: str
+    detected_at: datetime
+    external_reference: str | None
+
+12. Incident API
+
+Endpoint:
+
+POST /api/v1/integration-attempts/{attempt_id}/recovery-incidents
+
+Request:
+
+{
+  "severity": "high",
+  "summary": "Authentication requests return HTTP 500.",
+  "details": "Errors began after the controlled integration commit reached main.",
+  "affected_environment": "production",
+  "detected_at": "2026-07-31T03:20:00Z",
+  "external_reference": "INC-2026-0042"
+}
+
+The API must not automatically create or execute a rollback.
+13. Recovery assessment
+
+The assessment determines what kind of recovery is safe.
+
+Inputs:
+
+rollback record
+incident
+current remote branch state
+integration commit ancestry
+files changed
+repository policy
+migration indicators
+external-side-effect declaration
+test requirements
+
+Output:
+
+recommended strategy
+risk level
+whether automatic revert is technically possible
+whether human approval is required
+whether operations or database coordination is required
+required tests
+expected branch head
+
+14. Recovery assessment schema
+
+class RecoveryAssessmentModel(Base):
+    __tablename__ = "recovery_assessments"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+    )
+
+    incident_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "recovery_incidents.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    rollback_record_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "rollback_records.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    recommended_strategy: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    expected_remote_head_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    integration_commit_is_ancestor: Mapped[bool] = (
+        mapped_column(
+            nullable=False,
+        )
+    )
+
+    direct_revert_possible: Mapped[bool] = mapped_column(
+        nullable=False,
+    )
+
+    database_coordination_required: Mapped[bool] = (
+        mapped_column(
+            nullable=False,
+        )
+    )
+
+    external_coordination_required: Mapped[bool] = (
+        mapped_column(
+            nullable=False,
+        )
+    )
+
+    required_test_commands: Mapped[list[dict]] = (
+        mapped_column(
+            JSONB,
+            nullable=False,
+        )
+    )
+
+    findings: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    assessment_policy_version: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    assessment_binding_sha256: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    assessed_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+15. Recovery strategy policy
+
+# app/application/policies/recovery_strategy_policy.py
+
+class RecoveryStrategyPolicy:
+    POLICY_VERSION = "recovery-assessment-v1"
+
+    def determine(
+        self,
+        *,
+        rollback_record,
+        remote_state,
+        repository_policy,
+    ):
+        findings: list[dict] = []
+
+        if not remote_state.integration_commit_is_ancestor:
+            findings.append({
+                "code": "INTEGRATION_COMMIT_NOT_IN_HISTORY",
+                "severity": "critical",
+            })
+
+            return RecoveryDecision(
+                strategy="manual_recovery",
+                risk_level="critical",
+                direct_revert_possible=False,
+                findings=findings,
+            )
+
+        if rollback_record.external_side_effects_declared:
+            findings.append({
+                "code": "EXTERNAL_SIDE_EFFECTS_DECLARED",
+                "severity": "high",
+            })
+
+        if rollback_record.database_change_detected:
+            findings.append({
+                "code": "DATABASE_CHANGE_DETECTED",
+                "severity": "high",
+            })
+
+        if rollback_record.deployment_change_detected:
+            findings.append({
+                "code": "DEPLOYMENT_CHANGE_DETECTED",
+                "severity": "high",
+            })
+
+        if (
+            rollback_record.database_change_detected
+            or rollback_record.external_side_effects_declared
+        ):
+            return RecoveryDecision(
+                strategy="compensating_patch",
+                risk_level="high",
+                direct_revert_possible=False,
+                findings=findings,
+            )
+
+        return RecoveryDecision(
+            strategy="revert_commit",
+            risk_level="medium",
+            direct_revert_possible=True,
+            findings=findings,
+        )
+
+This policy should be conservative.
+
+False positives are preferable to unsafe automatic rollback.
+16. Database-change detection
+
+A useful initial classifier can flag paths such as:
+
+alembic/versions/
+migrations/
+db/migrations/
+schema/
+terraform/
+helm/
+k8s/
+deploy/
+
+It should also inspect patch metadata for:
+
+DROP TABLE
+ALTER TABLE
+CREATE INDEX
+data migration functions
+deployment manifests
+infrastructure state
+
+This is a risk signal, not conclusive semantic proof.
+
+The classifier output must be visible and auditable.
+17. Rollback approval
+
+A recovery action requires a separate human approval.
+
+It must bind:
+
+recovery incident
+recovery assessment
+rollback record
+repository
+target branch
+expected current remote head
+integration commit
+strategy
+required tests
+assessment policy version
+recovery policy version
+
+The original integration approval cannot authorize rollback.
+
+Different decision, different risk, different authority.
+18. Separation of duties
+
+Recommended permissions:
+
+incident reporter
+    can create recovery incident
+
+recovery assessor
+    can run or review assessment
+
+rollback approver
+    can approve recovery
+
+recovery worker
+    can execute approved recovery
+
+audit reader
+    can inspect evidence
+
+The integration worker identity may execute recovery only if it has a separately scoped recovery-worker role.
+
+The agent that created the original implementation must not approve or execute rollback.
+19. Rollback approval model
+
+class RollbackApprovalModel(Base):
+    __tablename__ = "rollback_approvals"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+    )
+
+    recovery_assessment_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "recovery_assessments.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    rollback_record_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "rollback_records.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    repository_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "repositories.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    target_branch: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    recovery_strategy: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    expected_remote_head_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    integration_commit_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    required_test_commands: Mapped[list[dict]] = (
+        mapped_column(
+            JSONB,
+            nullable=False,
+        )
+    )
+
+    required_test_commands_sha256: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    approval_binding_sha256: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    approver_subject: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    approved_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        nullable=True,
+    )
+
+Only one active rollback approval should exist per recovery assessment.
+20. Recovery attempt
+
+A recovery attempt is structurally similar to an integration attempt but uses separate tables and states.
+
+It binds:
+
+rollback approval
+recovery assessment
+rollback record
+repository
+target branch
+expected remote head
+recovery strategy
+integration commit
+approved tests
+
+The attempt creation must atomically:
+
+lock rollback approval
+verify active
+recalculate binding
+create recovery attempt
+mark approval consumed
+write audit event
+write outbox event
+commit
+
+21. Current remote-state problem
+
+A critical difference exists between integration and rollback.
+
+For integration, the expected target head was the original base commit.
+
+For rollback, other legitimate commits may have been added after the integration commit.
+
+Example:
+
+A — B — C — D
+    ↑
+ integration commit
+
+The platform must decide whether it is safe to revert B when current head is D.
+
+It must not require:
+
+current head == integration commit
+
+in every case.
+
+Instead it must verify:
+
+integration commit is an ancestor of current head
+current head equals the head approved during rollback authorization
+
+This prevents applying the approved recovery against a different branch state.
+22. Recovery remote-state policy
+
+class RecoveryRemoteStatePolicy:
+    def verify_before_execution(
+        self,
+        *,
+        approval,
+        current_remote_head_sha: str,
+        integration_commit_is_ancestor: bool,
+    ) -> None:
+        if (
+            current_remote_head_sha
+            != approval.expected_remote_head_sha
+        ):
+            raise RecoveryRemoteStateChanged(
+                "The target branch changed after "
+                "rollback approval."
+            )
+
+        if not integration_commit_is_ancestor:
+            raise RecoveryHistoryInvalid(
+                "The integration commit is no longer "
+                "an ancestor of the protected branch."
+            )
+
+If the branch moves after rollback approval:
+
+stop
+reassess
+obtain new approval
+
+Do not automatically rebase the recovery commit.
+23. Creating a fresh recovery snapshot
+
+Recovery must use a new disposable workspace.
+
+Never reuse the original integration workspace.
+
+Flow:
+
+fresh clone
+verify remote identity
+fetch target branch
+verify expected current remote head
+checkout current remote head detached
+verify tree
+verify clean state
+verify integration commit ancestry
+
+The recovery commit is based on the current approved branch head, not necessarily the original integration commit.
+24. Revert commit creation
+
+For a simple one-parent integration commit:
+
+git revert --no-commit <integration-commit-sha>
+
+Use:
+
+shell=False
+hooks disabled
+isolated Git configuration
+no editor
+no signing unless controlled signing is implemented
+
+Recommended environment:
+
+GIT_EDITOR=/bin/false
+GIT_SEQUENCE_EDITOR=/bin/false
+GIT_TERMINAL_PROMPT=0
+
+Invocation:
+
+git.run(
+    "-c",
+    "credential.helper=",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "revert",
+    "--no-commit",
+    "--no-edit",
+    integration_commit_sha,
+    cwd=repository_path,
+)
+
+Because the integration commit is guaranteed to have one parent, -m is not required.
+25. Revert conflicts
+
+A later commit may have modified the same lines.
+
+Example:
+
+Integration B changes auth.py
+Later commit C also changes auth.py
+
+Then:
+
+git revert --no-commit B
+
+may conflict.
+
+The recovery worker must not resolve the conflict autonomously in P3.6.
+
+It must:
+
+capture conflict paths
+abort revert
+record evidence
+mark REVERT_CONFLICT
+require compensating patch workflow
+
+Abort:
+
+git revert --abort
+
+Verify the repository returns to a clean state.
+26. Conflict evidence
+
+Persist:
+
+conflicting paths
+Git status
+current head
+integration commit
+repository tree
+revert command exit code
+sanitized stderr
+
+Do not persist secrets or credential paths.
+
+Failure code:
+
+REVERT_CONFLICT
+
+Recommended next action:
+
+new bounded compensating work package
+implementation
+tests
+independent review
+human approval
+controlled integration
+
+27. Scope verification for rollback
+
+A revert should normally modify only paths that the original integration changed.
+
+Compare:
+
+rollback changed paths
+
+against:
+
+rollback_record.changed_paths
+
+However, Git may produce related changes due to rename or mode behavior.
+
+Policy:
+
+rollback_paths <= original_changed_paths
+
+unless an explicitly approved compensating patch expands the scope.
+
+If the revert touches additional paths:
+
+ROLLBACK_SCOPE_VIOLATION
+
+28. Symlink and file-mode verification
+
+Use the same controls as P3.4.
+
+Verify after revert:
+
+no path escape
+no unexpected symlink target
+no .git metadata changes
+no hooks
+no submodule modification
+no device or socket creation
+file modes match intended inverse change
+
+Recovery is not exempt from repository safety policy.
+29. Recovery tests
+
+Rollback approval binds the exact tests.
+
+The test set should include:
+
+original approved tests
+incident-specific regression test if available
+repository-required branch tests
+recovery-specific validation
+
+The client must not modify the commands during execution.
+
+Run:
+
+structured argv
+shell disabled
+network restricted
+resource limits
+isolated environment
+
+Stop on first failure.
+
+A failed recovery test means:
+
+no recovery commit
+no push
+
+30. Recovery commit
+
+Commit message example:
+
+Revert controlled integration <commit-sha>
+
+Recovery incident: INC-2026-0042
+Recovery assessment: <assessment-id>
+Rollback approval: <approval-id>
+
+Generated by Controlled Recovery Worker
+
+The recovery commit must have:
+
+one parent
+parent = approved current remote head
+tree = verified recovery tree
+dedicated recovery-worker identity
+deterministic message structure
+
+31. Recovery commit model
+
+class RecoveryCommitModel(Base):
+    __tablename__ = "recovery_commits"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+    )
+
+    recovery_attempt_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "recovery_attempts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    commit_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        unique=True,
+    )
+
+    tree_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    parent_commit_sha: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    reverted_integration_commit_sha: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    commit_message_sha256: Mapped[str] = (
+        mapped_column(
+            Text,
+            nullable=False,
+        )
+    )
+
+    author_name: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    author_email: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+32. Recovery push
+
+Use the same restricted push architecture as P3.5.
+
+Before push:
+
+re-read remote head
+verify it still equals rollback approval expected head
+verify local parent equals that head
+verify recovery commit
+acquire temporary push credential
+push fast-forward only
+
+Allowed:
+
+git push origin HEAD:refs/heads/main
+
+Forbidden:
+
+force
+force-with-lease
+delete branch
+push tag
+push multiple refs
+
+33. Remote recovery verification
+
+After push, verify:
+
+remote branch head = recovery commit
+remote tree = local recovery tree
+remote parent = approved pre-recovery head
+reverted integration commit remains in history
+
+Recovery completion does not mean the original integration disappears.
+
+It means a verified compensating commit was appended.
+34. Patch and integration states after recovery
+
+Do not mutate the original patch status from:
+
+integrated
+
+to:
+
+not integrated
+
+The patch was integrated historically.
+
+Use an additional recovery dimension.
+
+Example:
+
+integration outcome:
+    integrated
+    recovered
+
+Add to integration_attempts:
+
+recovery_status
+
+Possible values:
+
+not_required
+incident_open
+recovery_assessment_pending
+rollback_approved
+recovery_in_progress
+recovered
+manual_recovery_required
+
+Alternatively, derive the state from recovery aggregates instead of denormalizing it.
+
+The derived approach is cleaner for immutable audit history.
+35. Failure classification
+
+Recovery behavior depends heavily on failure class.
+
+Use explicit categories.
+
+class FailureClass(StrEnum):
+    TRANSIENT_INFRASTRUCTURE = "transient_infrastructure"
+    DETERMINISTIC_VALIDATION = "deterministic_validation"
+    CONCURRENCY_CONFLICT = "concurrency_conflict"
+    AUTHORIZATION = "authorization"
+    INTEGRITY = "integrity"
+    EXTERNAL_SIDE_EFFECT = "external_side_effect"
+    UNKNOWN = "unknown"
+
+Examples:
+Failure	Class	Automatic retry
+Temporary network timeout before push	Transient infrastructure	Possibly
+Patch hash mismatch	Integrity	No
+Target branch moved	Concurrency conflict	No
+Test failure	Deterministic validation	No
+Credential denied	Authorization	No
+Worker crash before Git changes	Transient infrastructure	Possibly
+Push succeeded, verification uncertain	Integrity/unknown	No
+Database migration side effect	External side effect	No
+36. Retry policy
+
+Automatic retries must be stage-aware.
+Safe to retry automatically
+
+Potentially safe:
+
+queue claim acquisition
+artifact read timeout
+fresh clone network interruption
+database connection loss before transaction commit
+worker crash before patch or recovery modification
+
+Do not automatically retry
+
+Do not retry automatically after:
+
+patch application failure
+revert conflict
+test failure
+commit verification failure
+target branch advancement
+push result uncertain
+remote verification mismatch
+integrity mismatch
+authorization failure
+
+A retry policy should never be based only on exception type such as RuntimeError.
+
+Use structured failure codes and stage information.
+37. Integration attempt runs
+
+Now implement the refinement introduced before P3.6.
+
+Business attempt:
+
+IntegrationAttempt
+
+Operational executions:
+
+IntegrationAttemptRun
+
+Schema:
+
+class IntegrationAttemptRunModel(Base):
+    __tablename__ = "integration_attempt_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+    )
+
+    integration_attempt_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "integration_attempts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    run_number: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    worker_id: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    current_stage: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    claim_token_hash: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    claim_expires_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+    failure_class: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    failure_code: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+    )
+
+    completed_at: Mapped[datetime | None] = (
+        mapped_column(
+            nullable=True,
+        )
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "integration_attempt_id",
+            "run_number",
+            name="uq_integration_attempt_run_number",
+        ),
+    )
+
+The same pattern should be used for recovery_attempt_runs.
+38. Stage execution records
+
+For detailed observability, add:
+
+integration_stage_executions
+recovery_stage_executions
+
+Each stage record includes:
+
+run ID
+stage name
+attempt number
+status
+started_at
+completed_at
+duration
+input binding hash
+output binding hash
+failure code
+evidence artifact ID
+
+This makes each stage independently auditable.
+39. Stage idempotency
+
+Every pipeline stage should have an idempotency rule.
+
+Example:
+Snapshot stage
+
+May rerun if no verified snapshot was persisted for the current run.
+Patch stage
+
+May not blindly rerun against an unknown workspace.
+
+It requires a fresh verified snapshot.
+Test stage
+
+May rerun only against the same verified candidate tree.
+Commit stage
+
+If a commit was already created, verify and reuse the exact commit rather than creating a second one.
+Push stage
+
+Never repeat merely because the worker did not observe the result.
+
+First query the remote.
+
+If remote already points to the expected commit:
+
+treat push as successful after verification
+
+If remote points elsewhere:
+
+manual intervention
+
+40. Push uncertainty recovery
+
+A classic failure:
+
+worker sends push
+remote accepts push
+network connection breaks before response
+
+The worker does not know whether push succeeded.
+
+Correct handling:
+
+do not push again immediately
+query remote branch
+
+Outcomes:
+Remote equals expected commit
+
+push succeeded
+continue remote verification
+
+Remote equals old base commit
+
+push likely did not succeed
+retry may be allowed according to policy
+
+Remote equals another commit
+
+concurrency conflict
+stop
+manual assessment
+
+This logic is required for both integration and recovery pushes.
+41. Recovery after worker crash
+Crash before workspace modification
+
+Safe to start a new run with a fresh workspace.
+Crash after patch or revert but before commit
+
+Delete workspace and restart from a fresh verified snapshot.
+
+Do not attempt to reconstruct local state.
+Crash after commit but before push
+
+A fresh run can recreate and verify the deterministic commit.
+
+However, Git commit SHA depends on:
+
+tree
+parent
+author
+committer
+message
+timestamps
+
+To reproduce the same SHA, commit timestamps must be persisted and reused.
+
+Therefore store planned commit metadata before commit creation.
+Crash during push
+
+Use remote-query reconciliation before any retry.
+42. Deterministic commit plan
+
+Before creating integration or recovery commit, persist a CommitPlan.
+
+Fields:
+
+tree SHA
+parent SHA
+author name
+author email
+author timestamp
+committer name
+committer email
+committer timestamp
+message
+message hash
+policy version
+
+Then create the commit using:
+
+git commit-tree
+
+rather than git commit.
+
+This is more deterministic and avoids worktree-side behavior.
+
+Example:
+
+printf '%s' "$MESSAGE" |
+git commit-tree <tree-sha> -p <parent-sha>
+
+In code, pass message through standard input without a shell.
+43. Controlled commit creation with git commit-tree
+
+def create_commit_from_plan(
+    *,
+    git_binary: str,
+    repository_path: Path,
+    plan,
+) -> str:
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/nonexistent",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": plan.author_name,
+        "GIT_AUTHOR_EMAIL": plan.author_email,
+        "GIT_AUTHOR_DATE": plan.author_date,
+        "GIT_COMMITTER_NAME": plan.committer_name,
+        "GIT_COMMITTER_EMAIL": plan.committer_email,
+        "GIT_COMMITTER_DATE": plan.committer_date,
+    }
+
+    completed = subprocess.run(
+        [
+            git_binary,
+            "commit-tree",
+            plan.tree_sha,
+            "-p",
+            plan.parent_sha,
+        ],
+        cwd=repository_path,
+        env=env,
+        shell=False,
+        input=plan.message,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=60,
+    )
+
+    if completed.returncode != 0:
+        raise CommitCreationFailed(
+            sanitize_git_error(completed.stderr)
+        )
+
+    return completed.stdout.strip()
+
+This approach should replace the earlier git commit recommendation in P3.4.
+
+It gives stronger reproducibility and recovery semantics.
+44. Updating HEAD safely
+
+After git commit-tree, update only the detached workspace reference:
+
+git update-ref HEAD <commit-sha> <parent-sha>
+
+Verify:
+
+HEAD = expected commit
+parent = expected parent
+tree = expected tree
+
+No branch is modified locally.
+
+The push stage still pushes:
+
+<commit-sha>:refs/heads/main
+
+45. Operational health metrics
+
+Expose metrics for:
+
+queued integration attempts
+queued recovery attempts
+active worker claims
+expired claims
+stage duration
+clone failures
+test failures
+push uncertainties
+remote verification failures
+revert conflicts
+manual recovery requirements
+
+Suggested Prometheus metrics:
+
+ai_enterprise_integration_attempts_total
+ai_enterprise_integration_stage_duration_seconds
+ai_enterprise_recovery_attempts_total
+ai_enterprise_recovery_conflicts_total
+ai_enterprise_worker_claims_expired_total
+ai_enterprise_push_uncertain_total
+ai_enterprise_remote_verification_failures_total
+
+Do not include repository credentials, patch contents, or sensitive paths as metric labels.
+46. Alerting conditions
+
+High-severity alerts:
+
+push succeeded but remote verification failed
+remote commit differs from expected commit
+protected branch history no longer contains integration commit
+rollback conflict on critical incident
+claim expires during push stage
+artifact hash mismatch
+repository fingerprint mismatch
+multiple active recovery attempts for one incident
+
+Medium severity:
+
+repeated clone failures
+test timeout
+recovery approval expired
+worker unavailable
+outbox backlog
+
+47. Recovery API endpoints
+
+Add:
+
+POST /api/v1/integration-attempts/{id}/recovery-incidents
+POST /api/v1/recovery-incidents/{id}/assessments
+POST /api/v1/recovery-assessments/{id}/approvals
+POST /api/v1/rollback-approvals/{id}/attempts
+
+GET /api/v1/recovery-incidents/{id}
+GET /api/v1/recovery-assessments/{id}
+GET /api/v1/recovery-attempts/{id}
+GET /api/v1/recovery-attempts/{id}/evidence
+
+Keep assessment, approval, and execution separate.
+48. Domain exceptions
+
+class RecoveryError(Exception):
+    code = "RECOVERY_ERROR"
+
+
+class RollbackRecordNotFound(RecoveryError):
+    code = "ROLLBACK_RECORD_NOT_FOUND"
+
+
+class RecoveryAssessmentStale(RecoveryError):
+    code = "RECOVERY_ASSESSMENT_STALE"
+
+
+class RollbackApprovalHumanRequired(RecoveryError):
+    code = "ROLLBACK_APPROVAL_HUMAN_REQUIRED"
+
+
+class RollbackApprovalNotActive(RecoveryError):
+    code = "ROLLBACK_APPROVAL_NOT_ACTIVE"
+
+
+class RecoveryRemoteStateChanged(RecoveryError):
+    code = "RECOVERY_REMOTE_STATE_CHANGED"
+
+
+class RecoveryHistoryInvalid(RecoveryError):
+    code = "RECOVERY_HISTORY_INVALID"
+
+
+class RevertConflict(RecoveryError):
+    code = "REVERT_CONFLICT"
+
+
+class RollbackScopeViolation(RecoveryError):
+    code = "ROLLBACK_SCOPE_VIOLATION"
+
+
+class RecoveryTestFailed(RecoveryError):
+    code = "RECOVERY_TEST_FAILED"
+
+
+class RecoveryPushUncertain(RecoveryError):
+    code = "RECOVERY_PUSH_UNCERTAIN"
+
+
+class RecoveryRemoteVerificationFailed(RecoveryError):
+    code = "RECOVERY_REMOTE_VERIFICATION_FAILED"
+
+49. API error mapping
+
+ROLLBACK_RECORD_NOT_FOUND               404
+RECOVERY_ASSESSMENT_STALE               409
+ROLLBACK_APPROVAL_HUMAN_REQUIRED        403
+ROLLBACK_APPROVAL_NOT_ACTIVE            409
+RECOVERY_REMOTE_STATE_CHANGED           409
+RECOVERY_HISTORY_INVALID                409
+REVERT_CONFLICT                         409
+ROLLBACK_SCOPE_VIOLATION                422
+RECOVERY_TEST_FAILED                    422
+RECOVERY_PUSH_UNCERTAIN                 503
+RECOVERY_REMOTE_VERIFICATION_FAILED     500
+
+A 500 remote verification failure must also trigger a high-priority operational alert.
+50. Audit events
+
+Add:
+
+RollbackMetadataCreated
+RecoveryIncidentCreated
+RecoveryAssessmentStarted
+RecoveryAssessmentCompleted
+RollbackApprovalGranted
+RollbackApprovalDenied
+RecoveryAttemptCreated
+RecoveryAttemptClaimed
+RecoverySnapshotVerified
+RevertPrepared
+RecoveryTestsCompleted
+RecoveryCommitCreated
+RecoveryPushStarted
+RecoveryPushReconciled
+RecoveryRemoteVerified
+RecoveryCompleted
+RecoveryManualInterventionRequired
+
+Each event includes:
+
+aggregate ID
+correlation ID
+causation ID
+actor
+worker
+policy versions
+binding hashes
+artifact references
+timestamps
+
+51. End-to-end recovery test
+
+async def test_reverts_verified_integration_commit(
+    api_client,
+    recovery_worker,
+    seeded_integrated_patch,
+):
+    integration = seeded_integrated_patch.integration_attempt
+
+    incident_response = await api_client.post(
+        (
+            f"/api/v1/integration-attempts/"
+            f"{integration.id}/recovery-incidents"
+        ),
+        json={
+            "severity": "high",
+            "summary": "Regression detected after integration.",
+            "details": (
+                "The affected endpoint returns invalid data."
+            ),
+            "affected_environment": "production",
+            "detected_at": "2026-07-31T03:30:00Z",
+            "external_reference": "INC-2026-0042",
+        },
+        headers={
+            "Authorization": "Bearer incident-reporter-token"
+        },
+    )
+
+    assert incident_response.status_code == 201
+    incident_id = incident_response.json()["id"]
+
+    assessment_response = await api_client.post(
+        (
+            f"/api/v1/recovery-incidents/"
+            f"{incident_id}/assessments"
+        ),
+        json={},
+        headers={
+            "Authorization": "Bearer recovery-assessor-token"
+        },
+    )
+
+    assert assessment_response.status_code == 201
+    assessment = assessment_response.json()
+
+    assert assessment["recommended_strategy"] == "revert_commit"
+    assert assessment["direct_revert_possible"] is True
+
+    approval_response = await api_client.post(
+        (
+            f"/api/v1/recovery-assessments/"
+            f"{assessment['id']}/approvals"
+        ),
+        json={
+            "decision": "approved",
+            "reason": (
+                "The regression is confirmed and "
+                "the bounded revert is authorized."
+            ),
+        },
+        headers={
+            "Authorization": "Bearer rollback-approver-token"
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    attempt_response = await api_client.post(
+        (
+            f"/api/v1/rollback-approvals/"
+            f"{approval_response.json()['id']}/attempts"
+        ),
+        json={
+            "reason": "Execute approved recovery."
+        },
+        headers={
+            "Authorization": "Bearer recovery-operator-token"
+        },
+    )
+
+    assert attempt_response.status_code == 201
+    recovery_attempt_id = attempt_response.json()["id"]
+
+    await recovery_worker.process_one()
+
+    result = await api_client.get(
+        (
+            f"/api/v1/recovery-attempts/"
+            f"{recovery_attempt_id}"
+        ),
+        headers={
+            "Authorization": "Bearer audit-reader-token"
+        },
+    )
+
+    assert result.status_code == 200
+    assert result.json()["status"] == "recovered"
+    assert result.json()["recovery_commit_sha"] is not None
+
+52. Critical conflict test
+
+async def test_revert_conflict_requires_compensating_patch(
+    seeded_integration_with_later_conflicting_commit,
+    recovery_worker,
+):
+    attempt = await create_approved_recovery_attempt(
+        seeded_integration_with_later_conflicting_commit
+    )
+
+    await recovery_worker.process(attempt.id)
+
+    stored = await load_recovery_attempt(attempt.id)
+
+    assert stored.status == "revert_conflict"
+    assert stored.failure_code == "REVERT_CONFLICT"
+    assert stored.recovery_commit_id is None
+    assert stored.push_started_at is None
+
+Also verify:
+
+revert aborted
+workspace clean before deletion
+conflict evidence stored
+manual or compensating workflow required
+
+53. Push-uncertainty test
+
+Simulate:
+
+remote accepts push
+client connection drops
+
+The worker must:
+
+query remote
+observe expected recovery commit
+verify tree and parent
+complete recovery
+
+It must not create a second commit or force push.
+54. Database migration outline
+
+Create:
+
+rollback_records
+recovery_incidents
+recovery_assessments
+rollback_approvals
+recovery_attempts
+recovery_attempt_runs
+recovery_test_runs
+recovery_commits
+recovery_remote_verifications
+integration_attempt_runs
+integration_stage_executions
+recovery_stage_executions
+commit_plans
+
+Important constraints:
+
+one rollback record per integration commit
+one active rollback approval per assessment
+one recovery attempt per consumed rollback approval
+unique run number per attempt
+one recovery commit per recovery attempt
+one remote verification per recovery commit
+
+55. Recommended migration order
+
+Implement in this order:
+
+1. integration_attempt_runs
+2. integration_stage_executions
+3. commit_plans
+4. rollback_records
+5. recovery_incidents
+6. recovery_assessments
+7. rollback_approvals
+8. recovery_attempts
+9. recovery_attempt_runs
+10. recovery_stage_executions
+11. recovery_test_runs
+12. recovery_commits
+13. recovery_remote_verifications
+
+This order minimizes circular dependencies.
+56. Manual implementation sequence
+
+From:
+
+cd ~/projects/ai-enterprise
+
+Create the migration:
+
+docker compose exec api \
+  alembic revision \
+  -m "add recovery and rollback workflow"
+
+Apply:
+
+docker compose exec api \
+  alembic upgrade head
+
+Run domain tests first:
+
+docker compose exec api \
+  pytest \
+  tests/unit/test_recovery_strategy_policy.py \
+  tests/unit/test_recovery_remote_state_policy.py \
+  tests/unit/test_recovery_state_machine.py \
+  tests/unit/test_failure_classification.py \
+  -q
+
+Run persistence and concurrency tests:
+
+docker compose exec api \
+  pytest \
+  tests/integration/test_rollback_record_persistence.py \
+  tests/integration/test_rollback_approval_concurrency.py \
+  tests/integration/test_recovery_attempt_creation.py \
+  -q
+
+Run Git workflow tests:
+
+docker compose exec api \
+  pytest \
+  tests/integration/test_revert_commit_creation.py \
+  tests/integration/test_revert_conflict.py \
+  tests/integration/test_recovery_push_reconciliation.py \
+  -q
+
+Run end-to-end:
+
+docker compose exec api \
+  pytest \
+  tests/e2e/test_controlled_recovery_workflow.py \
+  -q
+
+57. P3.6 acceptance criteria
+
+[ ] Every successful integration creates rollback metadata
+[ ] Parent commit and parent tree are stored
+[ ] Changed paths and file modes are stored
+[ ] Inverse diff artifact is immutable and hashed
+[ ] Recovery incidents are separate from integrations
+[ ] Recovery assessment is required before approval
+[ ] Recovery strategy is explicit
+[ ] Database and external-side-effect risks are classified
+[ ] Rollback approval is human-only
+[ ] Rollback approval binds exact remote head
+[ ] Recovery uses a fresh disposable workspace
+[ ] Protected branch identity is verified
+[ ] Integration commit ancestry is verified
+[ ] A standard revert never resolves conflicts autonomously
+[ ] Conflict evidence is preserved
+[ ] Recovery changes remain within authorized scope
+[ ] Only approval-bound tests run
+[ ] Recovery commit is single-parent
+[ ] Recovery push is fast-forward only
+[ ] Push uncertainty is reconciled through remote inspection
+[ ] Remote recovery commit, tree and parent are verified
+[ ] No protected history is rewritten
+[ ] Original integration evidence remains immutable
+[ ] Operational retries are represented as attempt runs
+[ ] Every pipeline stage has durable evidence
+[ ] Failure classifications control retry behavior
+[ ] High-risk integrity failures trigger alerts
+
+P3 final milestone status
+
+Independent patch review                  complete / P3.1
+Review findings                           complete / P3.1
+Immutable execution lineage               complete / P3.1
+Patch eligibility                         complete / P3.1
+Human integration approval                complete / P3.2
+Approval integrity binding                complete / P3.2
+Approval consumption                      complete / P3.3
+Durable integration attempt               complete / P3.3
+Fresh repository snapshot                 complete / P3.3
+Remote, commit and tree verification      complete / P3.3
+Verified patch application                complete / P3.4
+Changed-path and filesystem validation    complete / P3.4
+Approval-bound tests                      complete / P3.4
+Deterministic controlled commit           complete / P3.4
+Restricted fast-forward push              complete / P3.5
+Remote commit verification                complete / P3.5
+Immutable integration completion          complete / P3.5
+Rollback metadata                         complete / P3.6
+Governed recovery assessment              complete / P3.6
+Human rollback approval                   complete / P3.6
+Controlled recovery commit                complete / P3.6
+Recovery remote verification              complete / P3.6
+Operational retry and resilience model    complete / P3.6
+
+First practical milestone status
+
+The original first milestone is now architecturally complete:
+
+Create a project                         complete
+Store immutable manifest                 complete
+Run Requirements Crew                    complete
+Persist requirements artifact            complete
+Pause for human approval                 complete
+Run Architecture Crew                    complete
+Generate bounded work package            complete
+Execute in disposable container          complete
+Run approved tests                        complete
+Produce patch                             complete
+Independent patch review                 complete
+Human integration approval               complete
+Controlled integration                   complete
+Complete audit trail                      complete
+No uncontrolled Ubuntu-host change       complete by contract
+Governed rollback and recovery            complete
+
+The next engineering phase should no longer add another conceptual layer. It should consolidate P1–P3 into a single executable vertical slice:
+
+project
+→ requirements
+→ architecture
+→ work package
+→ disposable execution
+→ patch
+→ review
+→ approval
+→ integration
+→ recovery metadata
+
+That consolidation phase should be treated as P4 — Vertical Slice Assembly, Contract Testing, and Production Hardening.
+
+
+

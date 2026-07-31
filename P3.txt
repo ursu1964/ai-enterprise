@@ -1,0 +1,5817 @@
+
+P4-we are here The next engineering phase should no longer add another conceptual layer. It should consolidate P1–P3 into a single executable vertical slice:
+
+project
+→ requirements
+→ architecture
+→ work package
+→ disposable execution
+→ patch
+→ review
+→ approval
+→ integration
+→ recovery metadata
+
+That consolidation phase should be treated as P4 — Vertical Slice Assembly, Contract Testing, and Production Hardening. continue from this
+
+This is exactly the correct next phase.
+
+Up until now we have built the platform layer by layer.
+
+    P1 established the governance and immutable project lifecycle.
+
+    P2 established safe execution inside disposable runtimes.
+
+    P3 established controlled integration with human approval.
+
+If we continued by adding more subsystems now, technical debt would begin accumulating because none of the existing phases have yet been exercised together as one continuous workflow.
+
+Therefore P4 is not another feature.
+
+It is the phase where the platform first behaves like an actual software company.
+P4 — Vertical Slice Assembly, Contract Testing, and Production Hardening
+
+Goal:
+
+Build one complete end-to-end execution path using every subsystem already implemented.
+
+For the first time the platform should be capable of taking a project from creation all the way to an integrated Git commit while preserving every audit artifact.
+Overall objective
+
+At the end of P4 a user should be able to execute exactly one API call:
+
+Create Project
+
+and eventually obtain
+
+Approved Git Commit
+
+through a fully controlled pipeline.
+
+Nothing manual should happen except the explicitly required human approvals.
+End-to-End Pipeline
+
+Project
+    │
+    ▼
+Manifest
+    │
+    ▼
+Requirements Crew
+    │
+    ▼
+Requirements Approval
+    │
+    ▼
+Architecture Crew
+    │
+    ▼
+Architecture Approval
+    │
+    ▼
+Planning Crew
+    │
+    ▼
+Approved Work Package
+    │
+    ▼
+Disposable Runtime
+    │
+    ▼
+Implementation Agent
+    │
+    ▼
+Tests
+    │
+    ▼
+Patch
+    │
+    ▼
+Independent Review
+    │
+    ▼
+Human Approval
+    │
+    ▼
+Controlled Integration
+    │
+    ▼
+Git Commit
+    │
+    ▼
+Audit Record
+
+Everything must execute inside one orchestration engine.
+Major Deliverables
+
+P4 consists of six major engineering efforts.
+
+P4.1
+Workflow Orchestrator
+
+P4.2
+State Machine
+
+P4.3
+Contract Testing
+
+P4.4
+Recovery Engine
+
+P4.5
+Production Hardening
+
+P4.6
+Observability
+
+These are not optional.
+P4.1 Workflow Orchestrator
+
+Until now every phase has its own API.
+
+Now they must become one workflow.
+
+Instead of:
+
+POST /projects
+
+POST /requirements/run
+
+POST /architecture/run
+
+POST /planning/run
+
+POST /execution/run
+
+we introduce:
+
+Workflow Engine
+
+The engine knows how to execute each stage.
+
+Internally:
+
+Start Project
+
+↓
+
+Requirements
+
+↓
+
+Architecture
+
+↓
+
+Planning
+
+↓
+
+Execution
+
+↓
+
+Review
+
+↓
+
+Integration
+
+↓
+
+Finished
+
+Each stage is responsible only for itself.
+
+The orchestrator controls sequencing.
+Workflow Definition
+
+Each workflow step should implement exactly the same interface.
+
+WorkflowStep
+
+class WorkflowStep:
+
+    async def validate(...)
+
+    async def execute(...)
+
+    async def rollback(...)
+
+    async def next(...)
+
+Every phase now becomes a plug-in.
+
+For example
+
+RequirementsStep
+
+ArchitectureStep
+
+PlanningStep
+
+ExecutionStep
+
+ReviewStep
+
+IntegrationStep
+
+Each one satisfies the same contract.
+
+That makes future workflows trivial.
+Workflow Context
+
+The orchestrator never passes dozens of parameters.
+
+Instead it passes a single immutable context.
+
+WorkflowContext
+
+Contains
+
+Project ID
+
+Current State
+
+Manifest
+
+Approved Requirements
+
+Architecture
+
+Work Package
+
+Container ID
+
+Patch ID
+
+Review ID
+
+Commit ID
+
+Audit IDs
+
+Correlation ID
+
+User
+
+Permissions
+
+Cancellation Token
+
+Everything needed for execution.
+Immutable Context Updates
+
+No step edits previous data.
+
+Instead
+
+Context Version 1
+
+↓
+
+Context Version 2
+
+↓
+
+Context Version 3
+
+Each transition produces a new immutable snapshot.
+
+Exactly like event sourcing.
+P4.2 Workflow State Machine
+
+The workflow must become deterministic.
+
+Every project has exactly one state.
+
+Example
+
+PROJECT_CREATED
+
+↓
+
+REQUIREMENTS_RUNNING
+
+↓
+
+WAITING_REQUIREMENTS_APPROVAL
+
+↓
+
+ARCHITECTURE_RUNNING
+
+↓
+
+WAITING_ARCHITECTURE_APPROVAL
+
+↓
+
+PLANNING
+
+↓
+
+WAITING_WORK_PACKAGE_APPROVAL
+
+↓
+
+EXECUTION_RUNNING
+
+↓
+
+PATCH_REVIEW
+
+↓
+
+WAITING_INTEGRATION
+
+↓
+
+INTEGRATING
+
+↓
+
+COMPLETED
+
+No hidden states.
+
+No undocumented transitions.
+Transition Rules
+
+Every transition must be validated.
+
+Example
+
+Illegal
+
+PROJECT_CREATED
+
+↓
+
+EXECUTION_RUNNING
+
+Impossible.
+
+Legal
+
+ARCHITECTURE_APPROVED
+
+↓
+
+PLANNING_RUNNING
+
+Allowed.
+
+The state machine enforces all business rules.
+State Persistence
+
+Every transition writes
+
+Current State
+
+Previous State
+
+Timestamp
+
+Actor
+
+Reason
+
+Workflow Version
+
+Nothing disappears.
+P4.3 Contract Testing
+
+Every subsystem now receives executable contracts.
+
+Instead of testing implementations we test interfaces.
+
+For Requirements Crew
+
+Input
+
+↓
+
+Expected Output Schema
+
+↓
+
+Validation
+
+If output changes
+
+the workflow immediately detects it.
+Contract Examples
+
+Requirements Contract
+
+Requirements Artifact
+
+Version
+
+Hash
+
+Sections
+
+Acceptance Criteria
+
+Traceability IDs
+
+Architecture Contract
+
+Components
+
+Interfaces
+
+Technology Choices
+
+Constraints
+
+Risks
+
+Planning Contract
+
+Task
+
+Files
+
+Dependencies
+
+Acceptance Tests
+
+Complexity
+
+Estimated Size
+
+Execution Contract
+
+Patch
+
+Logs
+
+Coverage
+
+Metrics
+
+Artifacts
+
+Review Contract
+
+Decision
+
+Findings
+
+Severity
+
+Approved Files
+
+Requested Changes
+
+Every phase validates the previous one.
+Schema Validation
+
+Use Pydantic models everywhere.
+
+Never accept arbitrary JSON.
+
+Every artifact becomes a versioned schema.
+P4.4 Recovery Engine
+
+The workflow must survive failures.
+
+Suppose execution crashes here
+
+Execution
+
+↓
+
+Tests
+
+↓
+
+Crash
+
+After restart
+
+the workflow resumes
+
+exactly
+
+here
+
+not from the beginning.
+
+Recovery Metadata
+
+Persist
+
+Current Step
+
+Step Version
+
+Retry Count
+
+Container ID
+
+Artifact IDs
+
+Open Resources
+
+Running Commands
+
+Checkpoint Time
+
+Enough information to continue safely.
+Checkpoints
+
+Each workflow step produces
+
+Checkpoint
+
+Example
+
+Requirements Complete
+
+↓
+
+Checkpoint
+
+↓
+
+Architecture
+
+Crash?
+
+Resume from checkpoint.
+
+Never recompute approved work.
+Retry Policies
+
+Different failures deserve different handling.
+
+Validation Failure
+
+No Retry
+
+Temporary Database Failure
+
+Retry
+
+Container Timeout
+
+Retry Once
+
+Patch Conflict
+
+Manual Resolution
+
+Policies must be explicit, configurable, and recorded in the audit trail.
+Idempotency
+
+Every workflow action must be safe to repeat.
+
+For example
+
+Approve Requirements
+
+Running twice
+
+must produce
+
+exactly the same state.
+
+Never duplicate artifacts.
+
+Never create duplicate commits.
+P4.5 Production Hardening
+
+Now we assume failures are normal.
+
+Every boundary gets protection.
+Timeouts
+
+Each step defines
+
+Maximum Duration
+
+Example
+
+Requirements
+
+5 minutes
+
+Execution
+
+30 minutes
+
+Review
+
+10 minutes
+
+Timeouts become configuration.
+Resource Limits
+
+Execution already limits
+
+CPU
+
+Memory
+
+Processes
+
+Disk
+
+Now apply limits everywhere appropriate, including queue workers and long-running orchestration tasks.
+Concurrency Protection
+
+Prevent
+
+Two executions
+
+on
+
+one work package
+
+using optimistic locking or advisory locks.
+Cancellation
+
+User requests
+
+Cancel Project
+
+Workflow becomes
+
+Cancelling
+
+↓
+
+Stop Current Step
+
+↓
+
+Cleanup Resources
+
+↓
+
+Persist State
+
+↓
+
+Cancelled
+
+Graceful shutdown only.
+Dead-Letter Handling
+
+If a workflow repeatedly fails and exceeds its retry policy, move it to a terminal failure state rather than retrying indefinitely.
+
+Record:
+
+    failure reason
+
+    retry history
+
+    last successful checkpoint
+
+    recommended operator action
+
+P4.6 Observability
+
+By P4, the platform must become observable.
+
+Every workflow execution gets a unique Correlation ID that is propagated through every service, container, log entry, audit record, and event.
+Structured Logging
+
+Each log entry should include fields such as:
+
+timestamp
+correlation_id
+project_id
+workflow_id
+step
+attempt
+actor
+severity
+message
+
+This enables end-to-end tracing.
+Metrics
+
+Track operational metrics including:
+
+    Workflow duration
+
+    Step duration
+
+    Queue wait time
+
+    Container startup time
+
+    Test execution time
+
+    Review duration
+
+    Integration duration
+
+    Success rate
+
+    Failure rate
+
+    Retry count
+
+    Average recovery time
+
+These metrics form the basis of future dashboards and capacity planning.
+Audit Completeness Verification
+
+At workflow completion, perform a final verification that every mandatory artifact exists and that hashes and references are internally consistent.
+
+Example checklist:
+
+✓ Manifest
+✓ Requirements
+✓ Requirements approval
+✓ Architecture
+✓ Architecture approval
+✓ Work package
+✓ Work package approval
+✓ Execution logs
+✓ Patch
+✓ Review
+✓ Integration approval
+✓ Commit metadata
+✓ Recovery metadata
+✓ Final audit record
+
+A workflow cannot be marked Completed if any required evidence is missing.
+Final Milestone Status After P4
+Phase	Status
+P1 – Governance & Lifecycle	✅ Complete
+P2 – Disposable Execution Runtime	✅ Complete
+P3 – Controlled Integration	✅ Complete
+P4 – Vertical Slice Assembly & Hardening	Current Phase
+Workflow Orchestrator	Next
+Deterministic State Machine	Next
+Contract Testing	Next
+Recovery Engine	Next
+Production Hardening	Next
+Observability	Next
+Definition of Done for P4
+
+P4 is complete when a single workflow can reliably execute this entire sequence:
+
+Project
+→ Manifest
+→ Requirements
+→ Human approval
+→ Architecture
+→ Human approval
+→ Work package
+→ Human approval
+→ Disposable execution
+→ Tests
+→ Patch
+→ Independent review
+→ Human approval
+→ Controlled integration
+→ Git commit
+→ Recovery metadata
+→ Complete audit evidence
+
+The workflow must be deterministic, resumable after failure, idempotent where appropriate, fully observable, and validated through contract tests. At that point, the platform has its first production-quality vertical slice and provides a stable foundation for subsequent phases such as multi-agent scaling, parallel work-package execution, enterprise governance, and advanced operational capabilities.
+
+P9 — Enterprise Resilience, Sovereign Control, Model Governance, and Institutional Continuity
+
+P8 connects the platform to production systems, customers, suppliers, regulators, and external operations.
+
+P9 addresses a deeper requirement:
+
+    Can the enterprise continue operating safely when infrastructure, models, vendors, regions, credentials, policies, or key personnel fail or change?
+
+This phase is not primarily about adding more automation.
+
+It is about ensuring that the system remains:
+
+Available
+Recoverable
+Portable
+Governable
+Explainable
+Secure
+Operationally independent
+Institutionally durable
+
+P9 treats failures, supplier changes, geopolitical constraints, model deprecation, organizational turnover, and long-term evolution as expected operating conditions.
+P9 Objective
+
+P9 should ensure that the platform can:
+
+    survive regional infrastructure failure;
+
+    recover from database, queue, artifact-store, and repository loss;
+
+    replace model providers without redesigning the organization;
+
+    preserve critical workflows when external vendors are unavailable;
+
+    enforce jurisdictional data and model restrictions;
+
+    maintain cryptographic and audit continuity;
+
+    detect institutional knowledge concentration;
+
+    preserve decision authority during personnel changes;
+
+    rehearse disaster recovery;
+
+    migrate platform components without losing provenance;
+
+    continue essential operations in a degraded mode.
+
+The full resilience model becomes:
+
+Normal operation
+      │
+      ▼
+Failure or disruption detected
+      │
+      ▼
+Impact and scope classified
+      │
+      ▼
+Continuity policy selected
+      │
+      ▼
+Failover or degraded operation
+      │
+      ▼
+State reconciliation
+      │
+      ▼
+Controlled recovery
+      │
+      ▼
+Evidence verification
+      │
+      ▼
+Normal operation restored
+      │
+      ▼
+Resilience review and improvement
+
+Core Principle
+
+The enterprise must not depend on any single:
+
+Model provider
+Cloud provider
+Region
+Repository host
+Identity provider
+Queue implementation
+Database node
+Artifact store
+Human approver
+Agent definition
+Prompt
+Encryption key
+Vendor-specific API
+
+Some dependencies may remain operationally primary, but no critical dependency should remain unidentified, unclassified, and unrecoverable.
+P9 Major Workstreams
+
+P9.1   Resilience Architecture and Criticality Model
+P9.2   Business Continuity and Degraded Operation
+P9.3   Disaster Recovery
+P9.4   Multi-Region and Multi-Site Operation
+P9.5   Sovereign Data and Jurisdiction Controls
+P9.6   Model Governance and Provider Independence
+P9.7   Cryptographic Continuity
+P9.8   Identity and Authority Continuity
+P9.9   Institutional Knowledge Continuity
+P9.10  Vendor Exit and Technology Substitution
+P9.11  Backup Integrity and Recovery Verification
+P9.12  Resilience Testing and Chaos Engineering
+P9.13  Long-Term Schema, Artifact, and Audit Preservation
+P9.14  Crisis Governance and Emergency Operating Mode
+
+P9.1 — Resilience Architecture and Criticality Model
+
+The platform first needs a formal model of what is critical.
+
+Not every service deserves the same recovery guarantees.
+
+Introduce:
+
+BusinessService
+TechnicalService
+CriticalProcess
+CriticalDependency
+RecoveryTier
+ContinuityPolicy
+RecoveryObjective
+FailureDomain
+
+Criticality Tiers
+
+A practical classification:
+
+Tier 0 — Safety and authority control
+
+Examples:
+Identity verification
+Approval validation
+Authority grants
+Audit integrity
+Credential revocation
+
+Tier 1 — Critical execution control
+
+Examples:
+Workflow state
+Project metadata
+Integration control
+Production command authorization
+Incident coordination
+
+Tier 2 — Important operational services
+
+Examples:
+Agent scheduling
+Review queues
+Portfolio reporting
+Knowledge retrieval
+
+Tier 3 — Deferrable services
+
+Examples:
+Historical analytics
+Nonessential dashboards
+Learning analysis
+Optional recommendations
+
+Tier classification determines:
+
+Recovery time objective
+Recovery point objective
+Replication strategy
+Backup frequency
+Failover procedure
+Testing frequency
+Required operational ownership
+
+Recovery Objectives
+
+For every critical service define:
+
+RTO — Maximum acceptable recovery time
+RPO — Maximum acceptable data loss window
+MTPD — Maximum tolerable period of disruption
+WRT — Work recovery time after technical restoration
+
+Example:
+
+Workflow metadata database
+
+RTO: 30 minutes
+RPO: 5 minutes
+MTPD: 2 hours
+WRT: 30 minutes
+
+These values must be approved based on business impact, not chosen arbitrarily by engineering.
+Service Criticality Model
+
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class RecoveryObjective(BaseModel):
+    service_id: UUID
+
+    criticality_tier: Literal[
+        "tier_0",
+        "tier_1",
+        "tier_2",
+        "tier_3",
+    ]
+
+    rto_seconds: int = Field(gt=0)
+    rpo_seconds: int = Field(ge=0)
+    mtpd_seconds: int = Field(gt=0)
+    work_recovery_time_seconds: int = Field(ge=0)
+
+    approved_by: UUID
+    policy_version: int
+
+Dependency Mapping
+
+Each service must identify:
+
+Upstream dependencies
+Downstream dependents
+Data stores
+Queues
+External providers
+Credential providers
+Network dependencies
+Human authority dependencies
+Model dependencies
+Recovery dependencies
+
+The recovery system must know whether a dependency is:
+
+Mandatory
+Replaceable
+Optional
+Cached
+Manually substitutable
+Fail-open prohibited
+
+P9.2 — Business Continuity and Degraded Operation
+
+Recovery does not always mean immediate restoration of full functionality.
+
+The system should define explicit degraded operating modes.
+
+Examples:
+
+Read-only governance mode
+No-external-action mode
+Manual approval mode
+Single-region mode
+Local-model-only mode
+No-learning mode
+No-new-project mode
+Incident-only mode
+Audit-preservation mode
+
+Degraded Mode Matrix
+
+Example:
+Capability	Normal	Model provider outage	Identity outage	Database failover	External gateway outage
+Read project data	Yes	Yes	Restricted	Failover	Yes
+Start new agent work	Yes	No or alternate model	No	After recovery	Yes
+Approve integration	Yes	Yes	No	After recovery	Yes
+Execute production commands	Yes	Yes	No	Restricted	No
+Preserve audit events	Yes	Yes	Local buffer	Replicated	Yes
+Continuity Policy
+
+class ContinuityPolicy(BaseModel):
+    id: UUID
+    service_id: UUID
+
+    disruption_type: str
+    operating_mode: str
+
+    allowed_capabilities: list[str]
+    prohibited_capabilities: list[str]
+
+    activation_conditions: list[str]
+    required_authority_role: str
+
+    maximum_duration_seconds: int
+    exit_conditions: list[str]
+
+Fail-Closed Versus Fail-Operational
+
+Each control must specify its failure behavior.
+
+Examples:
+
+Approval verification:
+Fail closed.
+
+Audit event delivery:
+Buffer locally and continue within limits.
+
+Historical analytics:
+Fail unavailable.
+
+Production command verification:
+Fail closed.
+
+Read-only project browsing:
+May remain available from replicated data.
+
+Security-sensitive controls must never silently fail open.
+P9.3 — Disaster Recovery
+
+Disaster recovery must cover the complete platform, not only PostgreSQL.
+
+Recovery scope includes:
+
+PostgreSQL
+Artifact storage
+Event bus
+Queue state
+Git mirrors
+Configuration
+Secrets metadata
+Policy definitions
+Agent definitions
+Crew templates
+Audit logs
+Model routing configuration
+External-system registry
+Cryptographic material
+
+Recovery Sequence
+
+A controlled recovery should follow:
+
+Declare disaster
+      │
+      ▼
+Freeze unsafe writes
+      │
+      ▼
+Establish recovery authority
+      │
+      ▼
+Select recovery point
+      │
+      ▼
+Restore critical control plane
+      │
+      ▼
+Verify identities and policies
+      │
+      ▼
+Restore metadata and artifacts
+      │
+      ▼
+Reconcile queues and workflows
+      │
+      ▼
+Verify repository state
+      │
+      ▼
+Resume in degraded mode
+      │
+      ▼
+Perform full integrity review
+      │
+      ▼
+Return to normal operation
+
+Recovery Orchestration Record
+
+class DisasterRecoveryRun(BaseModel):
+    id: UUID
+    disaster_type: str
+    declared_at: str
+    declared_by: UUID
+
+    recovery_site_id: UUID
+    selected_recovery_point: str
+
+    affected_service_ids: list[UUID]
+    recovery_plan_version: int
+
+    commander_id: UUID
+    status: str
+
+    started_at: str | None
+    completed_at: str | None
+
+    evidence_artifact_ids: list[UUID]
+
+Recovery Must Be Idempotent
+
+A failed recovery attempt must not corrupt a later attempt.
+
+Recovery steps should use explicit states:
+
+pending
+started
+completed
+failed
+skipped
+manually_verified
+
+Each step must record evidence and support safe re-entry.
+P9.4 — Multi-Region and Multi-Site Operation
+
+Critical services should support operation across isolated failure domains.
+
+Possible topology:
+
+Primary region
+    │
+    ├── PostgreSQL primary
+    ├── API services
+    ├── Workflow workers
+    └── Artifact store
+
+Recovery region
+    │
+    ├── PostgreSQL replica
+    ├── Warm API capacity
+    ├── Standby workers
+    └── Replicated artifacts
+
+Active-Passive First
+
+The initial design should prefer active-passive for critical write paths.
+
+Why:
+
+Simpler state ownership
+Lower split-brain risk
+Clearer recovery process
+Easier audit interpretation
+Safer approval sequencing
+
+Active-active operation may be introduced later for carefully selected services.
+Region Ownership Lease
+
+Only one region should own authoritative writes unless the domain explicitly supports multi-writer semantics.
+
+class RegionOwnershipLease(BaseModel):
+    resource_type: str
+    resource_id: UUID
+
+    owning_region: str
+    lease_version: int
+
+    acquired_at: str
+    expires_at: str
+
+    fencing_token: int
+
+The fencing token prevents a recovered old primary from continuing stale writes.
+Split-Brain Protection
+
+Required controls:
+
+Quorum or external witness
+Fencing tokens
+Write ownership leases
+Database promotion controls
+Region isolation verification
+Manual emergency authority for ambiguous cases
+
+The platform must prefer temporary unavailability over conflicting authoritative histories.
+P9.5 — Sovereign Data and Jurisdiction Controls
+
+The enterprise may operate across legal jurisdictions with different restrictions.
+
+The platform must know:
+
+Where data originated
+Where data may be stored
+Where data may be processed
+Which models may receive it
+Which personnel may access it
+How long it may be retained
+Whether it may cross borders
+
+Data Residency Policy
+
+class DataResidencyPolicy(BaseModel):
+    id: UUID
+    data_classification: str
+    jurisdiction_code: str
+
+    permitted_storage_regions: list[str]
+    permitted_processing_regions: list[str]
+
+    permitted_model_provider_ids: list[UUID]
+    cross_border_transfer_allowed: bool
+
+    encryption_profile_id: UUID
+    retention_policy_id: UUID
+
+    policy_version: int
+
+Sovereign Execution Zone
+
+Create logical execution zones:
+
+EU Restricted Zone
+US Commercial Zone
+Internal Confidential Zone
+Regulated Financial Zone
+Air-Gapped High-Security Zone
+
+Each zone defines:
+
+Allowed data
+Allowed models
+Allowed tools
+Allowed integrations
+Allowed personnel
+Allowed artifact destinations
+Allowed telemetry exports
+
+Policy Enforcement Point
+
+Every model request and external command should evaluate:
+
+Data classification
+Project jurisdiction
+Execution zone
+Model provider location
+Tool destination
+Artifact destination
+User and agent authority
+
+A prompt must never be sent to a provider that violates residency or data-processing policy.
+P9.6 — Model Governance and Provider Independence
+
+Models are replaceable execution components, not the organizational foundation.
+
+The platform must prevent hard dependency on one provider or one model family.
+Model Registry
+
+Introduce:
+
+ModelProvider
+ModelDefinition
+ModelVersion
+ModelCapabilityProfile
+ModelRiskProfile
+ModelRoutingPolicy
+ModelEvaluationSuite
+ModelApprovalRecord
+
+Model Definition
+
+class ModelDefinition(BaseModel):
+    id: UUID
+    provider_id: UUID
+
+    model_name: str
+    model_version: str
+
+    deployment_type: str
+    hosting_region: str | None
+
+    context_window: int
+    supported_modalities: list[str]
+
+    data_retention_mode: str
+    training_use_policy: str
+
+    status: str
+    approved_use_cases: list[str]
+    prohibited_data_classes: list[str]
+
+    evaluation_profile_id: UUID
+
+Model Abstraction Contract
+
+Agents should call a platform model interface:
+
+class ModelGateway:
+    async def generate(
+        self,
+        request: "ModelRequest",
+        routing_policy: "RoutingPolicy",
+    ) -> "ModelResponse":
+        ...
+
+Agent logic must not directly depend on provider-specific SDKs.
+Model Routing
+
+Routing may consider:
+
+Task type
+Required capability
+Data classification
+Jurisdiction
+Latency
+Cost
+Availability
+Evaluation score
+Context size
+Risk classification
+Provider concentration
+
+Example:
+
+Architecture reasoning:
+High-capability approved model.
+
+Code formatting:
+Lower-cost local model.
+
+Restricted customer data:
+Sovereign local deployment only.
+
+Emergency provider outage:
+Validated fallback model.
+
+Provider Outage Strategy
+
+Primary model unavailable
+      │
+      ▼
+Check fallback eligibility
+      │
+      ├── Equivalent model available
+      │      ▼
+      │   Route with recorded substitution
+      │
+      ├── Reduced-capability model available
+      │      ▼
+      │   Enter degraded workflow
+      │
+      └── No compliant model available
+             ▼
+          Pause affected work
+
+The platform must not silently substitute a weaker or noncompliant model.
+Model Change Control
+
+A new model version requires:
+
+Benchmark evaluation
+Contract conformance
+Security review
+Data-policy review
+Regression testing
+Risk classification
+Approval
+Controlled rollout
+Rollback plan
+
+Model Evaluation Dimensions
+
+Evaluate:
+
+Schema adherence
+Instruction following
+Tool-use accuracy
+Hallucination rate
+Security-policy compliance
+Code correctness
+Review precision
+Reasoning consistency
+Latency
+Cost
+Determinism
+Jurisdictional suitability
+
+P9.7 — Cryptographic Continuity
+
+Long-term audit integrity depends on cryptographic continuity.
+
+The platform must manage:
+
+Signing keys
+Encryption keys
+Certificate chains
+Artifact signatures
+Commit signatures
+Approval signatures
+Audit hash chains
+Key rotation
+Key revocation
+Historical verification
+
+Key Hierarchy
+
+Example:
+
+Enterprise root key
+      │
+      ├── Audit signing key
+      ├── Artifact signing key
+      ├── Deployment signing key
+      ├── Integration signing key
+      └── Regional encryption keys
+
+Root keys should be protected separately from operational keys.
+Key Versioning
+
+Every signed record must identify:
+
+Key ID
+Key version
+Algorithm
+Signature timestamp
+Certificate chain
+Revocation status at signing time
+
+Key rotation must not make historical signatures unverifiable.
+Cryptographic Record
+
+class SignatureRecord(BaseModel):
+    id: UUID
+    subject_type: str
+    subject_id: UUID
+
+    key_id: UUID
+    key_version: int
+    algorithm: str
+
+    content_hash: str
+    signature: str
+
+    signed_at: str
+    signer_principal_id: UUID
+
+Algorithm Agility
+
+The system must support future algorithm migration.
+
+Do not hardcode one cryptographic algorithm across domain models.
+
+Use named cryptographic profiles:
+
+audit-signing-v1
+artifact-encryption-v2
+production-signing-v3
+
+P9.8 — Identity and Authority Continuity
+
+Critical authority must survive personnel changes without becoming uncontrolled.
+
+Problems to address:
+
+Approver leaves organization
+Identity provider unavailable
+Emergency approver unavailable
+Credential compromised
+Role ownership unclear
+Authority delegated indefinitely
+
+Authority Succession
+
+Each critical role should define:
+
+Primary authority holder
+Deputy
+Emergency authority group
+Succession conditions
+Maximum emergency duration
+Post-event review requirement
+
+Break-Glass Access
+
+Break-glass authority must be:
+
+Rare
+Time-limited
+Explicitly justified
+Strongly authenticated
+Narrowly scoped
+Immediately visible
+Automatically revoked
+Independently reviewed
+
+Break-Glass Grant
+
+class EmergencyAuthorityGrant(BaseModel):
+    id: UUID
+    principal_id: UUID
+
+    incident_id: UUID
+    justification: str
+
+    capability_codes: list[str]
+    resource_scope: dict
+
+    valid_from: str
+    valid_until: str
+
+    issued_by: UUID
+    second_approver_id: UUID | None
+
+    status: str
+
+Identity Provider Failure
+
+The system should support a controlled offline authority method for extreme continuity cases.
+
+This may include:
+
+Pre-issued emergency credentials
+Hardware-backed certificates
+Offline approval tokens
+Dual-control recovery procedure
+Restricted emergency console
+
+Emergency identity must not become a convenient alternative to normal identity controls.
+P9.9 — Institutional Knowledge Continuity
+
+An enterprise can fail even when its infrastructure survives.
+
+Critical knowledge may be concentrated in:
+
+One architect
+One operations engineer
+One undocumented agent prompt
+One vendor consultant
+One model-specific behavior
+One untested runbook
+
+P9 must identify and reduce this concentration.
+Knowledge Concentration Risk
+
+For every critical process, measure:
+
+Number of qualified human owners
+Number of qualified agent definitions
+Documentation completeness
+Runbook validation status
+Dependency on proprietary knowledge
+Last successful rehearsal
+
+Knowledge Continuity Record
+
+class KnowledgeContinuityAssessment(BaseModel):
+    process_id: UUID
+
+    human_owner_count: int
+    qualified_backup_count: int
+    approved_agent_count: int
+
+    documentation_score: float
+    runbook_test_score: float
+    vendor_dependency_score: float
+
+    concentration_risk: str
+    remediation_actions: list[str]
+
+Institutional Runbooks
+
+Critical runbooks should include:
+
+Purpose
+Trigger
+Preconditions
+Authority requirements
+Inputs
+Exact procedure
+Verification
+Rollback or compensation
+Escalation
+Evidence produced
+Last rehearsal
+Known limitations
+
+Runbooks must be executable or testable where possible.
+Decision Knowledge Preservation
+
+The platform should preserve not only decisions, but also:
+
+Alternatives considered
+Evidence available
+Rejected assumptions
+Known uncertainty
+Expected consequences
+Review date
+
+This prevents future teams from repeating old debates without context.
+P9.10 — Vendor Exit and Technology Substitution
+
+Every critical vendor dependency requires an exit plan.
+
+Examples:
+
+Model provider
+Cloud platform
+Repository host
+Identity provider
+Observability vendor
+Queue technology
+Artifact storage vendor
+Security scanner
+
+Exit Plan
+
+class VendorExitPlan(BaseModel):
+    vendor_id: UUID
+    service_id: UUID
+
+    trigger_conditions: list[str]
+    replacement_options: list[str]
+
+    data_export_method: str
+    configuration_export_method: str
+
+    maximum_exit_duration_days: int
+    expected_exit_cost: str
+
+    validation_steps: list[str]
+    owner_id: UUID
+
+    last_rehearsed_at: str | None
+    status: str
+
+Substitution Layers
+
+The architecture should isolate vendor-specific functionality behind contracts:
+
+Model gateway
+Repository adapter
+Identity adapter
+Queue adapter
+Artifact-store adapter
+Notification adapter
+Observability adapter
+Cloud execution adapter
+
+Substitution should require adapter replacement and controlled migration, not domain redesign.
+Exit Rehearsal
+
+A vendor exit plan is not credible until tested.
+
+Possible rehearsal:
+
+Export sample data
+Restore into alternate system
+Run contract tests
+Compare behavior
+Verify audit provenance
+Measure migration duration
+Record incompatibilities
+
+P9.11 — Backup Integrity and Recovery Verification
+
+A successful backup job does not prove recoverability.
+
+The platform must verify restoration continuously.
+Backup Classes
+
+Database backups
+Artifact backups
+Configuration backups
+Policy backups
+Git mirrors
+Audit archives
+Key metadata backups
+Model registry backups
+Runbook backups
+
+Backup Manifest
+
+class BackupManifest(BaseModel):
+    id: UUID
+    backup_type: str
+
+    source_system: str
+    source_version: str
+
+    started_at: str
+    completed_at: str
+
+    object_count: int
+    total_bytes: int
+
+    content_hash: str
+    encryption_profile_id: UUID
+
+    retention_class: str
+    storage_locations: list[str]
+
+    status: str
+
+Restore Verification
+
+Every restore test should confirm:
+
+Data can be decrypted
+Schemas can be migrated
+References remain valid
+Artifacts match hashes
+Audit chains verify
+Git commits are reachable
+Workflow states are coherent
+Credentials are not accidentally restored as active
+External commands are not replayed
+
+Isolated Recovery Environment
+
+Restore tests must occur in an isolated environment.
+
+Restored workers must not connect to production external systems.
+
+Use:
+
+Network isolation
+Mock integrations
+Disabled production credentials
+Synthetic endpoints
+Command execution blocks
+
+P9.12 — Resilience Testing and Chaos Engineering
+
+Resilience must be demonstrated experimentally.
+
+Tests should include controlled failures.
+Failure Scenarios
+
+Kill workflow worker during execution
+Terminate PostgreSQL primary
+Corrupt queue message
+Make artifact store unavailable
+Expire signing certificate
+Disable model provider
+Block identity provider
+Delay external acknowledgements
+Partition primary and recovery region
+Remove one critical approver
+Return stale repository data
+Restore from backup with missing artifact
+
+Chaos Experiment Model
+
+class ResilienceExperiment(BaseModel):
+    id: UUID
+    name: str
+    hypothesis: str
+
+    target_service_ids: list[UUID]
+    failure_injection: dict
+
+    safety_limits: dict
+    abort_conditions: list[str]
+
+    expected_behavior: list[str]
+    observed_behavior: list[str] | None
+
+    approved_by: UUID
+    status: str
+
+Experiment Requirements
+
+Every experiment requires:
+
+Explicit hypothesis
+Blast-radius limit
+Rollback procedure
+Monitoring
+Named owner
+Approved execution window
+Abort criteria
+Post-experiment review
+
+Chaos engineering must never become uncontrolled disruption.
+P9.13 — Long-Term Schema, Artifact, and Audit Preservation
+
+The platform is intended to operate for years.
+
+Artifacts and evidence must remain readable across software evolution.
+Preservation Challenges
+
+Schema versions change
+Pydantic models change
+Database structures change
+Hash algorithms age
+File formats become obsolete
+Providers disappear
+Agent definitions are retired
+
+Canonical Artifact Envelope
+
+Every durable artifact should include:
+
+Artifact type
+Schema version
+Serialization format
+Encoding
+Content hash
+Created time
+Creator
+Source references
+Migration history
+Verification status
+
+Artifact Migration
+
+Migration must never overwrite the original artifact.
+
+The correct model is:
+
+Original artifact
+      │
+      ▼
+Migration record
+      │
+      ▼
+Derived migrated artifact
+
+Both remain available.
+Migration Record
+
+class ArtifactMigrationRecord(BaseModel):
+    id: UUID
+    source_artifact_id: UUID
+    target_artifact_id: UUID
+
+    source_schema_version: str
+    target_schema_version: str
+
+    migration_tool_version: str
+    transformation_hash: str
+
+    executed_at: str
+    verified_by: UUID
+
+Audit Chain Preservation
+
+Audit records should use:
+
+Append-only storage
+Hash chaining
+Periodic signed checkpoints
+Independent archive copies
+Retention controls
+Verification tooling
+
+A periodic audit checkpoint may include:
+
+Event range
+Root hash
+Record count
+Signing key
+Timestamp
+Archive locations
+
+P9.14 — Crisis Governance and Emergency Operating Mode
+
+Some disruptions exceed normal incident management.
+
+Examples:
+
+Regional disaster
+Widespread cyberattack
+Identity compromise
+Critical vendor shutdown
+Regulatory prohibition
+Cryptographic compromise
+Major data-integrity failure
+
+These require crisis governance.
+Crisis Governance Structure
+
+Crisis Authority Board
+│
+├── Crisis Commander
+├── Security Authority
+├── Legal Authority
+├── Operations Authority
+├── Business Continuity Lead
+├── Communications Lead
+└── Audit Observer
+
+Agents may provide analysis, but crisis authority must remain explicit.
+Crisis Mode Lifecycle
+
+Potential crisis detected
+      │
+      ▼
+Crisis assessment
+      │
+      ▼
+Crisis declared
+      │
+      ▼
+Emergency operating mode activated
+      │
+      ▼
+Critical services prioritized
+      │
+      ▼
+Nonessential operations suspended
+      │
+      ▼
+Recovery and containment
+      │
+      ▼
+State reconciliation
+      │
+      ▼
+Crisis exit approval
+      │
+      ▼
+Independent review
+
+Crisis Mode Controls
+
+Possible controls:
+
+Suspend new external integrations
+Suspend autonomous financial actions
+Require dual approval for production changes
+Disable learning deployment
+Restrict model providers
+Freeze noncritical portfolio changes
+Enable emergency local models
+Increase audit replication
+Require manual release authorization
+
+P9 Data Model
+
+Suggested PostgreSQL tables:
+
+business_services
+technical_services
+service_criticality
+recovery_objectives
+critical_dependencies
+failure_domains
+
+continuity_policies
+degraded_operating_modes
+continuity_activations
+
+disaster_recovery_plans
+disaster_recovery_runs
+recovery_steps
+recovery_evidence
+
+regions
+recovery_sites
+region_ownership_leases
+failover_events
+
+data_residency_policies
+execution_zones
+jurisdiction_constraints
+data_transfer_approvals
+
+model_providers
+model_definitions
+model_versions
+model_routing_policies
+model_evaluation_runs
+model_approval_records
+model_substitution_events
+
+cryptographic_profiles
+cryptographic_keys
+key_versions
+signature_records
+key_rotation_events
+key_revocations
+
+authority_succession_plans
+emergency_authority_grants
+break_glass_events
+offline_identity_records
+
+knowledge_continuity_assessments
+institutional_runbooks
+runbook_rehearsals
+critical_role_backups
+
+vendors
+vendor_dependencies
+vendor_exit_plans
+vendor_exit_rehearsals
+technology_substitution_records
+
+backup_manifests
+backup_objects
+restore_tests
+restore_verification_results
+
+resilience_experiments
+failure_injections
+experiment_observations
+resilience_findings
+
+artifact_migration_records
+audit_checkpoints
+archive_locations
+archive_verification_runs
+
+crisis_events
+crisis_governance_roles
+crisis_mode_activations
+crisis_decisions
+crisis_exit_reviews
+
+P9 API Surface
+
+Suggested endpoints:
+
+POST   /services
+POST   /services/{service_id}/criticality
+POST   /services/{service_id}/recovery-objectives
+
+POST   /continuity-policies
+POST   /continuity-activations
+POST   /continuity-activations/{activation_id}/close
+
+POST   /disaster-recovery-plans
+POST   /disaster-recovery-runs
+POST   /disaster-recovery-runs/{run_id}/start
+POST   /disaster-recovery-runs/{run_id}/verify
+POST   /disaster-recovery-runs/{run_id}/complete
+
+POST   /regions/{region_id}/promote
+POST   /regions/{region_id}/fence
+GET    /regions/ownership
+
+POST   /data-residency-policies
+POST   /execution-zones
+POST   /data-transfer-approvals
+
+POST   /model-providers
+POST   /model-definitions
+POST   /model-evaluations
+POST   /model-definitions/{model_id}/approve
+POST   /model-routing-policies
+POST   /model-substitutions
+
+POST   /cryptographic-keys
+POST   /cryptographic-keys/{key_id}/rotate
+POST   /cryptographic-keys/{key_id}/revoke
+POST   /signatures/verify
+
+POST   /authority-succession-plans
+POST   /emergency-authority-grants
+POST   /emergency-authority-grants/{grant_id}/revoke
+
+POST   /knowledge-continuity-assessments
+POST   /institutional-runbooks
+POST   /institutional-runbooks/{runbook_id}/rehearse
+
+POST   /vendor-exit-plans
+POST   /vendor-exit-plans/{plan_id}/rehearse
+
+POST   /backups
+POST   /restore-tests
+GET    /restore-tests/{test_id}
+
+POST   /resilience-experiments
+POST   /resilience-experiments/{experiment_id}/approve
+POST   /resilience-experiments/{experiment_id}/execute
+
+POST   /artifact-migrations
+POST   /audit-checkpoints
+POST   /archive-verifications
+
+POST   /crisis-events
+POST   /crisis-events/{crisis_id}/declare
+POST   /crisis-events/{crisis_id}/activate-mode
+POST   /crisis-events/{crisis_id}/exit
+
+P9 Worker Topology
+
+API Service
+│
+├── Continuity Policy Worker
+├── Disaster Recovery Orchestrator
+├── Region Health Worker
+├── Failover Coordinator
+├── Backup Worker
+├── Restore Verification Worker
+├── Model Evaluation Worker
+├── Model Routing Worker
+├── Cryptographic Rotation Worker
+├── Residency Policy Worker
+├── Vendor Risk Worker
+├── Knowledge Continuity Worker
+├── Resilience Experiment Worker
+├── Audit Archive Worker
+└── Crisis Coordination Worker
+
+These workers must use isolated credentials and narrowly scoped authority.
+
+The disaster recovery worker must not automatically promote a region without satisfying promotion policy.
+P9 Repository Structure
+
+src/
+├── resilience/
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   └── api/
+│
+├── continuity/
+├── disaster_recovery/
+├── regions/
+├── sovereignty/
+├── model_governance/
+├── cryptography/
+├── identity_continuity/
+├── knowledge_continuity/
+├── vendor_independence/
+├── backups/
+├── restore_verification/
+├── resilience_testing/
+├── artifact_preservation/
+├── audit_archives/
+└── crisis_governance/
+
+P9 Implementation Order
+
+P9 should be introduced in controlled increments.
+Increment 1 — Criticality and Recovery Objectives
+
+Implement:
+
+Service registry
+Criticality tiers
+Dependencies
+RTO
+RPO
+MTPD
+Recovery ownership
+
+Without this model, resilience investment cannot be prioritized correctly.
+Increment 2 — Backup and Restore Verification
+
+Implement:
+
+Backup manifests
+Encrypted backups
+Artifact replication
+Git mirrors
+Automated isolated restore tests
+Integrity verification
+
+Do this before claiming disaster recovery capability.
+Increment 3 — Continuity Modes
+
+Implement:
+
+Degraded modes
+Capability restrictions
+Activation policies
+Fail-closed behavior
+Exit criteria
+
+Increment 4 — Disaster Recovery Orchestration
+
+Implement:
+
+Recovery plans
+Recovery steps
+Evidence capture
+State verification
+Queue reconciliation
+Workflow resumption
+
+Increment 5 — Regional Failover
+
+Implement:
+
+Region health
+Replication status
+Ownership leases
+Fencing
+Controlled promotion
+Return-to-primary procedure
+
+Increment 6 — Model Registry and Gateway Independence
+
+Implement:
+
+Provider abstraction
+Model registry
+Evaluation profiles
+Routing policies
+Fallback rules
+Substitution audit
+
+Increment 7 — Sovereign Execution Controls
+
+Implement:
+
+Data residency
+Jurisdiction rules
+Execution zones
+Provider restrictions
+Cross-border approvals
+Telemetry restrictions
+
+Increment 8 — Cryptographic Continuity
+
+Implement:
+
+Key hierarchy
+Signing profiles
+Rotation
+Revocation
+Historical verification
+Algorithm agility
+
+Increment 9 — Identity and Authority Continuity
+
+Implement:
+
+Succession plans
+Deputies
+Emergency authority
+Break-glass workflow
+Offline recovery credentials
+Post-use review
+
+Increment 10 — Institutional Knowledge Continuity
+
+Implement:
+
+Critical-process inventory
+Knowledge concentration scoring
+Runbooks
+Backup ownership
+Rehearsals
+Decision-context preservation
+
+Increment 11 — Vendor Exit
+
+Implement:
+
+Dependency inventory
+Exit plans
+Data export
+Alternate adapters
+Migration tests
+Exit rehearsals
+
+Increment 12 — Chaos and Resilience Testing
+
+Implement:
+
+Failure experiments
+Safety controls
+Automated observations
+Recovery measurement
+Corrective actions
+
+Increment 13 — Long-Term Preservation
+
+Implement:
+
+Artifact migration
+Schema compatibility
+Audit checkpoints
+Independent archives
+Archive verification
+
+Increment 14 — Crisis Governance
+
+Implement:
+
+Crisis declaration
+Emergency operating mode
+Authority board
+Restricted capabilities
+Crisis decisions
+Exit review
+
+P9 Contract Tests
+
+Mandatory contract tests should include:
+
+A Tier 0 service cannot exist without approved recovery objectives.
+
+A recovery plan cannot be activated without a named recovery authority.
+
+A stale region cannot write after losing its fencing lease.
+
+A failed identity provider cannot cause approval validation to fail open.
+
+A model request containing restricted data cannot route to a prohibited provider.
+
+A fallback model cannot be used unless approved for the task and data classification.
+
+A model substitution must be recorded in the workflow evidence.
+
+A revoked signing key cannot sign new artifacts.
+
+Historical signatures must remain verifiable after key rotation.
+
+An emergency authority grant must expire automatically.
+
+A break-glass user cannot expand its own authority.
+
+A backup cannot be marked recoverable until an isolated restore succeeds.
+
+A restore environment cannot dispatch production external commands.
+
+A vendor exit plan cannot be marked tested without a rehearsal.
+
+An artifact migration cannot overwrite the original artifact.
+
+A degraded operating mode cannot allow capabilities explicitly prohibited by its policy.
+
+A disaster recovery run cannot complete while workflow states remain unreconciled.
+
+A crisis mode cannot be exited without an integrity and authority review.
+
+P9 Failure Scenarios
+
+P9 must test severe failures.
+Primary Database Region Lost
+
+Primary region unavailable
+Replica lag within RPO
+
+Expected response:
+
+Fence old primary
+Verify replica integrity
+Promote recovery region
+Issue new ownership lease
+Start critical services
+Reconcile workflow queues
+Enter degraded mode
+
+Model Provider Suddenly Unavailable
+
+Expected response:
+
+Stop new requests to failed provider
+Identify eligible fallback models
+Apply jurisdiction and capability rules
+Route compatible tasks
+Pause incompatible tasks
+Record substitutions
+
+Identity Provider Compromised
+
+Expected response:
+
+Suspend normal authority issuance
+Revoke affected sessions
+Activate emergency identity procedure
+Require dual control
+Restrict external and production actions
+Preserve local audit evidence
+
+Backup Restores but Artifacts Are Missing
+
+Expected response:
+
+Do not resume affected workflows
+Mark recovery incomplete
+Identify missing artifact range
+Restore alternate replica or archive
+Verify hashes
+Reconcile references
+
+Signing Key Compromise
+
+Expected response:
+
+Revoke key
+Stop affected signing operations
+Determine exposure window
+Validate historical signatures
+Rotate to new key
+Re-sign only where policy permits
+Publish revocation evidence
+
+Region Split-Brain
+
+Expected response:
+
+Use fencing and quorum
+Select one authoritative writer
+Block the other region
+Compare divergent records
+Reconcile under controlled procedure
+Preserve both histories for investigation
+
+P9 Observability
+
+Track:
+
+Recovery objective compliance
+Backup success rate
+Restore success rate
+Backup age
+Replication lag
+Failover duration
+Workflow recovery duration
+Degraded-mode duration
+Model substitution frequency
+Provider concentration
+Jurisdiction-policy denials
+Emergency authority usage
+Key rotation completion
+Vendor exit readiness
+Knowledge concentration risk
+Chaos experiment success
+Archive verification status
+
+For each critical service, the dashboard should show:
+
+Current recovery readiness
+Last successful backup
+Last successful restore
+Last failover rehearsal
+Current replication health
+Current owner and deputy
+Open resilience findings
+Dependency concentration
+
+P9 Definition of Done
+
+P9 is complete when the platform can prove, through evidence and rehearsals, that it can:
+
+Classify all critical services
+        │
+        ▼
+Define approved recovery objectives
+        │
+        ▼
+Back up all authoritative state
+        │
+        ▼
+Restore that state in isolation
+        │
+        ▼
+Operate in controlled degraded modes
+        │
+        ▼
+Fail over to an alternate region
+        │
+        ▼
+Replace an unavailable model provider
+        │
+        ▼
+Enforce jurisdiction and data-sovereignty rules
+        │
+        ▼
+Rotate cryptographic keys without losing historical verification
+        │
+        ▼
+Preserve authority during identity or personnel disruption
+        │
+        ▼
+Execute a tested vendor exit path
+        │
+        ▼
+Recover workflows and reconcile external state
+        │
+        ▼
+Preserve artifacts and audit evidence across platform evolution
+
+At the end of P9, the enterprise is no longer only automated and intelligent.
+
+It is resilient, portable, sovereign, recoverable, and institutionally durable.
+
+The next phase should govern the evolution of the entire system itself: architectural change, policy evolution, model upgrades, organizational redesign, platform self-assessment, and controlled transformation without destabilizing the operating enterprise.
+
+That phase becomes:
+P10 — Governed Self-Evolution, Architecture Transformation, and Continuous Institutional Improvement
+
+continue
+
+P10 — Governed Self-Evolution, Architecture Transformation, and Continuous Institutional Improvement
+
+P9 ensures that the enterprise can survive disruption, preserve authority, replace critical dependencies, and recover its operating state.
+
+P10 addresses the final systemic problem:
+
+    Can the enterprise deliberately change its own architecture, policies, agents, workflows, and organizational design without destabilizing itself?
+
+This phase introduces controlled evolution of the platform itself.
+
+The system must be able to improve, but it must never silently rewrite the rules under which it operates.
+
+The required evolution loop is:
+
+Operational evidence
+      │
+      ▼
+Deficiency or opportunity detected
+      │
+      ▼
+Change hypothesis created
+      │
+      ▼
+Impact assessed
+      │
+      ▼
+Transformation proposal produced
+      │
+      ▼
+Simulation and validation
+      │
+      ▼
+Human governance decision
+      │
+      ▼
+Controlled rollout
+      │
+      ▼
+Outcome observed
+      │
+      ▼
+Retain, revise, or roll back
+
+P10 turns organizational improvement into an explicit, versioned, testable, and reversible engineering process.
+P10 Objective
+
+P10 should enable the platform to evolve its own:
+
+Domain architecture
+Workflow definitions
+Agent definitions
+Crew structures
+Policies
+Contracts
+Schemas
+Model-routing rules
+Allocation strategies
+Evaluation criteria
+Knowledge structures
+Operational processes
+Governance mechanisms
+
+while preserving:
+
+Authority
+Auditability
+Backward compatibility
+Operational continuity
+Reversibility
+Evidence integrity
+Human accountability
+
+The enterprise must never confuse:
+
+Recommendation
+Experiment
+Approved change
+Deployed change
+Validated improvement
+
+These are distinct lifecycle states.
+Core Principle
+
+The system may analyze and propose changes to itself.
+
+It must not autonomously redefine its own authority boundaries.
+
+In particular, agents must not independently:
+
+Expand their capabilities
+Remove approval requirements
+Lower security controls
+Redefine audit policy
+Change strategic authority
+Disable separation of duties
+Promote unvalidated models
+Rewrite evaluation criteria to improve their own scores
+
+Self-improvement is permitted only inside a higher-order governance framework that the changing component cannot override.
+P10 Major Workstreams
+
+P10.1   Enterprise Change Model
+P10.2   Architecture Evolution Governance
+P10.3   Policy Lifecycle and Policy-as-Code
+P10.4   Workflow Versioning and Migration
+P10.5   Agent and Crew Evolution
+P10.6   Contract and Schema Evolution
+P10.7   Controlled Experimentation
+P10.8   Digital Simulation and Shadow Operation
+P10.9   Change Impact Analysis
+P10.10  Progressive Transformation Rollout
+P10.11  Continuous Control Validation
+P10.12  Institutional Improvement Management
+P10.13  Technical Debt and Entropy Control
+P10.14  Meta-Governance and Constitutional Controls
+
+P10.1 — Enterprise Change Model
+
+Every material change must become a first-class governed object.
+
+A change must not exist only as:
+
+A Git pull request
+A configuration edit
+A prompt revision
+A database migration
+A conversation decision
+
+Instead, introduce:
+
+ChangeProposal
+ChangeSet
+TransformationPlan
+ImpactAssessment
+ValidationPlan
+RolloutPlan
+RollbackPlan
+ChangeDecision
+ChangeObservation
+ChangeOutcome
+
+Change Categories
+
+Support categories such as:
+
+Architecture change
+Policy change
+Workflow change
+Agent-definition change
+Crew-template change
+Schema change
+Model change
+Infrastructure change
+Security-control change
+Organizational change
+Financial-control change
+External-integration change
+
+Different categories require different governance.
+Change Proposal
+
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel
+
+
+class ChangeProposal(BaseModel):
+    id: UUID
+    organization_id: UUID
+
+    title: str
+    description: str
+    change_category: str
+
+    proposed_by: UUID
+    sponsor_id: UUID
+
+    problem_statement: str
+    desired_outcome: str
+
+    affected_component_ids: list[UUID]
+    affected_policy_ids: list[UUID]
+    affected_workflow_ids: list[UUID]
+
+    risk_level: Literal[
+        "low",
+        "medium",
+        "high",
+        "critical",
+    ]
+
+    status: Literal[
+        "draft",
+        "submitted",
+        "under_analysis",
+        "validation_required",
+        "ready_for_decision",
+        "approved",
+        "rejected",
+        "deferred",
+        "in_rollout",
+        "completed",
+        "rolled_back",
+    ]
+
+    created_at: datetime
+
+Required Change Evidence
+
+Every change proposal should include:
+
+Observed problem
+Supporting evidence
+Affected capabilities
+Expected benefit
+Expected cost
+Known risks
+Unknowns
+Dependencies
+Compatibility implications
+Security implications
+Operational implications
+Rollback feasibility
+Measurement plan
+
+P10.2 — Architecture Evolution Governance
+
+Architecture changes affect multiple projects, teams, workflows, and long-lived artifacts.
+
+The platform needs an explicit architecture-governance lifecycle.
+Architecture Change Lifecycle
+
+Architecture issue identified
+        │
+        ▼
+Current-state model captured
+        │
+        ▼
+Target-state proposal created
+        │
+        ▼
+Alternatives analyzed
+        │
+        ▼
+Migration path designed
+        │
+        ▼
+Compatibility assessed
+        │
+        ▼
+Architecture review
+        │
+        ▼
+Human approval
+        │
+        ▼
+Incremental implementation
+        │
+        ▼
+Conformance verification
+
+Architecture Decision Record
+
+Architecture decisions should be durable, versioned objects.
+
+class ArchitectureDecisionRecord(BaseModel):
+    id: UUID
+    project_id: UUID | None
+    organization_id: UUID
+
+    title: str
+    context: str
+    decision: str
+
+    alternatives: list[str]
+    consequences: list[str]
+
+    status: Literal[
+        "proposed",
+        "accepted",
+        "rejected",
+        "deprecated",
+        "superseded",
+    ]
+
+    supersedes_decision_id: UUID | None
+    evidence_artifact_ids: list[UUID]
+
+    approved_by: UUID | None
+    decision_date: datetime | None
+
+Current-State and Target-State Models
+
+The platform must represent:
+
+Current architecture
+Target architecture
+Transition architecture
+Migration stages
+Temporary compatibility layers
+Retirement criteria
+
+A target architecture without a transition architecture is incomplete.
+Architecture Fitness Functions
+
+Architecture rules should become executable where possible.
+
+Examples:
+
+No domain module imports another module’s infrastructure layer.
+
+All production commands pass through the Integration Gateway.
+
+Implementation agents cannot access authoritative Git credentials.
+
+Every external command has an idempotency key.
+
+All Tier 0 services define recovery objectives.
+
+Restricted data cannot route to prohibited model providers.
+
+These rules should be evaluated continuously.
+P10.3 — Policy Lifecycle and Policy-as-Code
+
+Policies define the operating boundaries of the enterprise.
+
+They must be versioned, tested, approved, deployed, and retired deliberately.
+Policy Lifecycle
+
+Draft
+  │
+  ▼
+Review
+  │
+  ▼
+Test
+  │
+  ▼
+Approved
+  │
+  ▼
+Active
+  │
+  ▼
+Deprecated
+  │
+  ▼
+Retired
+
+Alternative outcomes:
+
+Rejected
+Suspended
+Superseded
+Emergency disabled
+
+Policy Definition
+
+class PolicyDefinition(BaseModel):
+    id: UUID
+    code: str
+    name: str
+
+    policy_domain: str
+    description: str
+
+    current_version: int
+    owner_id: UUID
+
+    enforcement_mode: Literal[
+        "advisory",
+        "warning",
+        "blocking",
+        "emergency_blocking",
+    ]
+
+    status: str
+
+Policy Version
+
+class PolicyVersion(BaseModel):
+    policy_id: UUID
+    version: int
+
+    rule_language: str
+    rule_content: str
+
+    effective_from: datetime | None
+    effective_until: datetime | None
+
+    test_suite_id: UUID
+    approval_record_id: UUID | None
+
+    content_hash: str
+    status: str
+
+Policy Test Categories
+
+Every policy change requires:
+
+Positive tests
+Negative tests
+Boundary tests
+Conflict tests
+Regression tests
+Emergency-mode tests
+Jurisdiction tests
+Authority tests
+
+Example:
+
+Policy:
+Implementation agents cannot approve integration.
+
+Positive test:
+Human integration approver can approve.
+
+Negative test:
+Implementation agent approval is rejected.
+
+Boundary test:
+An agent with expired temporary approval authority is rejected.
+
+Conflict test:
+A broader role grant cannot override this separation rule.
+
+Policy Conflict Resolution
+
+Policies may conflict.
+
+The system needs explicit precedence rules:
+
+Constitutional policy
+Legal or regulatory policy
+Security policy
+Enterprise governance policy
+Portfolio policy
+Project policy
+Workflow policy
+Task-specific authority
+
+Lower-level policies must not weaken higher-level controls.
+P10.4 — Workflow Versioning and Migration
+
+Long-running workflows may span days or weeks.
+
+The platform will evolve while workflows are still active.
+
+Therefore every workflow instance must reference a fixed workflow definition version.
+Workflow Definition
+
+class WorkflowDefinition(BaseModel):
+    id: UUID
+    code: str
+    version: int
+
+    state_machine_schema: dict
+    step_definitions: list[dict]
+    transition_rules: list[dict]
+
+    required_policy_versions: dict[str, int]
+    required_contract_versions: dict[str, str]
+
+    status: str
+    content_hash: str
+
+Workflow Upgrade Rules
+
+When a new workflow version is released, existing instances may:
+
+Remain on current version
+Migrate automatically
+Require manual migration
+Restart from a safe checkpoint
+Be cancelled and replaced
+
+The decision depends on compatibility.
+Workflow Migration Plan
+
+class WorkflowMigrationPlan(BaseModel):
+    id: UUID
+
+    source_workflow_version: int
+    target_workflow_version: int
+
+    eligible_states: list[str]
+    prohibited_states: list[str]
+
+    state_mapping: dict[str, str]
+    artifact_transformations: list[dict]
+
+    preconditions: list[str]
+    validation_steps: list[str]
+    rollback_supported: bool
+
+Safe Migration Principle
+
+Never mutate the meaning of an existing workflow state.
+
+Unsafe:
+
+Version 1: REVIEW_APPROVED means agent review passed.
+
+Version 2: REVIEW_APPROVED means human integration approval exists.
+
+Instead, introduce a new state or a mapped migration.
+P10.5 — Agent and Crew Evolution
+
+P6 introduced agent definitions and crew templates.
+
+P10 governs their modification.
+
+Agent behavior may change because of:
+
+New evidence
+Model changes
+New tools
+Policy changes
+Repeated defects
+Cost pressure
+Security findings
+Organizational redesign
+
+Agent Versioning
+
+Every agent definition change creates a new version.
+
+class AgentDefinitionVersion(BaseModel):
+    agent_definition_id: UUID
+    version: int
+
+    role: str
+    mission: str
+
+    system_instruction_artifact_id: UUID
+    capability_ids: list[UUID]
+    skill_ids: list[UUID]
+    allowed_tool_ids: list[UUID]
+
+    model_routing_policy_id: UUID
+    memory_policy_id: UUID
+    evaluation_profile_id: UUID
+
+    status: str
+    content_hash: str
+
+Agent Promotion Lifecycle
+
+Draft
+  │
+  ▼
+Offline evaluation
+  │
+  ▼
+Historical replay
+  │
+  ▼
+Shadow execution
+  │
+  ▼
+Limited pilot
+  │
+  ▼
+Approved production
+  │
+  ▼
+General availability
+
+A new agent version should not immediately replace the current version.
+Agent Regression Tests
+
+Evaluate against historical cases:
+
+Previously accepted tasks
+Previously rejected outputs
+Security boundary cases
+Ambiguous requirements
+Tool misuse attempts
+Schema-conformance cases
+Known hallucination patterns
+Escalation scenarios
+
+Crew Template Evolution
+
+Crew changes may include:
+
+Adding a role
+Removing a role
+Changing minimum membership
+Changing separation rules
+Adding risk-sensitive reviewers
+Changing delegation patterns
+
+Each change must be tested against representative work packages.
+Self-Interest Protection
+
+An agent cannot propose and approve modifications to:
+
+Its own evaluation profile
+Its own capability grants
+Its own authority scope
+Its own production status
+Its own review requirements
+
+Independent governance is mandatory.
+P10.6 — Contract and Schema Evolution
+
+P4 introduced versioned contracts.
+
+P10 makes their long-term evolution systematic.
+
+Contracts include:
+
+Requirements schemas
+Architecture schemas
+Work-package schemas
+Execution-result schemas
+Patch-review schemas
+External-command schemas
+Audit-event schemas
+Knowledge schemas
+Decision schemas
+
+Compatibility Categories
+
+Every schema change must be classified as:
+
+Backward compatible
+Forward compatible
+Fully compatible
+Breaking
+Semantically breaking
+
+A syntactically compatible change may still be semantically breaking.
+
+Example:
+
+Old meaning:
+priority = critical means execute first.
+
+New meaning:
+priority = critical means executive visibility only.
+
+The field remains valid, but the contract meaning changed.
+Schema Registry
+
+class SchemaDefinition(BaseModel):
+    id: UUID
+    schema_name: str
+    version: str
+
+    schema_format: str
+    schema_content: dict
+
+    semantic_description: str
+    compatibility_mode: str
+
+    status: str
+    content_hash: str
+
+Contract Compatibility Check
+
+Before deployment, validate:
+
+Can old producers communicate with new consumers?
+Can new producers communicate with old consumers?
+Are required fields preserved?
+Are defaults safe?
+Are enum extensions supported?
+Are semantic assumptions unchanged?
+Can historical artifacts still be read?
+
+Expand-and-Contract Migration
+
+For breaking changes, use:
+
+Add new field or structure
+        │
+        ▼
+Support old and new formats
+        │
+        ▼
+Migrate producers
+        │
+        ▼
+Migrate stored artifacts
+        │
+        ▼
+Migrate consumers
+        │
+        ▼
+Measure old-format usage
+        │
+        ▼
+Retire old format
+
+Never deploy producer and consumer changes as one indivisible assumption across a distributed system.
+P10.7 — Controlled Experimentation
+
+Not every proposed improvement should become a permanent change.
+
+P10 introduces formal experiments.
+Experiment Types
+
+Agent prompt experiment
+Model-routing experiment
+Crew-composition experiment
+Workflow experiment
+Policy advisory experiment
+Resource-allocation experiment
+Review-process experiment
+Architecture prototype
+Operational-process experiment
+
+Experiment Definition
+
+class EnterpriseExperiment(BaseModel):
+    id: UUID
+    name: str
+
+    hypothesis: str
+    experiment_type: str
+
+    control_configuration_id: UUID
+    treatment_configuration_id: UUID
+
+    eligible_population: dict
+    excluded_population: dict
+
+    primary_metric: str
+    secondary_metrics: list[str]
+    guardrail_metrics: list[str]
+
+    start_at: datetime | None
+    end_at: datetime | None
+
+    approval_record_id: UUID
+    status: str
+
+Guardrail Metrics
+
+Experiments must not optimize one metric while damaging the system.
+
+Example:
+
+Primary metric:
+Reduce work-package planning time.
+
+Guardrails:
+No increase in execution failure.
+No increase in scope violations.
+No reduction in reviewer precision.
+No security-control violations.
+
+Experiment Assignment
+
+Assignment must be deterministic and auditable.
+
+Record:
+
+Eligible subject
+Assignment rule
+Control or treatment
+Configuration version
+Assignment timestamp
+Experiment version
+
+Experiment Termination
+
+Stop an experiment when:
+
+Safety threshold is exceeded
+Policy violation occurs
+Data-quality failure occurs
+Statistical futility is reached
+Required authority is revoked
+Unexpected cross-system impact appears
+
+P10.8 — Digital Simulation and Shadow Operation
+
+High-risk changes should be tested without controlling real operations.
+
+P8 introduced the operational digital twin.
+
+P10 uses it to simulate transformation.
+Simulation Modes
+
+Historical replay
+Synthetic scenario simulation
+Shadow decisioning
+Shadow scheduling
+Shadow agent execution
+Shadow policy evaluation
+Disaster simulation
+Portfolio scenario replay
+
+Shadow Mode
+
+In shadow mode, the new component processes real inputs but cannot affect authoritative state.
+
+Example:
+
+Current scheduler
+      │
+      ├── Makes real scheduling decision
+      │
+      └── Sends same input to shadow scheduler
+                    │
+                    ▼
+             Records alternative decision
+
+The platform compares:
+
+Selected work
+Resource usage
+Completion time
+Failure rate
+Fairness
+Policy compliance
+
+Shadow Execution Constraints
+
+Shadow components must not:
+
+Dispatch external commands
+Modify authoritative workflow state
+Create real approvals
+Consume production integration identities
+Write to authoritative Git branches
+Notify customers
+Commit financial actions
+
+Simulation Result
+
+class SimulationResult(BaseModel):
+    id: UUID
+    simulation_run_id: UUID
+
+    subject_type: str
+    subject_id: UUID
+
+    baseline_result: dict
+    candidate_result: dict
+
+    differences: list[dict]
+    policy_violations: list[dict]
+
+    confidence: float
+    created_at: datetime
+
+P10.9 — Change Impact Analysis
+
+Every material change must identify its likely blast radius.
+Impact Dimensions
+
+Analyze:
+
+Projects
+Portfolios
+Workflows
+Agents
+Crews
+Policies
+Contracts
+Data
+Infrastructure
+External systems
+Customers
+Suppliers
+Jurisdictions
+Security controls
+Recovery procedures
+Audit evidence
+
+Dependency-Based Impact Analysis
+
+The platform already has dependency graphs from P5, P7, P8, and P9.
+
+P10 combines them.
+
+Example:
+
+Change model gateway interface
+        │
+        ├── affects agent runtime
+        ├── affects restricted execution zones
+        ├── affects cost forecasting
+        ├── affects model fallback
+        └── affects disaster recovery
+
+Impact Assessment
+
+class ChangeImpactAssessment(BaseModel):
+    id: UUID
+    change_proposal_id: UUID
+
+    directly_affected_entities: list[dict]
+    indirectly_affected_entities: list[dict]
+
+    compatibility_risks: list[str]
+    security_risks: list[str]
+    operational_risks: list[str]
+    legal_risks: list[str]
+
+    estimated_blast_radius: str
+    rollback_complexity: str
+
+    required_approvals: list[str]
+    required_tests: list[str]
+
+    confidence: float
+
+Unknown Impact
+
+The system must allow:
+
+Impact unknown
+
+as an explicit finding.
+
+Unknown impact should increase governance and rollout requirements, not be treated as zero impact.
+P10.10 — Progressive Transformation Rollout
+
+Approved changes should be introduced gradually.
+Rollout Stages
+
+A standard rollout may be:
+
+Development
+      │
+      ▼
+Test environment
+      │
+      ▼
+Historical replay
+      │
+      ▼
+Shadow mode
+      │
+      ▼
+Internal pilot
+      │
+      ▼
+Low-risk production segment
+      │
+      ▼
+Partial production
+      │
+      ▼
+General production
+
+Transformation Rollout
+
+class TransformationRollout(BaseModel):
+    id: UUID
+    change_proposal_id: UUID
+
+    current_stage: str
+    rollout_strategy: str
+
+    eligible_scope: dict
+    excluded_scope: dict
+
+    success_criteria: list[str]
+    rollback_criteria: list[str]
+
+    status: str
+    approved_by: UUID
+
+Rollout Segmentation
+
+Segment by:
+
+Project risk
+Portfolio
+Jurisdiction
+Customer class
+Agent role
+Workflow type
+Environment
+Data classification
+Service criticality
+
+High-risk workloads should be the last to migrate.
+Automatic Pause
+
+The rollout engine should pause when:
+
+Failure rate increases
+Policy violations appear
+Unexpected schema errors occur
+Cost exceeds threshold
+Quality declines
+Recovery confidence falls
+Human override is activated
+
+Automatic pause is different from automatic rollback.
+
+Rollback should follow its approved policy.
+P10.11 — Continuous Control Validation
+
+Controls should not be trusted merely because they are configured.
+
+They must be continuously validated.
+Control Types
+
+Preventive control
+Detective control
+Corrective control
+Compensating control
+Recovery control
+Governance control
+
+Examples
+
+Preventive:
+
+Implementation agent cannot push to main.
+
+Detective:
+
+Audit worker detects unauthorized branch update.
+
+Corrective:
+
+Integration worker reverts invalid merge.
+
+Recovery:
+
+Repository mirror restores authoritative commit history.
+
+Control Definition
+
+class ControlDefinition(BaseModel):
+    id: UUID
+    code: str
+    name: str
+
+    control_type: str
+    control_objective: str
+
+    enforcement_component_id: UUID
+    evidence_source_ids: list[UUID]
+
+    test_frequency: str
+    owner_id: UUID
+
+    status: str
+
+Control Effectiveness
+
+Evaluate:
+
+Design effectiveness
+Operating effectiveness
+Evidence completeness
+Failure frequency
+Detection latency
+Remediation latency
+Coverage
+
+Continuous Control Test
+
+class ControlTestResult(BaseModel):
+    control_id: UUID
+    test_run_id: UUID
+
+    test_type: str
+    expected_result: dict
+    observed_result: dict
+
+    passed: bool
+    findings: list[str]
+
+    evidence_artifact_ids: list[UUID]
+    tested_at: datetime
+
+A control whose tests are failing must not remain classified as effective.
+P10.12 — Institutional Improvement Management
+
+Improvement must be managed as a portfolio, not as isolated optimizations.
+
+Introduce an improvement backlog.
+Improvement Sources
+
+Incident reviews
+Agent evaluations
+Audit findings
+Security findings
+Customer outcomes
+Portfolio reviews
+Resilience experiments
+Cost analysis
+Architecture conformance
+Model evaluation
+Human proposals
+
+Improvement Item
+
+class ImprovementItem(BaseModel):
+    id: UUID
+    source_type: str
+    source_reference_id: UUID
+
+    title: str
+    problem_statement: str
+
+    expected_benefit: str
+    urgency: str
+    risk_if_ignored: str
+
+    affected_domains: list[str]
+    owner_id: UUID
+
+    status: str
+
+Improvement Prioritization
+
+Score using:
+
+Risk reduction
+Strategic value
+Recurrence frequency
+Affected scope
+Customer impact
+Compliance impact
+Cost of delay
+Implementation cost
+Confidence
+
+Learning Does Not Equal Change
+
+The correct sequence is:
+
+Observation
+      │
+      ▼
+Learning
+      │
+      ▼
+Improvement proposal
+      │
+      ▼
+Governed change
+      │
+      ▼
+Validated outcome
+
+A learned fact may not justify a platform-wide modification.
+P10.13 — Technical Debt and Entropy Control
+
+As the enterprise evolves, structural complexity increases.
+
+P10 must explicitly manage entropy.
+Debt Categories
+
+Architecture debt
+Code debt
+Schema debt
+Policy debt
+Workflow debt
+Agent-definition debt
+Knowledge debt
+Infrastructure debt
+Security debt
+Operational debt
+Vendor debt
+
+Technical Debt Record
+
+class TechnicalDebtItem(BaseModel):
+    id: UUID
+    debt_type: str
+
+    description: str
+    origin_change_id: UUID | None
+
+    affected_component_ids: list[UUID]
+    risk_level: str
+
+    estimated_remediation_cost: str
+    cost_of_delay: str
+
+    target_resolution_date: datetime | None
+    owner_id: UUID
+    status: str
+
+Entropy Indicators
+
+Track:
+
+Number of active schema versions
+Number of compatibility adapters
+Number of policy exceptions
+Number of emergency authority uses
+Number of deprecated agent versions
+Number of untested runbooks
+Number of orphaned artifacts
+Number of unresolved migrations
+Number of duplicated capabilities
+Number of vendor-specific dependencies
+
+Rising entropy should trigger architectural review.
+Temporary Exceptions
+
+Every exception must define:
+
+Reason
+Scope
+Owner
+Expiration
+Compensating control
+Removal plan
+
+No exception should be permanent by omission.
+P10.14 — Meta-Governance and Constitutional Controls
+
+This is the most important P10 workstream.
+
+The system requires a set of rules that ordinary workflows and agents cannot modify.
+
+These are the enterprise’s constitutional controls.
+Constitutional Policy Scope
+
+Examples:
+
+Human authority over strategic commitments
+Human approval for production integration
+Separation of implementation and review
+Immutable audit evidence
+No self-expansion of agent authority
+No silent weakening of security controls
+No unapproved external financial action
+No policy change without versioned approval
+No deletion of original historical artifacts
+No autonomous modification of constitutional policy
+
+Constitutional Policy
+
+class ConstitutionalPolicy(BaseModel):
+    id: UUID
+    code: str
+    version: int
+
+    principle: str
+    enforceable_rules: list[str]
+
+    protected_component_ids: list[UUID]
+    amendment_authority_group_id: UUID
+
+    minimum_approval_count: int
+    required_role_codes: list[str]
+
+    cooling_off_period_seconds: int
+    status: str
+
+Amendment Process
+
+Changing a constitutional control should require:
+
+Formal amendment proposal
+Independent impact assessment
+Security review
+Legal or compliance review where applicable
+Multiple human approvals
+Cooling-off period
+Public internal notice
+Rollback or emergency-reversal plan
+Signed activation record
+
+No Circular Authority
+
+The component being changed cannot be the sole validator of its change.
+
+Examples:
+
+The policy engine cannot alone approve a policy-engine bypass.
+
+The audit subsystem cannot alone approve removal of audit requirements.
+
+The agent registry cannot alone approve agent self-authorization.
+
+The model gateway cannot alone approve removal of model-safety evaluation.
+
+Independent enforcement paths are required.
+P10 Domain Events
+
+Introduce events such as:
+
+ChangeProposalCreated
+ChangeImpactAssessmentCompleted
+ChangeValidationPlanApproved
+ArchitectureDecisionAccepted
+PolicyVersionCreated
+PolicyVersionActivated
+PolicyConflictDetected
+WorkflowMigrationStarted
+WorkflowMigrationCompleted
+AgentVersionPromoted
+AgentVersionRolledBack
+SchemaVersionRegistered
+SchemaCompatibilityFailed
+ExperimentStarted
+ExperimentPaused
+ExperimentCompleted
+ShadowEvaluationCompleted
+TransformationRolloutAdvanced
+TransformationRolloutPaused
+TransformationRolledBack
+ControlTestFailed
+ImprovementItemCreated
+TechnicalDebtThresholdExceeded
+ConstitutionalAmendmentProposed
+ConstitutionalAmendmentApproved
+ConstitutionalPolicyActivated
+
+P10 Database Modules
+
+Suggested PostgreSQL tables:
+
+change_proposals
+change_sets
+change_impact_assessments
+change_validation_plans
+change_rollout_plans
+change_rollback_plans
+change_decisions
+change_observations
+change_outcomes
+
+architecture_decision_records
+architecture_models
+architecture_transitions
+architecture_fitness_functions
+architecture_conformance_results
+
+policy_definitions
+policy_versions
+policy_tests
+policy_test_results
+policy_conflicts
+policy_activations
+
+workflow_definitions
+workflow_definition_versions
+workflow_migration_plans
+workflow_migration_runs
+workflow_instance_migrations
+
+agent_definition_versions
+agent_promotion_runs
+agent_regression_results
+crew_template_versions
+crew_template_evaluations
+
+schema_definitions
+schema_versions
+schema_compatibility_results
+schema_usage_records
+schema_retirement_plans
+
+enterprise_experiments
+experiment_assignments
+experiment_measurements
+experiment_guardrail_events
+experiment_outcomes
+
+simulation_runs
+simulation_inputs
+simulation_results
+shadow_decisions
+shadow_comparisons
+
+transformation_rollouts
+rollout_stages
+rollout_observations
+rollout_pauses
+rollout_rollbacks
+
+control_definitions
+control_test_suites
+control_test_runs
+control_test_results
+control_findings
+
+improvement_items
+improvement_portfolios
+improvement_decisions
+improvement_outcomes
+
+technical_debt_items
+technical_debt_measurements
+policy_exceptions
+exception_expirations
+
+constitutional_policies
+constitutional_policy_versions
+constitutional_amendments
+constitutional_approvals
+constitutional_activation_records
+
+P10 API Surface
+
+Suggested endpoints:
+
+POST   /change-proposals
+GET    /change-proposals/{change_id}
+POST   /change-proposals/{change_id}/submit
+POST   /change-proposals/{change_id}/assess-impact
+POST   /change-proposals/{change_id}/approve
+POST   /change-proposals/{change_id}/reject
+
+POST   /architecture-decisions
+POST   /architecture-decisions/{decision_id}/accept
+POST   /architecture-fitness-functions
+POST   /architecture-conformance-runs
+
+POST   /policies
+POST   /policies/{policy_id}/versions
+POST   /policy-versions/{version_id}/test
+POST   /policy-versions/{version_id}/activate
+POST   /policy-versions/{version_id}/retire
+
+POST   /workflow-definitions
+POST   /workflow-migration-plans
+POST   /workflow-migration-runs
+
+POST   /agent-definitions/{agent_id}/versions
+POST   /agent-versions/{version_id}/evaluate
+POST   /agent-versions/{version_id}/promote
+POST   /agent-versions/{version_id}/rollback
+
+POST   /schemas
+POST   /schemas/{schema_id}/versions
+POST   /schema-compatibility-checks
+POST   /schema-retirement-plans
+
+POST   /experiments
+POST   /experiments/{experiment_id}/approve
+POST   /experiments/{experiment_id}/start
+POST   /experiments/{experiment_id}/pause
+POST   /experiments/{experiment_id}/complete
+
+POST   /simulations
+POST   /shadow-evaluations
+
+POST   /transformation-rollouts
+POST   /transformation-rollouts/{rollout_id}/advance
+POST   /transformation-rollouts/{rollout_id}/pause
+POST   /transformation-rollouts/{rollout_id}/rollback
+
+POST   /controls
+POST   /controls/{control_id}/test
+GET    /controls/{control_id}/effectiveness
+
+POST   /improvement-items
+POST   /improvement-portfolios
+POST   /technical-debt-items
+POST   /policy-exceptions
+
+POST   /constitutional-amendments
+POST   /constitutional-amendments/{amendment_id}/approve
+POST   /constitutional-amendments/{amendment_id}/activate
+
+P10 Worker Topology
+
+API Service
+│
+├── Change Analysis Worker
+├── Architecture Conformance Worker
+├── Policy Test Worker
+├── Workflow Migration Worker
+├── Agent Evaluation Worker
+├── Schema Compatibility Worker
+├── Experiment Assignment Worker
+├── Simulation Worker
+├── Shadow Execution Worker
+├── Rollout Coordinator
+├── Control Validation Worker
+├── Improvement Analysis Worker
+├── Technical Debt Monitor
+└── Constitutional Governance Worker
+
+The Constitutional Governance Worker must not possess unilateral authority to activate constitutional amendments.
+
+It may validate process completion, but activation requires the required human approvals and cryptographic evidence.
+P10 Repository Structure
+
+src/
+├── change_management/
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   └── api/
+│
+├── architecture_governance/
+├── policy_management/
+├── workflow_evolution/
+├── agent_evolution/
+├── schema_registry/
+├── experimentation/
+├── simulation/
+├── shadow_operation/
+├── transformation_rollout/
+├── control_validation/
+├── institutional_improvement/
+├── technical_debt/
+└── constitutional_governance/
+
+P10 Implementation Order
+
+P10 should be implemented in the following sequence.
+Increment 1 — Change Proposal and Impact Model
+
+Implement:
+
+Change proposals
+Affected components
+Risk classification
+Impact assessments
+Approval lifecycle
+
+This becomes the entry point for all future platform changes.
+Increment 2 — Policy Versioning
+
+Implement:
+
+Policy registry
+Versioned rules
+Policy tests
+Activation records
+Policy precedence
+Rollback
+
+Increment 3 — Workflow Versioning
+
+Implement:
+
+Immutable workflow definitions
+Instance version binding
+Migration plans
+Migration validation
+Checkpoint-safe migration
+
+Increment 4 — Schema Registry
+
+Implement:
+
+Schema versions
+Compatibility modes
+Compatibility checks
+Usage tracking
+Retirement plans
+Artifact migration linkage
+
+Increment 5 — Agent Evolution
+
+Implement:
+
+Agent-definition versions
+Historical evaluation
+Shadow operation
+Promotion stages
+Rollback
+Independent approval
+
+Increment 6 — Architecture Fitness Functions
+
+Implement:
+
+Executable architecture rules
+Repository conformance
+Runtime conformance
+Policy conformance
+Drift detection
+
+Increment 7 — Controlled Experimentation
+
+Implement:
+
+Experiment definitions
+Control and treatment
+Assignment
+Guardrails
+Measurement
+Termination
+Outcome review
+
+Increment 8 — Simulation and Shadow Systems
+
+Implement:
+
+Historical replay
+Synthetic scenarios
+Shadow scheduling
+Shadow agent execution
+Decision comparison
+Side-effect prevention
+
+Increment 9 — Progressive Rollout
+
+Implement:
+
+Rollout stages
+Segmentation
+Health gates
+Automatic pause
+Manual continuation
+Rollback
+
+Increment 10 — Continuous Control Validation
+
+Implement:
+
+Control registry
+Control tests
+Effectiveness scoring
+Findings
+Remediation workflows
+Evidence retention
+
+Increment 11 — Improvement and Debt Portfolios
+
+Implement:
+
+Improvement backlog
+Evidence linkage
+Prioritization
+Technical-debt inventory
+Exception expiry
+Entropy metrics
+
+Increment 12 — Constitutional Governance
+
+Implement last:
+
+Protected principles
+Amendment process
+Approval quorum
+Cooling-off period
+Independent validation
+Signed activation
+Emergency reversal
+
+Constitutional controls should only be formalized after the lower-level governance mechanisms are operational and testable.
+P10 Contract Tests
+
+Mandatory contract tests should include:
+
+A material change cannot enter production without a change proposal.
+
+A change proposal cannot approve itself.
+
+A policy version cannot activate without passing its required test suite.
+
+A lower-level policy cannot override a constitutional policy.
+
+A running workflow cannot silently change workflow version.
+
+A workflow migration cannot occur from a prohibited state.
+
+An agent version cannot promote itself.
+
+An agent cannot alter its own evaluation profile or authority.
+
+A breaking schema version cannot activate without a migration or compatibility plan.
+
+An original artifact cannot be overwritten during schema migration.
+
+A shadow component cannot create external side effects.
+
+An experiment cannot continue after a safety guardrail is violated.
+
+A transformation rollout cannot advance while required health gates are failing.
+
+A failed control test must affect the control’s effectiveness status.
+
+A policy exception cannot exist without an expiration date.
+
+An expired exception cannot continue authorizing behavior.
+
+A constitutional amendment cannot be approved by a single actor.
+
+A constitutional amendment cannot bypass its cooling-off period without an independently governed emergency procedure.
+
+The component being changed cannot be the sole validator of its own change.
+
+P10 Failure Scenarios
+
+P10 must test transformation failures deliberately.
+New Policy Blocks Legitimate Work
+
+Policy version activated
+Legitimate workflows begin failing
+
+Expected response:
+
+Detect abnormal denial rate
+Pause policy rollout
+Restore previous active version
+Preserve denied-request evidence
+Create corrective change proposal
+
+Agent Version Reduces Quality
+
+New agent version lowers task time
+Review rejection rate increases
+
+Expected response:
+
+Trigger quality guardrail
+Stop promotion
+Return traffic to previous version
+Retain experiment evidence
+Analyze failure pattern
+
+Workflow Migration Fails Midway
+
+Instance artifacts transformed
+State migration fails
+
+Expected response:
+
+Stop migration
+Do not activate target workflow version
+Restore source-state references
+Preserve transformed derived artifacts
+Mark instance migration failed
+Require reconciliation
+
+Schema Consumer Is Incompatible
+
+New producer emits valid new schema
+Old consumer cannot interpret it
+
+Expected response:
+
+Reject activation or route through compatibility adapter
+Record consumer incompatibility
+Do not silently discard fields
+
+Experiment Changes External Behavior
+
+Shadow agent unexpectedly receives production credentials
+
+Expected response:
+
+Block command at gateway
+Suspend experiment
+Revoke credentials
+Open security incident
+Validate all prior experiment actions
+
+Constitutional-Control Bypass Attempt
+
+Policy change attempts to remove integration approval
+
+Expected response:
+
+Reject ordinary policy activation
+Classify as constitutional amendment
+Require constitutional governance workflow
+Preserve attempted-change evidence
+
+P10 Observability
+
+Track:
+
+Change proposal throughput
+Change lead time
+Change failure rate
+Rollback rate
+Policy-denial anomalies
+Workflow migration success
+Schema-version proliferation
+Agent promotion success
+Experiment guardrail violations
+Shadow-versus-production divergence
+Rollout pause frequency
+Control effectiveness
+Exception count and age
+Technical-debt growth
+Architecture drift
+Constitutional amendment activity
+
+Key organizational indicators should include:
+
+Percentage of changes with validated rollback
+Percentage of policies with passing tests
+Percentage of workflows on supported versions
+Percentage of agents on approved versions
+Percentage of schemas within support window
+Percentage of controls recently validated
+Number of overdue technical-debt items
+Number of expired exceptions still referenced
+
+P10 Definition of Done
+
+P10 is complete when the platform can execute this governed transformation lifecycle:
+
+Operational deficiency identified
+        │
+        ▼
+Evidence-linked change proposal created
+        │
+        ▼
+Cross-system impact assessed
+        │
+        ▼
+Architecture, policy, workflow, schema, and authority implications identified
+        │
+        ▼
+Candidate change validated through tests and simulation
+        │
+        ▼
+Shadow operation demonstrates acceptable behavior
+        │
+        ▼
+Required human governance approval recorded
+        │
+        ▼
+Progressive rollout begins
+        │
+        ▼
+Guardrails and controls continuously evaluated
+        │
+        ▼
+Change retained, revised, paused, or rolled back
+        │
+        ▼
+Outcome measured against the original hypothesis
+        │
+        ▼
+Institutional knowledge and technical-debt records updated
+
+At the completion of P10, the enterprise can safely change itself without losing the controls established in P1–P9.
+
+The full platform can now govern:
+
+Strategy
+→ investment
+→ organization
+→ planning
+→ implementation
+→ review
+→ integration
+→ production
+→ operations
+→ resilience
+→ institutional evolution
+
+The next engineering step should not be another conceptual phase.
+
+It should be the consolidation of P1–P10 into a formal master architecture, implementation program, domain dependency map, release roadmap, and executable build sequence.
+
+That consolidation should become:
+Master Implementation Blueprint — From Repository Skeleton to Governed Autonomous Enterprise
+
+Its purpose is to determine:
+
+What must be built first
+Which modules depend on which
+Which abstractions should be delayed
+Which milestones produce usable software
+Which controls are mandatory from day one
+Which capabilities belong only in later releases
+How the complete system is assembled without overengineering the first version
+
+
+continue
+
+Master Implementation Blueprint — From Repository Skeleton to Governed Autonomous Enterprise
+
+P1–P10 define the complete target operating model.
+
+The next task is to convert that architecture into an implementation program that can actually be built, tested, operated, and expanded without attempting to create the entire enterprise platform at once.
+
+The governing principle is:
+
+    Build the smallest trustworthy vertical slice first, then expand its capacity, intelligence, scope, and resilience without replacing its foundations.
+
+The implementation sequence must therefore preserve two objectives:
+
+Deliver useful software early
+            +
+Avoid architectural dead ends
+
+1. Final Platform Structure
+
+The platform should be understood as six architectural layers.
+
+┌───────────────────────────────────────────────┐
+│ 6. Strategy and Institutional Governance      │
+│ P7, P9, P10                                   │
+├───────────────────────────────────────────────┤
+│ 5. External Operations and Production         │
+│ P8                                            │
+├───────────────────────────────────────────────┤
+│ 4. Organizational Intelligence                │
+│ P6                                            │
+├───────────────────────────────────────────────┤
+│ 3. Scale and Portfolio Coordination           │
+│ P5, P7                                        │
+├───────────────────────────────────────────────┤
+│ 2. Governed Engineering Workflow              │
+│ P1, P3, P4                                    │
+├───────────────────────────────────────────────┤
+│ 1. Execution and Metadata Foundation          │
+│ P1, P2                                        │
+└───────────────────────────────────────────────┘
+
+The lower layers must be operational before higher layers are activated.
+
+For example:
+
+Agent intelligence
+
+must not be implemented before:
+
+Identity
+Authority
+Artifacts
+Workflow state
+Execution isolation
+Audit evidence
+
+Otherwise agents would operate without enforceable boundaries.
+2. Product Decomposition
+
+The complete platform should be divided into bounded product areas.
+
+A. Enterprise Metadata Kernel
+B. Governance and Approval Engine
+C. Artifact and Evidence System
+D. Workflow Orchestration Engine
+E. Disposable Execution Runtime
+F. Patch Review and Integration
+G. Agent and Crew Platform
+H. Scheduler and Dependency Engine
+I. Portfolio and Financial Governance
+J. External Integration Gateway
+K. Production Operations Platform
+L. Resilience and Continuity Platform
+M. Change and Evolution Governance
+N. User Interface and Operational Console
+
+Each product area should have:
+
+Domain model
+Application services
+Database migrations
+API contracts
+Workers
+Events
+Policies
+Tests
+Operational dashboards
+
+3. Dependency Order
+
+The dependency graph should be explicit.
+
+Metadata Kernel
+      │
+      ├── Artifact System
+      ├── Identity and Authority
+      └── Audit Events
+             │
+             ▼
+Workflow Orchestration
+      │
+      ├── Approval Engine
+      ├── Disposable Runtime
+      └── Recovery Checkpoints
+             │
+             ▼
+Patch Review and Integration
+             │
+             ▼
+Vertical Slice
+             │
+             ├── Parallel Scheduler
+             ├── Agent Organization
+             └── Portfolio Governance
+                    │
+                    ▼
+External Operations
+                    │
+                    ▼
+Resilience and Self-Evolution
+
+This means the first production release must not begin with dynamic crews, portfolio analytics, or external integrations.
+
+It must begin with the metadata kernel and one governed engineering workflow.
+4. Implementation Releases
+
+The program should be implemented through ten practical releases.
+
+R0  Development Foundation
+R1  Governed Metadata Kernel
+R2  Requirements and Architecture Workflow
+R3  Disposable Execution and Patch Production
+R4  Controlled Review and Integration
+R5  Complete Vertical Slice
+R6  Parallel Work and Agent Organization
+R7  Portfolio and Enterprise Governance
+R8  External Operations and Production
+R9  Resilience and Sovereign Control
+R10 Governed Self-Evolution
+
+Each release must produce usable software.
+R0 — Development Foundation
+Objective
+
+Create a reproducible local development and CI environment.
+
+This release does not implement autonomous agents yet.
+
+It establishes the technical foundation on which every later module depends.
+Deliverables
+
+Repository structure
+Python application
+FastAPI
+PostgreSQL
+Alembic
+Redis or initial queue
+Docker Compose
+Structured logging
+Configuration management
+Health checks
+Test framework
+CI pipeline
+Local artifact storage
+
+Recommended Initial Technology Stack
+
+Language                  Python 3.12+
+API                       FastAPI
+Validation                Pydantic
+Database                  PostgreSQL
+Migrations                Alembic
+ORM                       SQLAlchemy 2
+Queue                     Redis initially
+Workers                   Custom durable worker or Celery/Dramatiq
+Containers                Docker
+Repository integration    Git CLI through controlled adapter
+Testing                   Pytest
+Observability             OpenTelemetry-compatible instrumentation
+
+Avoid introducing Kubernetes during R0 unless it is already an operational requirement.
+
+Docker Compose is sufficient for the first local and single-node vertical slice.
+Initial Repository
+
+~/projects/ai-enterprise/
+├── apps/
+│   ├── api/
+│   └── worker/
+│
+├── src/
+│   ├── shared/
+│   ├── projects/
+│   ├── artifacts/
+│   ├── approvals/
+│   ├── workflows/
+│   ├── execution/
+│   ├── reviews/
+│   └── integration/
+│
+├── migrations/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── contract/
+│   └── end_to_end/
+│
+├── infrastructure/
+│   ├── docker/
+│   └── compose/
+│
+├── scripts/
+├── docs/
+├── pyproject.toml
+├── compose.yaml
+├── .env.example
+└── README.md
+
+R0 Completion Criteria
+
+API starts successfully
+Database migrations apply
+Worker connects to database
+Health endpoint responds
+Tests run in CI
+Structured logs contain correlation IDs
+Local environment starts through one command
+
+Example:
+
+docker compose up --build
+
+R1 — Governed Metadata Kernel
+Objective
+
+Create the durable source of truth for projects, identities, artifacts, commands, events, and approvals.
+
+This is the most important architectural release.
+
+All later functionality depends on it.
+Core Domains
+
+Projects
+Manifests
+Artifacts
+Actors
+Roles
+Authority grants
+Approvals
+Commands
+Events
+Audit records
+
+Minimum Tables
+
+projects
+project_manifests
+actors
+roles
+actor_roles
+authority_grants
+artifacts
+artifact_versions
+commands
+domain_events
+approval_requests
+approval_decisions
+audit_records
+
+Project Aggregate
+
+A project should include:
+
+Project identity
+Lifecycle state
+Repository reference
+Default branch
+Manifest reference
+Policy set
+Current workflow
+Created by
+Creation timestamp
+
+Immutable Manifest
+
+The manifest defines the project’s initial operating constraints.
+
+Example:
+
+project:
+  name: ai-enterprise
+  repository:
+    path: /workspace/repository
+    default_branch: main
+
+execution:
+  network_enabled: false
+  maximum_cpu: 2
+  maximum_memory_mb: 4096
+  timeout_seconds: 1800
+
+governance:
+  requirements_approval_required: true
+  architecture_approval_required: true
+  work_package_approval_required: true
+  integration_approval_required: true
+
+testing:
+  allowed_commands:
+    - pytest
+    - ruff check .
+
+Once accepted, the manifest must not be edited.
+
+A change creates a new manifest version and a governed amendment.
+R1 API
+
+POST /projects
+GET  /projects/{project_id}
+
+POST /projects/{project_id}/manifests
+GET  /projects/{project_id}/manifests/{version}
+
+POST /artifacts
+GET  /artifacts/{artifact_id}
+
+POST /approval-requests
+POST /approval-requests/{approval_id}/decisions
+
+GET  /audit/events
+
+R1 Completion Criteria
+
+The platform can:
+
+Create a project
+Store an immutable manifest
+Create versioned artifacts
+Request approval
+Record approval or rejection
+Preserve an append-only audit trail
+Reject unauthorized state changes
+
+No LLM integration is required to declare R1 complete.
+R2 — Requirements and Architecture Workflow
+Objective
+
+Implement the first controlled agent-assisted workflow.
+
+The first useful sequence is:
+
+Project created
+      │
+      ▼
+Requirements generated
+      │
+      ▼
+Human approval
+      │
+      ▼
+Architecture generated
+      │
+      ▼
+Human approval
+
+CrewAI Integration Boundary
+
+CrewAI should be used as an agent orchestration adapter, not as the platform’s source of truth.
+
+The architecture should be:
+
+Platform workflow
+      │
+      ▼
+Agent execution request
+      │
+      ▼
+CrewAI adapter
+      │
+      ▼
+CrewAI crew
+      │
+      ▼
+Structured output
+      │
+      ▼
+Platform validation
+      │
+      ▼
+Artifact storage
+
+CrewAI should not directly update workflow state, approve artifacts, or write to authoritative repositories.
+Agent Definitions
+
+Initial agents:
+
+Requirements Analyst
+Requirements Reviewer
+Solution Architect
+Architecture Reviewer
+
+The first release can use fixed agent definitions stored in configuration.
+
+Dynamic agent registries belong later.
+Requirements Contract
+
+class RequirementsArtifact(BaseModel):
+    project_id: UUID
+    version: int
+
+    problem_statement: str
+    objectives: list[str]
+    functional_requirements: list[str]
+    nonfunctional_requirements: list[str]
+    constraints: list[str]
+    acceptance_criteria: list[str]
+    assumptions: list[str]
+    open_questions: list[str]
+
+Architecture Contract
+
+class ArchitectureArtifact(BaseModel):
+    project_id: UUID
+    requirements_artifact_id: UUID
+    version: int
+
+    architecture_summary: str
+    components: list[dict]
+    interfaces: list[dict]
+    data_stores: list[dict]
+    security_constraints: list[str]
+    operational_constraints: list[str]
+    decisions: list[dict]
+    risks: list[dict]
+
+R2 Workflow States
+
+PROJECT_CREATED
+REQUIREMENTS_RUNNING
+WAITING_REQUIREMENTS_APPROVAL
+REQUIREMENTS_REJECTED
+ARCHITECTURE_RUNNING
+WAITING_ARCHITECTURE_APPROVAL
+ARCHITECTURE_REJECTED
+ARCHITECTURE_APPROVED
+
+R2 Completion Criteria
+
+The platform can:
+
+Run the Requirements Crew
+Validate its structured output
+Store the requirements artifact
+Pause for human approval
+Run the Architecture Crew only after approval
+Store the architecture artifact
+Pause for architecture approval
+Resume correctly after worker restart
+
+R3 — Disposable Execution and Patch Production
+Objective
+
+Implement one bounded work package inside a disposable runtime.
+
+The host repository must remain unchanged.
+Workflow
+
+Approved architecture
+      │
+      ▼
+Generate work package
+      │
+      ▼
+Human approval
+      │
+      ▼
+Create repository snapshot
+      │
+      ▼
+Launch unprivileged container
+      │
+      ▼
+Run implementation agent
+      │
+      ▼
+Run approved tests
+      │
+      ▼
+Validate changed files
+      │
+      ▼
+Generate patch
+
+Work Package Contract
+
+class WorkPackageArtifact(BaseModel):
+    project_id: UUID
+    architecture_artifact_id: UUID
+
+    title: str
+    objective: str
+    scope: str
+
+    allowed_files: list[str]
+    prohibited_files: list[str]
+
+    implementation_steps: list[str]
+    acceptance_criteria: list[str]
+    approved_test_commands: list[str]
+
+    base_commit: str
+    timeout_seconds: int
+
+Execution Security
+
+The runtime must enforce:
+
+Non-root user
+No host repository write access
+Network disabled by default
+Read-only base snapshot
+CPU limit
+Memory limit
+PID limit
+Timeout
+Approved command allowlist
+Output-size limits
+
+Execution Outputs
+
+Execution logs
+Test logs
+Exit codes
+Changed-file list
+Changed-line statistics
+Patch artifact
+Result metadata
+Container metadata
+Failure reason
+
+Scope Validation
+
+Reject the result when:
+
+A changed file is outside the approved scope
+A prohibited file was modified
+A disallowed command executed
+The base commit does not match
+The execution exceeded limits
+The patch cannot be parsed
+Required tests did not execute
+
+R3 Completion Criteria
+
+The platform can execute one approved work package and produce a patch without changing the authoritative host repository.
+R4 — Controlled Review and Integration
+Objective
+
+Complete the path from patch to authoritative Git commit.
+Workflow
+
+Patch produced
+      │
+      ▼
+Independent reviewer assigned
+      │
+      ▼
+Patch reviewed
+      │
+      ├── Changes requested
+      │        ▼
+      │     New execution attempt
+      │
+      └── Accepted
+               ▼
+        Human integration approval
+               ▼
+        Fresh repository snapshot
+               ▼
+        Patch integrity verification
+               ▼
+        Patch application
+               ▼
+        Post-integration tests
+               ▼
+        Controlled commit
+
+Review Contract
+
+class PatchReviewArtifact(BaseModel):
+    patch_id: UUID
+    reviewer_id: UUID
+
+    decision: Literal[
+        "accepted",
+        "changes_requested",
+        "rejected",
+    ]
+
+    summary: str
+    findings: list[dict]
+    reviewed_files: list[str]
+    test_assessment: str
+    security_assessment: str
+
+Integration Protections
+
+Fresh authoritative snapshot
+Expected target branch verification
+Base commit verification
+Patch hash verification
+Tree hash verification
+Restricted Git identity
+Post-application tests
+Protected branch policy
+Commit evidence
+Rollback metadata
+
+The implementation agent and reviewer must never receive authoritative push credentials.
+Revision Lineage
+
+Work package
+      │
+      ├── Attempt 1
+      │      └── Review: changes requested
+      │
+      ├── Attempt 2
+      │      └── Review: changes requested
+      │
+      └── Attempt 3
+             └── Review: accepted
+
+Each attempt references:
+
+Parent attempt
+Review findings
+Base commit
+Generated patch
+Execution evidence
+
+R4 Completion Criteria
+
+The platform can transform an accepted patch into a controlled Git commit with complete traceability and rollback metadata.
+R5 — Complete Vertical Slice
+Objective
+
+Consolidate R1–R4 into one resumable workflow.
+
+This is the practical completion of P4.
+End-to-End Lifecycle
+
+Create project
+      │
+      ▼
+Store manifest
+      │
+      ▼
+Generate requirements
+      │
+      ▼
+Approve requirements
+      │
+      ▼
+Generate architecture
+      │
+      ▼
+Approve architecture
+      │
+      ▼
+Generate work package
+      │
+      ▼
+Approve work package
+      │
+      ▼
+Execute in container
+      │
+      ▼
+Produce patch
+      │
+      ▼
+Independent review
+      │
+      ▼
+Approve integration
+      │
+      ▼
+Create Git commit
+      │
+      ▼
+Complete audit package
+
+Required Platform Guarantees
+
+Deterministic state transitions
+Idempotent commands
+Persistent checkpoints
+Retry policies
+Cancellation
+Dead-letter handling
+Correlation IDs
+Contract validation
+Audit completeness checks
+
+R5 End-to-End Test
+
+Create a small fixture repository.
+
+Example task:
+
+Add one validated health endpoint.
+
+The automated test should verify:
+
+Project was created
+Artifacts were persisted
+Approvals were required
+Execution occurred in isolation
+Patch contained only approved files
+Reviewer was independent
+Integration used a restricted identity
+Target repository received one expected commit
+Audit evidence was complete
+
+First Production-Usable Milestone
+
+At this point, the platform can safely develop small bounded changes.
+
+This is the first release that should be considered an actual product.
+
+Everything before R5 is foundational assembly.
+R6 — Parallel Work and Agent Organization
+Objective
+
+Increase throughput and introduce governed specialization.
+
+Implement selected capabilities from P5 and P6.
+First Additions
+
+Dependency graph
+Parallel work-package execution
+Worker resource pools
+Fair scheduling
+Agent registry
+Capability registry
+Crew templates
+Delegation contracts
+Performance evaluation
+
+Important Scope Limitation
+
+Do not begin R6 with hundreds of dynamic agents.
+
+Start with:
+
+One scheduler
+Three to five agent roles
+Two crew templates
+A small worker pool
+A limited dependency graph
+
+The purpose is to validate organizational coordination, not maximize agent count.
+R6 Completion Criteria
+
+The platform can:
+
+Create multiple work packages
+Represent dependencies
+Execute independent packages concurrently
+Select eligible agent roles
+Prevent conflicted assignments
+Coordinate reviews
+Serialize integration safely
+
+R7 — Portfolio and Enterprise Governance
+Objective
+
+Connect engineering execution to strategic and financial governance.
+
+Implement selected P7 capabilities.
+Initial Scope
+
+Strategic objectives
+Portfolio
+Program
+Project traceability
+Investment proposal
+Basic prioritization
+Capacity plan
+Budget allocation
+Decision package
+
+Advanced financial forecasting and optimization can follow later.
+R7 Completion Criteria
+
+Every active project can explain:
+
+Which objective it supports
+Who sponsored it
+What budget it has
+What capacity it consumes
+What outcome it should produce
+Who approved the investment
+
+R8 — External Operations and Production
+Objective
+
+Connect the platform to real production and enterprise systems.
+
+Start with one low-risk integration and one deployment path.
+Recommended First Integrations
+
+Git hosting
+Container registry
+Staging deployment platform
+Observability platform
+Incident-management system
+
+Financial, customer-data, and regulatory integrations should come later because they carry greater risk.
+R8 Completion Criteria
+
+The platform can:
+
+Receive a validated external event
+Issue an idempotent external command
+Verify the external outcome
+Deploy an approved artifact to staging
+Observe health gates
+Pause or roll back
+Reconcile external state
+
+R9 — Resilience and Sovereign Control
+Objective
+
+Make the platform recoverable, provider-independent, and jurisdiction-aware.
+Initial Scope
+
+Service criticality
+RTO and RPO
+Backup manifests
+Isolated restore tests
+Degraded modes
+Model gateway abstraction
+Fallback model policies
+Regional recovery plan
+Key rotation
+Emergency authority
+
+R9 Completion Criteria
+
+The organization can demonstrate through testing that it can:
+
+Restore authoritative data
+Verify artifact integrity
+Resume workflows
+Replace a failed model provider
+Operate in a restricted degraded mode
+Preserve authority and audit continuity
+
+R10 — Governed Self-Evolution
+Objective
+
+Allow the platform to safely change its own policies, workflows, schemas, agents, and architecture.
+Initial Scope
+
+Change proposals
+Impact assessments
+Policy versioning
+Workflow versioning
+Schema registry
+Agent-version promotion
+Shadow operation
+Progressive rollout
+Rollback
+Constitutional controls
+
+R10 Completion Criteria
+
+A platform change can proceed through:
+
+Proposal
+Impact analysis
+Testing
+Shadow evaluation
+Approval
+Progressive rollout
+Observation
+Retention or rollback
+
+without bypassing existing governance.
+5. What Must Exist from Day One
+
+Certain controls cannot be postponed.
+
+They should exist in R1 or earlier.
+
+Immutable identifiers
+Versioned artifacts
+Append-only audit events
+Explicit actor identity
+Explicit authority checks
+Approval records
+Correlation and causation IDs
+Transaction boundaries
+Idempotency keys
+Database migrations
+Structured error handling
+Secret separation
+
+These are foundational controls.
+
+Adding them later would require rewriting every module.
+6. What Must Be Delayed
+
+Some capabilities are valuable but dangerous to implement too early.
+
+Delay:
+
+Dynamic self-modifying agents
+Automatic policy rewriting
+Multi-region active-active writes
+Complex portfolio optimization
+Direct financial actions
+Large-scale autonomous production remediation
+Long-term semantic memory
+Cross-project knowledge reuse without approval
+Constitutional amendment automation
+
+These require evidence and operational maturity from earlier releases.
+7. Shared Platform Contracts
+
+All modules should use a small set of shared primitives.
+Command Envelope
+
+class CommandEnvelope(BaseModel):
+    command_id: UUID
+    command_type: str
+    command_version: str
+
+    actor_id: UUID
+    authority_grant_id: UUID | None
+
+    correlation_id: UUID
+    causation_id: UUID | None
+
+    idempotency_key: str
+    issued_at: datetime
+
+    payload: dict
+
+Event Envelope
+
+class EventEnvelope(BaseModel):
+    event_id: UUID
+    event_type: str
+    event_version: str
+
+    aggregate_type: str
+    aggregate_id: UUID
+    aggregate_version: int
+
+    actor_id: UUID
+    correlation_id: UUID
+    causation_id: UUID | None
+
+    occurred_at: datetime
+    payload: dict
+    content_hash: str
+
+Artifact Envelope
+
+class ArtifactEnvelope(BaseModel):
+    artifact_id: UUID
+    artifact_type: str
+    schema_version: str
+
+    project_id: UUID
+    workflow_id: UUID | None
+
+    created_by: UUID
+    created_at: datetime
+
+    storage_uri: str
+    content_hash: str
+    byte_size: int
+
+    source_artifact_ids: list[UUID]
+
+Approval Envelope
+
+class ApprovalDecision(BaseModel):
+    approval_request_id: UUID
+    decision_id: UUID
+
+    actor_id: UUID
+    decision: Literal[
+        "approved",
+        "rejected",
+        "changes_requested",
+    ]
+
+    reason: str
+    evidence_artifact_ids: list[UUID]
+
+    decided_at: datetime
+    signature_reference: str | None
+
+These primitives should remain stable across the complete platform.
+8. Transaction Model
+
+Each command should follow:
+
+Receive command
+      │
+      ▼
+Check idempotency
+      │
+      ▼
+Load aggregate
+      │
+      ▼
+Verify authority
+      │
+      ▼
+Validate transition
+      │
+      ▼
+Persist state changes
+      │
+      ▼
+Persist domain events
+      │
+      ▼
+Commit transaction
+      │
+      ▼
+Publish events through outbox
+
+Do not publish events before the database transaction commits.
+
+Use the transactional outbox pattern from the beginning.
+9. Testing Strategy
+
+The test pyramid should include five levels.
+
+Unit tests
+Domain-state tests
+Contract tests
+Integration tests
+End-to-end tests
+
+Unit Tests
+
+Validate:
+
+State transitions
+Hashing
+Authorization predicates
+Scope checks
+Scoring functions
+Schema validation
+
+Contract Tests
+
+Validate boundaries:
+
+Requirements output contract
+Architecture output contract
+Work-package contract
+Execution-result contract
+Review contract
+Integration contract
+
+Integration Tests
+
+Use real:
+
+PostgreSQL
+Redis or queue
+Git repository
+Container runtime
+Artifact storage
+
+Avoid mocking infrastructure for all tests.
+End-to-End Tests
+
+At least one complete workflow must run in CI or a controlled integration environment.
+Security Tests
+
+Include:
+
+Unauthorized approval
+Expired authority grant
+Scope escape
+Container network attempt
+Host repository write attempt
+Reviewer conflict
+Patch hash mismatch
+Duplicate command
+Replay attack
+
+10. Operational Environments
+
+Use at least four environments.
+
+Local
+Integration
+Staging
+Production
+
+Local:
+
+Docker Compose
+Synthetic repositories
+Local artifact storage
+Mock model provider where useful
+
+Integration:
+
+Real PostgreSQL
+Real worker queues
+Real containers
+Test Git repositories
+
+Staging:
+
+Production-like policies
+Restricted real model access
+Production-like observability
+No production external actions
+
+Production:
+
+Strict credentials
+Protected repositories
+Approved model routes
+Formal recovery procedures
+Complete audit retention
+
+11. Deployment Architecture for the First Vertical Slice
+
+The initial runtime may use:
+
+FastAPI service
+PostgreSQL
+Redis
+Workflow worker
+Execution worker
+Review worker
+Integration worker
+Artifact volume or object store
+Docker socket proxy or controlled runtime service
+
+Architecture:
+
+Client
+  │
+  ▼
+FastAPI
+  │
+  ├── PostgreSQL
+  ├── Artifact Store
+  └── Queue
+         │
+         ├── Workflow Worker
+         ├── Execution Worker
+         ├── Review Worker
+         └── Integration Worker
+
+The execution worker should not expose unrestricted Docker access to the API service.
+
+Prefer a dedicated runtime service or tightly restricted Docker-socket proxy.
+12. User Interface Roadmap
+
+The initial product should not begin with a complex enterprise dashboard.
+
+Build the UI in stages.
+UI Stage 1
+
+Project list
+Project details
+Workflow state
+Artifact viewer
+Approval inbox
+Execution logs
+Patch viewer
+Audit timeline
+
+UI Stage 2
+
+Work-package dependency graph
+Worker capacity
+Crew assignments
+Review queue
+Integration queue
+Failure recovery
+
+UI Stage 3
+
+Portfolio view
+Budget and capacity
+Strategic traceability
+Outcome dashboards
+Executive decisions
+
+UI Stage 4
+
+External operations
+Deployment health
+Incidents
+Resilience status
+Policy and change governance
+
+The API and workflow correctness should precede visual sophistication.
+13. First Twelve Practical Engineering Milestones
+
+A concrete execution plan should be:
+
+M1  Repository and Compose environment
+M2  PostgreSQL and Alembic
+M3  Projects and immutable manifests
+M4  Artifacts and audit events
+M5  Approval workflow
+M6  Durable workflow worker
+M7  Requirements Crew
+M8  Architecture Crew
+M9  Work-package generation
+M10 Disposable execution
+M11 Patch review
+M12 Controlled integration
+
+After M12, execute the complete R5 vertical slice.
+14. First Usable Demonstration
+
+The first demonstration should be deliberately small.
+
+Use a fixture repository containing a minimal FastAPI service.
+
+The requested change:
+
+Add a /health endpoint returning:
+
+{
+  "status": "ok"
+}
+
+The system must:
+
+Create the project
+Generate requirements
+Require approval
+Generate architecture
+Require approval
+Generate one work package
+Require approval
+Execute the change in a container
+Run tests
+Produce a patch
+Review the patch independently
+Require integration approval
+Commit the patch
+Display the audit chain
+
+This small change validates the entire architecture without hiding failures behind project complexity.
+15. Success Metrics for the Initial Product
+
+Do not measure success by the number of agents.
+
+Measure:
+
+Percentage of workflows completed without manual repair
+Percentage of commands that are idempotent
+Artifact contract validation rate
+Execution isolation violations
+Review rejection rate
+Integration success rate
+Recovery success rate
+Audit completeness
+Median approval wait time
+Median work-package cycle time
+
+The most important first metric is:
+
+Can the same bounded workflow run repeatedly with deterministic, auditable results?
+
+16. Final Build Sequence
+
+The complete recommended sequence is:
+
+Foundation
+      │
+      ▼
+Metadata and governance
+      │
+      ▼
+Requirements and architecture
+      │
+      ▼
+Work-package planning
+      │
+      ▼
+Disposable execution
+      │
+      ▼
+Patch review
+      │
+      ▼
+Controlled integration
+      │
+      ▼
+Vertical-slice hardening
+      │
+      ▼
+Parallel scheduling
+      │
+      ▼
+Agent and crew organization
+      │
+      ▼
+Portfolio governance
+      │
+      ▼
+External operations
+      │
+      ▼
+Resilience
+      │
+      ▼
+Governed self-evolution
+
+Master Definition of Done
+
+The full implementation program is complete when the platform can demonstrate:
+
+An enterprise objective is approved
+        │
+        ▼
+A project is authorized
+        │
+        ▼
+Requirements and architecture are generated and approved
+        │
+        ▼
+Work is decomposed and allocated
+        │
+        ▼
+Agents execute in isolated environments
+        │
+        ▼
+Patches are independently reviewed
+        │
+        ▼
+Changes are integrated through restricted authority
+        │
+        ▼
+Artifacts are deployed and verified
+        │
+        ▼
+Operational outcomes are measured
+        │
+        ▼
+Costs, risks, and benefits are reconciled
+        │
+        ▼
+The platform survives provider or infrastructure failure
+        │
+        ▼
+The organization proposes and governs improvements
+        │
+        ▼
+Every action remains attributable, reversible where possible, and auditable
+
+The immediate engineering work should now return to implementation rather than continue extending the conceptual roadmap.
+
+The correct next build activity is:
+M1 — Repository Skeleton, Docker Compose Environment, FastAPI Service, PostgreSQL, and Alembic
+
+This milestone should create the first executable foundation under:
+
+~/projects/ai-enterprise
+
+and establish the exact directories, files, containers, commands, configuration, health checks, and database migration needed to start the platform.
+
+
+

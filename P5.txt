@@ -1,0 +1,8029 @@
+
+P6-we are here:The next increment is P5 — M4: Architecture Workflow Foundation.
+
+It will reuse the proven execution kernel but introduce a new domain artifact and Crew:
+
+approved requirements
+→ architecture run
+→ architecture analysis
+→ system decomposition
+→ interfaces and data model
+→ threat and failure analysis
+→ architecture artifact
+→ independent human review
+→ architecture approval
+→ bounded work-package generation   continue
+
+Yes. This is the correct next milestone.
+
+At this point we do not build more infrastructure. The execution kernel already exists from M1–M3:
+
+    Project
+
+    Immutable metadata
+
+    Requirements workflow
+
+    Disposable execution runtime
+
+    Audit trail
+
+    Human approval
+
+    PostgreSQL
+
+    FastAPI
+
+    Docker
+
+    Repository snapshots
+
+Now we reuse exactly that kernel for a completely different engineering activity:
+
+Requirements
+        │
+        ▼
+Human approval
+        │
+        ▼
+Architecture Crew
+        │
+        ▼
+Architecture artifact
+        │
+        ▼
+Human architecture approval
+        │
+        ▼
+Work Package Generator
+        │
+        ▼
+Approved work packages
+
+Nothing in the runtime changes.
+
+Only the domain model and orchestration expand.
+P5 — M4 Architecture Workflow Foundation
+
+Repository
+
+~/projects/ai-enterprise
+
+New modules
+
+app/
+    architecture/
+        models.py
+        schemas.py
+        service.py
+        repository.py
+        router.py
+
+        prompts/
+            architecture_system.md
+            architecture_user.md
+
+        crews/
+            architecture_crew.py
+
+        tasks/
+            analyze_requirements.py
+            decompose_system.py
+            interfaces.py
+            persistence.py
+            threat_model.py
+            architecture_document.py
+
+        tools/
+            repository_reader.py
+            manifest_reader.py
+            requirements_reader.py
+
+        templates/
+            architecture_template.md
+
+        validators/
+            architecture_validator.py
+
+New workflow
+
+Current
+
+Project
+
+↓
+
+Requirements
+
+↓
+
+Human approval
+
+becomes
+
+Project
+
+↓
+
+Requirements
+
+↓
+
+Requirements approval
+
+↓
+
+Architecture Run
+
+↓
+
+Architecture Artifact
+
+↓
+
+Architecture Review
+
+↓
+
+Architecture Approval
+
+↓
+
+Generate Work Packages
+
+New PostgreSQL aggregate
+
+ArchitectureRun
+
+Fields
+
+id
+
+project_id
+
+requirements_version
+
+status
+
+crew_version
+
+started_at
+
+finished_at
+
+completed_by
+
+prompt_hash
+
+system_prompt_hash
+
+temperature
+
+model
+
+execution_manifest
+
+token_usage
+
+audit_hash
+
+Architecture Artifact
+
+ArchitectureArtifact
+
+contains
+
+id
+
+run_id
+
+version
+
+markdown
+
+json_model
+
+checksum
+
+created_at
+
+Architecture Review
+
+ArchitectureReview
+
+contains
+
+id
+
+architecture_id
+
+reviewer
+
+decision
+
+comments
+
+created_at
+
+Architecture Approval
+
+ArchitectureApproval
+
+contains
+
+approved
+
+approved_by
+
+approved_at
+
+version
+
+Exactly identical to Requirements approval.
+
+Different artifact.
+Alembic
+
+New migration
+
+versions/
+
+0005_architecture.py
+
+creates
+
+architecture_runs
+
+architecture_artifacts
+
+architecture_reviews
+
+architecture_approvals
+
+FastAPI
+
+New router
+
+/architecture
+
+Endpoints
+
+POST
+/projects/{id}/architecture/run
+
+Starts crew.
+
+GET
+/architecture/{run_id}
+
+Returns status.
+
+GET
+/architecture/{artifact_id}
+
+Returns markdown.
+
+POST
+/architecture/{artifact}/review
+
+Stores review.
+
+POST
+/architecture/{artifact}/approve
+
+Stores approval.
+
+GET
+/projects/{id}/architecture/latest
+
+Latest approved architecture.
+Architecture state machine
+
+READY
+
+↓
+
+RUNNING
+
+↓
+
+ANALYZING
+
+↓
+
+WRITING
+
+↓
+
+COMPLETED
+
+↓
+
+UNDER_REVIEW
+
+↓
+
+APPROVED
+
+or
+
+CHANGES_REQUESTED
+
+Exactly like Requirements.
+Crew
+
+ArchitectureCrew
+
+Agents
+
+Architecture Analyst
+
+↓
+
+System Designer
+
+↓
+
+Interface Designer
+
+↓
+
+Persistence Architect
+
+↓
+
+Threat Modeler
+
+↓
+
+Architecture Writer
+
+Agent responsibilities
+1
+
+Architecture Analyst
+
+Input
+
+Approved requirements
+
+Produces
+
+functional domains
+
+bounded contexts
+
+major services
+
+constraints
+
+quality attributes
+
+2
+
+System Designer
+
+Produces
+
+high level architecture
+
+modules
+
+ownership
+
+communication
+
+dependencies
+
+3
+
+Interface Designer
+
+Produces
+
+REST endpoints
+
+events
+
+queues
+
+contracts
+
+DTOs
+
+4
+
+Persistence Architect
+
+Produces
+
+aggregates
+
+entities
+
+repositories
+
+database model
+
+transactions
+
+5
+
+Threat Modeler
+
+Produces
+
+security
+
+availability
+
+failure modes
+
+rollback
+
+audit
+
+recovery
+
+resource isolation
+
+6
+
+Architecture Writer
+
+Produces final document.
+Crew pipeline
+
+Requirements
+
+↓
+
+Architecture Analyst
+
+↓
+
+System Designer
+
+↓
+
+Interface Designer
+
+↓
+
+Persistence
+
+↓
+
+Threat
+
+↓
+
+Writer
+
+↓
+
+Architecture.md
+
+Prompt contract
+
+The system prompt becomes extremely strict.
+
+Example
+
+You are an enterprise software architect.
+
+You shall never write implementation code.
+
+You shall only design architecture.
+
+Every design decision must reference
+one or more approved requirements.
+
+Every module must expose responsibilities.
+
+Every dependency must be justified.
+
+Every interface must define ownership.
+
+Never invent requirements.
+
+Never omit failure handling.
+
+Never omit security.
+
+Never omit scalability.
+
+Never omit observability.
+
+Architecture document template
+
+# Overview
+
+# Goals
+
+# Constraints
+
+# Functional decomposition
+
+# Domain model
+
+# Modules
+
+# Responsibilities
+
+# Interfaces
+
+# Events
+
+# API contracts
+
+# Database model
+
+# Deployment
+
+# Security
+
+# Reliability
+
+# Failure scenarios
+
+# Scaling
+
+# Risks
+
+# Open Questions
+
+Validation
+
+Before saving
+
+Validator checks
+
+Every requirement referenced
+
+No orphan modules
+
+No circular ownership
+
+Every API owner exists
+
+Every database entity belongs to module
+
+Security section exists
+
+Failure analysis exists
+
+Scaling exists
+
+Otherwise
+
+FAILED_VALIDATION
+
+Approval
+
+Human sees
+
+Architecture v1
+
+Review
+
+Approve
+
+Reject
+
+Request changes
+
+If approved
+
+architecture_status
+
+=
+
+APPROVED
+
+Work Package Generator unlock
+
+Only approved architectures may generate work.
+
+Requirements
+
+↓
+
+Approved
+
+↓
+
+Architecture
+
+↓
+
+Approved
+
+↓
+
+Generate Work Packages
+
+Never
+
+Requirements
+
+↓
+
+Generate Work Package
+
+That path is removed.
+New audit events
+
+ArchitectureStarted
+
+ArchitectureCompleted
+
+ArchitectureValidated
+
+ArchitectureRejected
+
+ArchitectureReviewed
+
+ArchitectureApproved
+
+All immutable.
+Metadata lineage
+
+The lineage becomes:
+
+Project
+    │
+    ▼
+Manifest
+    │
+    ▼
+Requirements Run
+    │
+    ▼
+Approved Requirements
+    │
+    ▼
+Architecture Run
+    │
+    ▼
+Architecture Artifact
+    │
+    ▼
+Architecture Review
+    │
+    ▼
+Approved Architecture
+    │
+    ▼
+Work Package Generation
+
+Every artifact references the immutable version immediately before it, ensuring full traceability from project creation through architecture approval and into implementation planning. This preserves the core principle established in earlier milestones: no downstream engineering activity can proceed unless its upstream artifact has been explicitly approved.
+
+P5 — M4, Increment 5
+Independent architecture review, revision lineage, approval authorization, and immutable approval evidence
+
+This increment separates four distinct concepts:
+
+Architecture generation
+Architecture review
+Architecture revision
+Architecture approval
+
+They must not collapse into one operation.
+
+The governed flow becomes:
+
+DRAFT architecture artifact
+        ↓
+submitted for independent review
+        ↓
+reviewer examines exact checksum
+        ├── approve recommendation
+        ├── request changes
+        └── reject
+        ↓
+human architecture authority
+        ├── approves exact reviewed checksum
+        └── refuses approval
+
+When changes are requested:
+
+old artifact remains immutable
+        ↓
+new revision run created
+        ↓
+new artifact version generated
+        ↓
+review starts again
+
+No artifact is reopened or edited in place.
+1. Strengthen the domain model
+
+The current model has:
+
+ArchitectureRun
+ArchitectureArtifact
+ArchitectureReview
+ArchitectureApproval
+ArchitectureExecutionAttempt
+
+Add explicit revision lineage:
+
+ArchitectureRevisionRequest
+
+It records why a new architecture version exists and which review initiated it.
+
+The lineage becomes:
+
+ArchitectureArtifact v1
+        ↓
+ArchitectureReview
+        ↓
+ArchitectureRevisionRequest
+        ↓
+ArchitectureRun v2
+        ↓
+ArchitectureArtifact v2
+
+This preserves:
+
+source artifact
+source checksum
+review findings
+revision initiator
+new run
+new version
+
+2. Add review lifecycle states
+
+Update:
+
+app/architecture/enums.py
+
+Add:
+
+class ArchitectureReviewStatus(StrEnum):
+    OPEN = "open"
+    COMPLETED = "completed"
+    SUPERSEDED = "superseded"
+    CANCELLED = "cancelled"
+
+
+class ArchitectureRevisionStatus(StrEnum):
+    REQUESTED = "requested"
+    RUN_CREATED = "run_created"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+Update the review decision enum:
+
+class ArchitectureReviewDecision(StrEnum):
+    RECOMMEND_APPROVAL = "recommend_approval"
+    REQUEST_CHANGES = "request_changes"
+    REJECT = "reject"
+
+Avoid the ambiguous value:
+
+approve
+
+A reviewer does not perform final approval.
+
+The reviewer only recommends approval.
+3. Extend ArchitectureReview
+
+Update:
+
+app/architecture/models.py
+
+Modify ArchitectureReview:
+
+class ArchitectureReview(Base):
+    __tablename__ = "architecture_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "architecture_artifact_id",
+            "review_round",
+            name="uq_architecture_review_artifact_round",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    architecture_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    review_round: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=ArchitectureReviewStatus.OPEN.value,
+        index=True,
+    )
+
+    reviewer_id: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    reviewer_role: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    reviewer_subject_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    decision: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+
+    comments: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    findings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
+
+    reviewed_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    policy_version: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    artifact: Mapped["ArchitectureArtifact"] = relationship(
+        back_populates="reviews",
+    )
+
+A review is now opened first and completed later.
+
+This allows assignment, audit, and separation-of-duties checks before a decision is recorded.
+4. Add architecture revision request model
+
+Add to:
+
+app/architecture/models.py
+
+class ArchitectureRevisionRequest(Base):
+    __tablename__ = "architecture_revision_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_review_id",
+            name="uq_architecture_revision_source_review",
+        ),
+        UniqueConstraint(
+            "revision_run_id",
+            name="uq_architecture_revision_run",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    source_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    source_review_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_reviews.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    source_artifact_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    source_artifact_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    requirements_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "requirements_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=ArchitectureRevisionStatus.REQUESTED.value,
+        index=True,
+    )
+
+    requested_by: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    requested_by_role: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    revision_instructions: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    inherited_findings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    revision_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_runs.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+5. Link architecture runs to their revision source
+
+Add to ArchitectureRun:
+
+    revision_request_id: Mapped[
+        uuid.UUID | None
+    ] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_revision_requests.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+        unique=True,
+    )
+
+    parent_architecture_artifact_id: Mapped[
+        uuid.UUID | None
+    ] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+For the initial run:
+
+revision_request_id = NULL
+parent_architecture_artifact_id = NULL
+
+For a revision:
+
+revision_request_id = revision request ID
+parent_architecture_artifact_id = prior artifact ID
+
+6. Strengthen approval evidence
+
+Extend ArchitectureApproval:
+
+class ArchitectureApproval(Base):
+    __tablename__ = "architecture_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "architecture_artifact_id",
+            name="uq_architecture_approval_artifact",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    architecture_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    approving_review_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_reviews.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    approved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    approved_by: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    approver_role: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    approver_subject_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    approved_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    architecture_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    review_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    policy_version: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+Approval now binds:
+
+artifact ID
+artifact version
+artifact checksum
+review ID
+reviewed checksum
+approver identity
+approver role
+authorization policy version
+approval evidence
+timestamp
+
+7. Add migration
+
+Generate:
+
+docker compose exec api alembic revision \
+  --autogenerate \
+  -m "add architecture review governance and revision lineage"
+
+Use a migration such as:
+
+0008_architecture_review_governance.py
+
+The migration must:
+
+alter architecture_reviews
+create architecture_revision_requests
+alter architecture_runs
+alter architecture_approvals
+add constraints and indexes
+
+Because existing review rows may already exist, perform the migration in stages:
+
+1. Add nullable columns.
+2. Backfill historical values.
+3. Add NOT NULL constraints.
+4. Replace old decision values.
+5. Add uniqueness constraints.
+
+Example review decision conversion:
+
+UPDATE architecture_reviews
+SET decision = 'recommend_approval'
+WHERE decision = 'approve';
+
+Backfill:
+
+UPDATE architecture_reviews
+SET
+    review_round = 1,
+    status = 'completed',
+    reviewer_role = 'architecture_reviewer',
+    reviewer_subject_type = 'human',
+    policy_version = 'architecture-review-policy-v1',
+    opened_at = created_at,
+    completed_at = created_at
+WHERE review_round IS NULL;
+
+Do not add a NOT NULL constraint before backfill.
+8. Define identity and authorization contracts
+
+Create:
+
+app/security/principal.py
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class Principal:
+    subject_id: str
+    subject_type: str
+    roles: frozenset[str]
+    permissions: frozenset[str]
+
+    def has_role(
+        self,
+        role: str,
+    ) -> bool:
+        return role in self.roles
+
+    def has_permission(
+        self,
+        permission: str,
+    ) -> bool:
+        return permission in self.permissions
+
+Architecture permissions:
+
+architecture.review.assign
+architecture.review.complete
+architecture.revision.create
+architecture.approve
+architecture.read
+architecture.audit.read
+
+Roles:
+
+architecture_reviewer
+architecture_owner
+platform_administrator
+auditor
+
+9. Enforce separation of duties
+
+Create:
+
+app/architecture/governance_policy.py
+
+from dataclasses import dataclass
+
+from app.security.principal import Principal
+
+
+@dataclass(frozen=True, slots=True)
+class ArchitectureGovernancePolicy:
+    version: str = "architecture-governance-v1"
+
+    require_distinct_reviewer_and_approver: bool = True
+    prohibit_generator_as_reviewer: bool = True
+    prohibit_reviewer_as_approver: bool = True
+
+    def assert_can_review(
+        self,
+        *,
+        principal: Principal,
+        generator_identity: str | None,
+    ) -> None:
+        if not principal.has_permission(
+            "architecture.review.complete"
+        ):
+            raise PermissionError(
+                "Principal cannot complete architecture reviews."
+            )
+
+        if (
+            self.prohibit_generator_as_reviewer
+            and generator_identity is not None
+            and principal.subject_id == generator_identity
+        ):
+            raise PermissionError(
+                "Architecture generator cannot review its own output."
+            )
+
+    def assert_can_approve(
+        self,
+        *,
+        principal: Principal,
+        reviewer_identity: str,
+    ) -> None:
+        if not principal.has_permission(
+            "architecture.approve"
+        ):
+            raise PermissionError(
+                "Principal cannot approve architecture."
+            )
+
+        if (
+            self.prohibit_reviewer_as_approver
+            and principal.subject_id == reviewer_identity
+        ):
+            raise PermissionError(
+                "Architecture reviewer cannot approve the same artifact."
+            )
+
+For AI-generated architecture, the generator identity can be represented as:
+
+architecture-worker-01
+
+or:
+
+architecture-crew-v1
+
+A human review principal cannot equal the model worker identity, but the policy should still enforce it explicitly.
+10. Define structured review findings
+
+Do not store only unstructured comments.
+
+Create:
+
+app/architecture/review_schema.py
+
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ReviewFindingSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    BLOCKING = "blocking"
+
+
+class ReviewFindingCategory(StrEnum):
+    REQUIREMENT_TRACEABILITY = (
+        "requirement_traceability"
+    )
+    MODULE_BOUNDARY = "module_boundary"
+    API_CONTRACT = "api_contract"
+    EVENT_CONTRACT = "event_contract"
+    DATA_OWNERSHIP = "data_ownership"
+    SECURITY = "security"
+    RELIABILITY = "reliability"
+    OBSERVABILITY = "observability"
+    DEPLOYMENT = "deployment"
+    SCALABILITY = "scalability"
+    GOVERNANCE = "governance"
+    OTHER = "other"
+
+
+class ArchitectureReviewFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(
+        pattern=r"^ARF-[0-9]{3,}$"
+    )
+
+    category: ReviewFindingCategory
+    severity: ReviewFindingSeverity
+
+    title: str = Field(
+        min_length=1,
+        max_length=300,
+    )
+
+    description: str = Field(min_length=1)
+
+    location: str = Field(min_length=1)
+
+    related_requirement_ids: list[str] = Field(
+        default_factory=list
+    )
+
+    required_change: str | None = None
+
+    blocking: bool
+
+Review findings become machine-readable inputs to a revision run.
+11. Update review schemas
+
+Replace the previous direct review request with two operations.
+Open review
+
+class ArchitectureReviewOpenRequest(BaseModel):
+    reviewer_id: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+In production, reviewer_id should come from assignment or authenticated identity rather than arbitrary request input.
+Complete review
+
+class ArchitectureReviewCompleteRequest(BaseModel):
+    decision: ArchitectureReviewDecision
+    comments: str = Field(min_length=1)
+    findings: list[ArchitectureReviewFinding] = Field(
+        default_factory=list
+    )
+
+Response:
+
+class ArchitectureReviewRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    architecture_artifact_id: uuid.UUID
+    review_round: int
+    status: ArchitectureReviewStatus
+    reviewer_id: str
+    reviewer_role: str
+    reviewer_subject_type: str
+    decision: ArchitectureReviewDecision | None
+    comments: str | None
+    findings: list[dict[str, Any]]
+    reviewed_checksum: str
+    policy_version: str
+    opened_at: datetime
+    completed_at: datetime | None
+
+12. Add review repository methods
+
+Extend:
+
+app/architecture/repository.py
+
+    async def next_review_round(
+        self,
+        artifact_id: uuid.UUID,
+    ) -> int:
+        result = await self._session.execute(
+            select(
+                func.coalesce(
+                    func.max(
+                        ArchitectureReview.review_round
+                    ),
+                    0,
+                )
+            ).where(
+                ArchitectureReview.architecture_artifact_id
+                == artifact_id
+            )
+        )
+
+        return int(result.scalar_one()) + 1
+
+    async def get_open_review(
+        self,
+        artifact_id: uuid.UUID,
+    ) -> ArchitectureReview | None:
+        result = await self._session.execute(
+            select(ArchitectureReview)
+            .where(
+                ArchitectureReview.architecture_artifact_id
+                == artifact_id,
+                ArchitectureReview.status
+                == ArchitectureReviewStatus.OPEN.value,
+            )
+            .order_by(
+                ArchitectureReview.review_round.desc()
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+
+    async def get_review(
+        self,
+        review_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> ArchitectureReview | None:
+        statement = select(
+            ArchitectureReview
+        ).where(
+            ArchitectureReview.id == review_id
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def add_revision_request(
+        self,
+        revision: ArchitectureRevisionRequest,
+    ) -> ArchitectureRevisionRequest:
+        self._session.add(revision)
+        await self._session.flush()
+        return revision
+
+    async def get_revision_request(
+        self,
+        revision_request_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> ArchitectureRevisionRequest | None:
+        statement = select(
+            ArchitectureRevisionRequest
+        ).where(
+            ArchitectureRevisionRequest.id
+            == revision_request_id
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
+13. Add review commands
+
+Update:
+
+app/architecture/commands.py
+
+Add:
+
+@dataclass(frozen=True, slots=True)
+class OpenArchitectureReviewCommand:
+    architecture_artifact_id: uuid.UUID
+    reviewer_id: str
+    reviewer_role: str
+    reviewer_subject_type: str
+    policy_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class CompleteArchitectureReviewCommand:
+    review_id: uuid.UUID
+    completed_by: str
+    decision: ArchitectureReviewDecision
+    comments: str
+    findings: list[dict[str, Any]]
+
+
+@dataclass(frozen=True, slots=True)
+class CreateArchitectureRevisionCommand:
+    source_review_id: uuid.UUID
+    requested_by: str
+    requested_by_role: str
+    revision_instructions: str
+
+
+@dataclass(frozen=True, slots=True)
+class ApproveArchitectureCommand:
+    architecture_artifact_id: uuid.UUID
+    approving_review_id: uuid.UUID
+    approved_by: str
+    approver_role: str
+    approver_subject_type: str
+    policy_version: str
+    evidence: dict[str, Any]
+
+14. Open an independent review
+
+Add to ArchitectureService:
+
+    async def open_review(
+        self,
+        command: OpenArchitectureReviewCommand,
+    ) -> ArchitectureReview:
+        artifact = await self._repository.get_artifact(
+            command.architecture_artifact_id,
+            for_update=True,
+        )
+
+        if artifact is None:
+            raise ArchitectureArtifactNotFoundError(
+                "Architecture artifact not found."
+            )
+
+        current_status = ArchitectureArtifactStatus(
+            artifact.status
+        )
+
+        if current_status == ArchitectureArtifactStatus.DRAFT:
+            assert_artifact_transition(
+                current_status,
+                ArchitectureArtifactStatus.UNDER_REVIEW,
+            )
+
+            artifact.status = (
+                ArchitectureArtifactStatus.UNDER_REVIEW.value
+            )
+
+        elif (
+            current_status
+            != ArchitectureArtifactStatus.UNDER_REVIEW
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Review can be opened only for a draft or "
+                "under-review artifact."
+            )
+
+        existing = await self._repository.get_open_review(
+            artifact.id
+        )
+
+        if existing is not None:
+            raise ArchitectureApprovalNotAllowedError(
+                "An open review already exists for this artifact."
+            )
+
+        review_round = (
+            await self._repository.next_review_round(
+                artifact.id
+            )
+        )
+
+        review = ArchitectureReview(
+            architecture_artifact_id=artifact.id,
+            review_round=review_round,
+            status=ArchitectureReviewStatus.OPEN.value,
+            reviewer_id=command.reviewer_id,
+            reviewer_role=command.reviewer_role,
+            reviewer_subject_type=(
+                command.reviewer_subject_type
+            ),
+            decision=None,
+            comments=None,
+            findings=[],
+            reviewed_checksum=artifact.content_checksum,
+            policy_version=command.policy_version,
+        )
+
+        await self._repository.add_review(review)
+
+        await self._audit_writer.append(
+            AuditRecord(
+                event_type="architecture.review.opened",
+                aggregate_type="architecture_review",
+                aggregate_id=review.id,
+                project_id=artifact.project_id,
+                payload={
+                    "artifact_id": str(artifact.id),
+                    "artifact_version": artifact.version,
+                    "review_round": review.review_round,
+                    "reviewer_id": review.reviewer_id,
+                    "reviewed_checksum":
+                        review.reviewed_checksum,
+                    "policy_version":
+                        review.policy_version,
+                },
+            )
+        )
+
+        await self._session.commit()
+        await self._session.refresh(review)
+
+        return review
+
+15. Complete a review
+
+Add:
+
+    async def complete_review(
+        self,
+        command: CompleteArchitectureReviewCommand,
+    ) -> ArchitectureReview:
+        review = await self._repository.get_review(
+            command.review_id,
+            for_update=True,
+        )
+
+        if review is None:
+            raise ArchitectureNotFoundError(
+                f"Architecture review not found: "
+                f"{command.review_id}."
+            )
+
+        if (
+            review.status
+            != ArchitectureReviewStatus.OPEN.value
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Only an open review may be completed."
+            )
+
+        if review.reviewer_id != command.completed_by:
+            raise ArchitectureApprovalNotAllowedError(
+                "Only the assigned reviewer may complete "
+                "the review."
+            )
+
+        artifact = await self._repository.get_artifact(
+            review.architecture_artifact_id,
+            for_update=True,
+        )
+
+        if artifact is None:
+            raise ArchitectureArtifactNotFoundError(
+                "Architecture artifact not found."
+            )
+
+        recalculated_checksum = architecture_checksum(
+            markdown_content=artifact.markdown_content,
+            structured_content=artifact.structured_content,
+        )
+
+        if recalculated_checksum != artifact.content_checksum:
+            raise ArchitectureChecksumMismatchError(
+                "Stored architecture content no longer matches "
+                "its checksum."
+            )
+
+        if review.reviewed_checksum != artifact.content_checksum:
+            raise ArchitectureChecksumMismatchError(
+                "Review was opened against a different artifact "
+                "checksum."
+            )
+
+        if (
+            command.decision
+            == ArchitectureReviewDecision
+            .RECOMMEND_APPROVAL
+        ):
+            blocking_findings = [
+                finding
+                for finding in command.findings
+                if finding.get("blocking") is True
+            ]
+
+            if blocking_findings:
+                raise ArchitectureApprovalNotAllowedError(
+                    "A review with blocking findings cannot "
+                    "recommend approval."
+                )
+
+            artifact.status = (
+                ArchitectureArtifactStatus.UNDER_REVIEW.value
+            )
+
+        elif (
+            command.decision
+            == ArchitectureReviewDecision
+            .REQUEST_CHANGES
+        ):
+            artifact.status = (
+                ArchitectureArtifactStatus
+                .CHANGES_REQUESTED.value
+            )
+
+        elif (
+            command.decision
+            == ArchitectureReviewDecision.REJECT
+        ):
+            artifact.status = (
+                ArchitectureArtifactStatus.REJECTED.value
+            )
+
+        review.decision = command.decision.value
+        review.comments = command.comments
+        review.findings = command.findings
+        review.status = ArchitectureReviewStatus.COMPLETED.value
+        review.completed_at = datetime.now(UTC)
+
+        event_type = {
+            ArchitectureReviewDecision.RECOMMEND_APPROVAL:
+                "architecture.review.recommended_approval",
+            ArchitectureReviewDecision.REQUEST_CHANGES:
+                "architecture.review.changes_requested",
+            ArchitectureReviewDecision.REJECT:
+                "architecture.review.rejected",
+        }[command.decision]
+
+        await self._audit_writer.append(
+            AuditRecord(
+                event_type=event_type,
+                aggregate_type="architecture_review",
+                aggregate_id=review.id,
+                project_id=artifact.project_id,
+                payload={
+                    "artifact_id": str(artifact.id),
+                    "artifact_version": artifact.version,
+                    "decision": review.decision,
+                    "finding_count": len(review.findings),
+                    "reviewed_checksum":
+                        review.reviewed_checksum,
+                },
+            )
+        )
+
+        await self._session.commit()
+        await self._session.refresh(review)
+
+        return review
+
+16. Validate review findings
+
+Before saving findings, validate them with:
+
+ArchitectureReviewFinding.model_validate(finding)
+
+Better: let the API schema produce validated finding objects and convert them to JSON.
+
+findings=[
+    finding.model_dump(mode="json")
+    for finding in request.findings
+]
+
+Rules:
+
+RECOMMEND_APPROVAL
+    → no blocking findings
+
+REQUEST_CHANGES
+    → at least one required change or blocking finding
+
+REJECT
+    → explanatory finding or explicit rejection rationale
+
+Add deterministic checks:
+
+def validate_review_decision(
+    *,
+    decision: ArchitectureReviewDecision,
+    findings: list[dict[str, Any]],
+) -> None:
+    blocking = [
+        finding
+        for finding in findings
+        if finding.get("blocking") is True
+    ]
+
+    if (
+        decision
+        == ArchitectureReviewDecision.RECOMMEND_APPROVAL
+        and blocking
+    ):
+        raise ArchitectureApprovalNotAllowedError(
+            "Approval recommendation cannot contain "
+            "blocking findings."
+        )
+
+    if (
+        decision
+        == ArchitectureReviewDecision.REQUEST_CHANGES
+        and not findings
+    ):
+        raise ArchitectureApprovalNotAllowedError(
+            "Changes-requested review requires findings."
+        )
+
+17. Create revision request from a completed review
+
+Add:
+
+    async def create_revision(
+        self,
+        command: CreateArchitectureRevisionCommand,
+    ) -> ArchitectureRevisionRequest:
+        review = await self._repository.get_review(
+            command.source_review_id,
+            for_update=True,
+        )
+
+        if review is None:
+            raise ArchitectureNotFoundError(
+                "Source review not found."
+            )
+
+        if (
+            review.status
+            != ArchitectureReviewStatus.COMPLETED.value
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Revision requires a completed review."
+            )
+
+        if (
+            review.decision
+            != ArchitectureReviewDecision
+            .REQUEST_CHANGES.value
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Revision may be created only from a "
+                "changes-requested review."
+            )
+
+        artifact = await self._repository.get_artifact(
+            review.architecture_artifact_id,
+            for_update=True,
+        )
+
+        if artifact is None:
+            raise ArchitectureArtifactNotFoundError(
+                "Source architecture artifact not found."
+            )
+
+        if (
+            artifact.status
+            != ArchitectureArtifactStatus
+            .CHANGES_REQUESTED.value
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Source architecture is not in "
+                "changes-requested state."
+            )
+
+        revision = ArchitectureRevisionRequest(
+            project_id=artifact.project_id,
+            source_artifact_id=artifact.id,
+            source_review_id=review.id,
+            source_artifact_version=artifact.version,
+            source_artifact_checksum=(
+                artifact.content_checksum
+            ),
+            requirements_artifact_id=(
+                artifact.requirements_artifact_id
+            ),
+            status=ArchitectureRevisionStatus.REQUESTED.value,
+            requested_by=command.requested_by,
+            requested_by_role=command.requested_by_role,
+            revision_instructions=(
+                command.revision_instructions
+            ),
+            inherited_findings=review.findings,
+        )
+
+        try:
+            await self._repository.add_revision_request(
+                revision
+            )
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+
+            raise ActiveArchitectureRunExistsError(
+                "A revision already exists for this review."
+            ) from exc
+
+        await self._session.refresh(revision)
+        return revision
+
+18. Create the revision architecture run
+
+A revision request does not directly execute the model.
+
+It creates a normal architecture run with lineage metadata.
+
+Add:
+
+    async def create_revision_run(
+        self,
+        *,
+        revision_request_id: uuid.UUID,
+        crew_version: str,
+        model_name: str,
+        temperature: float,
+        system_prompt_hash: str,
+        user_prompt_hash: str,
+        execution_manifest: dict[str, Any],
+    ) -> ArchitectureRun:
+        revision = (
+            await self._repository.get_revision_request(
+                revision_request_id,
+                for_update=True,
+            )
+        )
+
+        if revision is None:
+            raise ArchitectureNotFoundError(
+                "Architecture revision request not found."
+            )
+
+        if (
+            revision.status
+            != ArchitectureRevisionStatus.REQUESTED.value
+        ):
+            raise InvalidArchitectureTransitionError(
+                "Revision run has already been created."
+            )
+
+        source_artifact = (
+            await self._repository.get_artifact(
+                revision.source_artifact_id
+            )
+        )
+
+        if source_artifact is None:
+            raise ArchitectureArtifactNotFoundError(
+                "Source architecture artifact not found."
+            )
+
+        if (
+            source_artifact.content_checksum
+            != revision.source_artifact_checksum
+        ):
+            raise ArchitectureChecksumMismatchError(
+                "Source architecture checksum differs from "
+                "revision request evidence."
+            )
+
+        requirements = (
+            await self._requirements_gateway
+            .get_approved_snapshot(
+                revision.requirements_artifact_id
+            )
+        )
+
+        if requirements is None:
+            raise RequirementsNotApprovedError(
+                "Revision requires the original approved "
+                "requirements artifact."
+            )
+
+        run = ArchitectureRun(
+            project_id=revision.project_id,
+            requirements_artifact_id=(
+                revision.requirements_artifact_id
+            ),
+            requirements_version=requirements.version,
+            status=ArchitectureRunStatus.PENDING.value,
+            crew_version=crew_version,
+            model_name=model_name,
+            temperature=temperature,
+            system_prompt_hash=system_prompt_hash,
+            user_prompt_hash=user_prompt_hash,
+            revision_request_id=revision.id,
+            parent_architecture_artifact_id=(
+                source_artifact.id
+            ),
+            execution_manifest={
+                **execution_manifest,
+                "requirements_checksum":
+                    requirements.checksum,
+                "revision_request_id": str(revision.id),
+                "parent_architecture_artifact_id": str(
+                    source_artifact.id
+                ),
+                "parent_architecture_checksum":
+                    source_artifact.content_checksum,
+                "review_findings": (
+                    revision.inherited_findings
+                ),
+                "revision_instructions": (
+                    revision.revision_instructions
+                ),
+            },
+        )
+
+        await self._repository.add_run(run)
+
+        revision.revision_run_id = run.id
+        revision.status = (
+            ArchitectureRevisionStatus.RUN_CREATED.value
+        )
+
+        await self._audit_writer.append(
+            AuditRecord(
+                event_type="architecture.revision.run_created",
+                aggregate_type="architecture_revision_request",
+                aggregate_id=revision.id,
+                project_id=revision.project_id,
+                payload={
+                    "revision_run_id": str(run.id),
+                    "source_artifact_id": str(
+                        source_artifact.id
+                    ),
+                    "source_artifact_checksum":
+                        source_artifact.content_checksum,
+                    "requirements_artifact_id": str(
+                        revision.requirements_artifact_id
+                    ),
+                },
+            )
+        )
+
+        await self._session.commit()
+        await self._session.refresh(run)
+
+        return run
+
+19. Revision Crew input
+
+Extend ArchitectureCrewInput:
+
+    revision_context: dict[str, Any] | None = None
+
+For a revision run:
+
+{
+  "source_artifact_id": "...",
+  "source_artifact_version": 1,
+  "source_artifact_checksum": "...",
+  "source_architecture": {
+    "...": "..."
+  },
+  "review_findings": [
+    {
+      "id": "ARF-001",
+      "severity": "blocking",
+      "required_change": "..."
+    }
+  ],
+  "revision_instructions": "..."
+}
+
+Do not overwrite approved requirements with reviewer findings.
+
+Reviewer findings constrain the architecture revision but do not become requirements.
+20. Revision prompt
+
+Create:
+
+app/architecture/prompts/revise_architecture.md
+
+Revise the prior architecture using the supplied completed review findings.
+
+Rules:
+
+1. The approved requirements remain authoritative.
+2. Review findings do not create new requirements.
+3. Preserve valid prior architecture decisions where they remain compatible.
+4. Correct every blocking review finding.
+5. Address every required change explicitly.
+6. Do not mutate the source artifact.
+7. Produce a complete new architecture artifact, not a patch or partial update.
+8. Retain requirement traceability.
+9. Use new identifiers only where necessary.
+10. Return one JSON object matching the architecture schema exactly.
+
+The executor should select:
+
+initial architecture prompt
+
+or:
+
+revision architecture prompt
+
+based on revision_context.
+21. Complete revision lineage
+
+When a revision run successfully creates an artifact, update the corresponding revision request:
+
+revision.status = ArchitectureRevisionStatus.COMPLETED.value
+revision.completed_at = datetime.now(UTC)
+
+Audit:
+
+architecture.revision.completed
+
+Payload:
+
+{
+  "revision_request_id": "...",
+  "source_artifact_id": "...",
+  "source_artifact_version": 1,
+  "new_artifact_id": "...",
+  "new_artifact_version": 2,
+  "new_artifact_checksum": "..."
+}
+
+If the run fails terminally:
+
+revision.status = failed
+
+but the source artifact remains:
+
+changes_requested
+
+22. Approval authorization
+
+Final approval requires an authenticated principal.
+
+Do not accept:
+
+{
+  "approved_by": "someone"
+}
+
+from arbitrary request input.
+
+Use:
+
+principal: PrincipalDependency
+
+The service command is built from the authenticated principal:
+
+ApproveArchitectureCommand(
+    architecture_artifact_id=artifact_id,
+    approving_review_id=request.approving_review_id,
+    approved_by=principal.subject_id,
+    approver_role=resolved_approver_role,
+    approver_subject_type=principal.subject_type,
+    policy_version=governance_policy.version,
+    evidence={
+        "authentication_context": {
+            "subject_id": principal.subject_id,
+            "subject_type": principal.subject_type,
+        },
+        "request_id": request_context.request_id,
+        "source_ip_hash": request_context.source_ip_hash,
+    },
+)
+
+Do not store raw access tokens or session cookies.
+23. Harden approval logic
+
+Replace the previous approval method with:
+
+    async def approve(
+        self,
+        command: ApproveArchitectureCommand,
+        *,
+        principal: Principal,
+        governance_policy: ArchitectureGovernancePolicy,
+    ) -> ArchitectureApproval:
+        artifact = await self._repository.get_artifact(
+            command.architecture_artifact_id,
+            for_update=True,
+        )
+
+        if artifact is None:
+            raise ArchitectureArtifactNotFoundError(
+                "Architecture artifact not found."
+            )
+
+        if (
+            artifact.status
+            != ArchitectureArtifactStatus.UNDER_REVIEW.value
+        ):
+            raise ArchitectureApprovalNotAllowedError(
+                "Only an under-review architecture may be "
+                "approved."
+            )
+
+        review = await self._repository.get_review(
+            command.approving_review_id,
+            for_update=True,
+        )
+
+        if review is None:
+            raise ArchitectureApprovalNotAllowedError(
+                "Approving review not found."
+            )
+
+        if (
+            review.architecture_artifact_id
+            != artifact.id
+        ):
+            raise ArchitectureApprovalNotAllowedError(
+                "Review belongs to a different architecture "
+                "artifact."
+            )
+
+        if (
+            review.status
+            != ArchitectureReviewStatus.COMPLETED.value
+        ):
+            raise ArchitectureApprovalNotAllowedError(
+                "Approval requires a completed review."
+            )
+
+        if (
+            review.decision
+            != ArchitectureReviewDecision
+            .RECOMMEND_APPROVAL.value
+        ):
+            raise ArchitectureApprovalNotAllowedError(
+                "Review does not recommend approval."
+            )
+
+        governance_policy.assert_can_approve(
+            principal=principal,
+            reviewer_identity=review.reviewer_id,
+        )
+
+        existing_approval = (
+            await self._repository.get_approval(
+                artifact.id
+            )
+        )
+
+        if existing_approval is not None:
+            raise ArchitectureAlreadyApprovedError(
+                "Architecture artifact is already approved."
+            )
+
+        recalculated_checksum = architecture_checksum(
+            markdown_content=artifact.markdown_content,
+            structured_content=artifact.structured_content,
+        )
+
+        if (
+            recalculated_checksum
+            != artifact.content_checksum
+        ):
+            raise ArchitectureChecksumMismatchError(
+                "Artifact checksum verification failed."
+            )
+
+        if (
+            review.reviewed_checksum
+            != artifact.content_checksum
+        ):
+            raise ArchitectureChecksumMismatchError(
+                "Review checksum does not match artifact."
+            )
+
+        approval = ArchitectureApproval(
+            architecture_artifact_id=artifact.id,
+            approving_review_id=review.id,
+            approved=True,
+            approved_by=principal.subject_id,
+            approver_role=command.approver_role,
+            approver_subject_type=(
+                principal.subject_type
+            ),
+            approved_checksum=(
+                artifact.content_checksum
+            ),
+            architecture_version=artifact.version,
+            review_checksum=review.reviewed_checksum,
+            policy_version=governance_policy.version,
+            evidence=command.evidence,
+        )
+
+        artifact.status = (
+            ArchitectureArtifactStatus.APPROVED.value
+        )
+
+        await self._repository.add_approval(approval)
+
+        await self._audit_writer.append(
+            AuditRecord(
+                event_type="architecture.approved",
+                aggregate_type="architecture_artifact",
+                aggregate_id=artifact.id,
+                project_id=artifact.project_id,
+                payload={
+                    "approval_id": str(approval.id),
+                    "review_id": str(review.id),
+                    "approved_by":
+                        approval.approved_by,
+                    "approver_role":
+                        approval.approver_role,
+                    "architecture_version":
+                        artifact.version,
+                    "approved_checksum":
+                        artifact.content_checksum,
+                    "review_checksum":
+                        review.reviewed_checksum,
+                    "policy_version":
+                        approval.policy_version,
+                },
+            )
+        )
+
+        await self._session.commit()
+        await self._session.refresh(approval)
+
+        return approval
+
+24. Prevent approval of stale architecture
+
+Approval is rejected if any of these differ:
+
+stored artifact checksum
+recalculated artifact checksum
+reviewed checksum
+approval checksum
+architecture version
+review artifact ID
+
+Also reject approval if a newer architecture artifact already exists for the same revision chain.
+
+Add repository query:
+
+    async def has_newer_artifact(
+        self,
+        *,
+        project_id: uuid.UUID,
+        version: int,
+    ) -> bool:
+        result = await self._session.execute(
+            select(
+                ArchitectureArtifact.id
+            )
+            .where(
+                ArchitectureArtifact.project_id
+                == project_id,
+                ArchitectureArtifact.version > version,
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none() is not None
+
+Policy choice:
+
+A prior version may remain approvable
+
+or:
+
+Only the latest version may be approved
+
+For this platform, use the stricter rule:
+
+Only the latest architecture version may be approved.
+
+Add:
+
+if await self._repository.has_newer_artifact(
+    project_id=artifact.project_id,
+    version=artifact.version,
+):
+    raise ArchitectureApprovalNotAllowedError(
+        "A newer architecture version exists."
+    )
+
+25. Approval evidence checksum
+
+The approval row should itself have a deterministic evidence checksum.
+
+Add field:
+
+approval_evidence_checksum: Mapped[str] = mapped_column(
+    String(64),
+    nullable=False,
+)
+
+Create:
+
+app/architecture/approval_evidence.py
+
+from typing import Any
+
+from app.architecture.checksums import (
+    canonical_json,
+    sha256_text,
+)
+
+
+def architecture_approval_evidence_checksum(
+    *,
+    artifact_id: str,
+    architecture_version: int,
+    artifact_checksum: str,
+    review_id: str,
+    review_checksum: str,
+    approved_by: str,
+    approver_role: str,
+    policy_version: str,
+    evidence: dict[str, Any],
+) -> str:
+    payload = {
+        "artifact_id": artifact_id,
+        "architecture_version": architecture_version,
+        "artifact_checksum": artifact_checksum,
+        "review_id": review_id,
+        "review_checksum": review_checksum,
+        "approved_by": approved_by,
+        "approver_role": approver_role,
+        "policy_version": policy_version,
+        "evidence": evidence,
+    }
+
+    return sha256_text(
+        canonical_json(payload)
+    )
+
+Store this at approval time.
+
+Audit the checksum rather than duplicating all sensitive evidence fields.
+26. API routes
+
+Add or replace routes with:
+
+POST /api/v1/architecture/artifacts/{artifact_id}/reviews
+POST /api/v1/architecture/reviews/{review_id}/complete
+POST /api/v1/architecture/reviews/{review_id}/revision
+POST /api/v1/architecture/revisions/{revision_id}/run
+POST /api/v1/architecture/artifacts/{artifact_id}/approve
+
+GET  /api/v1/architecture/reviews/{review_id}
+GET  /api/v1/architecture/revisions/{revision_id}
+GET  /api/v1/architecture/artifacts/{artifact_id}/lineage
+
+27. Open review endpoint
+
+@router.post(
+    "/artifacts/{artifact_id}/reviews",
+    response_model=ArchitectureReviewRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def open_architecture_review(
+    artifact_id: uuid.UUID,
+    principal: PrincipalDependency,
+    service: ArchitectureServiceDependency,
+    governance_policy: GovernancePolicyDependency,
+) -> ArchitectureReviewRead:
+    if not principal.has_permission(
+        "architecture.review.assign"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Architecture review assignment denied.",
+        )
+
+    governance_policy.assert_can_review(
+        principal=principal,
+        generator_identity=None,
+    )
+
+    review = await service.open_review(
+        OpenArchitectureReviewCommand(
+            architecture_artifact_id=artifact_id,
+            reviewer_id=principal.subject_id,
+            reviewer_role="architecture_reviewer",
+            reviewer_subject_type=(
+                principal.subject_type
+            ),
+            policy_version=(
+                governance_policy.version
+            ),
+        )
+    )
+
+    return ArchitectureReviewRead.model_validate(
+        review
+    )
+
+For team assignment, separate:
+
+assign reviewer
+
+from:
+
+reviewer accepts assignment
+
+That refinement can be added later.
+28. Complete review endpoint
+
+@router.post(
+    "/reviews/{review_id}/complete",
+    response_model=ArchitectureReviewRead,
+)
+async def complete_architecture_review(
+    review_id: uuid.UUID,
+    request: ArchitectureReviewCompleteRequest,
+    principal: PrincipalDependency,
+    service: ArchitectureServiceDependency,
+    governance_policy: GovernancePolicyDependency,
+) -> ArchitectureReviewRead:
+    governance_policy.assert_can_review(
+        principal=principal,
+        generator_identity=None,
+    )
+
+    review = await service.complete_review(
+        CompleteArchitectureReviewCommand(
+            review_id=review_id,
+            completed_by=principal.subject_id,
+            decision=request.decision,
+            comments=request.comments,
+            findings=[
+                finding.model_dump(mode="json")
+                for finding in request.findings
+            ],
+        )
+    )
+
+    return ArchitectureReviewRead.model_validate(
+        review
+    )
+
+29. Revision endpoint
+
+class ArchitectureRevisionCreateRequest(BaseModel):
+    revision_instructions: str = Field(
+        min_length=1
+    )
+
+Route:
+
+@router.post(
+    "/reviews/{review_id}/revision",
+    response_model=ArchitectureRevisionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_architecture_revision(
+    review_id: uuid.UUID,
+    request: ArchitectureRevisionCreateRequest,
+    principal: PrincipalDependency,
+    service: ArchitectureServiceDependency,
+) -> ArchitectureRevisionRead:
+    if not principal.has_permission(
+        "architecture.revision.create"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Architecture revision creation denied.",
+        )
+
+    revision = await service.create_revision(
+        CreateArchitectureRevisionCommand(
+            source_review_id=review_id,
+            requested_by=principal.subject_id,
+            requested_by_role=(
+                "architecture_reviewer"
+            ),
+            revision_instructions=(
+                request.revision_instructions
+            ),
+        )
+    )
+
+    return ArchitectureRevisionRead.model_validate(
+        revision
+    )
+
+30. Automatic revision run creation
+
+The revision endpoint may immediately create and enqueue the run.
+
+Recommended flow:
+
+create revision request
+        ↓
+create revision run
+        ↓
+enqueue run ID
+        ↓
+return 202 Accepted
+
+Response should contain:
+
+{
+  "revision_request_id": "...",
+  "run_id": "...",
+  "status": "pending"
+}
+
+Do not allow clients to supply model configuration.
+31. Architecture lineage query
+
+Create response:
+
+class ArchitectureLineageNode(BaseModel):
+    artifact_id: uuid.UUID
+    version: int
+    checksum: str
+    status: ArchitectureArtifactStatus
+    parent_artifact_id: uuid.UUID | None
+    revision_request_id: uuid.UUID | None
+    source_review_id: uuid.UUID | None
+    created_at: datetime
+
+
+class ArchitectureLineageRead(BaseModel):
+    project_id: uuid.UUID
+    nodes: list[ArchitectureLineageNode]
+
+The lineage endpoint should return:
+
+v1
+ └── review: changes requested
+      └── revision request
+           └── v2
+                └── review: recommended approval
+                     └── approval
+
+32. Work-package generation gate
+
+This is the first explicit downstream gate.
+
+Create:
+
+app/architecture/eligibility.py
+
+from dataclasses import dataclass
+
+from app.architecture.checksums import (
+    architecture_checksum,
+)
+from app.architecture.enums import (
+    ArchitectureArtifactStatus,
+)
+from app.architecture.exceptions import (
+    ArchitectureApprovalNotAllowedError,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedArchitectureSnapshot:
+    artifact_id: str
+    project_id: str
+    version: int
+    checksum: str
+    requirements_artifact_id: str
+    approval_id: str
+    approving_review_id: str
+    approval_evidence_checksum: str
+
+
+def assert_work_package_eligible(
+    *,
+    artifact,
+    approval,
+    review,
+) -> ApprovedArchitectureSnapshot:
+    if (
+        artifact.status
+        != ArchitectureArtifactStatus.APPROVED.value
+    ):
+        raise ArchitectureApprovalNotAllowedError(
+            "Work packages require approved architecture."
+        )
+
+    recalculated = architecture_checksum(
+        markdown_content=artifact.markdown_content,
+        structured_content=artifact.structured_content,
+    )
+
+    if recalculated != artifact.content_checksum:
+        raise ArchitectureApprovalNotAllowedError(
+            "Architecture checksum verification failed."
+        )
+
+    if approval.approved_checksum != artifact.content_checksum:
+        raise ArchitectureApprovalNotAllowedError(
+            "Approval checksum does not match architecture."
+        )
+
+    if review.reviewed_checksum != artifact.content_checksum:
+        raise ArchitectureApprovalNotAllowedError(
+            "Review checksum does not match architecture."
+        )
+
+    return ApprovedArchitectureSnapshot(
+        artifact_id=str(artifact.id),
+        project_id=str(artifact.project_id),
+        version=artifact.version,
+        checksum=artifact.content_checksum,
+        requirements_artifact_id=str(
+            artifact.requirements_artifact_id
+        ),
+        approval_id=str(approval.id),
+        approving_review_id=str(review.id),
+        approval_evidence_checksum=(
+            approval.approval_evidence_checksum
+        ),
+    )
+
+Work-package generation must accept this snapshot, not a bare architecture artifact ID.
+33. Prevent direct requirements-to-work-package flow
+
+At the work-package service boundary, delete or reject commands that accept only:
+
+requirements_artifact_id
+
+Replace with:
+
+@dataclass(frozen=True, slots=True)
+class GenerateWorkPackagesCommand:
+    project_id: uuid.UUID
+    approved_architecture_artifact_id: uuid.UUID
+    architecture_approval_id: uuid.UUID
+
+The service must verify:
+
+approved architecture
+exact approval
+exact review
+exact checksum
+latest version
+same project
+same requirements lineage
+
+This makes the architecture phase mandatory.
+34. Audit events
+
+Add:
+
+architecture.review.opened
+architecture.review.completed
+architecture.review.recommended_approval
+architecture.review.changes_requested
+architecture.review.rejected
+architecture.revision.requested
+architecture.revision.run_created
+architecture.revision.completed
+architecture.revision.failed
+architecture.approval.denied
+architecture.approved
+architecture.work_package_eligibility.verified
+
+For denied approval, audit:
+
+principal ID
+artifact ID
+review ID
+policy version
+denial reason code
+
+Do not audit authorization secrets.
+35. Tests
+
+Create:
+
+tests/architecture/test_review_governance.py
+tests/architecture/test_revision_lineage.py
+tests/architecture/test_approval_authorization.py
+tests/architecture/test_approval_checksum.py
+tests/architecture/test_work_package_eligibility.py
+
+Reviewer cannot approve same artifact
+
+def test_reviewer_cannot_approve_same_artifact() -> None:
+    policy = ArchitectureGovernancePolicy()
+
+    reviewer = Principal(
+        subject_id="user-001",
+        subject_type="human",
+        roles=frozenset(
+            {"architecture_reviewer"}
+        ),
+        permissions=frozenset(
+            {"architecture.approve"}
+        ),
+    )
+
+    with pytest.raises(PermissionError):
+        policy.assert_can_approve(
+            principal=reviewer,
+            reviewer_identity="user-001",
+        )
+
+Blocking findings prevent recommendation
+
+@pytest.mark.asyncio
+async def test_blocking_findings_prevent_recommendation(
+    service,
+    open_review,
+) -> None:
+    with pytest.raises(
+        ArchitectureApprovalNotAllowedError
+    ):
+        await service.complete_review(
+            CompleteArchitectureReviewCommand(
+                review_id=open_review.id,
+                completed_by=open_review.reviewer_id,
+                decision=(
+                    ArchitectureReviewDecision
+                    .RECOMMEND_APPROVAL
+                ),
+                comments="Looks acceptable.",
+                findings=[
+                    {
+                        "id": "ARF-001",
+                        "category": "security",
+                        "severity": "blocking",
+                        "title": "Missing authorization",
+                        "description": (
+                            "Authorization boundary is absent."
+                        ),
+                        "location": "api_contracts",
+                        "related_requirement_ids": [
+                            "REQ-001"
+                        ],
+                        "required_change": (
+                            "Define authorization."
+                        ),
+                        "blocking": True,
+                    }
+                ],
+            )
+        )
+
+Changes requested create new lineage
+
+Assert:
+
+v1 remains immutable
+v1 status = changes_requested
+revision request references v1 checksum
+revision run parent artifact = v1
+new artifact version = 2
+new artifact has a different checksum
+
+Stale approval rejected
+
+Create:
+
+review against checksum A
+artifact checksum changed to B in test corruption setup
+
+Approval must fail.
+Latest-version rule
+
+Create v1 and v2.
+
+Attempt to approve v1.
+
+Expected:
+
+409 conflict
+A newer architecture version exists.
+
+Work-package gate
+
+Unapproved architecture:
+
+rejected
+
+Approved architecture with mismatched approval checksum:
+
+rejected
+
+Exact valid lineage:
+
+eligible snapshot returned
+
+36. Migration and validation commands
+
+docker compose exec api alembic upgrade head
+
+docker compose exec api alembic check
+
+docker compose exec api ruff check \
+  app/architecture \
+  app/security \
+  tests/architecture
+
+docker compose exec api mypy \
+  app/architecture \
+  app/security
+
+docker compose exec api pytest \
+  tests/architecture \
+  -q
+
+Then:
+
+docker compose exec api pytest -q
+
+37. Manual governed workflow
+
+Assume:
+
+ARTIFACT_ID="<draft-architecture-artifact-id>"
+
+Open review:
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/architecture/artifacts/${ARTIFACT_ID}/reviews" \
+  -H "Authorization: Bearer ${REVIEWER_TOKEN}" \
+  | jq
+
+Complete with changes requested:
+
+REVIEW_ID="<review-id>"
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/architecture/reviews/${REVIEW_ID}/complete" \
+  -H "Authorization: Bearer ${REVIEWER_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "request_changes",
+    "comments": "Data ownership must be made explicit.",
+    "findings": [
+      {
+        "id": "ARF-001",
+        "category": "data_ownership",
+        "severity": "blocking",
+        "title": "Missing entity ownership",
+        "description": "Two modules appear to own the same entity.",
+        "location": "data_entities.ENT-PROJECT",
+        "related_requirement_ids": ["REQ-004"],
+        "required_change": "Assign exactly one owner module.",
+        "blocking": true
+      }
+    ]
+  }' | jq
+
+Create revision:
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/architecture/reviews/${REVIEW_ID}/revision" \
+  -H "Authorization: Bearer ${REVIEWER_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "revision_instructions": "Resolve ARF-001 while preserving approved requirements."
+  }' | jq
+
+After the revision run creates v2, open a new review.
+
+Complete with approval recommendation:
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/architecture/reviews/${NEW_REVIEW_ID}/complete" \
+  -H "Authorization: Bearer ${REVIEWER_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "recommend_approval",
+    "comments": "All blocking findings are resolved.",
+    "findings": []
+  }' | jq
+
+Approve using a different principal:
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/architecture/artifacts/${V2_ARTIFACT_ID}/approve" \
+  -H "Authorization: Bearer ${ARCHITECTURE_OWNER_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"approving_review_id\": \"${NEW_REVIEW_ID}\"
+  }" | jq
+
+Resulting governance boundary
+
+The architecture lifecycle is now:
+
+Approved Requirements v1
+        ↓
+Architecture Run 1
+        ↓
+Architecture Artifact v1
+        ↓
+Independent Review 1
+        ↓
+Changes Requested
+        ↓
+Revision Request 1
+        ↓
+Architecture Run 2
+        ↓
+Architecture Artifact v2
+        ↓
+Independent Review 2
+        ↓
+Approval Recommendation
+        ↓
+Distinct Human Architecture Owner
+        ↓
+Immutable Approval Evidence
+        ↓
+Work-Package Eligibility
+
+The following are prohibited:
+
+self-review
+reviewer self-approval
+approval without a completed review
+approval of stale content
+approval of an older version when a newer version exists
+editing an artifact after review
+reopening a changes-requested artifact
+revision without lineage
+work-package generation from requirements alone
+work-package generation from unapproved architecture
+
+M4 status after Increment 5
+
+Architecture persistence                        complete
+Execution and attempt isolation                 complete
+Structured artifact contract                    complete
+Deterministic validation                        complete
+Independent review workflow                     complete
+Structured review findings                      complete
+Review checksum binding                         complete
+Separation of duties                            complete
+Approval authorization                          complete
+Immutable approval evidence                     complete
+Changes-requested revision lineage               complete
+Revision Crew context                           complete
+Latest-version approval rule                    complete
+Work-package eligibility gate                   complete
+Architecture API policy hardening               complete
+End-to-end M4 contract tests                     next
+Operational metrics and dashboards              next
+M4 production acceptance suite                  next
+M5 work-package decomposition workflow           pending
+
+The next increment is M4 Increment 6: end-to-end contract tests, production observability, operational recovery procedures, and M4 acceptance criteria.
+
+continue
+
+P5 — M4, Increment 6
+End-to-end contract tests, observability, recovery procedures, and production acceptance
+
+This increment closes M4 as an operationally testable milestone.
+
+The goal is not to add another conceptual layer. It is to prove that the entire architecture workflow behaves correctly under success, failure, concurrency, corruption, retry, revision, and approval scenarios.
+
+The full M4 path is now:
+
+Approved Requirements
+        ↓
+Architecture Run
+        ↓
+Trusted Worker
+        ↓
+Bounded Crew Execution
+        ↓
+Schema + Semantic Validation
+        ↓
+Draft Architecture Artifact
+        ↓
+Independent Review
+        ├── Recommend Approval
+        ├── Request Changes
+        └── Reject
+        ↓
+Revision Lineage, when required
+        ↓
+Distinct Human Approval
+        ↓
+Immutable Approval Evidence
+        ↓
+Work-Package Eligibility
+
+1. M4 acceptance boundary
+
+M4 is complete only when the platform can prove all of the following:
+
+1. Architecture generation starts only from approved requirements.
+
+2. The exact requirements checksum is preserved through execution.
+
+3. A trusted worker is the only component allowed to execute the Crew.
+
+4. Every model invocation creates an immutable execution-attempt record.
+
+5. Model output is not persisted as architecture until deterministic validation passes.
+
+6. Markdown is rendered from structured JSON, not independently generated.
+
+7. Invalid output can receive at most one bounded repair invocation.
+
+8. Worker crashes do not cause duplicate artifacts or uncontrolled retries.
+
+9. Architecture artifacts remain immutable after creation.
+
+10. Review is bound to an exact artifact checksum.
+
+11. Reviewer and approver are distinct identities.
+
+12. Changes requested create a new revision run and artifact version.
+
+13. Approval is bound to the exact artifact, review, policy, checksum, and identity.
+
+14. Only the latest approved architecture version is eligible for work-package generation.
+
+15. Every meaningful transition emits durable audit evidence.
+
+16. No architecture workflow component modifies the host repository.
+
+2. Add end-to-end test directory
+
+Create:
+
+cd ~/projects/ai-enterprise
+
+mkdir -p tests/e2e/architecture
+touch tests/e2e/architecture/__init__.py
+touch tests/e2e/architecture/conftest.py
+touch tests/e2e/architecture/test_happy_path.py
+touch tests/e2e/architecture/test_revision_path.py
+touch tests/e2e/architecture/test_failure_paths.py
+touch tests/e2e/architecture/test_concurrency.py
+touch tests/e2e/architecture/test_recovery.py
+touch tests/e2e/architecture/test_security.py
+touch tests/e2e/architecture/test_work_package_gate.py
+
+The tests should use:
+
+real PostgreSQL
+real Alembic schema
+real FastAPI application
+real service layer
+fake deterministic model runtime
+real worker orchestration logic
+
+Do not use a real LLM in the main acceptance suite.
+
+A separate optional smoke test may use Ollama.
+3. Deterministic fake model runtime
+
+Create:
+
+tests/e2e/architecture/fake_runtime.py
+
+from collections import deque
+from dataclasses import dataclass
+from typing import Any
+
+from app.architecture.execution_result import (
+    InvalidArchitectureExecution,
+    ValidArchitectureExecution,
+)
+
+
+@dataclass(slots=True)
+class RuntimeCall:
+    operation: str
+    input_checksum: str
+    payload: dict[str, Any]
+
+
+class ScriptedArchitectureRuntime:
+    def __init__(
+        self,
+        scripted_results: list[
+            ValidArchitectureExecution
+            | InvalidArchitectureExecution
+            | Exception
+        ],
+    ) -> None:
+        self._results = deque(scripted_results)
+        self.calls: list[RuntimeCall] = []
+
+    async def generate(
+        self,
+        *,
+        crew_input,
+        approved_requirement_ids,
+    ):
+        self.calls.append(
+            RuntimeCall(
+                operation="generate",
+                input_checksum="",
+                payload={
+                    "project_id": str(
+                        crew_input.project_id
+                    ),
+                    "requirement_ids": sorted(
+                        approved_requirement_ids
+                    ),
+                },
+            )
+        )
+
+        return self._next_result()
+
+    async def repair(
+        self,
+        *,
+        crew_input,
+        approved_requirement_ids,
+        invalid_output,
+        validation_report,
+    ):
+        self.calls.append(
+            RuntimeCall(
+                operation="repair",
+                input_checksum="",
+                payload={
+                    "project_id": str(
+                        crew_input.project_id
+                    ),
+                    "requirement_ids": sorted(
+                        approved_requirement_ids
+                    ),
+                    "invalid_output": invalid_output,
+                    "validation_report":
+                        validation_report,
+                },
+            )
+        )
+
+        return self._next_result()
+
+    def _next_result(self):
+        if not self._results:
+            raise AssertionError(
+                "Scripted runtime received an unexpected call."
+            )
+
+        result = self._results.popleft()
+
+        if isinstance(result, Exception):
+            raise result
+
+        return result
+
+This lets each test declare exactly how the model runtime behaves.
+4. Shared end-to-end fixtures
+
+Create:
+
+tests/e2e/architecture/conftest.py
+
+Representative structure:
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.main import app
+from app.security.principal import Principal
+
+
+@pytest.fixture
+def reviewer_principal() -> Principal:
+    return Principal(
+        subject_id="reviewer-001",
+        subject_type="human",
+        roles=frozenset(
+            {"architecture_reviewer"}
+        ),
+        permissions=frozenset(
+            {
+                "architecture.read",
+                "architecture.review.assign",
+                "architecture.review.complete",
+                "architecture.revision.create",
+            }
+        ),
+    )
+
+
+@pytest.fixture
+def approver_principal() -> Principal:
+    return Principal(
+        subject_id="approver-001",
+        subject_type="human",
+        roles=frozenset(
+            {"architecture_owner"}
+        ),
+        permissions=frozenset(
+            {
+                "architecture.read",
+                "architecture.approve",
+            }
+        ),
+    )
+
+
+@pytest.fixture
+async def api_client():
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        yield client
+
+Use your existing dependency override system to inject principals and fake runtime.
+5. Happy-path contract test
+
+Create:
+
+tests/e2e/architecture/test_happy_path.py
+
+Test the complete path:
+
+approved requirements
+→ create run
+→ execute worker
+→ draft artifact
+→ open review
+→ recommend approval
+→ distinct approver approves
+→ eligibility snapshot produced
+
+Representative test:
+
+import pytest
+
+from app.architecture.enums import (
+    ArchitectureArtifactStatus,
+    ArchitectureReviewDecision,
+    ArchitectureRunStatus,
+)
+
+
+@pytest.mark.asyncio
+async def test_complete_architecture_happy_path(
+    architecture_test_harness,
+    approved_requirements_artifact,
+    valid_architecture_execution,
+    reviewer_principal,
+    approver_principal,
+) -> None:
+    harness = architecture_test_harness.with_runtime(
+        [valid_architecture_execution]
+    )
+
+    run = await harness.create_run(
+        project_id=(
+            approved_requirements_artifact.project_id
+        ),
+        requirements_artifact_id=(
+            approved_requirements_artifact.id
+        ),
+    )
+
+    assert (
+        run.status
+        == ArchitectureRunStatus.PENDING.value
+    )
+
+    artifact = await harness.execute_run(
+        run_id=run.id
+    )
+
+    assert (
+        artifact.status
+        == ArchitectureArtifactStatus.DRAFT.value
+    )
+
+    review = await harness.open_review(
+        artifact_id=artifact.id,
+        principal=reviewer_principal,
+    )
+
+    completed_review = await harness.complete_review(
+        review_id=review.id,
+        principal=reviewer_principal,
+        decision=(
+            ArchitectureReviewDecision
+            .RECOMMEND_APPROVAL
+        ),
+        comments="Architecture is ready.",
+        findings=[],
+    )
+
+    approval = await harness.approve(
+        artifact_id=artifact.id,
+        review_id=completed_review.id,
+        principal=approver_principal,
+    )
+
+    assert approval.approved is True
+    assert (
+        approval.approved_checksum
+        == artifact.content_checksum
+    )
+
+    eligible = await harness.verify_work_package_eligibility(
+        artifact_id=artifact.id,
+        approval_id=approval.id,
+    )
+
+    assert eligible.version == artifact.version
+    assert eligible.checksum == artifact.content_checksum
+
+6. Revision-path contract test
+
+Create:
+
+tests/e2e/architecture/test_revision_path.py
+
+The test must prove:
+
+v1 remains immutable
+review requests changes
+revision request references v1
+revision run references v1
+v2 is created
+v2 receives a new review
+v2 receives approval
+v1 cannot be approved
+
+Representative assertions:
+
+@pytest.mark.asyncio
+async def test_changes_requested_create_new_version(
+    architecture_test_harness,
+    approved_requirements_artifact,
+    valid_architecture_v1_execution,
+    valid_architecture_v2_execution,
+    reviewer_principal,
+    approver_principal,
+) -> None:
+    harness = architecture_test_harness.with_runtime(
+        [
+            valid_architecture_v1_execution,
+            valid_architecture_v2_execution,
+        ]
+    )
+
+    run_v1 = await harness.create_run(
+        project_id=(
+            approved_requirements_artifact.project_id
+        ),
+        requirements_artifact_id=(
+            approved_requirements_artifact.id
+        ),
+    )
+
+    artifact_v1 = await harness.execute_run(
+        run_id=run_v1.id
+    )
+
+    review_v1 = await harness.open_review(
+        artifact_id=artifact_v1.id,
+        principal=reviewer_principal,
+    )
+
+    completed_v1_review = await harness.complete_review(
+        review_id=review_v1.id,
+        principal=reviewer_principal,
+        decision=(
+            ArchitectureReviewDecision
+            .REQUEST_CHANGES
+        ),
+        comments="Ownership boundary is unclear.",
+        findings=[
+            {
+                "id": "ARF-001",
+                "category": "data_ownership",
+                "severity": "blocking",
+                "title": "Ambiguous ownership",
+                "description": (
+                    "Two modules own the same entity."
+                ),
+                "location": "data_entities.ENT-PROJECT",
+                "related_requirement_ids": [
+                    "REQ-001"
+                ],
+                "required_change": (
+                    "Assign exactly one owner."
+                ),
+                "blocking": True,
+            }
+        ],
+    )
+
+    revision = await harness.create_revision(
+        review_id=completed_v1_review.id,
+        principal=reviewer_principal,
+        instructions="Resolve ARF-001.",
+    )
+
+    run_v2 = await harness.create_revision_run(
+        revision_id=revision.id
+    )
+
+    artifact_v2 = await harness.execute_run(
+        run_id=run_v2.id
+    )
+
+    assert artifact_v1.version == 1
+    assert artifact_v2.version == 2
+
+    assert (
+        artifact_v2.content_checksum
+        != artifact_v1.content_checksum
+    )
+
+    assert (
+        run_v2.parent_architecture_artifact_id
+        == artifact_v1.id
+    )
+
+    stored_v1 = await harness.get_artifact(
+        artifact_v1.id
+    )
+
+    assert (
+        stored_v1.content_checksum
+        == artifact_v1.content_checksum
+    )
+
+    await harness.review_and_approve(
+        artifact=artifact_v2,
+        reviewer=reviewer_principal,
+        approver=approver_principal,
+    )
+
+    with pytest.raises(
+        ArchitectureApprovalNotAllowedError
+    ):
+        await harness.approve_old_version(
+            artifact_v1.id
+        )
+
+7. Validation and repair test
+
+The model returns invalid output first, then corrected output.
+
+Expected:
+
+attempt 1 = validation_failed
+attempt 2 = succeeded
+run = completed
+one artifact
+two model calls
+
+Create in:
+
+tests/e2e/architecture/test_failure_paths.py
+
+@pytest.mark.asyncio
+async def test_one_bounded_repair_is_allowed(
+    architecture_test_harness,
+    approved_requirements_artifact,
+    invalid_architecture_execution,
+    valid_architecture_execution,
+) -> None:
+    harness = architecture_test_harness.with_runtime(
+        [
+            invalid_architecture_execution,
+            valid_architecture_execution,
+        ]
+    )
+
+    run = await harness.create_run(
+        project_id=(
+            approved_requirements_artifact.project_id
+        ),
+        requirements_artifact_id=(
+            approved_requirements_artifact.id
+        ),
+    )
+
+    artifact = await harness.execute_run(
+        run_id=run.id
+    )
+
+    attempts = await harness.get_attempts(run.id)
+
+    assert len(attempts) == 2
+    assert attempts[0].status == "validation_failed"
+    assert attempts[1].status == "succeeded"
+    assert artifact.version == 1
+
+    assert [
+        call.operation
+        for call in harness.runtime.calls
+    ] == [
+        "generate",
+        "repair",
+    ]
+
+8. Repair exhaustion test
+
+Expected:
+
+attempt 1 = validation_failed
+attempt 2 = validation_failed
+run = failed
+no artifact
+no third call
+
+@pytest.mark.asyncio
+async def test_repair_exhaustion_fails_run(
+    architecture_test_harness,
+    approved_requirements_artifact,
+    invalid_architecture_execution,
+) -> None:
+    harness = architecture_test_harness.with_runtime(
+        [
+            invalid_architecture_execution,
+            invalid_architecture_execution,
+        ]
+    )
+
+    run = await harness.create_run(
+        project_id=(
+            approved_requirements_artifact.project_id
+        ),
+        requirements_artifact_id=(
+            approved_requirements_artifact.id
+        ),
+    )
+
+    with pytest.raises(
+        ArchitectureValidationError
+    ):
+        await harness.execute_run(
+            run_id=run.id
+        )
+
+    attempts = await harness.get_attempts(run.id)
+
+    assert len(attempts) == 2
+    assert all(
+        attempt.status == "validation_failed"
+        for attempt in attempts
+    )
+
+    stored_run = await harness.get_run(run.id)
+
+    assert stored_run.status == "failed"
+    assert (
+        await harness.get_artifact_by_run(run.id)
+        is None
+    )
+
+    assert len(harness.runtime.calls) == 2
+
+9. Timeout test
+
+Model timeout behavior must be explicit.
+
+Expected:
+
+timeout recorded
+retry only when policy permits
+terminal failure after retry exhaustion
+
+@pytest.mark.asyncio
+async def test_timeout_is_bounded(
+    architecture_test_harness,
+    approved_requirements_artifact,
+) -> None:
+    harness = architecture_test_harness.with_runtime(
+        [
+            ArchitectureCrewTimeoutError(
+                "timeout one"
+            ),
+            ArchitectureCrewTimeoutError(
+                "timeout two"
+            ),
+        ]
+    )
+
+    run = await harness.create_run(
+        project_id=(
+            approved_requirements_artifact.project_id
+        ),
+        requirements_artifact_id=(
+            approved_requirements_artifact.id
+        ),
+    )
+
+    with pytest.raises(
+        ArchitectureCrewTimeoutError
+    ):
+        await harness.execute_run(
+            run_id=run.id
+        )
+
+    attempts = await harness.get_attempts(run.id)
+
+    assert len(attempts) == 2
+    assert all(
+        attempt.status == "timed_out"
+        for attempt in attempts
+    )
+
+10. Concurrency tests
+
+Create:
+
+tests/e2e/architecture/test_concurrency.py
+
+Duplicate run creation
+
+Two concurrent requests for the same project and approved requirements must result in:
+
+one run created
+one conflict
+
+results = await asyncio.gather(
+    harness.create_run(...),
+    harness.create_run(...),
+    return_exceptions=True,
+)
+
+assert sum(
+    isinstance(result, ArchitectureRun)
+    for result in results
+) == 1
+
+assert sum(
+    isinstance(
+        result,
+        ActiveArchitectureRunExistsError,
+    )
+    for result in results
+) == 1
+
+Concurrent completion
+
+Two workers attempt to complete the same run.
+
+Expected:
+
+one artifact
+one completion succeeds
+second transition rejected
+
+Concurrent approval
+
+Two approval requests arrive simultaneously.
+
+Expected:
+
+one approval row
+one approval succeeds
+one conflict
+
+Concurrent version allocation
+
+Two runs for different requirements of the same project complete concurrently.
+
+Expected:
+
+versions are unique
+versions are sequential
+no duplicate project/version pair
+
+11. Corruption tests
+
+Corruption must fail closed.
+
+Create tests for:
+
+requirements checksum mismatch
+project manifest checksum mismatch
+artifact checksum mismatch
+review checksum mismatch
+approval checksum mismatch
+approval evidence checksum mismatch
+successful attempt artifact checksum mismatch
+
+Representative test:
+
+@pytest.mark.asyncio
+async def test_artifact_corruption_blocks_approval(
+    architecture_test_harness,
+    reviewed_architecture_artifact,
+    approver_principal,
+) -> None:
+    await architecture_test_harness.corrupt_artifact_markdown(
+        reviewed_architecture_artifact.id
+    )
+
+    with pytest.raises(
+        ArchitectureChecksumMismatchError
+    ):
+        await architecture_test_harness.approve(
+            artifact_id=(
+                reviewed_architecture_artifact.id
+            ),
+            review_id=(
+                reviewed_architecture_artifact.review_id
+            ),
+            principal=approver_principal,
+        )
+
+The corruption helper should modify the database directly only inside the test.
+12. Crash recovery tests
+
+Create:
+
+tests/e2e/architecture/test_recovery.py
+
+Crash after successful attempt
+
+Seed:
+
+run = RUNNING
+attempt = SUCCEEDED
+artifact = absent
+
+Recovery must:
+
+not invoke model again
+revalidate stored structured output
+rerender Markdown
+verify checksum
+persist artifact
+complete run
+emit recovery audit event
+
+Crash after artifact insert but before run update
+
+Seed:
+
+artifact exists
+run remains RUNNING
+
+Recovery must:
+
+verify artifact belongs to run
+verify checksum
+set run COMPLETED
+not create second artifact
+
+Stale claimed job
+
+Seed:
+
+job claimed
+lease expired
+run still RUNNING
+no active valid attempt
+
+Recovery should return the job to the queue when retry policy allows.
+Stale job for completed run
+
+Expected:
+
+job acknowledged or marked completed
+no execution
+
+13. Security contract tests
+
+Create:
+
+tests/e2e/architecture/test_security.py
+
+Test:
+
+unauthenticated review request → 401
+unauthorized principal → 403
+reviewer approves own artifact → 403
+caller supplies another reviewer ID → ignored or rejected
+public caller accesses raw model output → 403
+public caller invokes worker transition endpoint → 404 or 403
+worker without architecture permission → startup failure
+model output containing code does not modify repository
+
+Also verify no model credentials appear in:
+
+architecture_runs.execution_manifest
+architecture_execution_attempts.model_parameters
+audit event payloads
+API responses
+application logs
+
+14. Host repository integrity test
+
+M4 must prove architecture generation does not modify the source repository.
+
+Create:
+
+tests/e2e/architecture/test_host_integrity.py
+
+Before execution:
+
+git status --porcelain
+git rev-parse HEAD
+git ls-files -s
+
+After execution:
+
+git status --porcelain
+git rev-parse HEAD
+git ls-files -s
+
+Assertions:
+
+HEAD unchanged
+tracked file index unchanged
+no untracked files added by architecture execution
+no source file modifications
+
+The test may permit expected runtime directories such as:
+
+.pytest_cache
+__pycache__
+
+when they are outside the authoritative repository snapshot or excluded by the test environment.
+
+A stronger test computes a tree checksum before and after.
+15. Audit-chain assertions
+
+Every end-to-end test should verify audit events.
+
+Happy path should include:
+
+architecture.run.created
+architecture.run.started
+architecture.execution_attempt.started
+architecture.execution_attempt.succeeded
+architecture.run.completed
+architecture.artifact.created
+architecture.review.opened
+architecture.review.recommended_approval
+architecture.approved
+architecture.work_package_eligibility.verified
+
+Revision path should additionally include:
+
+architecture.review.changes_requested
+architecture.revision.requested
+architecture.revision.run_created
+architecture.revision.completed
+
+For each event verify:
+
+aggregate ID exists
+project ID matches
+timestamp exists
+payload checksum fields match stored records
+event order is valid
+audit chain hash remains valid
+
+16. Add metrics
+
+Create:
+
+app/architecture/metrics.py
+
+Using your existing Prometheus instrumentation, define:
+
+architecture_runs_total
+architecture_runs_active
+architecture_runs_completed_total
+architecture_runs_failed_total
+
+architecture_execution_attempts_total
+architecture_execution_attempt_duration_seconds
+architecture_execution_timeouts_total
+architecture_execution_repairs_total
+architecture_execution_validation_failures_total
+
+architecture_artifacts_created_total
+architecture_reviews_open
+architecture_reviews_completed_total
+architecture_changes_requested_total
+architecture_revisions_total
+architecture_approvals_total
+architecture_approval_denials_total
+
+architecture_work_package_eligibility_checks_total
+architecture_work_package_eligibility_failures_total
+
+Recommended labels:
+
+status
+model_name
+crew_version
+failure_code
+decision
+policy_version
+
+Avoid high-cardinality labels such as:
+
+project_id
+run_id
+artifact_id
+user_id
+execution_id
+
+Those belong in logs and traces, not metric labels.
+17. Metrics instrumentation points
+
+Increment:
+
+architecture_runs_total
+
+when the run is created.
+
+Set:
+
+architecture_runs_active
+
+when entering or leaving RUNNING.
+
+Observe:
+
+architecture_execution_attempt_duration_seconds
+
+when an attempt reaches a terminal state.
+
+Increment:
+
+architecture_execution_validation_failures_total
+
+for deterministic validation failure.
+
+Increment:
+
+architecture_execution_repairs_total
+
+when a repair invocation starts.
+
+Increment:
+
+architecture_changes_requested_total
+
+when a completed review requests changes.
+
+Increment:
+
+architecture_approval_denials_total
+
+for policy, checksum, lineage, or stale-version denial.
+18. Structured logging
+
+Architecture logs should be structured JSON.
+
+Each operational log record should include relevant fields:
+
+event
+project_id
+run_id
+artifact_id
+review_id
+revision_request_id
+attempt_id
+execution_id
+worker_id
+model_name
+crew_version
+status
+failure_code
+duration_ms
+request_id
+trace_id
+
+Example:
+
+logger.info(
+    "architecture_attempt_completed",
+    extra={
+        "run_id": str(run.id),
+        "attempt_id": str(attempt.id),
+        "execution_id": attempt.execution_id,
+        "worker_id": attempt.worker_id,
+        "model_name": attempt.model_name,
+        "status": attempt.status,
+        "duration_ms": duration_ms,
+        "raw_output_hash":
+            attempt.raw_output_hash,
+    },
+)
+
+Do not include:
+
+requirements content
+raw model output
+access tokens
+database passwords
+model API keys
+full approval evidence
+
+19. Distributed tracing
+
+Create spans:
+
+architecture.create_run
+architecture.claim_job
+architecture.execute_run
+architecture.build_input
+architecture.model.generate
+architecture.model.repair
+architecture.validate.schema
+architecture.validate.semantic
+architecture.render_markdown
+architecture.persist_artifact
+architecture.open_review
+architecture.complete_review
+architecture.create_revision
+architecture.approve
+architecture.verify_work_package_eligibility
+
+Trace attributes should include:
+
+architecture.run_id
+architecture.attempt_number
+architecture.model_name
+architecture.crew_version
+architecture.schema_version
+architecture.validation_result
+architecture.review_decision
+architecture.policy_version
+
+Do not attach full artifact content to spans.
+20. Health checks
+
+The API health check should remain lightweight.
+
+Architecture worker health requires more detail.
+
+Add:
+
+GET /internal/health/architecture-worker
+
+or expose worker health through your orchestration platform.
+
+Worker health should report:
+
+{
+  "status": "healthy",
+  "worker_id": "architecture-worker-01",
+  "database": "reachable",
+  "queue": "reachable",
+  "model_endpoint": "reachable",
+  "last_job_started_at": "...",
+  "last_job_completed_at": "...",
+  "active_job_count": 0
+}
+
+Do not expose this publicly.
+
+Readiness should fail when:
+
+database unavailable
+queue unavailable
+model endpoint unavailable for configured execution mode
+worker identity invalid
+migration version behind required head
+
+Liveness should fail only when the process cannot continue operating.
+21. Alerting rules
+
+Add alerts for:
+
+ArchitectureRunFailureRateHigh
+ArchitectureExecutionTimeoutRateHigh
+ArchitectureValidationFailureRateHigh
+ArchitectureRepairRateHigh
+ArchitectureWorkerNoHeartbeat
+ArchitectureQueueBacklogHigh
+ArchitectureReviewBacklogHigh
+ArchitectureApprovalDenialSpike
+ArchitectureAuditWriteFailure
+ArchitectureRecoveryFailure
+
+Example Prometheus rule:
+
+- alert: ArchitectureRunFailureRateHigh
+  expr: |
+    (
+      rate(
+        architecture_runs_failed_total[15m]
+      )
+      /
+      clamp_min(
+        rate(
+          architecture_runs_total[15m]
+        ),
+        0.001
+      )
+    ) > 0.20
+  for: 15m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Architecture run failure rate is high"
+
+Critical alerts:
+
+audit write failure
+checksum verification failure in normal operation
+recovery unable to reconcile run and artifact
+duplicate approval constraint violation
+
+22. Operational dashboard
+
+Create a dashboard with these panels:
+
+Architecture runs by status
+Run success rate
+Median and p95 run duration
+Execution attempts per run
+Validation failure rate
+Repair success rate
+Timeout rate
+Model usage by model name
+Open review count
+Review age
+Changes-requested rate
+Revision completion rate
+Approval count
+Approval denial reasons
+Queue depth
+Worker heartbeat age
+Recovery operations
+Audit failures
+
+Do not use the dashboard as the authoritative audit source.
+
+It is an operational view only.
+23. Recovery command interface
+
+Create administrative commands:
+
+python -m app.cli.architecture inspect-run <run-id>
+python -m app.cli.architecture recover-run <run-id>
+python -m app.cli.architecture cancel-run <run-id> --reason "..."
+python -m app.cli.architecture verify-artifact <artifact-id>
+python -m app.cli.architecture verify-approval <approval-id>
+python -m app.cli.architecture verify-lineage <artifact-id>
+
+Create:
+
+app/cli/architecture.py
+
+The commands must use the same service layer as the API and worker.
+
+Do not implement direct SQL mutations in the CLI.
+24. inspect-run behavior
+
+Output:
+
+run ID
+project ID
+requirements artifact ID
+requirements checksum
+status
+worker attempts
+latest attempt status
+artifact ID
+artifact checksum
+revision source
+review state
+approval state
+audit chain verification
+recovery eligibility
+
+Example:
+
+Architecture Run: 8a5...
+Status: RUNNING
+Requirements: 12f... version 3
+Expected requirements checksum: 9ac...
+Attempts: 1
+Latest attempt: SUCCEEDED
+Artifact: missing
+Recovery action: persist artifact from successful attempt
+Audit chain: valid
+
+25. recover-run contract
+
+Recovery must be deterministic.
+
+Allowed recovery cases:
+
+A. Successful attempt exists, artifact missing
+B. Artifact exists, run not completed
+C. Claimed job lease expired
+D. Revision request not updated after completed run
+E. Audit event missing but domain transaction rolled back
+
+Disallowed automatic recovery:
+
+requirements checksum mismatch
+artifact checksum mismatch
+review checksum mismatch
+approval evidence mismatch
+ambiguous multiple successful attempts
+multiple artifacts for one run
+unknown migration state
+
+These require operator investigation.
+26. Recovery decision table
+
+Run        Attempt       Artifact     Action
+------------------------------------------------------------
+RUNNING    SUCCEEDED     absent       reconstruct artifact
+RUNNING    SUCCEEDED     present      complete run
+RUNNING    FAILED        absent       retry if policy permits
+RUNNING    TIMED_OUT     absent       retry if policy permits
+RUNNING    VALIDATION    absent       repair if policy permits
+COMPLETED  SUCCEEDED     present      no action
+COMPLETED  any           absent       integrity incident
+FAILED     SUCCEEDED     absent       manual investigation
+FAILED     any           present      integrity incident
+CANCELLED  any           absent       no action
+CANCELLED  any           present      integrity incident
+
+27. Database integrity queries
+
+Create operational SQL views or repository checks for:
+
+completed run without artifact
+artifact whose run is not completed
+approved artifact without approval
+approval without approving review
+review checksum not equal to artifact checksum
+revision run without revision request
+revision request marked completed without new artifact
+multiple successful attempts for one run
+active run with expired worker lease
+artifact version gaps
+
+Example integrity query:
+
+SELECT ar.id
+FROM architecture_runs ar
+LEFT JOIN architecture_artifacts aa
+    ON aa.run_id = ar.id
+WHERE ar.status = 'completed'
+  AND aa.id IS NULL;
+
+This query should return zero rows.
+28. Scheduled integrity scan
+
+Add a low-frequency internal job:
+
+architecture-integrity-scan
+
+Recommended cadence:
+
+every 15 minutes
+
+The scan should:
+
+run read-only integrity checks
+emit metrics
+create incident records for violations
+not mutate workflow state automatically
+
+Recovery remains an explicit operation except for narrowly defined stale lease requeueing.
+29. Data retention
+
+Define retention by data type.
+
+Recommended:
+
+Architecture artifacts               indefinite
+Architecture approvals               indefinite
+Architecture reviews                 indefinite
+Revision requests                    indefinite
+Audit events                         indefinite or regulated policy
+Execution attempt metadata           indefinite
+Successful raw model output           90–365 days
+Failed raw model output               30–90 days
+Worker operational logs               30–90 days
+Metrics                               13–15 months
+Traces                                7–30 days
+
+Before deleting raw model output:
+
+retain raw output hash
+retain validation report
+retain structured artifact
+retain input checksum
+retain prompt bundle hash
+retain token usage
+retain failure metadata
+
+Deletion must itself be audited.
+30. Backup and restore requirements
+
+Backups must include:
+
+architecture_runs
+architecture_execution_attempts
+architecture_artifacts
+architecture_reviews
+architecture_revision_requests
+architecture_approvals
+audit events
+queue records
+project manifests
+requirements artifacts and approvals
+
+Restore test must verify:
+
+artifact checksum
+review checksum
+approval checksum
+approval evidence checksum
+revision lineage
+audit chain
+
+A database restore is not accepted merely because tables are readable.
+
+Cryptographic and lineage integrity must also pass.
+31. M4 production configuration
+
+Add settings:
+
+ARCHITECTURE_CREW_VERSION=architecture-crew-v1
+ARCHITECTURE_SCHEMA_VERSION=1.0
+ARCHITECTURE_GOVERNANCE_POLICY_VERSION=architecture-governance-v1
+
+ARCHITECTURE_MODEL_NAME=ollama/gemma3:12b
+ARCHITECTURE_TEMPERATURE=0.0
+ARCHITECTURE_TIMEOUT_SECONDS=900
+
+ARCHITECTURE_MAX_ATTEMPTS=2
+ARCHITECTURE_MAX_REPAIR_ATTEMPTS=1
+ARCHITECTURE_MAX_RAW_OUTPUT_BYTES=2000000
+ARCHITECTURE_MAX_REQUIREMENTS_BYTES=1000000
+ARCHITECTURE_MAX_REPOSITORY_MANIFEST_BYTES=500000
+
+ARCHITECTURE_JOB_LEASE_SECONDS=120
+ARCHITECTURE_JOB_HEARTBEAT_SECONDS=30
+ARCHITECTURE_QUEUE_POLL_SECONDS=2
+
+ARCHITECTURE_RAW_OUTPUT_RETENTION_DAYS=90
+ARCHITECTURE_INTEGRITY_SCAN_INTERVAL_SECONDS=900
+
+Validate configuration at startup.
+
+Reject:
+
+maximum attempts < 1
+repair attempts >= maximum attempts
+heartbeat >= lease duration
+timeout <= 0
+empty model name
+unknown policy version
+unknown schema version
+
+32. Optional real-model smoke test
+
+The acceptance suite should not depend on a live model.
+
+Add a separate marker:
+
+@pytest.mark.architecture_model_smoke
+
+Run manually:
+
+docker compose exec api pytest \
+  -m architecture_model_smoke \
+  tests/smoke/test_architecture_model.py \
+  -q
+
+The smoke test should use a very small approved requirements artifact.
+
+It verifies:
+
+model endpoint reachable
+CrewAI integration works
+structured result returned
+schema validation passes
+semantic validation passes
+artifact persists
+
+It must not approve the artifact automatically.
+33. CI pipeline stages
+
+Add these stages:
+
+1. lint
+2. static typing
+3. unit tests
+4. migration check
+5. database integration tests
+6. architecture end-to-end tests
+7. security tests
+8. concurrency tests
+9. recovery tests
+10. Docker image build
+11. container security scan
+12. optional real-model smoke test
+
+Representative commands:
+
+ruff check app tests
+mypy app
+pytest tests/unit -q
+pytest tests/integration -q
+pytest tests/e2e/architecture -q
+alembic upgrade head
+alembic check
+
+34. CI acceptance gates
+
+The build must fail when:
+
+migration drift exists
+architecture schema changed without schema-version update
+prompt files changed without Crew version review
+governance policy changed without policy-version update
+reviewer and approver can be the same identity
+more than one artifact can be created per run
+approval succeeds with a stale checksum
+work-package generation succeeds without approved architecture
+host repository integrity test fails
+audit event sequence is incomplete
+
+35. Schema-version discipline
+
+Any breaking change to:
+
+ArchitectureArtifactDocument
+
+requires:
+
+schema_version increment
+migration or compatibility adapter
+renderer update
+validator update
+contract test update
+work-package consumer update
+
+Do not silently alter schema 1.0.
+
+Non-breaking additions may still require a version review because extra="forbid" makes output compatibility strict.
+36. Prompt-version discipline
+
+Prompt changes can alter architecture output even when code remains unchanged.
+
+Any production prompt change should update at least one of:
+
+architecture Crew version
+prompt bundle hash
+release metadata
+acceptance fixtures
+
+A run must preserve:
+
+crew version
+model name
+model parameters
+prompt bundle hash
+schema version
+governance policy version
+
+This makes the artifact reproducibility boundary explicit.
+37. M4 operator runbook
+
+Create:
+
+docs/runbooks/architecture-workflow.md
+
+It should contain:
+
+Purpose
+Components
+Normal execution flow
+Architecture state machine
+Attempt state machine
+Review state machine
+Revision flow
+Approval flow
+Common alerts
+How to inspect a run
+How to recover a run
+How to cancel a run
+How to verify an artifact
+How to verify an approval
+How to identify stale jobs
+How to handle model outage
+How to handle PostgreSQL outage
+How to handle audit failure
+How to restore from backup
+Escalation rules
+
+38. Incident classifications
+
+Define:
+Severity 1
+
+approval checksum mismatch
+audit chain corruption
+unauthorized approval
+duplicate authoritative artifact
+host repository modification
+credential exposure
+
+Severity 2
+
+worker unable to process queue
+recovery cannot reconcile state
+persistent model outage
+large run failure spike
+revision lineage inconsistency
+
+Severity 3
+
+single run timeout
+single validation failure
+review backlog
+non-critical metric or trace loss
+
+39. Final M4 acceptance command
+
+Create:
+
+scripts/acceptance/m4_architecture.sh
+
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "Applying migrations..."
+docker compose exec -T api alembic upgrade head
+
+echo "Checking migration drift..."
+docker compose exec -T api alembic check
+
+echo "Running architecture lint..."
+docker compose exec -T api \
+  ruff check app/architecture app/security tests/architecture tests/e2e/architecture
+
+echo "Running architecture typing..."
+docker compose exec -T api \
+  mypy app/architecture app/security
+
+echo "Running architecture tests..."
+docker compose exec -T api \
+  pytest tests/architecture tests/e2e/architecture -q
+
+echo "Checking API health..."
+curl --fail --silent \
+  http://localhost:8000/health \
+  >/dev/null
+
+echo "Checking worker..."
+docker compose ps architecture-worker
+
+echo "M4 architecture acceptance passed."
+
+Make executable:
+
+chmod +x scripts/acceptance/m4_architecture.sh
+
+Run:
+
+./scripts/acceptance/m4_architecture.sh
+
+40. M4 Definition of Done
+
+M4 is complete when all of these are true:
+
+[ ] Alembic migrations apply from an empty database.
+
+[ ] Alembic migrations upgrade from the previous milestone.
+
+[ ] Architecture run creation rejects unapproved requirements.
+
+[ ] Duplicate active runs are prevented.
+
+[ ] Trusted worker identity is enforced.
+
+[ ] Execution attempts are durable and bounded.
+
+[ ] Invalid model output cannot create an artifact.
+
+[ ] One repair attempt is supported and bounded.
+
+[ ] Successful crash recovery does not reinvoke the model.
+
+[ ] One run produces at most one artifact.
+
+[ ] Architecture Markdown is deterministically rendered.
+
+[ ] Artifact checksum verification passes.
+
+[ ] Independent review is required.
+
+[ ] Review is tied to an exact checksum.
+
+[ ] Changes requested create a new version and lineage.
+
+[ ] Reviewer cannot approve the same artifact.
+
+[ ] Approval evidence is immutable and checksummed.
+
+[ ] Older architecture cannot be approved when a newer version exists.
+
+[ ] Work-package generation requires approved architecture.
+
+[ ] Audit events cover every transition.
+
+[ ] Metrics, logs, traces, health checks, and alerts exist.
+
+[ ] Host repository remains unchanged.
+
+[ ] Full M4 acceptance script passes.
+
+Final M4 architecture
+
+Project
+  │
+  ▼
+Immutable Manifest
+  │
+  ▼
+Approved Requirements
+  │
+  ▼
+Architecture Run
+  │
+  ├── Execution Attempt 1
+  │       ├── valid
+  │       ├── invalid
+  │       └── timeout
+  │
+  ├── Optional Bounded Repair Attempt
+  │
+  ▼
+Validated Structured Architecture
+  │
+  ▼
+Deterministic Markdown
+  │
+  ▼
+Immutable Architecture Artifact
+  │
+  ▼
+Independent Review
+  │
+  ├── Rejected
+  │
+  ├── Changes Requested
+  │       │
+  │       ▼
+  │   Revision Request
+  │       │
+  │       ▼
+  │   New Architecture Run and Version
+  │
+  └── Approval Recommended
+          │
+          ▼
+Distinct Human Approver
+          │
+          ▼
+Immutable Approval Evidence
+          │
+          ▼
+Work-Package Eligibility Snapshot
+
+P5 — M4 final status
+
+Architecture persistence                         complete
+Approved requirements gate                       complete
+Structured architecture contract                 complete
+CrewAI execution topology                        complete
+Trusted worker execution                         complete
+Bounded attempts and repair                       complete
+Deterministic validation                         complete
+Immutable artifact creation                      complete
+Independent review                               complete
+Revision lineage                                 complete
+Approval authorization                           complete
+Approval evidence checksum                       complete
+Work-package eligibility gate                    complete
+Contract tests                                   complete
+Concurrency tests                                complete
+Recovery tests                                   complete
+Security tests                                   complete
+Observability                                    complete
+Operational runbook                              complete
+Production acceptance criteria                   complete
+
+The next milestone is:
+P5 — M5
+Approved Architecture to Bounded Work-Package Decomposition
+
+M5 should convert one approved architecture into independently executable work packages with:
+
+explicit scope
+owned files
+allowed dependencies
+acceptance criteria
+approved test commands
+risk classification
+execution limits
+architecture traceability
+dependency ordering
+human approval
+immutable package checksum
+
+
+continue
+
+P5 — M5, Increment 1
+Work-package aggregate, persistence model, state machine, and architecture eligibility boundary
+
+M5 converts one approved architecture into bounded, reviewable units of implementation work.
+
+The target flow is:
+
+Approved Architecture
+        ↓
+Work-Package Decomposition Run
+        ↓
+Candidate Work Packages
+        ↓
+Deterministic Validation
+        ↓
+Dependency Graph
+        ↓
+Human Review and Approval
+        ↓
+Execution Eligibility
+
+A work package is not a free-form task description. It is an immutable execution contract.
+1. Work-package invariants
+
+The system must enforce these rules:
+
+1. Work packages can be generated only from an approved architecture.
+
+2. The architecture approval, review, artifact checksum, and project
+   lineage must all match.
+
+3. Every work package belongs to exactly one decomposition run.
+
+4. Every package references one approved architecture version.
+
+5. Package scope must be explicit and bounded.
+
+6. Package file access must be expressed as allowlists and denylists.
+
+7. Package test commands must be explicit and machine-executable.
+
+8. Package dependencies must reference packages in the same decomposition.
+
+9. The dependency graph must be acyclic.
+
+10. Every architecture requirement and module assigned to implementation
+    must be traceable to one or more packages.
+
+11. A package cannot approve itself.
+
+12. Approval is bound to the exact package checksum.
+
+13. Approved packages are immutable.
+
+14. Changes require a new package version or a new decomposition run.
+
+15. Execution starts only from an approved package and exact repository base.
+
+2. New module structure
+
+Create:
+
+cd ~/projects/ai-enterprise
+
+mkdir -p app/work_packages/validators
+mkdir -p app/work_packages/renderers
+mkdir -p app/work_packages/prompts
+mkdir -p app/work_packages/crews
+mkdir -p app/work_packages/agents
+mkdir -p app/work_packages/tasks
+
+touch app/work_packages/__init__.py
+touch app/work_packages/enums.py
+touch app/work_packages/models.py
+touch app/work_packages/schemas.py
+touch app/work_packages/commands.py
+touch app/work_packages/exceptions.py
+touch app/work_packages/state_machine.py
+touch app/work_packages/checksums.py
+touch app/work_packages/repository.py
+touch app/work_packages/service.py
+touch app/work_packages/router.py
+touch app/work_packages/dependencies.py
+touch app/work_packages/architecture_gateway.py
+touch app/work_packages/artifact_schema.py
+
+touch app/work_packages/validators/__init__.py
+touch app/work_packages/validators/schema_validator.py
+touch app/work_packages/validators/semantic_validator.py
+
+touch app/work_packages/renderers/__init__.py
+touch app/work_packages/renderers/markdown.py
+
+Result:
+
+app/work_packages/
+├── agents/
+├── crews/
+├── prompts/
+├── renderers/
+│   └── markdown.py
+├── tasks/
+├── validators/
+│   ├── schema_validator.py
+│   └── semantic_validator.py
+├── architecture_gateway.py
+├── artifact_schema.py
+├── checksums.py
+├── commands.py
+├── dependencies.py
+├── enums.py
+├── exceptions.py
+├── models.py
+├── repository.py
+├── router.py
+├── schemas.py
+├── service.py
+└── state_machine.py
+
+This increment implements persistence and governance. Crew generation comes in the next increment.
+3. Define decomposition states
+
+Create:
+
+app/work_packages/enums.py
+
+from enum import StrEnum
+
+
+class WorkPackageDecompositionRunStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class WorkPackageStatus(StrEnum):
+    DRAFT = "draft"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+
+
+class WorkPackageReviewDecision(StrEnum):
+    RECOMMEND_APPROVAL = "recommend_approval"
+    REQUEST_CHANGES = "request_changes"
+    REJECT = "reject"
+
+
+class WorkPackageRiskLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class WorkPackageExecutionMode(StrEnum):
+    CODE_CHANGE = "code_change"
+    DATABASE_MIGRATION = "database_migration"
+    CONFIGURATION = "configuration"
+    DOCUMENTATION = "documentation"
+    TEST_ONLY = "test_only"
+    INFRASTRUCTURE = "infrastructure"
+
+
+class FileAccessMode(StrEnum):
+    READ_ONLY = "read_only"
+    MODIFY = "modify"
+    CREATE = "create"
+    DELETE = "delete"
+
+
+class DependencyType(StrEnum):
+    BLOCKING = "blocking"
+    DATA = "data"
+    CONTRACT = "contract"
+    MIGRATION = "migration"
+    ORDERING = "ordering"
+
+4. Define the state machine
+
+Create:
+
+app/work_packages/state_machine.py
+
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+    WorkPackageStatus,
+)
+from app.work_packages.exceptions import (
+    InvalidWorkPackageTransitionError,
+)
+
+
+RUN_TRANSITIONS: dict[
+    WorkPackageDecompositionRunStatus,
+    set[WorkPackageDecompositionRunStatus],
+] = {
+    WorkPackageDecompositionRunStatus.PENDING: {
+        WorkPackageDecompositionRunStatus.RUNNING,
+        WorkPackageDecompositionRunStatus.FAILED,
+        WorkPackageDecompositionRunStatus.CANCELLED,
+    },
+    WorkPackageDecompositionRunStatus.RUNNING: {
+        WorkPackageDecompositionRunStatus.COMPLETED,
+        WorkPackageDecompositionRunStatus.FAILED,
+        WorkPackageDecompositionRunStatus.CANCELLED,
+    },
+    WorkPackageDecompositionRunStatus.COMPLETED: set(),
+    WorkPackageDecompositionRunStatus.FAILED: set(),
+    WorkPackageDecompositionRunStatus.CANCELLED: set(),
+}
+
+
+PACKAGE_TRANSITIONS: dict[
+    WorkPackageStatus,
+    set[WorkPackageStatus],
+] = {
+    WorkPackageStatus.DRAFT: {
+        WorkPackageStatus.UNDER_REVIEW,
+        WorkPackageStatus.REJECTED,
+    },
+    WorkPackageStatus.UNDER_REVIEW: {
+        WorkPackageStatus.APPROVED,
+        WorkPackageStatus.CHANGES_REQUESTED,
+        WorkPackageStatus.REJECTED,
+    },
+    WorkPackageStatus.APPROVED: {
+        WorkPackageStatus.SUPERSEDED,
+    },
+    WorkPackageStatus.CHANGES_REQUESTED: {
+        WorkPackageStatus.SUPERSEDED,
+    },
+    WorkPackageStatus.REJECTED: set(),
+    WorkPackageStatus.SUPERSEDED: set(),
+}
+
+
+def assert_run_transition(
+    current: WorkPackageDecompositionRunStatus,
+    target: WorkPackageDecompositionRunStatus,
+) -> None:
+    if target not in RUN_TRANSITIONS[current]:
+        raise InvalidWorkPackageTransitionError(
+            f"Invalid decomposition run transition: "
+            f"{current.value} -> {target.value}."
+        )
+
+
+def assert_package_transition(
+    current: WorkPackageStatus,
+    target: WorkPackageStatus,
+) -> None:
+    if target not in PACKAGE_TRANSITIONS[current]:
+        raise InvalidWorkPackageTransitionError(
+            f"Invalid work-package transition: "
+            f"{current.value} -> {target.value}."
+        )
+
+5. Add domain exceptions
+
+Create:
+
+app/work_packages/exceptions.py
+
+class WorkPackageError(Exception):
+    """Base work-package workflow error."""
+
+
+class WorkPackageNotFoundError(WorkPackageError):
+    pass
+
+
+class WorkPackageRunNotFoundError(WorkPackageNotFoundError):
+    pass
+
+
+class WorkPackageArtifactNotFoundError(
+    WorkPackageNotFoundError
+):
+    pass
+
+
+class ApprovedArchitectureRequiredError(
+    WorkPackageError
+):
+    pass
+
+
+class ArchitectureApprovalMismatchError(
+    WorkPackageError
+):
+    pass
+
+
+class ArchitectureProjectMismatchError(
+    WorkPackageError
+):
+    pass
+
+
+class ActiveDecompositionRunExistsError(
+    WorkPackageError
+):
+    pass
+
+
+class InvalidWorkPackageTransitionError(
+    WorkPackageError
+):
+    pass
+
+
+class WorkPackageValidationError(WorkPackageError):
+    pass
+
+
+class WorkPackageChecksumMismatchError(
+    WorkPackageError
+):
+    pass
+
+
+class WorkPackageAlreadyApprovedError(
+    WorkPackageError
+):
+    pass
+
+
+class WorkPackageApprovalNotAllowedError(
+    WorkPackageError
+):
+    pass
+
+
+class WorkPackageDependencyCycleError(
+    WorkPackageValidationError
+):
+    pass
+
+
+class WorkPackageScopeViolationError(
+    WorkPackageValidationError
+):
+    pass
+
+
+class WorkPackageVersionConflictError(
+    WorkPackageError
+):
+    pass
+
+6. Define the decomposition-run model
+
+Add to:
+
+app/work_packages/models.py
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database.base import Base
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+    WorkPackageStatus,
+)
+
+
+class WorkPackageDecompositionRun(Base):
+    __tablename__ = "work_package_decomposition_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    architecture_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    architecture_approval_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_approvals.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    architecture_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    architecture_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    requirements_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "requirements_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=(
+            WorkPackageDecompositionRunStatus.PENDING.value
+        ),
+        index=True,
+    )
+
+    decomposition_version: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    schema_version: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    model_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    temperature: Mapped[float] = mapped_column(
+        nullable=False,
+        default=0.0,
+    )
+
+    prompt_bundle_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    execution_manifest: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    validation_report: Mapped[
+        dict[str, Any] | None
+    ] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    failure_code: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    failure_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    packages: Mapped[list["WorkPackage"]] = relationship(
+        back_populates="decomposition_run",
+        order_by="WorkPackage.sequence_number",
+    )
+
+7. Define the work-package model
+
+Add:
+
+class WorkPackage(Base):
+    __tablename__ = "work_packages"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "package_key",
+            "version",
+            name="uq_work_package_project_key_version",
+        ),
+        UniqueConstraint(
+            "decomposition_run_id",
+            "sequence_number",
+            name="uq_work_package_run_sequence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    decomposition_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_package_decomposition_runs.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    architecture_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "architecture_artifacts.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    package_key: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    sequence_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(300),
+        nullable=False,
+    )
+
+    objective: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=WorkPackageStatus.DRAFT.value,
+        index=True,
+    )
+
+    execution_mode: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    markdown_content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    structured_content: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    content_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    estimated_complexity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    requires_database_migration: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    requires_network: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    human_review_required: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    validation_report: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    decomposition_run: Mapped[
+        WorkPackageDecompositionRun
+    ] = relationship(
+        back_populates="packages",
+    )
+
+    dependencies: Mapped[
+        list["WorkPackageDependency"]
+    ] = relationship(
+        foreign_keys=(
+            "WorkPackageDependency.work_package_id"
+        ),
+        cascade="all, delete-orphan",
+    )
+
+    reviews: Mapped[
+        list["WorkPackageReview"]
+    ] = relationship(
+        cascade="all, delete-orphan",
+        order_by="WorkPackageReview.review_round",
+    )
+
+    approval: Mapped[
+        "WorkPackageApproval | None"
+    ] = relationship(
+        uselist=False,
+    )
+
+8. Define dependency edges
+
+Add:
+
+class WorkPackageDependency(Base):
+    __tablename__ = "work_package_dependencies"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_package_id",
+            "depends_on_work_package_id",
+            name="uq_work_package_dependency_edge",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    work_package_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_packages.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    depends_on_work_package_id: Mapped[
+        uuid.UUID
+    ] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_packages.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    dependency_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    rationale: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+A dependency means:
+
+work_package_id cannot execute until
+depends_on_work_package_id is integrated successfully
+
+Do not invert this meaning in API responses.
+9. Define review and approval models
+
+Add:
+
+class WorkPackageReview(Base):
+    __tablename__ = "work_package_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_package_id",
+            "review_round",
+            name="uq_work_package_review_round",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    work_package_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_packages.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    review_round: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    reviewer_id: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    reviewer_role: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    decision: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    comments: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    findings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
+
+    reviewed_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    policy_version: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class WorkPackageApproval(Base):
+    __tablename__ = "work_package_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_package_id",
+            name="uq_work_package_approval",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    work_package_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_packages.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    approving_review_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_package_reviews.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    approved_by: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    approver_role: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    approved_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    policy_version: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    evidence_checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+10. Register models for Alembic
+
+Update the metadata-registration module used by Alembic.
+
+For example:
+
+app/database/models.py
+
+Add:
+
+from app.work_packages.models import (
+    WorkPackage,
+    WorkPackageApproval,
+    WorkPackageDecompositionRun,
+    WorkPackageDependency,
+    WorkPackageReview,
+)
+
+Without these imports, Alembic autogeneration may not detect the new tables.
+11. Add active-run database protection
+
+Only one active decomposition run should exist for the same approved architecture artifact.
+
+Use a PostgreSQL partial unique index:
+
+CREATE UNIQUE INDEX
+    uq_active_work_package_decomposition_per_architecture
+ON work_package_decomposition_runs (
+    project_id,
+    architecture_artifact_id
+)
+WHERE status IN ('pending', 'running');
+
+This still permits historical failed and completed runs.
+12. Create Alembic migration
+
+Generate:
+
+docker compose exec api alembic revision \
+  --autogenerate \
+  -m "add work package decomposition workflow"
+
+Use a revision such as:
+
+0009_work_package_decomposition.py
+
+Confirm it creates:
+
+work_package_decomposition_runs
+work_packages
+work_package_dependencies
+work_package_reviews
+work_package_approvals
+
+Add the partial unique index manually if Alembic does not generate it:
+
+op.execute(
+    """
+    CREATE UNIQUE INDEX
+        uq_active_work_package_decomposition_per_architecture
+    ON work_package_decomposition_runs (
+        project_id,
+        architecture_artifact_id
+    )
+    WHERE status IN ('pending', 'running')
+    """
+)
+
+Downgrade:
+
+op.execute(
+    """
+    DROP INDEX IF EXISTS
+        uq_active_work_package_decomposition_per_architecture
+    """
+)
+
+Apply:
+
+docker compose exec api alembic upgrade head
+
+Verify:
+
+docker compose exec postgres psql \
+  -U "${POSTGRES_USER}" \
+  -d "${POSTGRES_DB}" \
+  -c "\dt work_package*"
+
+13. Define the work-package structured contract
+
+Create:
+
+app/work_packages/artifact_schema.py
+
+from __future__ import annotations
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
+
+from app.work_packages.enums import (
+    DependencyType,
+    FileAccessMode,
+    WorkPackageExecutionMode,
+    WorkPackageRiskLevel,
+)
+
+
+class ArchitectureTraceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    architecture_element_id: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+    requirement_ids: list[str] = Field(
+        min_length=1,
+    )
+
+    rationale: str = Field(min_length=1)
+
+
+class FileScopeRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: str = Field(min_length=1)
+    access: FileAccessMode
+    rationale: str = Field(min_length=1)
+
+
+class TestCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command: list[str] = Field(min_length=1)
+    working_directory: str = Field(min_length=1)
+    timeout_seconds: int = Field(
+        ge=1,
+        le=3600,
+    )
+    required: bool = True
+    purpose: str = Field(min_length=1)
+
+
+class AcceptanceCriterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(
+        pattern=r"^AC-[A-Z0-9_-]+$",
+    )
+    statement: str = Field(min_length=1)
+    verification_method: str = Field(min_length=1)
+    automated: bool
+
+
+class PackageDependencyReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    package_key: str = Field(
+        pattern=r"^WP-[A-Z0-9_-]+$",
+    )
+    dependency_type: DependencyType
+    rationale: str = Field(min_length=1)
+
+
+class ExecutionLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    timeout_seconds: int = Field(
+        ge=1,
+        le=7200,
+    )
+    cpu_limit: float = Field(
+        gt=0,
+        le=16,
+    )
+    memory_limit_mb: int = Field(
+        ge=128,
+        le=32768,
+    )
+    pid_limit: int = Field(
+        ge=16,
+        le=1024,
+    )
+    network_enabled: bool
+    maximum_changed_files: int = Field(
+        ge=1,
+        le=500,
+    )
+    maximum_patch_bytes: int = Field(
+        ge=1024,
+        le=20_000_000,
+    )
+
+
+class WorkPackageDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(pattern=r"^1\.0$")
+
+    package_key: str = Field(
+        pattern=r"^WP-[A-Z0-9_-]+$",
+    )
+
+    sequence_number: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=300)
+    objective: str = Field(min_length=1)
+
+    execution_mode: WorkPackageExecutionMode
+    risk_level: WorkPackageRiskLevel
+
+    architecture_trace: list[
+        ArchitectureTraceReference
+    ] = Field(min_length=1)
+
+    in_scope: list[str] = Field(min_length=1)
+    out_of_scope: list[str] = Field(min_length=1)
+
+    file_scope: list[FileScopeRule] = Field(
+        min_length=1
+    )
+
+    allowed_dependencies: list[str] = Field(
+        default_factory=list
+    )
+
+    prohibited_dependencies: list[str] = Field(
+        default_factory=list
+    )
+
+    acceptance_criteria: list[
+        AcceptanceCriterion
+    ] = Field(min_length=1)
+
+    approved_test_commands: list[TestCommand] = Field(
+        min_length=1
+    )
+
+    package_dependencies: list[
+        PackageDependencyReference
+    ] = Field(default_factory=list)
+
+    execution_limits: ExecutionLimits
+
+    requires_database_migration: bool
+    requires_network: bool
+    rollback_strategy: str = Field(min_length=1)
+    failure_handling: str = Field(min_length=1)
+    audit_requirements: list[str] = Field(min_length=1)
+
+    implementation_notes: list[str] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_network_consistency(
+        self,
+    ) -> WorkPackageDocument:
+        if (
+            self.requires_network
+            != self.execution_limits.network_enabled
+        ):
+            raise ValueError(
+                "requires_network must match "
+                "execution_limits.network_enabled."
+            )
+
+        return self
+
+14. Define decomposition output contract
+
+Add:
+
+class WorkPackageDecompositionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(pattern=r"^1\.0$")
+
+    architecture_artifact_id: str
+    architecture_version: int = Field(ge=1)
+    architecture_checksum: str = Field(
+        min_length=64,
+        max_length=64,
+    )
+
+    decomposition_summary: str = Field(min_length=1)
+
+    packages: list[WorkPackageDocument] = Field(
+        min_length=1
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_package_keys(
+        self,
+    ) -> WorkPackageDecompositionDocument:
+        keys = [
+            package.package_key
+            for package in self.packages
+        ]
+
+        if len(keys) != len(set(keys)):
+            raise ValueError(
+                "Work-package keys must be unique."
+            )
+
+        sequence_numbers = [
+            package.sequence_number
+            for package in self.packages
+        ]
+
+        if len(sequence_numbers) != len(
+            set(sequence_numbers)
+        ):
+            raise ValueError(
+                "Work-package sequence numbers must be unique."
+            )
+
+        return self
+
+15. Checksum implementation
+
+Create:
+
+app/work_packages/checksums.py
+
+import hashlib
+import json
+from typing import Any
+
+
+def canonical_json(
+    value: Any,
+) -> str:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
+def sha256_text(
+    value: str,
+) -> str:
+    return hashlib.sha256(
+        value.encode("utf-8")
+    ).hexdigest()
+
+
+def work_package_checksum(
+    *,
+    markdown_content: str,
+    structured_content: dict[str, Any],
+) -> str:
+    payload = {
+        "markdown_content": markdown_content,
+        "structured_content": structured_content,
+    }
+
+    return sha256_text(
+        canonical_json(payload)
+    )
+
+
+def approval_evidence_checksum(
+    evidence: dict[str, Any],
+) -> str:
+    return sha256_text(
+        canonical_json(evidence)
+    )
+
+As with architecture, approval covers both structured content and rendered Markdown.
+16. Create approved-architecture gateway
+
+Create:
+
+app/work_packages/architecture_gateway.py
+
+import uuid
+from dataclasses import dataclass
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.architecture.models import (
+    ArchitectureApproval,
+    ArchitectureArtifact,
+    ArchitectureReview,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedArchitectureSnapshot:
+    artifact_id: uuid.UUID
+    project_id: uuid.UUID
+    requirements_artifact_id: uuid.UUID
+    version: int
+    checksum: str
+    markdown_content: str
+    structured_content: dict[str, Any]
+    approval_id: uuid.UUID
+    approval_evidence_checksum: str
+    review_id: uuid.UUID
+    review_checksum: str
+
+
+class ApprovedArchitectureGateway:
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
+        self._session = session
+
+    async def get_approved_snapshot(
+        self,
+        *,
+        architecture_artifact_id: uuid.UUID,
+        architecture_approval_id: uuid.UUID,
+    ) -> ApprovedArchitectureSnapshot | None:
+        result = await self._session.execute(
+            select(
+                ArchitectureArtifact.id,
+                ArchitectureArtifact.project_id,
+                ArchitectureArtifact.requirements_artifact_id,
+                ArchitectureArtifact.version,
+                ArchitectureArtifact.content_checksum,
+                ArchitectureArtifact.markdown_content,
+                ArchitectureArtifact.structured_content,
+                ArchitectureApproval.id.label(
+                    "approval_id"
+                ),
+                ArchitectureApproval.evidence_checksum,
+                ArchitectureReview.id.label(
+                    "review_id"
+                ),
+                ArchitectureReview.reviewed_checksum,
+            )
+            .join(
+                ArchitectureApproval,
+                ArchitectureApproval.architecture_artifact_id
+                == ArchitectureArtifact.id,
+            )
+            .join(
+                ArchitectureReview,
+                ArchitectureReview.id
+                == ArchitectureApproval.approving_review_id,
+            )
+            .where(
+                ArchitectureArtifact.id
+                == architecture_artifact_id,
+                ArchitectureApproval.id
+                == architecture_approval_id,
+                ArchitectureApproval.approved.is_(True),
+                ArchitectureApproval.approved_checksum
+                == ArchitectureArtifact.content_checksum,
+                ArchitectureReview.reviewed_checksum
+                == ArchitectureArtifact.content_checksum,
+            )
+        )
+
+        row = result.one_or_none()
+
+        if row is None:
+            return None
+
+        return ApprovedArchitectureSnapshot(
+            artifact_id=row.id,
+            project_id=row.project_id,
+            requirements_artifact_id=(
+                row.requirements_artifact_id
+            ),
+            version=row.version,
+            checksum=row.content_checksum,
+            markdown_content=row.markdown_content,
+            structured_content=row.structured_content,
+            approval_id=row.approval_id,
+            approval_evidence_checksum=(
+                row.evidence_checksum
+            ),
+            review_id=row.review_id,
+            review_checksum=row.reviewed_checksum,
+        )
+
+This gateway verifies the exact approval chain rather than trusting artifact status alone.
+17. Add commands
+
+Create:
+
+app/work_packages/commands.py
+
+import uuid
+from dataclasses import dataclass
+from typing import Any
+
+from app.work_packages.enums import (
+    WorkPackageReviewDecision,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CreateDecompositionRunCommand:
+    project_id: uuid.UUID
+    architecture_artifact_id: uuid.UUID
+    architecture_approval_id: uuid.UUID
+    decomposition_version: str
+    schema_version: str
+    model_name: str
+    temperature: float
+    prompt_bundle_hash: str
+    execution_manifest: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class StartDecompositionRunCommand:
+    run_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
+class CompleteDecompositionRunCommand:
+    run_id: uuid.UUID
+    decomposition_summary: str
+    packages: list[dict[str, Any]]
+    validation_report: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class FailDecompositionRunCommand:
+    run_id: uuid.UUID
+    failure_code: str
+    failure_message: str
+
+
+@dataclass(frozen=True, slots=True)
+class SubmitWorkPackageForReviewCommand:
+    work_package_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewWorkPackageCommand:
+    work_package_id: uuid.UUID
+    reviewer_id: str
+    reviewer_role: str
+    decision: WorkPackageReviewDecision
+    comments: str
+    findings: list[dict[str, Any]]
+    policy_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class ApproveWorkPackageCommand:
+    work_package_id: uuid.UUID
+    approving_review_id: uuid.UUID
+    approved_by: str
+    approver_role: str
+    policy_version: str
+    evidence: dict[str, Any]
+
+18. Repository foundation
+
+Create:
+
+app/work_packages/repository.py
+
+import uuid
+
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+    WorkPackageReviewDecision,
+)
+from app.work_packages.models import (
+    WorkPackage,
+    WorkPackageApproval,
+    WorkPackageDecompositionRun,
+    WorkPackageDependency,
+    WorkPackageReview,
+)
+
+
+class WorkPackageRepository:
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
+        self._session = session
+
+    async def add_run(
+        self,
+        run: WorkPackageDecompositionRun,
+    ) -> WorkPackageDecompositionRun:
+        self._session.add(run)
+        await self._session.flush()
+        return run
+
+    async def add_package(
+        self,
+        package: WorkPackage,
+    ) -> WorkPackage:
+        self._session.add(package)
+        await self._session.flush()
+        return package
+
+    async def add_dependency(
+        self,
+        dependency: WorkPackageDependency,
+    ) -> WorkPackageDependency:
+        self._session.add(dependency)
+        await self._session.flush()
+        return dependency
+
+    async def add_review(
+        self,
+        review: WorkPackageReview,
+    ) -> WorkPackageReview:
+        self._session.add(review)
+        await self._session.flush()
+        return review
+
+    async def add_approval(
+        self,
+        approval: WorkPackageApproval,
+    ) -> WorkPackageApproval:
+        self._session.add(approval)
+        await self._session.flush()
+        return approval
+
+    async def get_run(
+        self,
+        run_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> WorkPackageDecompositionRun | None:
+        statement = select(
+            WorkPackageDecompositionRun
+        ).where(
+            WorkPackageDecompositionRun.id == run_id
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def find_active_run(
+        self,
+        *,
+        project_id: uuid.UUID,
+        architecture_artifact_id: uuid.UUID,
+    ) -> WorkPackageDecompositionRun | None:
+        result = await self._session.execute(
+            select(WorkPackageDecompositionRun)
+            .where(
+                WorkPackageDecompositionRun.project_id
+                == project_id,
+                WorkPackageDecompositionRun
+                .architecture_artifact_id
+                == architecture_artifact_id,
+                WorkPackageDecompositionRun.status.in_(
+                    [
+                        WorkPackageDecompositionRunStatus
+                        .PENDING.value,
+                        WorkPackageDecompositionRunStatus
+                        .RUNNING.value,
+                    ]
+                ),
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+
+    async def get_package(
+        self,
+        package_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+        include_relations: bool = False,
+    ) -> WorkPackage | None:
+        statement = select(WorkPackage).where(
+            WorkPackage.id == package_id
+        )
+
+        if include_relations:
+            statement = statement.options(
+                selectinload(
+                    WorkPackage.dependencies
+                ),
+                selectinload(
+                    WorkPackage.reviews
+                ),
+                selectinload(
+                    WorkPackage.approval
+                ),
+            )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def get_packages_for_run(
+        self,
+        run_id: uuid.UUID,
+    ) -> list[WorkPackage]:
+        result = await self._session.execute(
+            select(WorkPackage)
+            .where(
+                WorkPackage.decomposition_run_id
+                == run_id
+            )
+            .order_by(
+                WorkPackage.sequence_number
+            )
+        )
+
+        return list(result.scalars().all())
+
+    async def get_package_by_key(
+        self,
+        *,
+        run_id: uuid.UUID,
+        package_key: str,
+    ) -> WorkPackage | None:
+        result = await self._session.execute(
+            select(WorkPackage).where(
+                WorkPackage.decomposition_run_id
+                == run_id,
+                WorkPackage.package_key
+                == package_key,
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+    async def next_package_version(
+        self,
+        *,
+        project_id: uuid.UUID,
+        package_key: str,
+    ) -> int:
+        result = await self._session.execute(
+            select(
+                func.coalesce(
+                    func.max(WorkPackage.version),
+                    0,
+                )
+            ).where(
+                WorkPackage.project_id == project_id,
+                WorkPackage.package_key == package_key,
+            )
+        )
+
+        return int(result.scalar_one()) + 1
+
+    async def lock_package_version_sequence(
+        self,
+        *,
+        project_id: uuid.UUID,
+        package_key: str,
+    ) -> None:
+        await self._session.execute(
+            text(
+                """
+                SELECT pg_advisory_xact_lock(
+                    hashtext(:lock_key)
+                )
+                """
+            ),
+            {
+                "lock_key": (
+                    "work-package-version:"
+                    f"{project_id}:{package_key}"
+                )
+            },
+        )
+
+    async def next_review_round(
+        self,
+        package_id: uuid.UUID,
+    ) -> int:
+        result = await self._session.execute(
+            select(
+                func.coalesce(
+                    func.max(
+                        WorkPackageReview.review_round
+                    ),
+                    0,
+                )
+            ).where(
+                WorkPackageReview.work_package_id
+                == package_id
+            )
+        )
+
+        return int(result.scalar_one()) + 1
+
+    async def latest_approving_review(
+        self,
+        package_id: uuid.UUID,
+    ) -> WorkPackageReview | None:
+        result = await self._session.execute(
+            select(WorkPackageReview)
+            .where(
+                WorkPackageReview.work_package_id
+                == package_id,
+                WorkPackageReview.decision
+                == WorkPackageReviewDecision
+                .RECOMMEND_APPROVAL.value,
+            )
+            .order_by(
+                WorkPackageReview.review_round.desc()
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+
+    async def get_review(
+        self,
+        review_id: uuid.UUID,
+    ) -> WorkPackageReview | None:
+        result = await self._session.execute(
+            select(WorkPackageReview).where(
+                WorkPackageReview.id == review_id
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+    async def get_approval(
+        self,
+        package_id: uuid.UUID,
+    ) -> WorkPackageApproval | None:
+        result = await self._session.execute(
+            select(WorkPackageApproval).where(
+                WorkPackageApproval.work_package_id
+                == package_id
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+Repository methods do not commit.
+19. Create run service
+
+Create:
+
+app/work_packages/service.py
+
+Start with run creation:
+
+from datetime import UTC, datetime
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.work_packages.architecture_gateway import (
+    ApprovedArchitectureGateway,
+)
+from app.work_packages.commands import (
+    CreateDecompositionRunCommand,
+    StartDecompositionRunCommand,
+)
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+)
+from app.work_packages.exceptions import (
+    ActiveDecompositionRunExistsError,
+    ApprovedArchitectureRequiredError,
+    ArchitectureProjectMismatchError,
+    WorkPackageRunNotFoundError,
+)
+from app.work_packages.models import (
+    WorkPackageDecompositionRun,
+)
+from app.work_packages.repository import (
+    WorkPackageRepository,
+)
+from app.work_packages.state_machine import (
+    assert_run_transition,
+)
+
+
+class WorkPackageService:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        repository: WorkPackageRepository,
+        architecture_gateway: ApprovedArchitectureGateway,
+        audit_writer,
+    ) -> None:
+        self._session = session
+        self._repository = repository
+        self._architecture_gateway = architecture_gateway
+        self._audit_writer = audit_writer
+
+    async def create_decomposition_run(
+        self,
+        command: CreateDecompositionRunCommand,
+    ) -> WorkPackageDecompositionRun:
+        architecture = (
+            await self._architecture_gateway
+            .get_approved_snapshot(
+                architecture_artifact_id=(
+                    command.architecture_artifact_id
+                ),
+                architecture_approval_id=(
+                    command.architecture_approval_id
+                ),
+            )
+        )
+
+        if architecture is None:
+            raise ApprovedArchitectureRequiredError(
+                "Work-package decomposition requires an "
+                "approved architecture and matching approval."
+            )
+
+        if architecture.project_id != command.project_id:
+            raise ArchitectureProjectMismatchError(
+                "Architecture does not belong to the "
+                "requested project."
+            )
+
+        active_run = await self._repository.find_active_run(
+            project_id=command.project_id,
+            architecture_artifact_id=(
+                command.architecture_artifact_id
+            ),
+        )
+
+        if active_run is not None:
+            raise ActiveDecompositionRunExistsError(
+                "An active work-package decomposition run "
+                "already exists for this architecture."
+            )
+
+        run = WorkPackageDecompositionRun(
+            project_id=command.project_id,
+            architecture_artifact_id=(
+                architecture.artifact_id
+            ),
+            architecture_approval_id=(
+                architecture.approval_id
+            ),
+            architecture_version=architecture.version,
+            architecture_checksum=architecture.checksum,
+            requirements_artifact_id=(
+                architecture.requirements_artifact_id
+            ),
+            status=(
+                WorkPackageDecompositionRunStatus
+                .PENDING.value
+            ),
+            decomposition_version=(
+                command.decomposition_version
+            ),
+            schema_version=command.schema_version,
+            model_name=command.model_name,
+            temperature=command.temperature,
+            prompt_bundle_hash=(
+                command.prompt_bundle_hash
+            ),
+            execution_manifest={
+                **command.execution_manifest,
+                "architecture_review_id": str(
+                    architecture.review_id
+                ),
+                "architecture_review_checksum":
+                    architecture.review_checksum,
+                "architecture_approval_evidence_checksum":
+                    architecture.approval_evidence_checksum,
+            },
+        )
+
+        try:
+            await self._repository.add_run(run)
+
+            await self._audit_writer.append(
+                {
+                    "event_type":
+                        "work_packages.decomposition.created",
+                    "aggregate_type":
+                        "work_package_decomposition_run",
+                    "aggregate_id": run.id,
+                    "project_id": run.project_id,
+                    "payload": {
+                        "architecture_artifact_id": str(
+                            run.architecture_artifact_id
+                        ),
+                        "architecture_approval_id": str(
+                            run.architecture_approval_id
+                        ),
+                        "architecture_version":
+                            run.architecture_version,
+                        "architecture_checksum":
+                            run.architecture_checksum,
+                        "schema_version":
+                            run.schema_version,
+                    },
+                }
+            )
+
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+
+            raise ActiveDecompositionRunExistsError(
+                "A decomposition run was created "
+                "concurrently."
+            ) from exc
+
+        await self._session.refresh(run)
+        return run
+
+    async def start_decomposition_run(
+        self,
+        command: StartDecompositionRunCommand,
+    ) -> WorkPackageDecompositionRun:
+        run = await self._repository.get_run(
+            command.run_id,
+            for_update=True,
+        )
+
+        if run is None:
+            raise WorkPackageRunNotFoundError(
+                f"Decomposition run not found: "
+                f"{command.run_id}."
+            )
+
+        current = WorkPackageDecompositionRunStatus(
+            run.status
+        )
+
+        target = (
+            WorkPackageDecompositionRunStatus.RUNNING
+        )
+
+        assert_run_transition(current, target)
+
+        run.status = target.value
+        run.started_at = datetime.now(UTC)
+
+        await self._session.commit()
+        await self._session.refresh(run)
+
+        return run
+
+Use the existing typed AuditRecord object if your audit writer requires it.
+20. Reverify architecture at run start
+
+Approval can be revoked operationally or data can become corrupted between run creation and worker execution.
+
+Before setting the run to RUNNING, reload and verify the approved architecture:
+
+architecture = (
+    await self._architecture_gateway.get_approved_snapshot(
+        architecture_artifact_id=(
+            run.architecture_artifact_id
+        ),
+        architecture_approval_id=(
+            run.architecture_approval_id
+        ),
+    )
+)
+
+if architecture is None:
+    raise ApprovedArchitectureRequiredError(
+        "Approved architecture could not be verified "
+        "at execution time."
+    )
+
+if architecture.checksum != run.architecture_checksum:
+    raise ArchitectureApprovalMismatchError(
+        "Architecture checksum changed between run "
+        "creation and execution."
+    )
+
+Do this before transitioning the run.
+21. Deterministic Markdown renderer
+
+Create:
+
+app/work_packages/renderers/markdown.py
+
+from app.work_packages.artifact_schema import (
+    WorkPackageDocument,
+)
+
+
+def render_work_package_markdown(
+    package: WorkPackageDocument,
+) -> str:
+    lines: list[str] = []
+
+    lines.append(
+        f"# {package.package_key} — {package.title}"
+    )
+    lines.append("")
+
+    lines.append("## Objective")
+    lines.append("")
+    lines.append(package.objective)
+    lines.append("")
+
+    lines.append("## Classification")
+    lines.append("")
+    lines.append(
+        f"- Execution mode: `{package.execution_mode.value}`"
+    )
+    lines.append(
+        f"- Risk level: `{package.risk_level.value}`"
+    )
+    lines.append(
+        "- Database migration required: "
+        f"`{package.requires_database_migration}`"
+    )
+    lines.append(
+        f"- Network required: `{package.requires_network}`"
+    )
+    lines.append("")
+
+    lines.append("## Architecture Traceability")
+    lines.append("")
+
+    for trace in package.architecture_trace:
+        requirements = ", ".join(
+            f"`{requirement_id}`"
+            for requirement_id in trace.requirement_ids
+        )
+
+        lines.append(
+            f"- `{trace.architecture_element_id}` "
+            f"→ {requirements}: {trace.rationale}"
+        )
+
+    lines.append("")
+    lines.append("## In Scope")
+    lines.append("")
+
+    for item in package.in_scope:
+        lines.append(f"- {item}")
+
+    lines.append("")
+    lines.append("## Out of Scope")
+    lines.append("")
+
+    for item in package.out_of_scope:
+        lines.append(f"- {item}")
+
+    lines.append("")
+    lines.append("## File Scope")
+    lines.append("")
+
+    for rule in package.file_scope:
+        lines.append(
+            f"- `{rule.access.value}` `{rule.pattern}`: "
+            f"{rule.rationale}"
+        )
+
+    lines.append("")
+    lines.append("## Acceptance Criteria")
+    lines.append("")
+
+    for criterion in package.acceptance_criteria:
+        lines.append(
+            f"- **{criterion.id}**: "
+            f"{criterion.statement}"
+        )
+        lines.append(
+            f"  Verification: "
+            f"{criterion.verification_method}"
+        )
+
+    lines.append("")
+    lines.append("## Approved Tests")
+    lines.append("")
+
+    for test in package.approved_test_commands:
+        command = " ".join(test.command)
+        lines.append(
+            f"- `{command}` in `{test.working_directory}` "
+            f"(timeout {test.timeout_seconds}s): "
+            f"{test.purpose}"
+        )
+
+    lines.append("")
+    lines.append("## Dependencies")
+    lines.append("")
+
+    if package.package_dependencies:
+        for dependency in package.package_dependencies:
+            lines.append(
+                f"- `{dependency.package_key}` "
+                f"({dependency.dependency_type.value}): "
+                f"{dependency.rationale}"
+            )
+    else:
+        lines.append("- None.")
+
+    lines.append("")
+    lines.append("## Execution Limits")
+    lines.append("")
+
+    limits = package.execution_limits
+
+    lines.append(
+        f"- Timeout: {limits.timeout_seconds}s"
+    )
+    lines.append(
+        f"- CPU limit: {limits.cpu_limit}"
+    )
+    lines.append(
+        f"- Memory limit: {limits.memory_limit_mb} MB"
+    )
+    lines.append(
+        f"- PID limit: {limits.pid_limit}"
+    )
+    lines.append(
+        f"- Network enabled: {limits.network_enabled}"
+    )
+    lines.append(
+        "- Maximum changed files: "
+        f"{limits.maximum_changed_files}"
+    )
+    lines.append(
+        "- Maximum patch bytes: "
+        f"{limits.maximum_patch_bytes}"
+    )
+
+    lines.append("")
+    lines.append("## Rollback Strategy")
+    lines.append("")
+    lines.append(package.rollback_strategy)
+
+    lines.append("")
+    lines.append("## Failure Handling")
+    lines.append("")
+    lines.append(package.failure_handling)
+
+    lines.append("")
+    lines.append("## Audit Requirements")
+    lines.append("")
+
+    for requirement in package.audit_requirements:
+        lines.append(f"- {requirement}")
+
+    lines.append("")
+    lines.append("## Implementation Notes")
+    lines.append("")
+
+    if package.implementation_notes:
+        for note in package.implementation_notes:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- None.")
+
+    lines.append("")
+
+    return "\n".join(lines)
+
+22. Basic semantic validator
+
+Create:
+
+app/work_packages/validators/semantic_validator.py
+
+from dataclasses import dataclass, field
+
+from app.work_packages.artifact_schema import (
+    WorkPackageDecompositionDocument,
+)
+from app.work_packages.exceptions import (
+    WorkPackageDependencyCycleError,
+)
+
+
+@dataclass(slots=True)
+class WorkPackageValidationFinding:
+    code: str
+    message: str
+    location: str
+    severity: str = "error"
+
+
+@dataclass(slots=True)
+class WorkPackageValidationReport:
+    valid: bool
+    findings: list[
+        WorkPackageValidationFinding
+    ] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "valid": self.valid,
+            "findings": [
+                {
+                    "code": finding.code,
+                    "message": finding.message,
+                    "location": finding.location,
+                    "severity": finding.severity,
+                }
+                for finding in self.findings
+            ],
+        }
+
+
+class WorkPackageSemanticValidator:
+    def validate(
+        self,
+        decomposition: WorkPackageDecompositionDocument,
+        *,
+        architecture_element_ids: set[str],
+        requirement_ids: set[str],
+    ) -> WorkPackageValidationReport:
+        findings: list[
+            WorkPackageValidationFinding
+        ] = []
+
+        package_keys = {
+            package.package_key
+            for package in decomposition.packages
+        }
+
+        for package in decomposition.packages:
+            for trace in package.architecture_trace:
+                if (
+                    trace.architecture_element_id
+                    not in architecture_element_ids
+                ):
+                    findings.append(
+                        WorkPackageValidationFinding(
+                            code=(
+                                "UNKNOWN_ARCHITECTURE_ELEMENT"
+                            ),
+                            message=(
+                                f"Package {package.package_key} "
+                                "references undefined architecture "
+                                "element "
+                                f"{trace.architecture_element_id}."
+                            ),
+                            location=(
+                                f"packages."
+                                f"{package.package_key}."
+                                "architecture_trace"
+                            ),
+                        )
+                    )
+
+                for requirement_id in trace.requirement_ids:
+                    if requirement_id not in requirement_ids:
+                        findings.append(
+                            WorkPackageValidationFinding(
+                                code=(
+                                    "UNKNOWN_REQUIREMENT"
+                                ),
+                                message=(
+                                    f"Package "
+                                    f"{package.package_key} "
+                                    "references undefined "
+                                    "requirement "
+                                    f"{requirement_id}."
+                                ),
+                                location=(
+                                    f"packages."
+                                    f"{package.package_key}."
+                                    "architecture_trace"
+                                ),
+                            )
+                        )
+
+            for dependency in (
+                package.package_dependencies
+            ):
+                if (
+                    dependency.package_key
+                    not in package_keys
+                ):
+                    findings.append(
+                        WorkPackageValidationFinding(
+                            code=(
+                                "UNKNOWN_PACKAGE_DEPENDENCY"
+                            ),
+                            message=(
+                                f"Package {package.package_key} "
+                                "depends on undefined package "
+                                f"{dependency.package_key}."
+                            ),
+                            location=(
+                                f"packages."
+                                f"{package.package_key}."
+                                "package_dependencies"
+                            ),
+                        )
+                    )
+
+                if (
+                    dependency.package_key
+                    == package.package_key
+                ):
+                    findings.append(
+                        WorkPackageValidationFinding(
+                            code="SELF_DEPENDENCY",
+                            message=(
+                                f"Package {package.package_key} "
+                                "depends on itself."
+                            ),
+                            location=(
+                                f"packages."
+                                f"{package.package_key}."
+                                "package_dependencies"
+                            ),
+                        )
+                    )
+
+        if not findings:
+            self._assert_acyclic(decomposition)
+
+        return WorkPackageValidationReport(
+            valid=not findings,
+            findings=findings,
+        )
+
+    def _assert_acyclic(
+        self,
+        decomposition: WorkPackageDecompositionDocument,
+    ) -> None:
+        graph = {
+            package.package_key: {
+                dependency.package_key
+                for dependency
+                in package.package_dependencies
+            }
+            for package in decomposition.packages
+        }
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(node: str) -> None:
+            if node in visiting:
+                raise WorkPackageDependencyCycleError(
+                    f"Dependency cycle detected at {node}."
+                )
+
+            if node in visited:
+                return
+
+            visiting.add(node)
+
+            for dependency in graph[node]:
+                visit(dependency)
+
+            visiting.remove(node)
+            visited.add(node)
+
+        for package_key in graph:
+            visit(package_key)
+
+Later increments will add deeper scope, repository, test-command, and execution-limit validation.
+23. Extract architecture identifiers
+
+Create:
+
+app/work_packages/architecture_trace.py
+
+from typing import Any
+
+
+def extract_architecture_element_ids(
+    architecture: dict[str, Any],
+) -> set[str]:
+    collection_names = [
+        "decisions",
+        "modules",
+        "api_contracts",
+        "event_contracts",
+        "data_entities",
+        "interactions",
+        "threats",
+        "failure_scenarios",
+        "deployment_units",
+        "open_questions",
+    ]
+
+    identifiers: set[str] = set()
+
+    for collection_name in collection_names:
+        collection = architecture.get(
+            collection_name,
+            [],
+        )
+
+        if not isinstance(collection, list):
+            continue
+
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+
+            identifier = item.get("id")
+
+            if isinstance(identifier, str):
+                identifiers.add(identifier)
+
+    return identifiers
+
+
+def extract_architecture_requirement_ids(
+    architecture: dict[str, Any],
+) -> set[str]:
+    requirement_ids = architecture.get(
+        "requirement_ids",
+        [],
+    )
+
+    if not isinstance(requirement_ids, list):
+        return set()
+
+    return {
+        item
+        for item in requirement_ids
+        if isinstance(item, str)
+    }
+
+24. Complete decomposition transaction
+
+Extend WorkPackageService:
+
+    async def complete_decomposition_run(
+        self,
+        command: CompleteDecompositionRunCommand,
+    ) -> list[WorkPackage]:
+        run = await self._repository.get_run(
+            command.run_id,
+            for_update=True,
+        )
+
+        if run is None:
+            raise WorkPackageRunNotFoundError(
+                f"Decomposition run not found: "
+                f"{command.run_id}."
+            )
+
+        current = WorkPackageDecompositionRunStatus(
+            run.status
+        )
+
+        target = (
+            WorkPackageDecompositionRunStatus.COMPLETED
+        )
+
+        assert_run_transition(current, target)
+
+        existing_packages = (
+            await self._repository.get_packages_for_run(
+                run.id
+            )
+        )
+
+        if existing_packages:
+            raise WorkPackageVersionConflictError(
+                "Decomposition run already produced packages."
+            )
+
+        package_models: dict[str, WorkPackage] = {}
+
+        for package_payload in command.packages:
+            document = WorkPackageDocument.model_validate(
+                package_payload
+            )
+
+            markdown = render_work_package_markdown(
+                document
+            )
+
+            checksum = work_package_checksum(
+                markdown_content=markdown,
+                structured_content=document.model_dump(
+                    mode="json"
+                ),
+            )
+
+            await self._repository.lock_package_version_sequence(
+                project_id=run.project_id,
+                package_key=document.package_key,
+            )
+
+            version = (
+                await self._repository.next_package_version(
+                    project_id=run.project_id,
+                    package_key=document.package_key,
+                )
+            )
+
+            package = WorkPackage(
+                decomposition_run_id=run.id,
+                project_id=run.project_id,
+                architecture_artifact_id=(
+                    run.architecture_artifact_id
+                ),
+                package_key=document.package_key,
+                version=version,
+                sequence_number=document.sequence_number,
+                title=document.title,
+                objective=document.objective,
+                status=WorkPackageStatus.DRAFT.value,
+                execution_mode=(
+                    document.execution_mode.value
+                ),
+                risk_level=document.risk_level.value,
+                markdown_content=markdown,
+                structured_content=(
+                    document.model_dump(mode="json")
+                ),
+                content_checksum=checksum,
+                estimated_complexity=(
+                    document.execution_limits
+                    .maximum_changed_files
+                ),
+                requires_database_migration=(
+                    document.requires_database_migration
+                ),
+                requires_network=(
+                    document.requires_network
+                ),
+                human_review_required=True,
+                validation_report=(
+                    command.validation_report
+                ),
+            )
+
+            await self._repository.add_package(package)
+
+            package_models[
+                document.package_key
+            ] = package
+
+        for package_payload in command.packages:
+            document = WorkPackageDocument.model_validate(
+                package_payload
+            )
+
+            package = package_models[
+                document.package_key
+            ]
+
+            for dependency_reference in (
+                document.package_dependencies
+            ):
+                dependency_package = package_models[
+                    dependency_reference.package_key
+                ]
+
+                dependency = WorkPackageDependency(
+                    work_package_id=package.id,
+                    depends_on_work_package_id=(
+                        dependency_package.id
+                    ),
+                    dependency_type=(
+                        dependency_reference
+                        .dependency_type.value
+                    ),
+                    rationale=(
+                        dependency_reference.rationale
+                    ),
+                )
+
+                await self._repository.add_dependency(
+                    dependency
+                )
+
+        run.status = target.value
+        run.validation_report = (
+            command.validation_report
+        )
+        run.finished_at = datetime.now(UTC)
+
+        await self._session.commit()
+
+        return list(package_models.values())
+
+This entire operation must be atomic:
+
+all packages and dependency edges persist
+
+or:
+
+none persist
+
+25. Important correction: complexity field
+
+Do not permanently derive estimated_complexity from maximum_changed_files.
+
+Add it explicitly to WorkPackageDocument:
+
+estimated_complexity: int = Field(
+    ge=1,
+    le=100,
+)
+
+Then store:
+
+estimated_complexity=document.estimated_complexity
+
+The temporary derivation above should not remain.
+26. Initial API schemas
+
+Create:
+
+app/work_packages/schemas.py
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+)
+
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+    WorkPackageStatus,
+)
+
+
+class CreateDecompositionRunRequest(BaseModel):
+    architecture_artifact_id: uuid.UUID
+    architecture_approval_id: uuid.UUID
+
+
+class DecompositionRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    project_id: uuid.UUID
+    architecture_artifact_id: uuid.UUID
+    architecture_approval_id: uuid.UUID
+    architecture_version: int
+    architecture_checksum: str
+    requirements_artifact_id: uuid.UUID
+    status: WorkPackageDecompositionRunStatus
+    decomposition_version: str
+    schema_version: str
+    model_name: str
+    prompt_bundle_hash: str
+    validation_report: dict[str, Any] | None
+    failure_code: str | None
+    failure_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+
+class WorkPackageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    decomposition_run_id: uuid.UUID
+    project_id: uuid.UUID
+    architecture_artifact_id: uuid.UUID
+    package_key: str
+    version: int
+    sequence_number: int
+    title: str
+    objective: str
+    status: WorkPackageStatus
+    execution_mode: str
+    risk_level: str
+    markdown_content: str
+    structured_content: dict[str, Any]
+    content_checksum: str
+    estimated_complexity: int
+    requires_database_migration: bool
+    requires_network: bool
+    human_review_required: bool
+    validation_report: dict[str, Any]
+    created_at: datetime
+
+
+class DecompositionDetailRead(BaseModel):
+    run: DecompositionRunRead
+    packages: list[WorkPackageRead]
+
+The public API should not accept generated packages directly. Completion is an internal worker operation.
+27. Public create endpoint
+
+Create:
+
+app/work_packages/router.py
+
+import uuid
+
+from fastapi import APIRouter, status
+
+from app.work_packages.commands import (
+    CreateDecompositionRunCommand,
+)
+from app.work_packages.schemas import (
+    CreateDecompositionRunRequest,
+    DecompositionRunRead,
+)
+
+
+router = APIRouter(
+    prefix="/work-package-decompositions",
+    tags=["work-package-decompositions"],
+)
+
+
+@router.post(
+    "/projects/{project_id}/runs",
+    response_model=DecompositionRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_decomposition_run(
+    project_id: uuid.UUID,
+    request: CreateDecompositionRunRequest,
+    service,
+    settings,
+    queue,
+) -> DecompositionRunRead:
+    run = await service.create_decomposition_run(
+        CreateDecompositionRunCommand(
+            project_id=project_id,
+            architecture_artifact_id=(
+                request.architecture_artifact_id
+            ),
+            architecture_approval_id=(
+                request.architecture_approval_id
+            ),
+            decomposition_version=(
+                settings.work_package_decomposition_version
+            ),
+            schema_version=(
+                settings.work_package_schema_version
+            ),
+            model_name=(
+                settings.work_package_model_name
+            ),
+            temperature=(
+                settings.work_package_temperature
+            ),
+            prompt_bundle_hash=(
+                settings.work_package_prompt_bundle_hash
+            ),
+            execution_manifest={
+                "timeout_seconds": (
+                    settings.work_package_timeout_seconds
+                ),
+                "maximum_packages": (
+                    settings.work_package_maximum_packages
+                ),
+            },
+        )
+    )
+
+    await queue.enqueue(
+        {
+            "run_id": str(run.id),
+        }
+    )
+
+    return DecompositionRunRead.model_validate(run)
+
+Model configuration remains server-controlled.
+28. Read endpoints
+
+Add:
+
+GET /api/v1/work-package-decompositions/runs/{run_id}
+GET /api/v1/work-package-decompositions/runs/{run_id}/packages
+GET /api/v1/work-packages/{package_id}
+
+Representative service read:
+
+    async def get_decomposition_detail(
+        self,
+        run_id: uuid.UUID,
+    ) -> tuple[
+        WorkPackageDecompositionRun,
+        list[WorkPackage],
+    ]:
+        run = await self._repository.get_run(run_id)
+
+        if run is None:
+            raise WorkPackageRunNotFoundError(
+                f"Decomposition run not found: {run_id}."
+            )
+
+        packages = (
+            await self._repository.get_packages_for_run(
+                run.id
+            )
+        )
+
+        return run, packages
+
+29. Configuration
+
+Add:
+
+WORK_PACKAGE_DECOMPOSITION_VERSION=work-package-decomposer-v1
+WORK_PACKAGE_SCHEMA_VERSION=1.0
+WORK_PACKAGE_MODEL_NAME=ollama/gemma3:12b
+WORK_PACKAGE_TEMPERATURE=0.0
+WORK_PACKAGE_TIMEOUT_SECONDS=900
+WORK_PACKAGE_MAXIMUM_PACKAGES=50
+WORK_PACKAGE_MAXIMUM_DEPENDENCY_DEPTH=20
+WORK_PACKAGE_MAXIMUM_FILES_PER_PACKAGE=100
+WORK_PACKAGE_DEFAULT_NETWORK_ENABLED=false
+WORK_PACKAGE_GOVERNANCE_POLICY_VERSION=work-package-governance-v1
+
+Startup validation:
+
+maximum packages >= 1
+maximum dependency depth >= 1
+temperature between 0 and 2
+timeout > 0
+known schema version
+known governance policy
+non-empty model name
+
+30. State-machine tests
+
+Create:
+
+tests/work_packages/test_state_machine.py
+
+import pytest
+
+from app.work_packages.enums import (
+    WorkPackageDecompositionRunStatus,
+    WorkPackageStatus,
+)
+from app.work_packages.exceptions import (
+    InvalidWorkPackageTransitionError,
+)
+from app.work_packages.state_machine import (
+    assert_package_transition,
+    assert_run_transition,
+)
+
+
+def test_pending_run_can_start() -> None:
+    assert_run_transition(
+        WorkPackageDecompositionRunStatus.PENDING,
+        WorkPackageDecompositionRunStatus.RUNNING,
+    )
+
+
+def test_completed_run_cannot_restart() -> None:
+    with pytest.raises(
+        InvalidWorkPackageTransitionError
+    ):
+        assert_run_transition(
+            WorkPackageDecompositionRunStatus.COMPLETED,
+            WorkPackageDecompositionRunStatus.RUNNING,
+        )
+
+
+def test_draft_package_can_enter_review() -> None:
+    assert_package_transition(
+        WorkPackageStatus.DRAFT,
+        WorkPackageStatus.UNDER_REVIEW,
+    )
+
+
+def test_approved_package_cannot_return_to_draft() -> None:
+    with pytest.raises(
+        InvalidWorkPackageTransitionError
+    ):
+        assert_package_transition(
+            WorkPackageStatus.APPROVED,
+            WorkPackageStatus.DRAFT,
+        )
+
+31. Schema tests
+
+Create:
+
+tests/work_packages/test_artifact_schema.py
+
+Test:
+
+valid package accepted
+network flags must match
+package keys must be unique
+sequence numbers must be unique
+empty acceptance criteria rejected
+empty file scope rejected
+test timeout bounds enforced
+execution limits enforced
+
+Representative test:
+
+import pytest
+from pydantic import ValidationError
+
+from app.work_packages.artifact_schema import (
+    WorkPackageDocument,
+)
+
+
+def minimal_package() -> dict:
+    return {
+        "schema_version": "1.0",
+        "package_key": "WP-PROJECT-MODEL",
+        "sequence_number": 1,
+        "title": "Create project model",
+        "objective": (
+            "Implement the project persistence model."
+        ),
+        "execution_mode": "code_change",
+        "risk_level": "medium",
+        "estimated_complexity": 20,
+        "architecture_trace": [
+            {
+                "architecture_element_id": "MOD-PROJECTS",
+                "requirement_ids": ["REQ-001"],
+                "rationale": (
+                    "Implements project persistence."
+                ),
+            }
+        ],
+        "in_scope": [
+            "SQLAlchemy project model",
+        ],
+        "out_of_scope": [
+            "Project API routes",
+        ],
+        "file_scope": [
+            {
+                "pattern": "app/projects/models.py",
+                "access": "modify",
+                "rationale": (
+                    "Owns the project persistence model."
+                ),
+            }
+        ],
+        "allowed_dependencies": [
+            "sqlalchemy",
+        ],
+        "prohibited_dependencies": [],
+        "acceptance_criteria": [
+            {
+                "id": "AC-PROJECT-MODEL-001",
+                "statement": (
+                    "Project model persists required fields."
+                ),
+                "verification_method": (
+                    "Run model unit tests."
+                ),
+                "automated": True,
+            }
+        ],
+        "approved_test_commands": [
+            {
+                "command": [
+                    "pytest",
+                    "tests/projects/test_models.py",
+                    "-q",
+                ],
+                "working_directory": ".",
+                "timeout_seconds": 120,
+                "required": True,
+                "purpose": (
+                    "Verify project model behavior."
+                ),
+            }
+        ],
+        "package_dependencies": [],
+        "execution_limits": {
+            "timeout_seconds": 900,
+            "cpu_limit": 2.0,
+            "memory_limit_mb": 2048,
+            "pid_limit": 128,
+            "network_enabled": False,
+            "maximum_changed_files": 5,
+            "maximum_patch_bytes": 200000,
+        },
+        "requires_database_migration": True,
+        "requires_network": False,
+        "rollback_strategy": (
+            "Revert model and migration changes."
+        ),
+        "failure_handling": (
+            "Return a failed execution attempt without "
+            "modifying the authoritative repository."
+        ),
+        "audit_requirements": [
+            "Record changed files.",
+            "Record test results.",
+        ],
+        "implementation_notes": [],
+    }
+
+
+def test_minimal_package_is_valid() -> None:
+    package = WorkPackageDocument.model_validate(
+        minimal_package()
+    )
+
+    assert package.package_key == (
+        "WP-PROJECT-MODEL"
+    )
+
+
+def test_network_flags_must_match() -> None:
+    payload = minimal_package()
+    payload["requires_network"] = True
+
+    with pytest.raises(ValidationError):
+        WorkPackageDocument.model_validate(
+            payload
+        )
+
+32. Semantic validation tests
+
+Create:
+
+tests/work_packages/test_semantic_validator.py
+
+Test:
+
+unknown architecture element rejected
+unknown requirement rejected
+unknown package dependency rejected
+self-dependency rejected
+dependency cycle rejected
+valid graph accepted
+
+Example cycle:
+
+WP-A depends on WP-B
+WP-B depends on WP-C
+WP-C depends on WP-A
+
+Expected:
+
+WorkPackageDependencyCycleError
+
+33. Architecture gateway tests
+
+Create:
+
+tests/work_packages/test_architecture_gateway.py
+
+Verify rejection when:
+
+artifact not approved
+approval belongs to another artifact
+approval checksum differs
+review checksum differs
+architecture project differs
+approval ID is fabricated
+
+Verify success only when the full chain matches.
+34. Run-service tests
+
+Create:
+
+tests/work_packages/test_service.py
+
+Test:
+
+approved architecture creates pending run
+unapproved architecture rejected
+duplicate active run rejected
+run start revalidates architecture checksum
+run completion persists all packages atomically
+dependency edges reference persisted package IDs
+duplicate package sequence rejected
+one failed package insert rolls back all packages
+
+35. Validation commands
+
+Run:
+
+docker compose exec api ruff check \
+  app/work_packages \
+  tests/work_packages
+
+docker compose exec api mypy \
+  app/work_packages
+
+docker compose exec api pytest \
+  tests/work_packages \
+  -q
+
+Then:
+
+docker compose exec api alembic check
+
+Finally:
+
+docker compose exec api pytest -q
+
+36. Manual run creation test
+
+Assume:
+
+PROJECT_ID="<project-id>"
+ARCHITECTURE_ARTIFACT_ID="<approved-architecture-id>"
+ARCHITECTURE_APPROVAL_ID="<architecture-approval-id>"
+
+Create the decomposition run:
+
+curl -sS -X POST \
+  "http://localhost:8000/api/v1/work-package-decompositions/projects/${PROJECT_ID}/runs" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"architecture_artifact_id\": \"${ARCHITECTURE_ARTIFACT_ID}\",
+    \"architecture_approval_id\": \"${ARCHITECTURE_APPROVAL_ID}\"
+  }" | jq
+
+Expected:
+
+{
+  "status": "pending",
+  "architecture_artifact_id": "...",
+  "architecture_approval_id": "...",
+  "architecture_version": 2,
+  "architecture_checksum": "...",
+  "schema_version": "1.0"
+}
+
+A duplicate request while the first run is active must return:
+
+409 Conflict
+
+M5 status after Increment 1
+
+Approved architecture gateway                  complete
+Decomposition run aggregate                    complete
+Work-package aggregate                         complete
+Dependency-edge model                          complete
+Review persistence model                       complete
+Approval persistence model                     complete
+State machines                                 complete
+Structured work-package schema                 complete
+Package checksum contract                      complete
+Architecture traceability contract             complete
+Deterministic Markdown rendering               complete
+Initial semantic validation                    complete
+Database migration                             complete
+Public run-creation API                        complete
+Crew decomposition logic                       next
+Repository-aware scope validation              next
+Dependency graph scheduling                    next
+Review and approval services                   pending
+Execution eligibility snapshot                 pending
+
+The next increment is M5 Increment 2: Work-Package Decomposition Crew, deterministic graph generation, repository-aware package boundaries, and complete validation.
+
+
+

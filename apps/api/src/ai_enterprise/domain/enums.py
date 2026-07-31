@@ -1,0 +1,77 @@
+from enum import StrEnum
+
+
+class ProjectStatus(StrEnum):
+    CREATED = "created"
+
+    REQUIREMENTS_QUEUED = "requirements_queued"
+    REQUIREMENTS_RUNNING = "requirements_running"
+    REQUIREMENTS_FAILED = "requirements_failed"
+    AWAITING_REQUIREMENTS_APPROVAL = "awaiting_requirements_approval"
+    REQUIREMENTS_APPROVED = "requirements_approved"
+    REQUIREMENTS_REJECTED = "requirements_rejected"
+
+    ARCHITECTURE_QUEUED = "architecture_queued"
+    ARCHITECTURE_RUNNING = "architecture_running"
+    ARCHITECTURE_FAILED = "architecture_failed"
+    AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
+    ARCHITECTURE_APPROVED = "architecture_approved"
+    ARCHITECTURE_REJECTED = "architecture_rejected"
+
+    WORK_PACKAGE_QUEUED = "work_package_queued"
+    WORK_PACKAGE_PLANNING = "work_package_planning"
+    WORK_PACKAGE_FAILED = "work_package_failed"
+    AWAITING_WORK_PACKAGE_APPROVAL = "awaiting_work_package_approval"
+    WORK_PACKAGE_APPROVED = "work_package_approved"
+    WORK_PACKAGE_REJECTED = "work_package_rejected"
+
+
+class RunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    LEASED = "leased"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DEAD_LETTER = "dead_letter"
+    CANCELLED = "cancelled"
+
+
+class JobType(StrEnum):
+    RUN_REQUIREMENTS_CREW = "run_requirements_crew"
+    RUN_ARCHITECTURE_CREW = "run_architecture_crew"
+    PLAN_WORK_PACKAGE = "plan_work_package"
+
+
+class ArtifactType(StrEnum):
+    PROJECT_MANIFEST = "project_manifest"
+    REQUIREMENTS_SPECIFICATION = "requirements_specification"
+    ARCHITECTURE_SPECIFICATION = "architecture_specification"
+    WORK_PACKAGE = "work_package"
+
+
+class ApprovalDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class NetworkPolicy(StrEnum):
+    NONE = "none"
+    LOOPBACK_ONLY = "loopback_only"
+    ALLOWLIST = "allowlist"
+
+
+class WorkPackageStatus(StrEnum):
+    DRAFT = "draft"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTION_QUEUED = "execution_queued"
+    EXECUTING = "executing"
+    EXECUTION_SUCCEEDED = "execution_succeeded"
+    EXECUTION_FAILED = "execution_failed"

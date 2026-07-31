@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: ai-enterprise-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_enterprise
+      POSTGRES_USER: ai_enterprise
+      POSTGRES_PASSWORD: ai_enterprise_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ai_enterprise_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ai_enterprise -d ai_enterprise"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-worker
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "ai_enterprise.worker"
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ai_enterprise_postgres_data:

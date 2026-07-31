@@ -1,0 +1,5934 @@
+
+
+Now we implement the first persisted project-to-requirements workflow inside:
+
+~/projects/ai-enterprise
+
+The objective is:
+
+Create project
+    ↓
+Store immutable project manifest
+    ↓
+Start requirements run
+    ↓
+CrewAI calls Ollama
+    ↓
+Store generated requirements artifact
+    ↓
+Set project to awaiting approval
+    ↓
+Human approves or rejects
+
+CrewAI provides the agent execution layer. Your FastAPI application remains the system of record and controls workflow state, authorization, persistence, approvals, and audit history. CrewAI Flows can manage and persist workflow state, but for this enterprise architecture, PostgreSQL should remain authoritative.
+1. Target repository structure
+
+Move to your repository:
+
+cd ~/projects/ai-enterprise
+
+Create this structure:
+
+mkdir -p \
+  apps/api/src/ai_enterprise/api/routes \
+  apps/api/src/ai_enterprise/application \
+  apps/api/src/ai_enterprise/domain \
+  apps/api/src/ai_enterprise/infrastructure/database \
+  apps/api/src/ai_enterprise/infrastructure/repositories \
+  apps/api/src/ai_enterprise/infrastructure/crews \
+  apps/api/tests \
+  migrations/versions \
+  artifacts \
+  scripts
+
+Create package files:
+
+find apps/api/src/ai_enterprise -type d -exec touch {}/__init__.py \;
+
+The repository should now resemble:
+
+ai-enterprise/
+├── apps/
+│   └── api/
+│       ├── pyproject.toml
+│       ├── src/
+│       │   └── ai_enterprise/
+│       │       ├── main.py
+│       │       ├── config.py
+│       │       ├── api/
+│       │       │   └── routes/
+│       │       ├── application/
+│       │       ├── domain/
+│       │       └── infrastructure/
+│       │           ├── crews/
+│       │           ├── database/
+│       │           └── repositories/
+│       └── tests/
+├── migrations/
+│   └── versions/
+├── artifacts/
+├── docker-compose.yml
+├── .env
+└── README.md
+
+2. Create the Python project
+
+Create:
+
+nano apps/api/pyproject.toml
+
+Insert:
+
+[project]
+name = "ai-enterprise-api"
+version = "0.1.0"
+description = "Enterprise AI software engineering orchestration platform"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "crewai[litellm]>=1.0",
+    "httpx>=0.28",
+    "python-json-logger>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_enterprise"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+Install dependencies:
+
+cd ~/projects/ai-enterprise/apps/api
+uv sync
+
+3. Create Docker Compose
+
+Return to the repository root:
+
+cd ~/projects/ai-enterprise
+nano docker-compose.yml
+
+Insert:
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: ai-enterprise-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_enterprise
+      POSTGRES_USER: ai_enterprise
+      POSTGRES_PASSWORD: ai_enterprise_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ai_enterprise_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ai_enterprise -d ai_enterprise"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ai_enterprise_postgres_data:
+
+The important connection is:
+
+API container
+    ↓
+host.docker.internal:11434
+    ↓
+Ollama running on Ubuntu host
+
+This prevents Ollama and the GPU runtime from being embedded in the application container.
+4. Create the API Dockerfile
+
+Create:
+
+nano apps/api/Dockerfile
+
+Insert:
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+COPY apps/api/pyproject.toml /app/pyproject.toml
+COPY apps/api/src /app/src
+
+RUN uv sync --no-dev
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+
+CMD ["uvicorn", "ai_enterprise.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+5. Configure environment variables
+
+Create:
+
+nano .env
+
+Insert:
+
+APP_NAME=AI Enterprise
+APP_ENV=development
+LOG_LEVEL=INFO
+
+DATABASE_URL=postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@localhost:5432/ai_enterprise
+
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=ollama/gemma4:12b
+
+ARTIFACT_ROOT=./artifacts
+
+Do not commit development secrets:
+
+cat >> .gitignore <<'EOF'
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+artifacts/*
+!artifacts/.gitkeep
+EOF
+
+touch artifacts/.gitkeep
+
+6. Add application settings
+
+Create:
+
+nano apps/api/src/ai_enterprise/config.py
+
+Insert:
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = "AI Enterprise"
+    app_env: str = "development"
+    log_level: str = "INFO"
+
+    database_url: str = (
+        "postgresql+asyncpg://"
+        "ai_enterprise:ai_enterprise_dev@localhost:5432/ai_enterprise"
+    )
+
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "ollama/gemma4:12b"
+
+    artifact_root: Path = Field(default=Path("./artifacts"))
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+Using settings through a dependency makes configuration easier to override in tests. FastAPI’s documentation specifically recommends this pattern for testability.
+7. Define workflow states
+
+Create:
+
+nano apps/api/src/ai_enterprise/domain/enums.py
+
+Insert:
+
+from enum import StrEnum
+
+
+class ProjectStatus(StrEnum):
+    CREATED = "created"
+    REQUIREMENTS_RUNNING = "requirements_running"
+    REQUIREMENTS_FAILED = "requirements_failed"
+    AWAITING_REQUIREMENTS_APPROVAL = "awaiting_requirements_approval"
+    REQUIREMENTS_APPROVED = "requirements_approved"
+    REQUIREMENTS_REJECTED = "requirements_rejected"
+
+
+class RunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ArtifactType(StrEnum):
+    PROJECT_MANIFEST = "project_manifest"
+    REQUIREMENTS_SPECIFICATION = "requirements_specification"
+
+
+class ApprovalDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+The explicit states are important. Do not use a generic field such as:
+
+status = complete
+
+The workflow must distinguish:
+
+crew completed
+
+from:
+
+human approved the result
+
+Those are different events.
+8. Create database models
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/database/models.py
+
+Insert:
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ProjectModel(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    runs: Mapped[list["CrewRunModel"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    artifacts: Mapped[list["ArtifactModel"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+class CrewRunModel(Base):
+    __tablename__ = "crew_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    crew_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    input_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["ProjectModel"] = relationship(back_populates="runs")
+
+
+class ArtifactModel(Base):
+    __tablename__ = "artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("crew_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    artifact_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["ProjectModel"] = relationship(back_populates="artifacts")
+
+
+class ApprovalModel(Base):
+    __tablename__ = "approvals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    decision: Mapped[str] = mapped_column(String(40), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(200), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class AuditEventModel(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(String(150), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+Notice that generated artifacts are append-only. We create a new artifact rather than overwrite an old one.
+9. Create database connection management
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/database/session.py
+
+Insert:
+
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from ai_enterprise.config import get_settings
+
+
+settings = get_settings()
+
+engine = create_async_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+)
+
+SessionFactory = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+async def get_session() -> AsyncIterator[AsyncSession]:
+    async with SessionFactory() as session:
+        yield session
+
+FastAPI supports generator-based dependencies for acquiring and reliably releasing resources such as database sessions.
+10. Add the initial migration
+
+For the first milestone, we can let Alembic generate the migration.
+
+Initialize Alembic:
+
+cd ~/projects/ai-enterprise/apps/api
+uv run alembic init ../../migrations
+
+Edit:
+
+nano ../../migrations/env.py
+
+Find the target_metadata line and replace it with:
+
+from ai_enterprise.infrastructure.database.models import Base
+
+target_metadata = Base.metadata
+
+Also replace the database URL configuration with:
+
+from ai_enterprise.config import get_settings
+
+config.set_main_option("sqlalchemy.url", get_settings().database_url)
+
+Generate the migration:
+
+uv run alembic revision --autogenerate \
+  -m "create project requirements workflow"
+
+Apply it:
+
+uv run alembic upgrade head
+
+11. Create API schemas
+
+Create:
+
+nano apps/api/src/ai_enterprise/api/schemas.py
+
+Insert:
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from ai_enterprise.domain.enums import ApprovalDecision, ProjectStatus, RunStatus
+
+
+class CreateProjectRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=200)
+    description: str = Field(min_length=20, max_length=20_000)
+
+
+class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str
+    status: ProjectStatus
+    manifest_hash: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class RunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    project_id: uuid.UUID
+    crew_name: str
+    status: RunStatus
+    error_message: str | None
+    created_at: datetime
+
+
+class ArtifactResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    project_id: uuid.UUID
+    run_id: uuid.UUID | None
+    artifact_type: str
+    media_type: str
+    content: str
+    content_hash: str
+    created_at: datetime
+
+
+class ApprovalRequest(BaseModel):
+    decision: ApprovalDecision
+    reviewer: str = Field(min_length=2, max_length=200)
+    comment: str | None = Field(default=None, max_length=5_000)
+
+12. Create immutable hashing utilities
+
+Create:
+
+nano apps/api/src/ai_enterprise/domain/hashing.py
+
+Insert:
+
+import hashlib
+import json
+from typing import Any
+
+
+def canonical_json(value: dict[str, Any]) -> str:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
+def hash_json(value: dict[str, Any]) -> str:
+    encoded = canonical_json(value).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def hash_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+This gives us deterministic hashes for:
+
+    manifests;
+
+    generated artifacts;
+
+    later work packages;
+
+    patches;
+
+    test reports.
+
+13. Create the CrewAI adapter
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/crews/requirements_crew.py
+
+Insert:
+
+from dataclasses import dataclass
+
+from crewai import Agent, Crew, LLM, Process, Task
+
+from ai_enterprise.config import Settings
+
+
+@dataclass(frozen=True)
+class RequirementsCrewResult:
+    markdown: str
+    raw_output: str
+
+
+class RequirementsCrewRunner:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def run(
+        self,
+        *,
+        project_name: str,
+        project_description: str,
+        manifest_hash: str,
+    ) -> RequirementsCrewResult:
+        llm = LLM(
+            model=self._settings.ollama_model,
+            base_url=self._settings.ollama_base_url,
+            temperature=0.1,
+            timeout=600,
+        )
+
+        analyst = Agent(
+            role="Senior Requirements Engineer",
+            goal=(
+                "Convert a software product request into precise, bounded, "
+                "traceable and testable requirements."
+            ),
+            backstory=(
+                "You specialize in enterprise software requirements, "
+                "workflow systems, security boundaries, auditability, "
+                "human approval controls and acceptance criteria."
+            ),
+            llm=llm,
+            allow_delegation=False,
+            verbose=True,
+        )
+
+        task = Task(
+            description=(
+                "Analyze this project.\n\n"
+                "Project name: {project_name}\n"
+                "Manifest hash: {manifest_hash}\n\n"
+                "Project description:\n"
+                "{project_description}\n\n"
+                "Produce a rigorous requirements specification containing:\n"
+                "1. Executive summary\n"
+                "2. Problem statement\n"
+                "3. Goals\n"
+                "4. Non-goals\n"
+                "5. Actors and responsibilities\n"
+                "6. Functional requirements with stable IDs such as FR-001\n"
+                "7. Non-functional requirements with IDs such as NFR-001\n"
+                "8. Security and isolation requirements\n"
+                "9. Auditability requirements\n"
+                "10. Data requirements\n"
+                "11. Failure and recovery requirements\n"
+                "12. Assumptions\n"
+                "13. Constraints\n"
+                "14. Risks\n"
+                "15. Acceptance criteria\n"
+                "16. Open questions\n\n"
+                "Do not propose implementation details unless they are "
+                "required constraints. Mark uncertain statements explicitly."
+            ),
+            expected_output=(
+                "A complete Markdown requirements document containing "
+                "stable requirement identifiers and verifiable acceptance criteria."
+            ),
+            agent=analyst,
+        )
+
+        crew = Crew(
+            agents=[analyst],
+            tasks=[task],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+        output = crew.kickoff(
+            inputs={
+                "project_name": project_name,
+                "project_description": project_description,
+                "manifest_hash": manifest_hash,
+            }
+        )
+
+        markdown = str(output).strip()
+
+        if not markdown:
+            raise RuntimeError("Requirements Crew returned an empty result")
+
+        return RequirementsCrewResult(
+            markdown=markdown,
+            raw_output=str(output),
+        )
+
+CrewAI’s current LLM connection layer supports provider-prefixed model identifiers and custom base URLs, which is the pattern used to connect to an Ollama server.
+14. Create the application service
+
+Create:
+
+nano apps/api/src/ai_enterprise/application/project_workflow.py
+
+Insert:
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ai_enterprise.config import Settings
+from ai_enterprise.domain.enums import (
+    ApprovalDecision,
+    ArtifactType,
+    ProjectStatus,
+    RunStatus,
+)
+from ai_enterprise.domain.hashing import hash_json, hash_text
+from ai_enterprise.infrastructure.crews.requirements_crew import (
+    RequirementsCrewRunner,
+)
+from ai_enterprise.infrastructure.database.models import (
+    ApprovalModel,
+    ArtifactModel,
+    AuditEventModel,
+    CrewRunModel,
+    ProjectModel,
+)
+
+
+class ProjectNotFoundError(Exception):
+    pass
+
+
+class InvalidProjectStateError(Exception):
+    pass
+
+
+class ArtifactNotFoundError(Exception):
+    pass
+
+
+class ProjectWorkflowService:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        settings: Settings,
+    ) -> None:
+        self._session = session
+        self._settings = settings
+
+    async def create_project(
+        self,
+        *,
+        name: str,
+        description: str,
+        actor_id: str,
+    ) -> ProjectModel:
+        project_id = uuid.uuid4()
+
+        manifest = {
+            "schema_version": "1.0",
+            "project_id": str(project_id),
+            "name": name,
+            "description": description,
+            "created_by": actor_id,
+        }
+
+        manifest_hash = hash_json(manifest)
+
+        project = ProjectModel(
+            id=project_id,
+            name=name,
+            description=description,
+            status=ProjectStatus.CREATED,
+            manifest_hash=manifest_hash,
+            manifest=manifest,
+        )
+
+        manifest_artifact = ArtifactModel(
+            project_id=project_id,
+            artifact_type=ArtifactType.PROJECT_MANIFEST,
+            media_type="application/json",
+            content=str(manifest),
+            content_hash=manifest_hash,
+        )
+
+        audit_event = AuditEventModel(
+            project_id=project_id,
+            event_type="project.created",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "project_id": str(project_id),
+                "manifest_hash": manifest_hash,
+            },
+        )
+
+        self._session.add_all(
+            [
+                project,
+                manifest_artifact,
+                audit_event,
+            ]
+        )
+
+        await self._session.commit()
+        await self._session.refresh(project)
+
+        return project
+
+    async def queue_requirements_run(
+        self,
+        *,
+        project_id: uuid.UUID,
+        actor_id: str,
+    ) -> CrewRunModel:
+        project = await self._get_project(project_id)
+
+        if project.status not in {
+            ProjectStatus.CREATED,
+            ProjectStatus.REQUIREMENTS_FAILED,
+            ProjectStatus.REQUIREMENTS_REJECTED,
+        }:
+            raise InvalidProjectStateError(
+                f"Cannot start requirements from state {project.status}"
+            )
+
+        run = CrewRunModel(
+            project_id=project.id,
+            crew_name="requirements_crew",
+            status=RunStatus.QUEUED,
+            input_payload={
+                "project_name": project.name,
+                "project_description": project.description,
+                "manifest_hash": project.manifest_hash,
+            },
+        )
+
+        project.status = ProjectStatus.REQUIREMENTS_RUNNING
+
+        audit_event = AuditEventModel(
+            project_id=project.id,
+            event_type="requirements.run.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={"run_id": str(run.id)},
+        )
+
+        self._session.add_all([run, audit_event])
+        await self._session.commit()
+        await self._session.refresh(run)
+
+        return run
+
+    async def execute_requirements_run(
+        self,
+        *,
+        run_id: uuid.UUID,
+    ) -> None:
+        result = await self._session.execute(
+            select(CrewRunModel).where(CrewRunModel.id == run_id)
+        )
+        run = result.scalar_one_or_none()
+
+        if run is None:
+            raise RuntimeError(f"Run {run_id} does not exist")
+
+        project = await self._get_project(run.project_id)
+
+        run.status = RunStatus.RUNNING
+        run.started_at = datetime.now(UTC)
+
+        self._session.add(
+            AuditEventModel(
+                project_id=project.id,
+                event_type="requirements.run.started",
+                actor_type="system",
+                actor_id="requirements-worker",
+                payload={"run_id": str(run.id)},
+            )
+        )
+
+        await self._session.commit()
+
+        try:
+            runner = RequirementsCrewRunner(self._settings)
+
+            crew_result = runner.run(
+                project_name=project.name,
+                project_description=project.description,
+                manifest_hash=project.manifest_hash,
+            )
+
+            artifact = ArtifactModel(
+                project_id=project.id,
+                run_id=run.id,
+                artifact_type=ArtifactType.REQUIREMENTS_SPECIFICATION,
+                media_type="text/markdown",
+                content=crew_result.markdown,
+                content_hash=hash_text(crew_result.markdown),
+            )
+
+            run.status = RunStatus.SUCCEEDED
+            run.completed_at = datetime.now(UTC)
+            run.output_payload = {
+                "artifact_type": ArtifactType.REQUIREMENTS_SPECIFICATION,
+                "content_hash": artifact.content_hash,
+            }
+
+            project.status = ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL
+
+            self._session.add_all(
+                [
+                    artifact,
+                    AuditEventModel(
+                        project_id=project.id,
+                        event_type="requirements.run.succeeded",
+                        actor_type="agent",
+                        actor_id="requirements-crew",
+                        payload={
+                            "run_id": str(run.id),
+                            "artifact_id": str(artifact.id),
+                            "content_hash": artifact.content_hash,
+                        },
+                    ),
+                    AuditEventModel(
+                        project_id=project.id,
+                        event_type="requirements.approval.requested",
+                        actor_type="system",
+                        actor_id="workflow-engine",
+                        payload={
+                            "run_id": str(run.id),
+                            "artifact_id": str(artifact.id),
+                        },
+                    ),
+                ]
+            )
+
+            await self._session.commit()
+
+        except Exception as exc:
+            run.status = RunStatus.FAILED
+            run.completed_at = datetime.now(UTC)
+            run.error_message = str(exc)
+
+            project.status = ProjectStatus.REQUIREMENTS_FAILED
+
+            self._session.add(
+                AuditEventModel(
+                    project_id=project.id,
+                    event_type="requirements.run.failed",
+                    actor_type="system",
+                    actor_id="requirements-worker",
+                    payload={
+                        "run_id": str(run.id),
+                        "error": str(exc),
+                    },
+                )
+            )
+
+            await self._session.commit()
+            raise
+
+    async def approve_requirements(
+        self,
+        *,
+        project_id: uuid.UUID,
+        artifact_id: uuid.UUID,
+        decision: ApprovalDecision,
+        reviewer: str,
+        comment: str | None,
+    ) -> ProjectModel:
+        project = await self._get_project(project_id)
+
+        if project.status != ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL:
+            raise InvalidProjectStateError(
+                "Project is not awaiting requirements approval"
+            )
+
+        result = await self._session.execute(
+            select(ArtifactModel).where(
+                ArtifactModel.id == artifact_id,
+                ArtifactModel.project_id == project_id,
+                ArtifactModel.artifact_type
+                == ArtifactType.REQUIREMENTS_SPECIFICATION,
+            )
+        )
+
+        artifact = result.scalar_one_or_none()
+
+        if artifact is None:
+            raise ArtifactNotFoundError(str(artifact_id))
+
+        approval = ApprovalModel(
+            project_id=project.id,
+            artifact_id=artifact.id,
+            decision=decision,
+            reviewer=reviewer,
+            comment=comment,
+        )
+
+        if decision == ApprovalDecision.APPROVED:
+            project.status = ProjectStatus.REQUIREMENTS_APPROVED
+            event_type = "requirements.approved"
+        else:
+            project.status = ProjectStatus.REQUIREMENTS_REJECTED
+            event_type = "requirements.rejected"
+
+        self._session.add_all(
+            [
+                approval,
+                AuditEventModel(
+                    project_id=project.id,
+                    event_type=event_type,
+                    actor_type="human",
+                    actor_id=reviewer,
+                    payload={
+                        "artifact_id": str(artifact.id),
+                        "artifact_hash": artifact.content_hash,
+                        "comment": comment,
+                    },
+                ),
+            ]
+        )
+
+        await self._session.commit()
+        await self._session.refresh(project)
+
+        return project
+
+    async def _get_project(
+        self,
+        project_id: uuid.UUID,
+    ) -> ProjectModel:
+        result = await self._session.execute(
+            select(ProjectModel).where(ProjectModel.id == project_id)
+        )
+
+        project = result.scalar_one_or_none()
+
+        if project is None:
+            raise ProjectNotFoundError(str(project_id))
+
+        return project
+
+There is one implementation issue we will address next: runner.run() is synchronous and may take several minutes. It must not execute directly on the FastAPI event loop.
+15. Add API dependencies
+
+Create:
+
+nano apps/api/src/ai_enterprise/api/dependencies.py
+
+Insert:
+
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ai_enterprise.config import Settings, get_settings
+from ai_enterprise.infrastructure.database.session import get_session
+
+
+SessionDependency = Annotated[AsyncSession, Depends(get_session)]
+SettingsDependency = Annotated[Settings, Depends(get_settings)]
+
+FastAPI dependency injection is suitable for supplying services, database sessions, and configuration while retaining test overrides.
+16. Create project routes
+
+Create:
+
+nano apps/api/src/ai_enterprise/api/routes/projects.py
+
+Insert:
+
+import asyncio
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from sqlalchemy import select
+
+from ai_enterprise.api.dependencies import SessionDependency, SettingsDependency
+from ai_enterprise.api.schemas import (
+    ApprovalRequest,
+    ArtifactResponse,
+    CreateProjectRequest,
+    ProjectResponse,
+    RunResponse,
+)
+from ai_enterprise.application.project_workflow import (
+    ArtifactNotFoundError,
+    InvalidProjectStateError,
+    ProjectNotFoundError,
+    ProjectWorkflowService,
+)
+from ai_enterprise.infrastructure.database.models import ArtifactModel
+from ai_enterprise.infrastructure.database.session import SessionFactory
+
+
+router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+async def execute_requirements_background(
+    run_id: uuid.UUID,
+) -> None:
+    async with SessionFactory() as session:
+        from ai_enterprise.config import get_settings
+
+        service = ProjectWorkflowService(
+            session=session,
+            settings=get_settings(),
+        )
+
+        await asyncio.to_thread(
+            lambda: asyncio.run(
+                _execute_in_new_loop(service, run_id)
+            )
+        )
+
+
+async def _execute_in_new_loop(
+    service: ProjectWorkflowService,
+    run_id: uuid.UUID,
+) -> None:
+    await service.execute_requirements_run(run_id=run_id)
+
+
+@router.post(
+    "",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project(
+    request: CreateProjectRequest,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ProjectResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    project = await service.create_project(
+        name=request.name,
+        description=request.description,
+        actor_id="local-user",
+    )
+
+    return ProjectResponse.model_validate(project)
+
+
+@router.post(
+    "/{project_id}/requirements-runs",
+    response_model=RunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_requirements_run(
+    project_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RunResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        run = await service.queue_requirements_run(
+            project_id=project_id,
+            actor_id="local-user",
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        run_requirements_job,
+        run.id,
+    )
+
+    return RunResponse.model_validate(run)
+
+
+def run_requirements_job(run_id: uuid.UUID) -> None:
+    asyncio.run(_run_requirements_job_async(run_id))
+
+
+async def _run_requirements_job_async(run_id: uuid.UUID) -> None:
+    async with SessionFactory() as session:
+        from ai_enterprise.config import get_settings
+
+        service = ProjectWorkflowService(
+            session=session,
+            settings=get_settings(),
+        )
+
+        await asyncio.to_thread(
+            _execute_sync_wrapper,
+            service,
+            run_id,
+        )
+
+
+def _execute_sync_wrapper(
+    service: ProjectWorkflowService,
+    run_id: uuid.UUID,
+) -> None:
+    asyncio.run(service.execute_requirements_run(run_id=run_id))
+
+
+@router.get(
+    "/{project_id}/artifacts",
+    response_model=list[ArtifactResponse],
+)
+async def list_artifacts(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+) -> list[ArtifactResponse]:
+    result = await session.execute(
+        select(ArtifactModel)
+        .where(ArtifactModel.project_id == project_id)
+        .order_by(ArtifactModel.created_at)
+    )
+
+    return [
+        ArtifactResponse.model_validate(artifact)
+        for artifact in result.scalars().all()
+    ]
+
+
+@router.post(
+    "/{project_id}/artifacts/{artifact_id}/approval",
+    response_model=ProjectResponse,
+)
+async def approve_artifact(
+    project_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    request: ApprovalRequest,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ProjectResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        project = await service.approve_requirements(
+            project_id=project_id,
+            artifact_id=artifact_id,
+            decision=request.decision,
+            reviewer=request.reviewer,
+            comment=request.comment,
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Artifact not found") from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return ProjectResponse.model_validate(project)
+
+Important correction
+
+The example above illustrates the API boundary, but the nested event-loop approach is unnecessarily complicated. Replace the execution method in the application service with a split between asynchronous database handling and synchronous CrewAI execution.
+
+In ProjectWorkflowService.execute_requirements_run, replace:
+
+crew_result = runner.run(
+    project_name=project.name,
+    project_description=project.description,
+    manifest_hash=project.manifest_hash,
+)
+
+with:
+
+import asyncio
+
+and:
+
+crew_result = await asyncio.to_thread(
+    runner.run,
+    project_name=project.name,
+    project_description=project.description,
+    manifest_hash=project.manifest_hash,
+)
+
+Then simplify the background function in projects.py to:
+
+def run_requirements_job(run_id: uuid.UUID) -> None:
+    asyncio.run(_run_requirements_job_async(run_id))
+
+
+async def _run_requirements_job_async(run_id: uuid.UUID) -> None:
+    async with SessionFactory() as session:
+        from ai_enterprise.config import get_settings
+
+        service = ProjectWorkflowService(
+            session=session,
+            settings=get_settings(),
+        )
+
+        await service.execute_requirements_run(run_id=run_id)
+
+Delete these unnecessary functions:
+
+execute_requirements_background
+_execute_in_new_loop
+_execute_sync_wrapper
+
+FastAPI background tasks execute after returning the HTTP response and integrate with dependency injection. However, for substantial or durable background computation, FastAPI recommends using a separate worker architecture rather than relying indefinitely on in-process background tasks.
+
+For this first milestone, BackgroundTasks is acceptable as a temporary bootstrap. Later we will replace it with a durable worker queue.
+17. Create the FastAPI application
+
+Create:
+
+nano apps/api/src/ai_enterprise/main.py
+
+Insert:
+
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
+from fastapi import FastAPI
+
+from ai_enterprise.api.routes.projects import router as projects_router
+from ai_enterprise.config import get_settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    settings.artifact_root.mkdir(parents=True, exist_ok=True)
+
+    yield
+
+
+settings = get_settings()
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.include_router(projects_router, prefix="/api/v1")
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+    }
+
+FastAPI’s recommended startup and shutdown mechanism is the application lifespan context rather than the older startup/shutdown event handlers.
+18. Make Ollama reachable from Docker
+
+By default, Ollama may listen only on 127.0.0.1, which the API container cannot reach through host.docker.internal.
+
+Create a systemd override:
+
+sudo systemctl edit ollama
+
+Add:
+
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+
+Reload and restart:
+
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+
+Verify locally:
+
+curl http://localhost:11434/api/tags
+
+Verify the listener:
+
+ss -lntp | grep 11434
+
+You should see:
+
+0.0.0.0:11434
+
+Because this exposes Ollama to network interfaces, protect the port with the host firewall. Allow Docker access but do not expose port 11434 through your router or public firewall.
+19. Start PostgreSQL first
+
+From the repository root:
+
+cd ~/projects/ai-enterprise
+docker compose up -d postgres
+
+Inspect:
+
+docker compose ps
+docker compose logs postgres
+
+Run migrations from the host:
+
+cd apps/api
+uv run alembic upgrade head
+
+20. Start the API locally first
+
+Testing locally before containerizing makes debugging easier:
+
+cd ~/projects/ai-enterprise/apps/api
+uv run uvicorn ai_enterprise.main:app \
+  --app-dir src \
+  --reload \
+  --host 0.0.0.0 \
+  --port 8000
+
+Open:
+
+http://localhost:8000/docs
+
+Test health:
+
+curl http://localhost:8000/health
+
+Expected:
+
+{
+  "status": "ok",
+  "service": "AI Enterprise"
+}
+
+21. Create the first project
+
+Run:
+
+curl -X POST http://localhost:8000/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI Enterprise",
+    "description": "Build an enterprise AI software-engineering platform that creates projects, stores immutable manifests, executes controlled requirements and architecture crews, pauses for human approvals, generates bounded work packages, executes them inside disposable containers, runs tests, independently reviews patches and preserves a complete audit trail."
+  }'
+
+Expected response:
+
+{
+  "id": "PROJECT-UUID",
+  "name": "AI Enterprise",
+  "description": "...",
+  "status": "created",
+  "manifest_hash": "...",
+  "created_at": "...",
+  "updated_at": "..."
+}
+
+Copy the project ID:
+
+export PROJECT_ID="paste-project-uuid-here"
+
+22. Start the Requirements Crew
+
+curl -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/requirements-runs"
+
+Expected:
+
+{
+  "id": "RUN-UUID",
+  "project_id": "PROJECT-UUID",
+  "crew_name": "requirements_crew",
+  "status": "queued",
+  "error_message": null,
+  "created_at": "..."
+}
+
+At this point:
+
+FastAPI returns HTTP 202
+    ↓
+background execution starts
+    ↓
+CrewAI creates Requirements Agent
+    ↓
+CrewAI calls Ollama
+    ↓
+Gemma generates the document
+    ↓
+artifact is stored in PostgreSQL
+    ↓
+project state becomes awaiting_requirements_approval
+
+Monitor Ollama:
+
+watch -n 1 nvidia-smi
+
+In another terminal:
+
+ollama ps
+
+Monitor API logs:
+
+cd ~/projects/ai-enterprise
+docker compose logs -f api
+
+Or, when running locally, watch the Uvicorn terminal.
+23. Retrieve the requirements artifact
+
+After the run finishes:
+
+curl \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts"
+
+You should receive at least:
+
+[
+  {
+    "artifact_type": "project_manifest"
+  },
+  {
+    "artifact_type": "requirements_specification",
+    "media_type": "text/markdown",
+    "content": "# Requirements Specification ..."
+  }
+]
+
+Copy the requirements artifact ID:
+
+export ARTIFACT_ID="paste-requirements-artifact-uuid"
+
+24. Approve the requirements
+
+curl -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts/$ARTIFACT_ID/approval" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "approved",
+    "reviewer": "ursu-sevastian",
+    "comment": "Requirements accepted for the first architecture iteration."
+  }'
+
+Expected project state:
+
+{
+  "status": "requirements_approved"
+}
+
+To reject instead:
+
+curl -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts/$ARTIFACT_ID/approval" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "rejected",
+    "reviewer": "ursu-sevastian",
+    "comment": "Isolation and rollback requirements require more detail."
+  }'
+
+25. What we have implemented
+
+After completing these steps, your platform has its first vertical slice:
+
+POST /projects
+    │
+    ├── creates project
+    ├── creates immutable manifest
+    ├── hashes manifest
+    └── records audit event
+             │
+             ▼
+POST /projects/{id}/requirements-runs
+    │
+    ├── creates run record
+    ├── changes project state
+    └── starts Requirements Crew
+             │
+             ▼
+CrewAI Requirements Agent
+    │
+    └── Ollama → Gemma
+             │
+             ▼
+Requirements artifact
+    │
+    ├── stored in PostgreSQL
+    ├── hashed
+    ├── associated with crew run
+    └── recorded in audit trail
+             │
+             ▼
+Human approval endpoint
+    │
+    ├── approval stored
+    ├── exact artifact hash referenced
+    └── workflow state advanced
+
+26. Architectural rule
+
+The dependency direction must remain:
+
+API routes
+    ↓
+Application services
+    ↓
+Domain rules
+    ↓
+Ports/interfaces
+    ↓
+Infrastructure adapters
+
+CrewAI belongs in:
+
+infrastructure/crews/
+
+It does not belong in:
+
+domain/
+
+The domain should understand:
+
+requirements run
+artifact
+approval
+workflow state
+
+It should not understand:
+
+CrewAI Agent
+CrewAI Task
+Ollama
+Gemma
+LiteLLM
+
+That separation allows us to replace CrewAI or Gemma later without redesigning the business workflow.
+
+The next engineering increment is to replace the temporary FastAPI background task with a durable worker and job lease mechanism, then implement the Architecture Crew so it can run only after the exact requirements artifact has been approved.
+
+continue
+
+We now implement the next controlled vertical slice:
+
+Approved requirements artifact
+        ↓
+Architecture job created
+        ↓
+Durable worker claims job
+        ↓
+Architecture Crew runs through Ollama
+        ↓
+Architecture artifact persisted
+        ↓
+Project pauses for architecture approval
+
+The worker will be a separate process. This is necessary because an LLM crew can run for minutes, consume substantial resources, or fail independently. FastAPI itself warns that heavy background computation is better handled outside the web process.
+
+PostgreSQL will initially serve as both:
+
+    system of record;
+
+    durable job queue.
+
+We will use SELECT … FOR UPDATE SKIP LOCKED so multiple workers cannot claim the same job. SQLAlchemy supports PostgreSQL’s SKIP LOCKED through with_for_update(skip_locked=True).
+1. Correct two issues from the previous implementation
+
+Before continuing, correct these two points.
+Issue 1: serialize manifests as canonical JSON
+
+The previous code stored this:
+
+content=str(manifest)
+
+That produces a Python dictionary representation, not valid JSON.
+
+Open:
+
+cd ~/projects/ai-enterprise
+nano apps/api/src/ai_enterprise/application/project_workflow.py
+
+Import:
+
+from ai_enterprise.domain.hashing import canonical_json, hash_json, hash_text
+
+Replace:
+
+content=str(manifest),
+
+with:
+
+content=canonical_json(manifest),
+
+Issue 2: generate IDs before using them in audit payloads
+
+SQLAlchemy column defaults may not execute until the model is inserted. Code such as:
+
+run = CrewRunModel(...)
+payload={"run_id": str(run.id)}
+
+can therefore record "None".
+
+Generate the UUID explicitly:
+
+run_id = uuid.uuid4()
+
+run = CrewRunModel(
+    id=run_id,
+    ...
+)
+
+Use:
+
+payload={"run_id": str(run_id)}
+
+Apply the same rule to artifacts, approvals, jobs and audit events whenever their IDs are referenced before flush.
+2. Expand the domain states
+
+Open:
+
+nano apps/api/src/ai_enterprise/domain/enums.py
+
+Replace it with:
+
+from enum import StrEnum
+
+
+class ProjectStatus(StrEnum):
+    CREATED = "created"
+
+    REQUIREMENTS_QUEUED = "requirements_queued"
+    REQUIREMENTS_RUNNING = "requirements_running"
+    REQUIREMENTS_FAILED = "requirements_failed"
+    AWAITING_REQUIREMENTS_APPROVAL = "awaiting_requirements_approval"
+    REQUIREMENTS_APPROVED = "requirements_approved"
+    REQUIREMENTS_REJECTED = "requirements_rejected"
+
+    ARCHITECTURE_QUEUED = "architecture_queued"
+    ARCHITECTURE_RUNNING = "architecture_running"
+    ARCHITECTURE_FAILED = "architecture_failed"
+    AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
+    ARCHITECTURE_APPROVED = "architecture_approved"
+    ARCHITECTURE_REJECTED = "architecture_rejected"
+
+
+class RunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    LEASED = "leased"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DEAD_LETTER = "dead_letter"
+    CANCELLED = "cancelled"
+
+
+class JobType(StrEnum):
+    RUN_REQUIREMENTS_CREW = "run_requirements_crew"
+    RUN_ARCHITECTURE_CREW = "run_architecture_crew"
+
+
+class ArtifactType(StrEnum):
+    PROJECT_MANIFEST = "project_manifest"
+    REQUIREMENTS_SPECIFICATION = "requirements_specification"
+    ARCHITECTURE_SPECIFICATION = "architecture_specification"
+
+
+class ApprovalDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+A project state and a job state are deliberately separate.
+
+For example:
+
+Project: requirements_running
+Job: leased
+Crew run: running
+
+Each describes a different aggregate.
+3. Add the durable jobs table
+
+Open:
+
+nano apps/api/src/ai_enterprise/infrastructure/database/models.py
+
+Add these imports:
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+
+Add this model:
+
+class JobModel(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("crew_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    job_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        index=True,
+    )
+
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    priority: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=100,
+    )
+
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    max_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+    )
+
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )
+
+    lease_owner: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    last_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+Remove Boolean from the import if your editor reports it as unused.
+
+The lease columns are important:
+
+lease_owner
+lease_expires_at
+
+If a worker crashes, its lease eventually expires and another worker may retry the job.
+4. Generate and apply the migration
+
+From the API directory:
+
+cd ~/projects/ai-enterprise/apps/api
+uv run alembic revision --autogenerate \
+  -m "add durable worker jobs"
+
+Inspect the generated migration:
+
+ls -1 ../../migrations/versions
+nano ../../migrations/versions/<new-migration-file>.py
+
+Confirm it creates:
+
+jobs
+jobs.project_id foreign key
+jobs.run_id foreign key
+indexes on status, job_type, available_at and lease_expires_at
+
+Apply:
+
+uv run alembic upgrade head
+
+Verify:
+
+docker compose exec postgres \
+  psql -U ai_enterprise -d ai_enterprise \
+  -c "\d jobs"
+
+5. Create the job repository
+
+Create:
+
+mkdir -p apps/api/src/ai_enterprise/infrastructure/jobs
+touch apps/api/src/ai_enterprise/infrastructure/jobs/__init__.py
+nano apps/api/src/ai_enterprise/infrastructure/jobs/repository.py
+
+Insert:
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ai_enterprise.domain.enums import JobStatus
+from ai_enterprise.infrastructure.database.models import JobModel
+
+
+class JobRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def enqueue(
+        self,
+        *,
+        project_id: uuid.UUID,
+        run_id: uuid.UUID | None,
+        job_type: str,
+        payload: dict[str, Any],
+        priority: int = 100,
+        max_attempts: int = 3,
+    ) -> JobModel:
+        job = JobModel(
+            id=uuid.uuid4(),
+            project_id=project_id,
+            run_id=run_id,
+            job_type=job_type,
+            status=JobStatus.QUEUED,
+            payload=payload,
+            priority=priority,
+            max_attempts=max_attempts,
+        )
+
+        self._session.add(job)
+        await self._session.flush()
+
+        return job
+
+    async def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_duration: timedelta,
+    ) -> JobModel | None:
+        now = datetime.now(UTC)
+
+        statement = (
+            select(JobModel)
+            .where(
+                JobModel.available_at <= now,
+                JobModel.attempt_count < JobModel.max_attempts,
+                or_(
+                    JobModel.status == JobStatus.QUEUED,
+                    (
+                        (JobModel.status == JobStatus.LEASED)
+                        & (JobModel.lease_expires_at < now)
+                    ),
+                ),
+            )
+            .order_by(
+                JobModel.priority.asc(),
+                JobModel.created_at.asc(),
+            )
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+
+        result = await self._session.execute(statement)
+        job = result.scalar_one_or_none()
+
+        if job is None:
+            return None
+
+        job.status = JobStatus.LEASED
+        job.lease_owner = worker_id
+        job.lease_expires_at = now + lease_duration
+        job.attempt_count += 1
+
+        await self._session.flush()
+
+        return job
+
+    async def extend_lease(
+        self,
+        *,
+        job_id: uuid.UUID,
+        worker_id: str,
+        lease_duration: timedelta,
+    ) -> bool:
+        job = await self._session.get(JobModel, job_id)
+
+        if (
+            job is None
+            or job.status != JobStatus.LEASED
+            or job.lease_owner != worker_id
+        ):
+            return False
+
+        job.lease_expires_at = datetime.now(UTC) + lease_duration
+        await self._session.flush()
+
+        return True
+
+    async def mark_succeeded(
+        self,
+        *,
+        job_id: uuid.UUID,
+        worker_id: str,
+    ) -> None:
+        job = await self._session.get(JobModel, job_id)
+
+        if job is None:
+            raise RuntimeError(f"Job {job_id} does not exist")
+
+        if job.lease_owner != worker_id:
+            raise RuntimeError(
+                f"Worker {worker_id} does not own job {job_id}"
+            )
+
+        job.status = JobStatus.SUCCEEDED
+        job.completed_at = datetime.now(UTC)
+        job.lease_owner = None
+        job.lease_expires_at = None
+
+        await self._session.flush()
+
+    async def mark_failed(
+        self,
+        *,
+        job_id: uuid.UUID,
+        worker_id: str,
+        error: str,
+        retry_delay: timedelta,
+    ) -> None:
+        job = await self._session.get(JobModel, job_id)
+
+        if job is None:
+            raise RuntimeError(f"Job {job_id} does not exist")
+
+        if job.lease_owner != worker_id:
+            raise RuntimeError(
+                f"Worker {worker_id} does not own job {job_id}"
+            )
+
+        job.last_error = error
+        job.lease_owner = None
+        job.lease_expires_at = None
+
+        if job.attempt_count >= job.max_attempts:
+            job.status = JobStatus.DEAD_LETTER
+            job.completed_at = datetime.now(UTC)
+        else:
+            job.status = JobStatus.QUEUED
+            job.available_at = datetime.now(UTC) + retry_delay
+
+        await self._session.flush()
+
+The claim transaction must remain small:
+
+lock one job
+update lease
+commit immediately
+
+Do not keep a database row locked while the LLM runs.
+6. Change the requirements endpoint to enqueue a durable job
+
+Open:
+
+nano apps/api/src/ai_enterprise/application/project_workflow.py
+
+Import:
+
+from ai_enterprise.domain.enums import JobType
+from ai_enterprise.infrastructure.jobs.repository import JobRepository
+
+Replace queue_requirements_run() with:
+
+async def queue_requirements_run(
+    self,
+    *,
+    project_id: uuid.UUID,
+    actor_id: str,
+) -> CrewRunModel:
+    project = await self._get_project(project_id)
+
+    if project.status not in {
+        ProjectStatus.CREATED,
+        ProjectStatus.REQUIREMENTS_FAILED,
+        ProjectStatus.REQUIREMENTS_REJECTED,
+    }:
+        raise InvalidProjectStateError(
+            f"Cannot start requirements from state {project.status}"
+        )
+
+    run_id = uuid.uuid4()
+
+    run = CrewRunModel(
+        id=run_id,
+        project_id=project.id,
+        crew_name="requirements_crew",
+        status=RunStatus.QUEUED,
+        input_payload={
+            "project_name": project.name,
+            "project_description": project.description,
+            "manifest_hash": project.manifest_hash,
+        },
+    )
+
+    project.status = ProjectStatus.REQUIREMENTS_QUEUED
+
+    self._session.add(run)
+
+    jobs = JobRepository(self._session)
+
+    job = await jobs.enqueue(
+        project_id=project.id,
+        run_id=run_id,
+        job_type=JobType.RUN_REQUIREMENTS_CREW,
+        payload={
+            "project_id": str(project.id),
+            "run_id": str(run_id),
+        },
+        priority=100,
+        max_attempts=3,
+    )
+
+    self._session.add(
+        AuditEventModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            event_type="requirements.run.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run_id),
+                "job_id": str(job.id),
+            },
+        )
+    )
+
+    await self._session.commit()
+    await self._session.refresh(run)
+
+    return run
+
+The critical property is atomicity:
+
+run record
+job record
+project state
+audit event
+
+They all commit in one database transaction.
+7. Remove FastAPI BackgroundTasks
+
+Open:
+
+nano apps/api/src/ai_enterprise/api/routes/projects.py
+
+Remove:
+
+import asyncio
+
+Remove:
+
+BackgroundTasks
+
+Remove these functions:
+
+run_requirements_job
+_run_requirements_job_async
+
+Change the endpoint signature from:
+
+async def start_requirements_run(
+    project_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RunResponse:
+
+to:
+
+async def start_requirements_run(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RunResponse:
+
+Delete:
+
+background_tasks.add_task(
+    run_requirements_job,
+    run.id,
+)
+
+FastAPI now only inserts a durable job and returns HTTP 202.
+
+It does not execute the crew.
+8. Create the worker configuration
+
+Add to .env:
+
+WORKER_POLL_INTERVAL_SECONDS=2
+WORKER_LEASE_SECONDS=900
+WORKER_RETRY_DELAY_SECONDS=30
+WORKER_HEARTBEAT_SECONDS=60
+
+Open:
+
+nano apps/api/src/ai_enterprise/config.py
+
+Add to Settings:
+
+worker_poll_interval_seconds: float = 2.0
+worker_lease_seconds: int = 900
+worker_retry_delay_seconds: int = 30
+worker_heartbeat_seconds: int = 60
+
+A 15-minute lease is reasonable for the first local model workflow. Later, the worker will periodically extend the lease while a crew is executing.
+9. Build the worker dispatcher
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/jobs/dispatcher.py
+
+Insert:
+
+import uuid
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ai_enterprise.application.project_workflow import ProjectWorkflowService
+from ai_enterprise.config import Settings
+from ai_enterprise.domain.enums import JobType
+from ai_enterprise.infrastructure.database.models import JobModel
+
+
+class JobDispatcher:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        settings: Settings,
+    ) -> None:
+        self._session = session
+        self._settings = settings
+
+    async def dispatch(self, job: JobModel) -> None:
+        service = ProjectWorkflowService(
+            session=self._session,
+            settings=self._settings,
+        )
+
+        if job.job_type == JobType.RUN_REQUIREMENTS_CREW:
+            await service.execute_requirements_run(
+                run_id=self._required_uuid(job, "run_id")
+            )
+            return
+
+        if job.job_type == JobType.RUN_ARCHITECTURE_CREW:
+            await service.execute_architecture_run(
+                run_id=self._required_uuid(job, "run_id")
+            )
+            return
+
+        raise RuntimeError(f"Unsupported job type: {job.job_type}")
+
+    @staticmethod
+    def _required_uuid(
+        job: JobModel,
+        field_name: str,
+    ) -> uuid.UUID:
+        raw_value = job.payload.get(field_name)
+
+        if not raw_value:
+            raise RuntimeError(
+                f"Job {job.id} is missing payload field {field_name}"
+            )
+
+        try:
+            return uuid.UUID(str(raw_value))
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Job {job.id} has invalid UUID in {field_name}"
+            ) from exc
+
+execute_architecture_run() does not exist yet. We will add it shortly.
+10. Create the worker process
+
+Create:
+
+nano apps/api/src/ai_enterprise/worker.py
+
+Insert:
+
+import asyncio
+import logging
+import os
+import socket
+import uuid
+from datetime import timedelta
+
+from ai_enterprise.config import get_settings
+from ai_enterprise.infrastructure.database.session import SessionFactory
+from ai_enterprise.infrastructure.jobs.dispatcher import JobDispatcher
+from ai_enterprise.infrastructure.jobs.repository import JobRepository
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+logger = logging.getLogger("ai_enterprise.worker")
+
+
+def build_worker_id() -> str:
+    hostname = socket.gethostname()
+    process_id = os.getpid()
+    random_suffix = uuid.uuid4().hex[:8]
+
+    return f"{hostname}:{process_id}:{random_suffix}"
+
+
+async def process_one_job(worker_id: str) -> bool:
+    settings = get_settings()
+
+    async with SessionFactory() as claim_session:
+        repository = JobRepository(claim_session)
+
+        async with claim_session.begin():
+            job = await repository.claim_next(
+                worker_id=worker_id,
+                lease_duration=timedelta(
+                    seconds=settings.worker_lease_seconds
+                ),
+            )
+
+        if job is None:
+            return False
+
+        job_id = job.id
+        job_type = job.job_type
+
+    logger.info(
+        "Claimed job %s of type %s",
+        job_id,
+        job_type,
+    )
+
+    try:
+        async with SessionFactory() as execution_session:
+            job = await execution_session.get(
+                type(job),
+                job_id,
+            )
+
+            if job is None:
+                raise RuntimeError(f"Job {job_id} disappeared")
+
+            dispatcher = JobDispatcher(
+                session=execution_session,
+                settings=settings,
+            )
+
+            await dispatcher.dispatch(job)
+
+        async with SessionFactory() as completion_session:
+            repository = JobRepository(completion_session)
+
+            async with completion_session.begin():
+                await repository.mark_succeeded(
+                    job_id=job_id,
+                    worker_id=worker_id,
+                )
+
+        logger.info("Job %s succeeded", job_id)
+
+    except Exception as exc:
+        logger.exception("Job %s failed", job_id)
+
+        async with SessionFactory() as failure_session:
+            repository = JobRepository(failure_session)
+
+            async with failure_session.begin():
+                await repository.mark_failed(
+                    job_id=job_id,
+                    worker_id=worker_id,
+                    error=str(exc),
+                    retry_delay=timedelta(
+                        seconds=settings.worker_retry_delay_seconds
+                    ),
+                )
+
+    return True
+
+
+async def run_worker() -> None:
+    settings = get_settings()
+    worker_id = build_worker_id()
+
+    logger.info("Worker started: %s", worker_id)
+
+    while True:
+        claimed = await process_one_job(worker_id)
+
+        if not claimed:
+            await asyncio.sleep(
+                settings.worker_poll_interval_seconds
+            )
+
+
+def main() -> None:
+    asyncio.run(run_worker())
+
+
+if __name__ == "__main__":
+    main()
+
+There is a small clarity improvement: import JobModel directly and replace:
+
+job = await execution_session.get(
+    type(job),
+    job_id,
+)
+
+with:
+
+from ai_enterprise.infrastructure.database.models import JobModel
+
+and:
+
+job = await execution_session.get(JobModel, job_id)
+
+Use the explicit form.
+11. Avoid transaction conflicts inside execution methods
+
+Currently, execute_requirements_run() commits internally.
+
+That is acceptable for the bootstrap worker, but establish this rule:
+
+ProjectWorkflowService owns workflow database transactions.
+JobRepository owns only job lifecycle transactions.
+
+The dispatcher must not wrap the entire crew execution inside one transaction.
+
+The job lease is committed first, then the crew runs, then the job status is finalized separately.
+12. Update requirements execution state
+
+In execute_requirements_run(), ensure these transitions happen.
+
+At start:
+
+if run.status not in {
+    RunStatus.QUEUED,
+    RunStatus.FAILED,
+}:
+    raise InvalidProjectStateError(
+        f"Requirements run cannot execute from {run.status}"
+    )
+
+run.status = RunStatus.RUNNING
+run.started_at = datetime.now(UTC)
+run.error_message = None
+project.status = ProjectStatus.REQUIREMENTS_RUNNING
+
+On success:
+
+run.status = RunStatus.SUCCEEDED
+project.status = ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL
+
+On final execution failure:
+
+run.status = RunStatus.FAILED
+project.status = ProjectStatus.REQUIREMENTS_FAILED
+
+Be aware that a job may be retried after a failure. Therefore, FAILED must be allowed to transition back to RUNNING.
+13. Add architecture crew configuration
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/crews/architecture_crew.py
+
+Insert:
+
+from dataclasses import dataclass
+
+from crewai import Agent, Crew, LLM, Process, Task
+
+from ai_enterprise.config import Settings
+
+
+@dataclass(frozen=True)
+class ArchitectureCrewResult:
+    markdown: str
+    raw_output: str
+
+
+class ArchitectureCrewRunner:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def run(
+        self,
+        *,
+        project_name: str,
+        project_description: str,
+        project_manifest_hash: str,
+        requirements_markdown: str,
+        requirements_artifact_hash: str,
+    ) -> ArchitectureCrewResult:
+        llm = LLM(
+            model=self._settings.ollama_model,
+            base_url=self._settings.ollama_base_url,
+            temperature=0.1,
+            timeout=900,
+        )
+
+        architect = Agent(
+            role="Principal Software Architect",
+            goal=(
+                "Transform approved requirements into a bounded, secure, "
+                "modular and auditable software architecture."
+            ),
+            backstory=(
+                "You design enterprise platforms with explicit trust "
+                "boundaries, reproducible execution, human approval gates, "
+                "immutable artifacts and controlled infrastructure access."
+            ),
+            llm=llm,
+            allow_delegation=False,
+            verbose=True,
+        )
+
+        reviewer = Agent(
+            role="Independent Architecture Reviewer",
+            goal=(
+                "Identify omissions, unsafe assumptions, uncontrolled host "
+                "access, weak boundaries and requirements that are not "
+                "covered by the proposed architecture."
+            ),
+            backstory=(
+                "You perform adversarial architecture reviews for secure "
+                "software delivery platforms."
+            ),
+            llm=llm,
+            allow_delegation=False,
+            verbose=True,
+        )
+
+        design_task = Task(
+            description=(
+                "Create an architecture specification for this project.\n\n"
+                "Project: {project_name}\n"
+                "Description: {project_description}\n"
+                "Manifest hash: {project_manifest_hash}\n"
+                "Approved requirements hash: {requirements_artifact_hash}\n\n"
+                "Approved requirements:\n"
+                "{requirements_markdown}\n\n"
+                "The architecture must contain:\n"
+                "1. Architecture objectives\n"
+                "2. Scope and non-scope\n"
+                "3. System context\n"
+                "4. Trust boundaries\n"
+                "5. Components and responsibilities\n"
+                "6. Dependency direction\n"
+                "7. Domain aggregates\n"
+                "8. Commands and domain events\n"
+                "9. Persistent data model\n"
+                "10. API boundaries\n"
+                "11. Worker and job execution model\n"
+                "12. Agent and crew execution model\n"
+                "13. Artifact and provenance model\n"
+                "14. Approval gates\n"
+                "15. Disposable execution environment\n"
+                "16. Host protection controls\n"
+                "17. Failure recovery and idempotency\n"
+                "18. Observability and audit trail\n"
+                "19. Security model\n"
+                "20. Deployment topology\n"
+                "21. Architecture decisions\n"
+                "22. Requirement traceability matrix\n"
+                "23. Risks and unresolved questions\n\n"
+                "Every major design decision must reference the requirement "
+                "IDs it satisfies. Do not silently invent requirements."
+            ),
+            expected_output=(
+                "A complete Markdown architecture specification with "
+                "component boundaries, trust boundaries, data flows, "
+                "architecture decisions and requirements traceability."
+            ),
+            agent=architect,
+        )
+
+        review_task = Task(
+            description=(
+                "Review the proposed architecture independently.\n\n"
+                "Verify:\n"
+                "- coverage of approved requirements;\n"
+                "- protection of the Ubuntu host;\n"
+                "- strict human approval gates;\n"
+                "- immutable artifact provenance;\n"
+                "- retry and idempotency behavior;\n"
+                "- database transaction boundaries;\n"
+                "- container isolation;\n"
+                "- absence of uncontrolled code execution.\n\n"
+                "Return a corrected final architecture document. Include a "
+                "review findings section describing material changes made."
+            ),
+            expected_output=(
+                "A reviewed and corrected Markdown architecture document "
+                "suitable for human approval."
+            ),
+            agent=reviewer,
+            context=[design_task],
+        )
+
+        crew = Crew(
+            agents=[architect, reviewer],
+            tasks=[design_task, review_task],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+        output = crew.kickoff(
+            inputs={
+                "project_name": project_name,
+                "project_description": project_description,
+                "project_manifest_hash": project_manifest_hash,
+                "requirements_markdown": requirements_markdown,
+                "requirements_artifact_hash": requirements_artifact_hash,
+            }
+        )
+
+        markdown = str(output).strip()
+
+        if not markdown:
+            raise RuntimeError("Architecture Crew returned an empty result")
+
+        return ArchitectureCrewResult(
+            markdown=markdown,
+            raw_output=str(output),
+        )
+
+CrewAI distinguishes higher-level crews from controlled workflow orchestration. In our platform, CrewAI performs the bounded agent task, while the application workflow remains authoritative.
+14. Queue architecture only after requirements approval
+
+Add this method to ProjectWorkflowService:
+
+async def queue_architecture_run(
+    self,
+    *,
+    project_id: uuid.UUID,
+    actor_id: str,
+) -> CrewRunModel:
+    project = await self._get_project(project_id)
+
+    if project.status not in {
+        ProjectStatus.REQUIREMENTS_APPROVED,
+        ProjectStatus.ARCHITECTURE_FAILED,
+        ProjectStatus.ARCHITECTURE_REJECTED,
+    }:
+        raise InvalidProjectStateError(
+            f"Cannot start architecture from state {project.status}"
+        )
+
+    requirements_result = await self._session.execute(
+        select(ArtifactModel)
+        .where(
+            ArtifactModel.project_id == project.id,
+            ArtifactModel.artifact_type
+            == ArtifactType.REQUIREMENTS_SPECIFICATION,
+        )
+        .order_by(ArtifactModel.created_at.desc())
+        .limit(1)
+    )
+
+    requirements_artifact = requirements_result.scalar_one_or_none()
+
+    if requirements_artifact is None:
+        raise ArtifactNotFoundError(
+            "Approved requirements artifact not found"
+        )
+
+    approval_result = await self._session.execute(
+        select(ApprovalModel)
+        .where(
+            ApprovalModel.project_id == project.id,
+            ApprovalModel.artifact_id == requirements_artifact.id,
+            ApprovalModel.decision == ApprovalDecision.APPROVED,
+        )
+        .order_by(ApprovalModel.created_at.desc())
+        .limit(1)
+    )
+
+    approval = approval_result.scalar_one_or_none()
+
+    if approval is None:
+        raise InvalidProjectStateError(
+            "The selected requirements artifact is not approved"
+        )
+
+    run_id = uuid.uuid4()
+
+    run = CrewRunModel(
+        id=run_id,
+        project_id=project.id,
+        crew_name="architecture_crew",
+        status=RunStatus.QUEUED,
+        input_payload={
+            "requirements_artifact_id": str(
+                requirements_artifact.id
+            ),
+            "requirements_artifact_hash": (
+                requirements_artifact.content_hash
+            ),
+        },
+    )
+
+    project.status = ProjectStatus.ARCHITECTURE_QUEUED
+    self._session.add(run)
+
+    jobs = JobRepository(self._session)
+
+    job = await jobs.enqueue(
+        project_id=project.id,
+        run_id=run_id,
+        job_type=JobType.RUN_ARCHITECTURE_CREW,
+        payload={
+            "project_id": str(project.id),
+            "run_id": str(run_id),
+            "requirements_artifact_id": str(
+                requirements_artifact.id
+            ),
+            "requirements_artifact_hash": (
+                requirements_artifact.content_hash
+            ),
+        },
+        priority=100,
+        max_attempts=3,
+    )
+
+    self._session.add(
+        AuditEventModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            event_type="architecture.run.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run_id),
+                "job_id": str(job.id),
+                "requirements_artifact_id": str(
+                    requirements_artifact.id
+                ),
+                "requirements_artifact_hash": (
+                    requirements_artifact.content_hash
+                ),
+            },
+        )
+    )
+
+    await self._session.commit()
+    await self._session.refresh(run)
+
+    return run
+
+The architecture run references the exact approved requirements artifact and its hash.
+
+It must not simply use “the current project description.”
+15. Execute the Architecture Crew
+
+Import:
+
+from ai_enterprise.infrastructure.crews.architecture_crew import (
+    ArchitectureCrewRunner,
+)
+
+Add this method to ProjectWorkflowService:
+
+async def execute_architecture_run(
+    self,
+    *,
+    run_id: uuid.UUID,
+) -> None:
+    result = await self._session.execute(
+        select(CrewRunModel).where(
+            CrewRunModel.id == run_id
+        )
+    )
+
+    run = result.scalar_one_or_none()
+
+    if run is None:
+        raise RuntimeError(
+            f"Architecture run {run_id} does not exist"
+        )
+
+    if run.status not in {
+        RunStatus.QUEUED,
+        RunStatus.FAILED,
+    }:
+        raise InvalidProjectStateError(
+            f"Architecture run cannot execute from {run.status}"
+        )
+
+    project = await self._get_project(run.project_id)
+
+    artifact_id = uuid.UUID(
+        run.input_payload["requirements_artifact_id"]
+    )
+
+    artifact_result = await self._session.execute(
+        select(ArtifactModel).where(
+            ArtifactModel.id == artifact_id,
+            ArtifactModel.project_id == project.id,
+            ArtifactModel.artifact_type
+            == ArtifactType.REQUIREMENTS_SPECIFICATION,
+        )
+    )
+
+    requirements_artifact = artifact_result.scalar_one_or_none()
+
+    if requirements_artifact is None:
+        raise ArtifactNotFoundError(str(artifact_id))
+
+    expected_hash = run.input_payload[
+        "requirements_artifact_hash"
+    ]
+
+    actual_hash = hash_text(requirements_artifact.content)
+
+    if actual_hash != expected_hash:
+        raise RuntimeError(
+            "Requirements artifact integrity check failed"
+        )
+
+    approval_result = await self._session.execute(
+        select(ApprovalModel).where(
+            ApprovalModel.project_id == project.id,
+            ApprovalModel.artifact_id == requirements_artifact.id,
+            ApprovalModel.decision == ApprovalDecision.APPROVED,
+        )
+    )
+
+    if approval_result.scalar_one_or_none() is None:
+        raise InvalidProjectStateError(
+            "Architecture cannot run without approved requirements"
+        )
+
+    run.status = RunStatus.RUNNING
+    run.started_at = datetime.now(UTC)
+    run.error_message = None
+    project.status = ProjectStatus.ARCHITECTURE_RUNNING
+
+    self._session.add(
+        AuditEventModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            event_type="architecture.run.started",
+            actor_type="system",
+            actor_id="architecture-worker",
+            payload={
+                "run_id": str(run.id),
+                "requirements_artifact_id": str(
+                    requirements_artifact.id
+                ),
+                "requirements_artifact_hash": (
+                    requirements_artifact.content_hash
+                ),
+            },
+        )
+    )
+
+    await self._session.commit()
+
+    try:
+        runner = ArchitectureCrewRunner(self._settings)
+
+        crew_result = await asyncio.to_thread(
+            runner.run,
+            project_name=project.name,
+            project_description=project.description,
+            project_manifest_hash=project.manifest_hash,
+            requirements_markdown=requirements_artifact.content,
+            requirements_artifact_hash=(
+                requirements_artifact.content_hash
+            ),
+        )
+
+        architecture_artifact_id = uuid.uuid4()
+
+        architecture_artifact = ArtifactModel(
+            id=architecture_artifact_id,
+            project_id=project.id,
+            run_id=run.id,
+            artifact_type=ArtifactType.ARCHITECTURE_SPECIFICATION,
+            media_type="text/markdown",
+            content=crew_result.markdown,
+            content_hash=hash_text(crew_result.markdown),
+        )
+
+        run.status = RunStatus.SUCCEEDED
+        run.completed_at = datetime.now(UTC)
+        run.output_payload = {
+            "artifact_id": str(architecture_artifact_id),
+            "artifact_type": (
+                ArtifactType.ARCHITECTURE_SPECIFICATION
+            ),
+            "content_hash": architecture_artifact.content_hash,
+            "source_requirements_artifact_id": str(
+                requirements_artifact.id
+            ),
+            "source_requirements_hash": (
+                requirements_artifact.content_hash
+            ),
+        }
+
+        project.status = (
+            ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
+        )
+
+        self._session.add_all(
+            [
+                architecture_artifact,
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="architecture.run.succeeded",
+                    actor_type="agent",
+                    actor_id="architecture-crew",
+                    payload={
+                        "run_id": str(run.id),
+                        "artifact_id": str(
+                            architecture_artifact_id
+                        ),
+                        "artifact_hash": (
+                            architecture_artifact.content_hash
+                        ),
+                        "requirements_artifact_id": str(
+                            requirements_artifact.id
+                        ),
+                        "requirements_artifact_hash": (
+                            requirements_artifact.content_hash
+                        ),
+                    },
+                ),
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type=(
+                        "architecture.approval.requested"
+                    ),
+                    actor_type="system",
+                    actor_id="workflow-engine",
+                    payload={
+                        "artifact_id": str(
+                            architecture_artifact_id
+                        ),
+                        "artifact_hash": (
+                            architecture_artifact.content_hash
+                        ),
+                    },
+                ),
+            ]
+        )
+
+        await self._session.commit()
+
+    except Exception as exc:
+        run.status = RunStatus.FAILED
+        run.completed_at = datetime.now(UTC)
+        run.error_message = str(exc)
+        project.status = ProjectStatus.ARCHITECTURE_FAILED
+
+        self._session.add(
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type="architecture.run.failed",
+                actor_type="system",
+                actor_id="architecture-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "error": str(exc),
+                },
+            )
+        )
+
+        await self._session.commit()
+        raise
+
+Ensure this import exists:
+
+import asyncio
+
+16. Create a generic architecture approval method
+
+Add:
+
+async def approve_architecture(
+    self,
+    *,
+    project_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    decision: ApprovalDecision,
+    reviewer: str,
+    comment: str | None,
+) -> ProjectModel:
+    project = await self._get_project(project_id)
+
+    if (
+        project.status
+        != ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
+    ):
+        raise InvalidProjectStateError(
+            "Project is not awaiting architecture approval"
+        )
+
+    result = await self._session.execute(
+        select(ArtifactModel).where(
+            ArtifactModel.id == artifact_id,
+            ArtifactModel.project_id == project_id,
+            ArtifactModel.artifact_type
+            == ArtifactType.ARCHITECTURE_SPECIFICATION,
+        )
+    )
+
+    artifact = result.scalar_one_or_none()
+
+    if artifact is None:
+        raise ArtifactNotFoundError(str(artifact_id))
+
+    approval = ApprovalModel(
+        id=uuid.uuid4(),
+        project_id=project.id,
+        artifact_id=artifact.id,
+        decision=decision,
+        reviewer=reviewer,
+        comment=comment,
+    )
+
+    if decision == ApprovalDecision.APPROVED:
+        project.status = ProjectStatus.ARCHITECTURE_APPROVED
+        event_type = "architecture.approved"
+    else:
+        project.status = ProjectStatus.ARCHITECTURE_REJECTED
+        event_type = "architecture.rejected"
+
+    self._session.add_all(
+        [
+            approval,
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type=event_type,
+                actor_type="human",
+                actor_id=reviewer,
+                payload={
+                    "artifact_id": str(artifact.id),
+                    "artifact_hash": artifact.content_hash,
+                    "comment": comment,
+                },
+            ),
+        ]
+    )
+
+    await self._session.commit()
+    await self._session.refresh(project)
+
+    return project
+
+17. Add the architecture API routes
+
+Add to:
+
+nano apps/api/src/ai_enterprise/api/routes/projects.py
+
+Architecture run endpoint:
+
+@router.post(
+    "/{project_id}/architecture-runs",
+    response_model=RunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_architecture_run(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RunResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        run = await service.queue_architecture_run(
+            project_id=project_id,
+            actor_id="local-user",
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        ) from exc
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return RunResponse.model_validate(run)
+
+Architecture approval endpoint:
+
+@router.post(
+    "/{project_id}/architecture-artifacts/"
+    "{artifact_id}/approval",
+    response_model=ProjectResponse,
+)
+async def approve_architecture_artifact(
+    project_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    request: ApprovalRequest,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ProjectResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        project = await service.approve_architecture(
+            project_id=project_id,
+            artifact_id=artifact_id,
+            decision=request.decision,
+            reviewer=request.reviewer,
+            comment=request.comment,
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        ) from exc
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Artifact not found",
+        ) from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return ProjectResponse.model_validate(project)
+
+18. Add the worker to Docker Compose
+
+Open:
+
+nano docker-compose.yml
+
+Add:
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-worker
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "ai_enterprise.worker"
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+Your services are now:
+
+postgres
+api
+worker
+Ollama on Ubuntu host
+
+The API and worker use the same application image but different commands.
+19. Start the complete system
+
+From the repository root:
+
+cd ~/projects/ai-enterprise
+docker compose build
+docker compose up -d
+
+Check:
+
+docker compose ps
+
+Expected:
+
+ai-enterprise-postgres   running
+ai-enterprise-api        running
+ai-enterprise-worker     running
+
+Watch worker logs:
+
+docker compose logs -f worker
+
+Watch API logs separately:
+
+docker compose logs -f api
+
+20. Verify the durable requirements workflow
+
+Create a project:
+
+curl -s -X POST \
+  http://localhost:8000/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI Enterprise",
+    "description": "Build an enterprise AI engineering platform with controlled crews, immutable artifacts, human approvals, disposable execution environments, independent patch review and a complete audit trail."
+  }' | jq
+
+Set the project ID:
+
+export PROJECT_ID="<project-uuid>"
+
+Queue requirements:
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/requirements-runs" \
+  | jq
+
+Inspect jobs:
+
+docker compose exec postgres \
+  psql -U ai_enterprise -d ai_enterprise \
+  -c "
+    SELECT
+      id,
+      job_type,
+      status,
+      attempt_count,
+      lease_owner,
+      lease_expires_at,
+      last_error
+    FROM jobs
+    ORDER BY created_at DESC;
+  "
+
+During execution you should see:
+
+status = leased
+lease_owner = worker identifier
+
+After execution:
+
+status = succeeded
+
+21. Approve requirements and run architecture
+
+Retrieve artifacts:
+
+curl -s \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts" \
+  | jq
+
+Set the requirements artifact ID:
+
+export REQUIREMENTS_ARTIFACT_ID="<artifact-uuid>"
+
+Approve:
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts/$REQUIREMENTS_ARTIFACT_ID/approval" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "approved",
+    "reviewer": "ursu-sevastian",
+    "comment": "Approved for architecture design."
+  }' | jq
+
+Queue architecture:
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/architecture-runs" \
+  | jq
+
+Monitor:
+
+docker compose logs -f worker
+
+Retrieve the new architecture artifact:
+
+curl -s \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/artifacts" \
+  | jq
+
+Approve it:
+
+export ARCHITECTURE_ARTIFACT_ID="<architecture-artifact-uuid>"
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/architecture-artifacts/$ARCHITECTURE_ARTIFACT_ID/approval" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "approved",
+    "reviewer": "ursu-sevastian",
+    "comment": "Architecture approved for bounded work-package planning."
+  }' | jq
+
+The final state should be:
+
+architecture_approved
+
+22. Test worker recovery
+
+Queue a job and stop the worker while it is running:
+
+docker compose stop worker
+
+The job should remain:
+
+leased
+
+After its lease expires, restart:
+
+docker compose start worker
+
+The worker should reclaim it because:
+
+status = leased
+lease_expires_at < current time
+attempt_count < max_attempts
+
+This proves that the job is not lost merely because the worker process terminates.
+23. Current milestone state
+
+You now have:
+
+Create project                       complete
+Immutable manifest                   complete
+Requirements Crew                    complete
+Requirements artifact                complete
+Human requirements approval          complete
+Durable worker                       complete
+Architecture Crew                    complete
+Architecture artifact                complete
+Human architecture approval          complete
+Bounded work package                 next
+Disposable execution container       not yet
+Tests                                not yet
+Independent patch review             not yet
+Complete audit query API             partial
+No uncontrolled host modification    architectural boundary established
+
+The next implementation increment is the Work Package Planner. It will convert an approved architecture artifact into exactly one bounded package containing:
+
+objective
+allowed files
+forbidden files
+required changes
+acceptance criteria
+test commands
+resource limits
+network policy
+execution timeout
+base repository commit
+input artifact hashes
+
+That work package will become the immutable contract supplied to a disposable implementation container.
+
+continue
+
+Next Increment — Immutable Work Package Planning
+
+The workflow now becomes:
+
+Approved architecture
+        ↓
+Create work-package planning run
+        ↓
+Durable worker claims job
+        ↓
+Planner Crew proposes one bounded package
+        ↓
+Independent planning reviewer validates boundaries
+        ↓
+Immutable work-package artifact stored
+        ↓
+Human approves package
+        ↓
+Package becomes eligible for container execution
+
+A work package is not a general instruction to modify the repository. It is an execution contract defining exactly:
+
+    what may change;
+
+    what must not change;
+
+    which repository revision is the starting point;
+
+    which commands may run;
+
+    how success is measured;
+
+    what resource and network constraints apply;
+
+    which approved artifacts authorize the work.
+
+1. Add work-package states
+
+Open:
+
+cd ~/projects/ai-enterprise
+nano apps/api/src/ai_enterprise/domain/enums.py
+
+Extend ProjectStatus:
+
+class ProjectStatus(StrEnum):
+    CREATED = "created"
+
+    REQUIREMENTS_QUEUED = "requirements_queued"
+    REQUIREMENTS_RUNNING = "requirements_running"
+    REQUIREMENTS_FAILED = "requirements_failed"
+    AWAITING_REQUIREMENTS_APPROVAL = "awaiting_requirements_approval"
+    REQUIREMENTS_APPROVED = "requirements_approved"
+    REQUIREMENTS_REJECTED = "requirements_rejected"
+
+    ARCHITECTURE_QUEUED = "architecture_queued"
+    ARCHITECTURE_RUNNING = "architecture_running"
+    ARCHITECTURE_FAILED = "architecture_failed"
+    AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
+    ARCHITECTURE_APPROVED = "architecture_approved"
+    ARCHITECTURE_REJECTED = "architecture_rejected"
+
+    WORK_PACKAGE_QUEUED = "work_package_queued"
+    WORK_PACKAGE_PLANNING = "work_package_planning"
+    WORK_PACKAGE_FAILED = "work_package_failed"
+    AWAITING_WORK_PACKAGE_APPROVAL = "awaiting_work_package_approval"
+    WORK_PACKAGE_APPROVED = "work_package_approved"
+    WORK_PACKAGE_REJECTED = "work_package_rejected"
+
+Extend JobType:
+
+class JobType(StrEnum):
+    RUN_REQUIREMENTS_CREW = "run_requirements_crew"
+    RUN_ARCHITECTURE_CREW = "run_architecture_crew"
+    PLAN_WORK_PACKAGE = "plan_work_package"
+
+Extend ArtifactType:
+
+class ArtifactType(StrEnum):
+    PROJECT_MANIFEST = "project_manifest"
+    REQUIREMENTS_SPECIFICATION = "requirements_specification"
+    ARCHITECTURE_SPECIFICATION = "architecture_specification"
+    WORK_PACKAGE = "work_package"
+
+Add execution-related enums:
+
+class NetworkPolicy(StrEnum):
+    NONE = "none"
+    LOOPBACK_ONLY = "loopback_only"
+    ALLOWLIST = "allowlist"
+
+
+class WorkPackageStatus(StrEnum):
+    DRAFT = "draft"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTION_QUEUED = "execution_queued"
+    EXECUTING = "executing"
+    EXECUTION_SUCCEEDED = "execution_succeeded"
+    EXECUTION_FAILED = "execution_failed"
+
+2. Create the work-package table
+
+A work package deserves its own table because the platform must query and enforce its boundaries without parsing an arbitrary Markdown artifact.
+
+Open:
+
+nano apps/api/src/ai_enterprise/infrastructure/database/models.py
+
+Add:
+
+class WorkPackageModel(Base):
+    __tablename__ = "work_packages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    planning_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("crew_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(250),
+        nullable=False,
+    )
+
+    objective: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    repository_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    base_commit_sha: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    source_requirements_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    source_requirements_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    source_architecture_artifact_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    source_architecture_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    contract: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    contract_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+The contract JSON will contain the complete machine-enforceable package. The artifact table will hold the canonical serialized representation.
+3. Create the migration
+
+cd ~/projects/ai-enterprise/apps/api
+
+uv run alembic revision --autogenerate \
+  -m "add bounded work packages"
+
+uv run alembic upgrade head
+
+Verify:
+
+docker compose exec postgres \
+  psql -U ai_enterprise -d ai_enterprise \
+  -c "\d work_packages"
+
+4. Define the work-package contract
+
+Create:
+
+nano apps/api/src/ai_enterprise/domain/work_package.py
+
+Insert:
+
+from __future__ import annotations
+
+import re
+from pathlib import PurePosixPath
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
+
+class ResourceLimits(BaseModel):
+    cpu_count: float = Field(default=2.0, gt=0, le=16)
+    memory_mb: int = Field(default=4096, ge=512, le=32768)
+    disk_mb: int = Field(default=8192, ge=1024, le=65536)
+    process_limit: int = Field(default=256, ge=32, le=2048)
+    execution_timeout_seconds: int = Field(
+        default=1800,
+        ge=30,
+        le=7200,
+    )
+
+
+class NetworkRules(BaseModel):
+    policy: Literal["none", "loopback_only", "allowlist"] = "none"
+    allowed_hosts: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_allowlist(self) -> NetworkRules:
+        if self.policy != "allowlist" and self.allowed_hosts:
+            raise ValueError(
+                "allowed_hosts may only be used with allowlist policy"
+            )
+
+        if self.policy == "allowlist" and not self.allowed_hosts:
+            raise ValueError(
+                "allowlist policy requires at least one allowed host"
+            )
+
+        return self
+
+
+class FileScope(BaseModel):
+    allowed_files: list[str] = Field(min_length=1)
+    allowed_directories: list[str] = Field(default_factory=list)
+    forbidden_files: list[str] = Field(default_factory=list)
+    forbidden_directories: list[str] = Field(default_factory=list)
+    maximum_changed_files: int = Field(default=12, ge=1, le=100)
+    maximum_added_lines: int = Field(default=1000, ge=1, le=10000)
+    maximum_deleted_lines: int = Field(default=500, ge=0, le=10000)
+
+    @field_validator(
+        "allowed_files",
+        "allowed_directories",
+        "forbidden_files",
+        "forbidden_directories",
+    )
+    @classmethod
+    def validate_paths(cls, paths: list[str]) -> list[str]:
+        normalized: list[str] = []
+
+        for raw_path in paths:
+            path = raw_path.strip()
+
+            if not path:
+                raise ValueError("Empty paths are not allowed")
+
+            pure_path = PurePosixPath(path)
+
+            if pure_path.is_absolute():
+                raise ValueError(
+                    f"Absolute repository path is forbidden: {path}"
+                )
+
+            if ".." in pure_path.parts:
+                raise ValueError(
+                    f"Parent traversal is forbidden: {path}"
+                )
+
+            normalized.append(str(pure_path))
+
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("Duplicate paths are not allowed")
+
+        return normalized
+
+    @model_validator(mode="after")
+    def prevent_scope_conflicts(self) -> FileScope:
+        overlap = set(self.allowed_files) & set(self.forbidden_files)
+
+        if overlap:
+            raise ValueError(
+                f"Paths cannot be both allowed and forbidden: {overlap}"
+            )
+
+        return self
+
+
+class CommandPolicy(BaseModel):
+    setup_commands: list[list[str]] = Field(default_factory=list)
+    implementation_commands: list[list[str]] = Field(default_factory=list)
+    test_commands: list[list[str]] = Field(min_length=1)
+    forbidden_executables: list[str] = Field(
+        default_factory=lambda: [
+            "sudo",
+            "su",
+            "ssh",
+            "scp",
+            "mount",
+            "umount",
+            "systemctl",
+            "service",
+            "reboot",
+            "shutdown",
+            "docker",
+            "podman",
+            "kubectl",
+        ]
+    )
+
+    @field_validator(
+        "setup_commands",
+        "implementation_commands",
+        "test_commands",
+    )
+    @classmethod
+    def validate_commands(
+        cls,
+        commands: list[list[str]],
+    ) -> list[list[str]]:
+        for command in commands:
+            if not command:
+                raise ValueError("Empty command arrays are forbidden")
+
+            executable = command[0].strip()
+
+            if not executable:
+                raise ValueError("Command executable is missing")
+
+            if executable in {"sh", "bash", "zsh"}:
+                raise ValueError(
+                    "Shell interpreter commands are forbidden; "
+                    "commands must use argument arrays"
+                )
+
+        return commands
+
+
+class AcceptanceCriterion(BaseModel):
+    id: str = Field(pattern=r"^AC-[0-9]{3}$")
+    description: str = Field(min_length=10, max_length=2000)
+    verification: str = Field(min_length=5, max_length=2000)
+
+
+class RequiredChange(BaseModel):
+    id: str = Field(pattern=r"^CHG-[0-9]{3}$")
+    description: str = Field(min_length=10, max_length=2000)
+    related_requirements: list[str] = Field(min_length=1)
+    target_paths: list[str] = Field(min_length=1)
+
+
+class WorkPackageContract(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+
+    project_id: str
+    title: str = Field(min_length=5, max_length=250)
+    objective: str = Field(min_length=20, max_length=5000)
+
+    base_commit_sha: str
+    source_requirements_artifact_id: str
+    source_requirements_hash: str
+    source_architecture_artifact_id: str
+    source_architecture_hash: str
+
+    required_changes: list[RequiredChange] = Field(
+        min_length=1,
+        max_length=12,
+    )
+
+    file_scope: FileScope
+    command_policy: CommandPolicy
+    network: NetworkRules = Field(default_factory=NetworkRules)
+    resources: ResourceLimits = Field(default_factory=ResourceLimits)
+
+    acceptance_criteria: list[AcceptanceCriterion] = Field(
+        min_length=1,
+        max_length=30,
+    )
+
+    expected_artifacts: list[str] = Field(
+        default_factory=lambda: [
+            "implementation.patch",
+            "test-report.json",
+            "execution-log.jsonl",
+            "changed-files.json",
+        ]
+    )
+
+    forbidden_actions: list[str] = Field(
+        default_factory=lambda: [
+            "Modify files outside the approved repository checkout",
+            "Access the Docker socket",
+            "Use privileged container execution",
+            "Mount host system directories",
+            "Change host services",
+            "Read host credentials",
+            "Push commits or tags",
+            "Contact unapproved network destinations",
+        ]
+    )
+
+    @field_validator("base_commit_sha")
+    @classmethod
+    def validate_commit_sha(cls, value: str) -> str:
+        normalized = value.lower().strip()
+
+        if not COMMIT_SHA_PATTERN.fullmatch(normalized):
+            raise ValueError(
+                "base_commit_sha must be a full 40-character Git SHA"
+            )
+
+        return normalized
+
+    @field_validator(
+        "source_requirements_hash",
+        "source_architecture_hash",
+    )
+    @classmethod
+    def validate_sha256(cls, value: str) -> str:
+        normalized = value.lower().strip()
+
+        if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+            raise ValueError(
+                "Artifact hashes must be 64-character SHA-256 values"
+            )
+
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_criterion_ids(self) -> WorkPackageContract:
+        criterion_ids = [
+            criterion.id for criterion in self.acceptance_criteria
+        ]
+
+        if len(criterion_ids) != len(set(criterion_ids)):
+            raise ValueError(
+                "Acceptance criterion IDs must be unique"
+            )
+
+        change_ids = [change.id for change in self.required_changes]
+
+        if len(change_ids) != len(set(change_ids)):
+            raise ValueError("Required-change IDs must be unique")
+
+        return self
+
+Important design decision:
+
+Commands are arrays of arguments, not shell strings.
+
+Correct:
+
+["pytest", "-q", "apps/api/tests"]
+
+Unsafe:
+
+"pytest -q && curl malicious.example"
+
+5. Add repository metadata to projects
+
+The work package must be anchored to a specific Git repository and commit.
+
+Add these fields to ProjectModel:
+
+repository_path: Mapped[str] = mapped_column(
+    Text,
+    nullable=False,
+)
+
+repository_url: Mapped[str | None] = mapped_column(
+    Text,
+    nullable=True,
+)
+
+default_branch: Mapped[str] = mapped_column(
+    String(200),
+    nullable=False,
+    default="main",
+)
+
+For the current local project, the repository path will be:
+
+/home/ursu/projects/ai-enterprise
+
+However, the execution container must never receive this host path directly. The host-side executor will create a detached repository snapshot or temporary worktree and mount only that isolated copy.
+
+Update the project creation request:
+
+class CreateProjectRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=200)
+    description: str = Field(min_length=20, max_length=20_000)
+    repository_path: str = Field(min_length=1, max_length=2000)
+    repository_url: str | None = Field(default=None, max_length=2000)
+    default_branch: str = Field(default="main", min_length=1, max_length=200)
+
+Update ProjectResponse:
+
+class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str
+    repository_path: str
+    repository_url: str | None
+    default_branch: str
+    status: ProjectStatus
+    manifest_hash: str
+    created_at: datetime
+    updated_at: datetime
+
+Update create_project() arguments and manifest:
+
+async def create_project(
+    self,
+    *,
+    name: str,
+    description: str,
+    repository_path: str,
+    repository_url: str | None,
+    default_branch: str,
+    actor_id: str,
+) -> ProjectModel:
+
+Manifest fields:
+
+manifest = {
+    "schema_version": "1.0",
+    "project_id": str(project_id),
+    "name": name,
+    "description": description,
+    "repository": {
+        "path": repository_path,
+        "url": repository_url,
+        "default_branch": default_branch,
+    },
+    "created_by": actor_id,
+}
+
+Project model:
+
+project = ProjectModel(
+    id=project_id,
+    name=name,
+    description=description,
+    repository_path=repository_path,
+    repository_url=repository_url,
+    default_branch=default_branch,
+    status=ProjectStatus.CREATED,
+    manifest_hash=manifest_hash,
+    manifest=manifest,
+)
+
+Update the route:
+
+project = await service.create_project(
+    name=request.name,
+    description=request.description,
+    repository_path=request.repository_path,
+    repository_url=request.repository_url,
+    default_branch=request.default_branch,
+    actor_id="local-user",
+)
+
+Generate another migration:
+
+cd ~/projects/ai-enterprise/apps/api
+
+uv run alembic revision --autogenerate \
+  -m "add project repository metadata"
+
+uv run alembic upgrade head
+
+For existing local rows, the generated migration may require a temporary default before changing repository_path to non-null. Adjust the migration if necessary:
+
+op.add_column(
+    "projects",
+    sa.Column(
+        "repository_path",
+        sa.Text(),
+        nullable=True,
+    ),
+)
+
+op.execute(
+    """
+    UPDATE projects
+    SET repository_path = '/home/ursu/projects/ai-enterprise'
+    WHERE repository_path IS NULL
+    """
+)
+
+op.alter_column(
+    "projects",
+    "repository_path",
+    nullable=False,
+)
+
+6. Create a safe Git inspection adapter
+
+The planner requires the current Git SHA and a controlled view of repository files.
+
+Create:
+
+mkdir -p apps/api/src/ai_enterprise/infrastructure/repositories
+nano apps/api/src/ai_enterprise/infrastructure/repositories/git_repository.py
+
+Insert:
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from pathlib import Path
+
+
+class RepositoryInspectionError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class RepositorySnapshot:
+    root: Path
+    commit_sha: str
+    branch: str
+    is_clean: bool
+    tracked_files: tuple[str, ...]
+
+
+class GitRepositoryInspector:
+    def __init__(
+        self,
+        *,
+        allowed_root: Path,
+    ) -> None:
+        self._allowed_root = allowed_root.resolve()
+
+    async def inspect(
+        self,
+        repository_path: str,
+    ) -> RepositorySnapshot:
+        root = Path(repository_path).expanduser().resolve()
+
+        self._assert_allowed(root)
+
+        commit_sha = await self._git(
+            root,
+            "rev-parse",
+            "HEAD",
+        )
+
+        branch = await self._git(
+            root,
+            "branch",
+            "--show-current",
+        )
+
+        status = await self._git(
+            root,
+            "status",
+            "--porcelain",
+        )
+
+        file_output = await self._git(
+            root,
+            "ls-files",
+        )
+
+        tracked_files = tuple(
+            line.strip()
+            for line in file_output.splitlines()
+            if line.strip()
+        )
+
+        return RepositorySnapshot(
+            root=root,
+            commit_sha=commit_sha.strip(),
+            branch=branch.strip(),
+            is_clean=not bool(status.strip()),
+            tracked_files=tracked_files,
+        )
+
+    def _assert_allowed(self, root: Path) -> None:
+        try:
+            root.relative_to(self._allowed_root)
+        except ValueError as exc:
+            raise RepositoryInspectionError(
+                f"Repository is outside allowed root: {root}"
+            ) from exc
+
+        if not root.is_dir():
+            raise RepositoryInspectionError(
+                f"Repository directory does not exist: {root}"
+            )
+
+        if not (root / ".git").exists():
+            raise RepositoryInspectionError(
+                f"Path is not a Git repository: {root}"
+            )
+
+    @staticmethod
+    async def _git(
+        root: Path,
+        *arguments: str,
+    ) -> str:
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(root),
+            *arguments,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            raise RepositoryInspectionError(
+                stderr.decode("utf-8", errors="replace").strip()
+            )
+
+        return stdout.decode("utf-8", errors="replace")
+
+Add to settings:
+
+repository_allowed_root: Path = Path("/home/ursu/projects")
+
+For Docker, the worker cannot inspect /home/ursu/projects unless the repository is mounted. For now, run the worker on the Ubuntu host or mount the repository read-only:
+
+worker:
+  volumes:
+    - ./apps/api/src:/app/src
+    - ./artifacts:/app/artifacts
+    - /home/ursu/projects:/repositories:ro
+
+A cleaner production design will use a dedicated repository snapshot service rather than exposing the entire projects directory to the worker.
+
+For the current milestone, the safer choice is:
+
+API in Docker
+PostgreSQL in Docker
+planning worker on host
+Ollama on host
+
+Run the worker from:
+
+cd ~/projects/ai-enterprise/apps/api
+uv run python -m ai_enterprise.worker
+
+with:
+
+REPOSITORY_ALLOWED_ROOT=/home/ursu/projects
+
+7. Create the Work Package Planner Crew
+
+Create:
+
+nano apps/api/src/ai_enterprise/infrastructure/crews/work_package_crew.py
+
+Insert:
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+
+from crewai import Agent, Crew, LLM, Process, Task
+
+from ai_enterprise.config import Settings
+
+
+@dataclass(frozen=True)
+class WorkPackageCrewResult:
+    raw_json: str
+
+
+class WorkPackageCrewRunner:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def run(
+        self,
+        *,
+        project_id: str,
+        project_name: str,
+        project_description: str,
+        base_commit_sha: str,
+        requirements_artifact_id: str,
+        requirements_hash: str,
+        requirements_markdown: str,
+        architecture_artifact_id: str,
+        architecture_hash: str,
+        architecture_markdown: str,
+        tracked_files: list[str],
+    ) -> WorkPackageCrewResult:
+        llm = LLM(
+            model=self._settings.ollama_model,
+            base_url=self._settings.ollama_base_url,
+            temperature=0.0,
+            timeout=900,
+        )
+
+        planner = Agent(
+            role="Senior Software Work Package Planner",
+            goal=(
+                "Select one small, coherent and independently testable "
+                "implementation increment from the approved architecture."
+            ),
+            backstory=(
+                "You divide enterprise software architecture into bounded "
+                "changes suitable for isolated execution and rigorous review."
+            ),
+            llm=llm,
+            allow_delegation=False,
+            verbose=True,
+        )
+
+        boundary_reviewer = Agent(
+            role="Work Package Boundary Reviewer",
+            goal=(
+                "Prevent broad, ambiguous, unsafe or non-verifiable "
+                "implementation packages."
+            ),
+            backstory=(
+                "You reject work that lacks precise file boundaries, "
+                "test commands, resource limits or traceability."
+            ),
+            llm=llm,
+            allow_delegation=False,
+            verbose=True,
+        )
+
+        planning_task = Task(
+            description=(
+                "Create exactly one bounded work package.\n\n"
+                "Project ID: {project_id}\n"
+                "Project name: {project_name}\n"
+                "Project description: {project_description}\n"
+                "Base commit: {base_commit_sha}\n\n"
+                "Requirements artifact ID: "
+                "{requirements_artifact_id}\n"
+                "Requirements hash: {requirements_hash}\n\n"
+                "Architecture artifact ID: "
+                "{architecture_artifact_id}\n"
+                "Architecture hash: {architecture_hash}\n\n"
+                "Tracked repository files:\n"
+                "{tracked_files}\n\n"
+                "Approved requirements:\n"
+                "{requirements_markdown}\n\n"
+                "Approved architecture:\n"
+                "{architecture_markdown}\n\n"
+                "Choose the smallest valuable implementation increment. "
+                "Do not plan the entire platform. The package should normally "
+                "modify no more than 12 files.\n\n"
+                "Return only valid JSON matching this shape:\n"
+                "{contract_schema}\n\n"
+                "Rules:\n"
+                "- Use only tracked paths or explicit new paths under an "
+                "approved directory.\n"
+                "- Never allow .git, .env, credentials, host configuration, "
+                "Docker socket access or system directories.\n"
+                "- Default network policy to none.\n"
+                "- Use command arrays, not shell strings.\n"
+                "- Include explicit test commands.\n"
+                "- Include stable CHG-### and AC-### identifiers.\n"
+                "- Every required change must reference approved requirement "
+                "IDs.\n"
+                "- Preserve the supplied artifact IDs and hashes exactly."
+            ),
+            expected_output=(
+                "One valid JSON work-package contract and no Markdown."
+            ),
+            agent=planner,
+        )
+
+        review_task = Task(
+            description=(
+                "Independently review the proposed work package.\n\n"
+                "Reject or correct:\n"
+                "- excessive scope;\n"
+                "- missing file boundaries;\n"
+                "- shell command strings;\n"
+                "- privileged operations;\n"
+                "- unnecessary network access;\n"
+                "- missing tests;\n"
+                "- vague acceptance criteria;\n"
+                "- source artifact IDs or hashes that changed;\n"
+                "- modifications to secrets, .git or host configuration.\n\n"
+                "Return only the corrected final JSON object."
+            ),
+            expected_output="A corrected valid JSON object only.",
+            agent=boundary_reviewer,
+            context=[planning_task],
+        )
+
+        contract_schema = {
+            "schema_version": "1.0",
+            "project_id": project_id,
+            "title": "Short bounded title",
+            "objective": "Precise implementation objective",
+            "base_commit_sha": base_commit_sha,
+            "source_requirements_artifact_id": requirements_artifact_id,
+            "source_requirements_hash": requirements_hash,
+            "source_architecture_artifact_id": architecture_artifact_id,
+            "source_architecture_hash": architecture_hash,
+            "required_changes": [
+                {
+                    "id": "CHG-001",
+                    "description": "Required change",
+                    "related_requirements": ["FR-001"],
+                    "target_paths": ["relative/path.py"],
+                }
+            ],
+            "file_scope": {
+                "allowed_files": ["relative/path.py"],
+                "allowed_directories": [],
+                "forbidden_files": [".env"],
+                "forbidden_directories": [".git"],
+                "maximum_changed_files": 12,
+                "maximum_added_lines": 1000,
+                "maximum_deleted_lines": 500,
+            },
+            "command_policy": {
+                "setup_commands": [],
+                "implementation_commands": [],
+                "test_commands": [
+                    ["pytest", "-q", "tests"]
+                ],
+                "forbidden_executables": [
+                    "sudo",
+                    "su",
+                    "ssh",
+                    "scp",
+                    "mount",
+                    "umount",
+                    "systemctl",
+                    "service",
+                    "reboot",
+                    "shutdown",
+                    "docker",
+                    "podman",
+                    "kubectl",
+                ],
+            },
+            "network": {
+                "policy": "none",
+                "allowed_hosts": [],
+            },
+            "resources": {
+                "cpu_count": 2.0,
+                "memory_mb": 4096,
+                "disk_mb": 8192,
+                "process_limit": 256,
+                "execution_timeout_seconds": 1800,
+            },
+            "acceptance_criteria": [
+                {
+                    "id": "AC-001",
+                    "description": "Observable outcome",
+                    "verification": "Exact test or inspection",
+                }
+            ],
+            "expected_artifacts": [
+                "implementation.patch",
+                "test-report.json",
+                "execution-log.jsonl",
+                "changed-files.json",
+            ],
+            "forbidden_actions": [
+                "Modify files outside the approved checkout",
+                "Access the Docker socket",
+                "Use privileged container execution",
+                "Mount host system directories",
+                "Change host services",
+                "Read host credentials",
+                "Push commits or tags",
+                "Contact unapproved network destinations",
+            ],
+        }
+
+        crew = Crew(
+            agents=[planner, boundary_reviewer],
+            tasks=[planning_task, review_task],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+        output = crew.kickoff(
+            inputs={
+                "project_id": project_id,
+                "project_name": project_name,
+                "project_description": project_description,
+                "base_commit_sha": base_commit_sha,
+                "requirements_artifact_id": requirements_artifact_id,
+                "requirements_hash": requirements_hash,
+                "requirements_markdown": requirements_markdown,
+                "architecture_artifact_id": architecture_artifact_id,
+                "architecture_hash": architecture_hash,
+                "architecture_markdown": architecture_markdown,
+                "tracked_files": "\n".join(tracked_files),
+                "contract_schema": json.dumps(
+                    contract_schema,
+                    indent=2,
+                ),
+            }
+        )
+
+        raw_json = str(output).strip()
+
+        if not raw_json:
+            raise RuntimeError(
+                "Work Package Crew returned an empty result"
+            )
+
+        return WorkPackageCrewResult(raw_json=raw_json)
+
+The LLM output is untrusted. It must pass deterministic validation before persistence.
+8. Add strict JSON extraction
+
+Local models sometimes surround JSON with Markdown fences. Create:
+
+nano apps/api/src/ai_enterprise/domain/json_parsing.py
+
+Insert:
+
+import json
+from typing import Any
+
+
+class InvalidModelJsonError(ValueError):
+    pass
+
+
+def parse_model_json(raw_output: str) -> dict[str, Any]:
+    value = raw_output.strip()
+
+    if value.startswith("```"):
+        lines = value.splitlines()
+
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+
+        value = "\n".join(lines).strip()
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise InvalidModelJsonError(
+            f"Model returned invalid JSON: {exc}"
+        ) from exc
+
+    if not isinstance(parsed, dict):
+        raise InvalidModelJsonError(
+            "Model output must be a JSON object"
+        )
+
+    return parsed
+
+Do not attempt broad automatic repair. Invalid output should fail the job and be retried or reviewed.
+9. Add deterministic boundary validation
+
+Create:
+
+nano apps/api/src/ai_enterprise/domain/work_package_validation.py
+
+Insert:
+
+from pathlib import PurePosixPath
+
+from ai_enterprise.domain.work_package import WorkPackageContract
+
+
+PROTECTED_PATHS = {
+    ".env",
+    ".git",
+    ".git/config",
+    ".git/hooks",
+    "/etc",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/var/run/docker.sock",
+}
+
+
+class WorkPackageBoundaryError(ValueError):
+    pass
+
+
+def validate_repository_boundaries(
+    *,
+    contract: WorkPackageContract,
+    tracked_files: set[str],
+) -> None:
+    for path in contract.file_scope.allowed_files:
+        _reject_protected_path(path)
+
+        # Existing files must be tracked. New files are allowed only when
+        # their parent appears in allowed_directories.
+        if path not in tracked_files:
+            parent = str(PurePosixPath(path).parent)
+
+            if parent not in contract.file_scope.allowed_directories:
+                raise WorkPackageBoundaryError(
+                    f"New file is outside allowed directories: {path}"
+                )
+
+    for directory in contract.file_scope.allowed_directories:
+        _reject_protected_path(directory)
+
+    executables = {
+        command[0]
+        for command_group in (
+            contract.command_policy.setup_commands,
+            contract.command_policy.implementation_commands,
+            contract.command_policy.test_commands,
+        )
+        for command in command_group
+    }
+
+    forbidden = set(
+        contract.command_policy.forbidden_executables
+    )
+
+    violation = executables & forbidden
+
+    if violation:
+        raise WorkPackageBoundaryError(
+            f"Forbidden executables requested: {sorted(violation)}"
+        )
+
+
+def _reject_protected_path(path: str) -> None:
+    normalized = str(PurePosixPath(path))
+
+    for protected in PROTECTED_PATHS:
+        if normalized == protected:
+            raise WorkPackageBoundaryError(
+                f"Protected path requested: {path}"
+            )
+
+        protected_prefix = protected.rstrip("/") + "/"
+
+        if normalized.startswith(protected_prefix):
+            raise WorkPackageBoundaryError(
+                f"Protected path requested: {path}"
+            )
+
+10. Queue the planning run
+
+Add to ProjectWorkflowService:
+
+async def queue_work_package_planning(
+    self,
+    *,
+    project_id: uuid.UUID,
+    actor_id: str,
+) -> CrewRunModel:
+    project = await self._get_project(project_id)
+
+    if project.status not in {
+        ProjectStatus.ARCHITECTURE_APPROVED,
+        ProjectStatus.WORK_PACKAGE_FAILED,
+        ProjectStatus.WORK_PACKAGE_REJECTED,
+    }:
+        raise InvalidProjectStateError(
+            f"Cannot plan work package from state {project.status}"
+        )
+
+    architecture_artifact = await self._get_latest_approved_artifact(
+        project_id=project.id,
+        artifact_type=ArtifactType.ARCHITECTURE_SPECIFICATION,
+    )
+
+    requirements_artifact_id = uuid.UUID(
+        architecture_artifact.run.output_payload[
+            "source_requirements_artifact_id"
+        ]
+    )
+
+The previous models do not currently define an ArtifactModel.run relationship. Instead of relying on a relationship, query the architecture run directly:
+
+    if architecture_artifact.run_id is None:
+        raise InvalidProjectStateError(
+            "Architecture artifact has no source run"
+        )
+
+    architecture_run = await self._session.get(
+        CrewRunModel,
+        architecture_artifact.run_id,
+    )
+
+    if architecture_run is None:
+        raise InvalidProjectStateError(
+            "Architecture source run does not exist"
+        )
+
+    requirements_artifact_id = uuid.UUID(
+        architecture_run.output_payload[
+            "source_requirements_artifact_id"
+        ]
+    )
+
+    requirements_artifact = await self._session.get(
+        ArtifactModel,
+        requirements_artifact_id,
+    )
+
+    if requirements_artifact is None:
+        raise ArtifactNotFoundError(
+            str(requirements_artifact_id)
+        )
+
+    requirements_hash = hash_text(
+        requirements_artifact.content
+    )
+
+    architecture_hash = hash_text(
+        architecture_artifact.content
+    )
+
+    if requirements_hash != requirements_artifact.content_hash:
+        raise RuntimeError(
+            "Requirements artifact integrity check failed"
+        )
+
+    if architecture_hash != architecture_artifact.content_hash:
+        raise RuntimeError(
+            "Architecture artifact integrity check failed"
+        )
+
+    run_id = uuid.uuid4()
+
+    run = CrewRunModel(
+        id=run_id,
+        project_id=project.id,
+        crew_name="work_package_planner_crew",
+        status=RunStatus.QUEUED,
+        input_payload={
+            "requirements_artifact_id": str(
+                requirements_artifact.id
+            ),
+            "requirements_artifact_hash": (
+                requirements_artifact.content_hash
+            ),
+            "architecture_artifact_id": str(
+                architecture_artifact.id
+            ),
+            "architecture_artifact_hash": (
+                architecture_artifact.content_hash
+            ),
+        },
+    )
+
+    project.status = ProjectStatus.WORK_PACKAGE_QUEUED
+    self._session.add(run)
+
+    jobs = JobRepository(self._session)
+
+    job = await jobs.enqueue(
+        project_id=project.id,
+        run_id=run.id,
+        job_type=JobType.PLAN_WORK_PACKAGE,
+        payload={
+            "project_id": str(project.id),
+            "run_id": str(run.id),
+        },
+        priority=100,
+        max_attempts=3,
+    )
+
+    self._session.add(
+        AuditEventModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            event_type="work_package.planning.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run.id),
+                "job_id": str(job.id),
+                "requirements_artifact_id": str(
+                    requirements_artifact.id
+                ),
+                "requirements_artifact_hash": (
+                    requirements_artifact.content_hash
+                ),
+                "architecture_artifact_id": str(
+                    architecture_artifact.id
+                ),
+                "architecture_artifact_hash": (
+                    architecture_artifact.content_hash
+                ),
+            },
+        )
+    )
+
+    await self._session.commit()
+    await self._session.refresh(run)
+
+    return run
+
+Add this helper:
+
+async def _get_latest_approved_artifact(
+    self,
+    *,
+    project_id: uuid.UUID,
+    artifact_type: ArtifactType,
+) -> ArtifactModel:
+    result = await self._session.execute(
+        select(ArtifactModel)
+        .join(
+            ApprovalModel,
+            ApprovalModel.artifact_id == ArtifactModel.id,
+        )
+        .where(
+            ArtifactModel.project_id == project_id,
+            ArtifactModel.artifact_type == artifact_type,
+            ApprovalModel.decision == ApprovalDecision.APPROVED,
+        )
+        .order_by(ApprovalModel.created_at.desc())
+        .limit(1)
+    )
+
+    artifact = result.scalar_one_or_none()
+
+    if artifact is None:
+        raise ArtifactNotFoundError(
+            f"No approved {artifact_type} artifact found"
+        )
+
+    return artifact
+
+11. Execute the planning run
+
+Add imports to project_workflow.py:
+
+from pathlib import Path
+
+from ai_enterprise.domain.hashing import (
+    canonical_json,
+    hash_json,
+    hash_text,
+)
+from ai_enterprise.domain.json_parsing import parse_model_json
+from ai_enterprise.domain.work_package import (
+    WorkPackageContract,
+    WorkPackageStatus,
+)
+from ai_enterprise.domain.work_package_validation import (
+    validate_repository_boundaries,
+)
+from ai_enterprise.infrastructure.crews.work_package_crew import (
+    WorkPackageCrewRunner,
+)
+from ai_enterprise.infrastructure.database.models import (
+    WorkPackageModel,
+)
+from ai_enterprise.infrastructure.repositories.git_repository import (
+    GitRepositoryInspector,
+)
+
+WorkPackageStatus belongs in enums.py, so import it from there rather than domain.work_package:
+
+from ai_enterprise.domain.enums import WorkPackageStatus
+
+Add:
+
+async def execute_work_package_planning(
+    self,
+    *,
+    run_id: uuid.UUID,
+) -> None:
+    run = await self._session.get(CrewRunModel, run_id)
+
+    if run is None:
+        raise RuntimeError(
+            f"Work-package planning run {run_id} does not exist"
+        )
+
+    if run.status not in {
+        RunStatus.QUEUED,
+        RunStatus.FAILED,
+    }:
+        raise InvalidProjectStateError(
+            f"Planning run cannot execute from {run.status}"
+        )
+
+    project = await self._get_project(run.project_id)
+
+    requirements_artifact_id = uuid.UUID(
+        run.input_payload["requirements_artifact_id"]
+    )
+
+    architecture_artifact_id = uuid.UUID(
+        run.input_payload["architecture_artifact_id"]
+    )
+
+    requirements_artifact = await self._session.get(
+        ArtifactModel,
+        requirements_artifact_id,
+    )
+
+    architecture_artifact = await self._session.get(
+        ArtifactModel,
+        architecture_artifact_id,
+    )
+
+    if requirements_artifact is None:
+        raise ArtifactNotFoundError(
+            str(requirements_artifact_id)
+        )
+
+    if architecture_artifact is None:
+        raise ArtifactNotFoundError(
+            str(architecture_artifact_id)
+        )
+
+    expected_requirements_hash = run.input_payload[
+        "requirements_artifact_hash"
+    ]
+
+    expected_architecture_hash = run.input_payload[
+        "architecture_artifact_hash"
+    ]
+
+    if hash_text(requirements_artifact.content) != expected_requirements_hash:
+        raise RuntimeError(
+            "Requirements artifact integrity check failed"
+        )
+
+    if hash_text(architecture_artifact.content) != expected_architecture_hash:
+        raise RuntimeError(
+            "Architecture artifact integrity check failed"
+        )
+
+    inspector = GitRepositoryInspector(
+        allowed_root=self._settings.repository_allowed_root,
+    )
+
+    repository = await inspector.inspect(
+        project.repository_path
+    )
+
+    if not repository.is_clean:
+        raise InvalidProjectStateError(
+            "Repository must be clean before work-package planning"
+        )
+
+    run.status = RunStatus.RUNNING
+    run.started_at = datetime.now(UTC)
+    run.error_message = None
+    project.status = ProjectStatus.WORK_PACKAGE_PLANNING
+
+    self._session.add(
+        AuditEventModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            event_type="work_package.planning.started",
+            actor_type="system",
+            actor_id="work-package-worker",
+            payload={
+                "run_id": str(run.id),
+                "base_commit_sha": repository.commit_sha,
+            },
+        )
+    )
+
+    await self._session.commit()
+
+    try:
+        runner = WorkPackageCrewRunner(self._settings)
+
+        result = await asyncio.to_thread(
+            runner.run,
+            project_id=str(project.id),
+            project_name=project.name,
+            project_description=project.description,
+            base_commit_sha=repository.commit_sha,
+            requirements_artifact_id=str(
+                requirements_artifact.id
+            ),
+            requirements_hash=(
+                requirements_artifact.content_hash
+            ),
+            requirements_markdown=(
+                requirements_artifact.content
+            ),
+            architecture_artifact_id=str(
+                architecture_artifact.id
+            ),
+            architecture_hash=(
+                architecture_artifact.content_hash
+            ),
+            architecture_markdown=(
+                architecture_artifact.content
+            ),
+            tracked_files=list(repository.tracked_files),
+        )
+
+        parsed = parse_model_json(result.raw_json)
+        contract = WorkPackageContract.model_validate(parsed)
+
+        if contract.project_id != str(project.id):
+            raise RuntimeError(
+                "Work package changed the project ID"
+            )
+
+        if contract.base_commit_sha != repository.commit_sha:
+            raise RuntimeError(
+                "Work package changed the base commit SHA"
+            )
+
+        if (
+            contract.source_requirements_artifact_id
+            != str(requirements_artifact.id)
+        ):
+            raise RuntimeError(
+                "Work package changed requirements artifact ID"
+            )
+
+        if (
+            contract.source_requirements_hash
+            != requirements_artifact.content_hash
+        ):
+            raise RuntimeError(
+                "Work package changed requirements hash"
+            )
+
+        if (
+            contract.source_architecture_artifact_id
+            != str(architecture_artifact.id)
+        ):
+            raise RuntimeError(
+                "Work package changed architecture artifact ID"
+            )
+
+        if (
+            contract.source_architecture_hash
+            != architecture_artifact.content_hash
+        ):
+            raise RuntimeError(
+                "Work package changed architecture hash"
+            )
+
+        validate_repository_boundaries(
+            contract=contract,
+            tracked_files=set(repository.tracked_files),
+        )
+
+        contract_data = contract.model_dump(mode="json")
+        contract_content = canonical_json(contract_data)
+        contract_hash = hash_json(contract_data)
+
+        work_package_id = uuid.uuid4()
+        artifact_id = uuid.uuid4()
+
+        artifact = ArtifactModel(
+            id=artifact_id,
+            project_id=project.id,
+            run_id=run.id,
+            artifact_type=ArtifactType.WORK_PACKAGE,
+            media_type="application/json",
+            content=contract_content,
+            content_hash=contract_hash,
+        )
+
+        work_package = WorkPackageModel(
+            id=work_package_id,
+            project_id=project.id,
+            planning_run_id=run.id,
+            artifact_id=artifact_id,
+            status=WorkPackageStatus.AWAITING_APPROVAL,
+            title=contract.title,
+            objective=contract.objective,
+            repository_url=project.repository_url,
+            base_commit_sha=contract.base_commit_sha,
+            source_requirements_artifact_id=(
+                requirements_artifact.id
+            ),
+            source_requirements_hash=(
+                requirements_artifact.content_hash
+            ),
+            source_architecture_artifact_id=(
+                architecture_artifact.id
+            ),
+            source_architecture_hash=(
+                architecture_artifact.content_hash
+            ),
+            contract=contract_data,
+            contract_hash=contract_hash,
+        )
+
+        run.status = RunStatus.SUCCEEDED
+        run.completed_at = datetime.now(UTC)
+        run.output_payload = {
+            "work_package_id": str(work_package_id),
+            "artifact_id": str(artifact_id),
+            "contract_hash": contract_hash,
+            "base_commit_sha": contract.base_commit_sha,
+        }
+
+        project.status = (
+            ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
+        )
+
+        self._session.add_all(
+            [
+                artifact,
+                work_package,
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="work_package.planning.succeeded",
+                    actor_type="agent",
+                    actor_id="work-package-planner-crew",
+                    payload={
+                        "run_id": str(run.id),
+                        "work_package_id": str(work_package_id),
+                        "artifact_id": str(artifact_id),
+                        "contract_hash": contract_hash,
+                        "base_commit_sha": (
+                            contract.base_commit_sha
+                        ),
+                    },
+                ),
+                AuditEventModel(
+                    id=uuid.uuid4(),
+                    project_id=project.id,
+                    event_type="work_package.approval.requested",
+                    actor_type="system",
+                    actor_id="workflow-engine",
+                    payload={
+                        "work_package_id": str(work_package_id),
+                        "artifact_id": str(artifact_id),
+                        "contract_hash": contract_hash,
+                    },
+                ),
+            ]
+        )
+
+        await self._session.commit()
+
+    except Exception as exc:
+        run.status = RunStatus.FAILED
+        run.completed_at = datetime.now(UTC)
+        run.error_message = str(exc)
+        project.status = ProjectStatus.WORK_PACKAGE_FAILED
+
+        self._session.add(
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type="work_package.planning.failed",
+                actor_type="system",
+                actor_id="work-package-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "error": str(exc),
+                },
+            )
+        )
+
+        await self._session.commit()
+        raise
+
+12. Add the new job to the dispatcher
+
+Open:
+
+nano apps/api/src/ai_enterprise/infrastructure/jobs/dispatcher.py
+
+Add:
+
+if job.job_type == JobType.PLAN_WORK_PACKAGE:
+    await service.execute_work_package_planning(
+        run_id=self._required_uuid(job, "run_id")
+    )
+    return
+
+The complete dispatch order becomes:
+
+if job.job_type == JobType.RUN_REQUIREMENTS_CREW:
+    ...
+
+if job.job_type == JobType.RUN_ARCHITECTURE_CREW:
+    ...
+
+if job.job_type == JobType.PLAN_WORK_PACKAGE:
+    ...
+
+raise RuntimeError(...)
+
+13. Add work-package schemas
+
+Open:
+
+nano apps/api/src/ai_enterprise/api/schemas.py
+
+Add:
+
+from typing import Any
+
+from ai_enterprise.domain.enums import WorkPackageStatus
+
+
+class WorkPackageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    project_id: uuid.UUID
+    planning_run_id: uuid.UUID
+    artifact_id: uuid.UUID | None
+    status: WorkPackageStatus
+    title: str
+    objective: str
+    base_commit_sha: str
+    contract_hash: str
+    contract: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkPackageApprovalRequest(BaseModel):
+    decision: ApprovalDecision
+    reviewer: str = Field(min_length=2, max_length=200)
+    comment: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+14. Add work-package approval
+
+Add to ProjectWorkflowService:
+
+async def approve_work_package(
+    self,
+    *,
+    project_id: uuid.UUID,
+    work_package_id: uuid.UUID,
+    decision: ApprovalDecision,
+    reviewer: str,
+    comment: str | None,
+) -> WorkPackageModel:
+    project = await self._get_project(project_id)
+
+    if (
+        project.status
+        != ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
+    ):
+        raise InvalidProjectStateError(
+            "Project is not awaiting work-package approval"
+        )
+
+    work_package = await self._session.get(
+        WorkPackageModel,
+        work_package_id,
+    )
+
+    if (
+        work_package is None
+        or work_package.project_id != project.id
+    ):
+        raise ArtifactNotFoundError(
+            str(work_package_id)
+        )
+
+    if work_package.artifact_id is None:
+        raise InvalidProjectStateError(
+            "Work package has no immutable artifact"
+        )
+
+    artifact = await self._session.get(
+        ArtifactModel,
+        work_package.artifact_id,
+    )
+
+    if artifact is None:
+        raise ArtifactNotFoundError(
+            str(work_package.artifact_id)
+        )
+
+    recalculated_hash = hash_text(artifact.content)
+
+    if recalculated_hash != work_package.contract_hash:
+        raise RuntimeError(
+            "Work-package artifact integrity check failed"
+        )
+
+    approval = ApprovalModel(
+        id=uuid.uuid4(),
+        project_id=project.id,
+        artifact_id=artifact.id,
+        decision=decision,
+        reviewer=reviewer,
+        comment=comment,
+    )
+
+    if decision == ApprovalDecision.APPROVED:
+        work_package.status = WorkPackageStatus.APPROVED
+        project.status = ProjectStatus.WORK_PACKAGE_APPROVED
+        event_type = "work_package.approved"
+    else:
+        work_package.status = WorkPackageStatus.REJECTED
+        project.status = ProjectStatus.WORK_PACKAGE_REJECTED
+        event_type = "work_package.rejected"
+
+    self._session.add_all(
+        [
+            approval,
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type=event_type,
+                actor_type="human",
+                actor_id=reviewer,
+                payload={
+                    "work_package_id": str(work_package.id),
+                    "artifact_id": str(artifact.id),
+                    "contract_hash": (
+                        work_package.contract_hash
+                    ),
+                    "base_commit_sha": (
+                        work_package.base_commit_sha
+                    ),
+                    "comment": comment,
+                },
+            ),
+        ]
+    )
+
+    await self._session.commit()
+    await self._session.refresh(work_package)
+
+    return work_package
+
+15. Add API routes
+
+Import:
+
+from ai_enterprise.api.schemas import (
+    WorkPackageApprovalRequest,
+    WorkPackageResponse,
+)
+from ai_enterprise.infrastructure.database.models import (
+    WorkPackageModel,
+)
+
+Add planning route:
+
+@router.post(
+    "/{project_id}/work-package-runs",
+    response_model=RunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_work_package_planning(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RunResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        run = await service.queue_work_package_planning(
+            project_id=project_id,
+            actor_id="local-user",
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        ) from exc
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return RunResponse.model_validate(run)
+
+Add list route:
+
+@router.get(
+    "/{project_id}/work-packages",
+    response_model=list[WorkPackageResponse],
+)
+async def list_work_packages(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+) -> list[WorkPackageResponse]:
+    result = await session.execute(
+        select(WorkPackageModel)
+        .where(WorkPackageModel.project_id == project_id)
+        .order_by(WorkPackageModel.created_at)
+    )
+
+    return [
+        WorkPackageResponse.model_validate(item)
+        for item in result.scalars().all()
+    ]
+
+Add approval route:
+
+@router.post(
+    "/{project_id}/work-packages/{work_package_id}/approval",
+    response_model=WorkPackageResponse,
+)
+async def approve_work_package(
+    project_id: uuid.UUID,
+    work_package_id: uuid.UUID,
+    request: WorkPackageApprovalRequest,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> WorkPackageResponse:
+    service = ProjectWorkflowService(
+        session=session,
+        settings=settings,
+    )
+
+    try:
+        work_package = await service.approve_work_package(
+            project_id=project_id,
+            work_package_id=work_package_id,
+            decision=request.decision,
+            reviewer=request.reviewer,
+            comment=request.comment,
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        ) from exc
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Work package not found",
+        ) from exc
+    except InvalidProjectStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return WorkPackageResponse.model_validate(work_package)
+
+16. Test the complete planning workflow
+
+Assuming the project is currently architecture_approved:
+
+export PROJECT_ID="<project-uuid>"
+
+Queue planning:
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/work-package-runs" \
+  | jq
+
+Watch worker:
+
+cd ~/projects/ai-enterprise/apps/api
+uv run python -m ai_enterprise.worker
+
+In another terminal:
+
+watch -n 2 '
+docker compose exec -T postgres \
+psql -U ai_enterprise -d ai_enterprise \
+-c "
+SELECT job_type, status, attempt_count, last_error
+FROM jobs
+ORDER BY created_at DESC
+LIMIT 5;
+"
+'
+
+Retrieve packages:
+
+curl -s \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/work-packages" \
+  | jq
+
+Set the ID:
+
+export WORK_PACKAGE_ID="<work-package-uuid>"
+
+Approve:
+
+curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/$PROJECT_ID/work-packages/$WORK_PACKAGE_ID/approval" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "approved",
+    "reviewer": "ursu-sevastian",
+    "comment": "Scope, repository boundaries, tests and resource limits approved."
+  }' | jq
+
+Expected result:
+
+{
+  "status": "approved"
+}
+
+The project state becomes:
+
+work_package_approved
+
+17. Inspect the immutable contract
+
+docker compose exec postgres \
+  psql -U ai_enterprise -d ai_enterprise \
+  -x -c "
+    SELECT
+      id,
+      status,
+      title,
+      objective,
+      base_commit_sha,
+      contract_hash,
+      contract
+    FROM work_packages
+    WHERE id = '$WORK_PACKAGE_ID';
+  "
+
+Verify the hash from Python:
+
+cd ~/projects/ai-enterprise/apps/api
+
+uv run python - <<'PY'
+import hashlib
+import json
+import os
+
+import psycopg
+
+work_package_id = os.environ["WORK_PACKAGE_ID"]
+
+with psycopg.connect(
+    "postgresql://ai_enterprise:"
+    "ai_enterprise_dev@localhost:5432/ai_enterprise"
+) as connection:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT contract, contract_hash
+            FROM work_packages
+            WHERE id = %s
+            """,
+            (work_package_id,),
+        )
+
+        contract, stored_hash = cursor.fetchone()
+
+canonical = json.dumps(
+    contract,
+    sort_keys=True,
+    separators=(",", ":"),
+    ensure_ascii=False,
+)
+
+calculated = hashlib.sha256(
+    canonical.encode("utf-8")
+).hexdigest()
+
+print("Stored:    ", stored_hash)
+print("Calculated:", calculated)
+print("Valid:     ", stored_hash == calculated)
+PY
+
+You may need:
+
+uv add --dev "psycopg[binary]"
+
+18. Add essential tests
+
+Create:
+
+nano apps/api/tests/test_work_package_contract.py
+
+Insert:
+
+import pytest
+from pydantic import ValidationError
+
+from ai_enterprise.domain.work_package import (
+    WorkPackageContract,
+)
+from ai_enterprise.domain.work_package_validation import (
+    WorkPackageBoundaryError,
+    validate_repository_boundaries,
+)
+
+
+def valid_contract() -> dict:
+    return {
+        "schema_version": "1.0",
+        "project_id": "project-id",
+        "title": "Add persisted project creation",
+        "objective": (
+            "Implement one persisted project creation endpoint "
+            "with an immutable manifest."
+        ),
+        "base_commit_sha": "a" * 40,
+        "source_requirements_artifact_id": "requirements-id",
+        "source_requirements_hash": "b" * 64,
+        "source_architecture_artifact_id": "architecture-id",
+        "source_architecture_hash": "c" * 64,
+        "required_changes": [
+            {
+                "id": "CHG-001",
+                "description": (
+                    "Add the project persistence application service."
+                ),
+                "related_requirements": ["FR-001"],
+                "target_paths": [
+                    "apps/api/src/project_service.py"
+                ],
+            }
+        ],
+        "file_scope": {
+            "allowed_files": [
+                "apps/api/src/project_service.py"
+            ],
+            "allowed_directories": [],
+            "forbidden_files": [".env"],
+            "forbidden_directories": [".git"],
+            "maximum_changed_files": 4,
+            "maximum_added_lines": 500,
+            "maximum_deleted_lines": 100,
+        },
+        "command_policy": {
+            "setup_commands": [],
+            "implementation_commands": [],
+            "test_commands": [
+                ["pytest", "-q", "apps/api/tests"]
+            ],
+        },
+        "network": {
+            "policy": "none",
+            "allowed_hosts": [],
+        },
+        "resources": {
+            "cpu_count": 2,
+            "memory_mb": 4096,
+            "disk_mb": 8192,
+            "process_limit": 256,
+            "execution_timeout_seconds": 1200,
+        },
+        "acceptance_criteria": [
+            {
+                "id": "AC-001",
+                "description": (
+                    "Creating a project persists its immutable manifest."
+                ),
+                "verification": (
+                    "Run the project creation integration test."
+                ),
+            }
+        ],
+    }
+
+
+def test_valid_contract_is_accepted() -> None:
+    contract = WorkPackageContract.model_validate(
+        valid_contract()
+    )
+
+    assert contract.base_commit_sha == "a" * 40
+
+
+def test_absolute_path_is_rejected() -> None:
+    payload = valid_contract()
+    payload["file_scope"]["allowed_files"] = [
+        "/etc/passwd"
+    ]
+
+    with pytest.raises(ValidationError):
+        WorkPackageContract.model_validate(payload)
+
+
+def test_shell_command_is_rejected() -> None:
+    payload = valid_contract()
+    payload["command_policy"]["test_commands"] = [
+        ["bash", "-c", "pytest && curl example.com"]
+    ]
+
+    with pytest.raises(ValidationError):
+        WorkPackageContract.model_validate(payload)
+
+
+def test_protected_path_is_rejected() -> None:
+    payload = valid_contract()
+    payload["file_scope"]["allowed_files"] = [".env"]
+
+    contract = WorkPackageContract.model_validate(payload)
+
+    with pytest.raises(WorkPackageBoundaryError):
+        validate_repository_boundaries(
+            contract=contract,
+            tracked_files={".env"},
+        )
+
+
+def test_unapproved_new_file_is_rejected() -> None:
+    contract = WorkPackageContract.model_validate(
+        valid_contract()
+    )
+
+    with pytest.raises(WorkPackageBoundaryError):
+        validate_repository_boundaries(
+            contract=contract,
+            tracked_files=set(),
+        )
+
+Run:
+
+cd ~/projects/ai-enterprise/apps/api
+
+uv run pytest -q
+uv run ruff check src tests
+
+19. Security boundary established
+
+The approved work package now provides the future executor with a contract like:
+
+{
+  "base_commit_sha": "40-character Git SHA",
+  "file_scope": {
+    "allowed_files": [
+      "apps/api/src/ai_enterprise/domain/project.py"
+    ],
+    "maximum_changed_files": 4
+  },
+  "command_policy": {
+    "test_commands": [
+      ["pytest", "-q", "apps/api/tests"]
+    ]
+  },
+  "network": {
+    "policy": "none"
+  },
+  "resources": {
+    "cpu_count": 2,
+    "memory_mb": 4096,
+    "execution_timeout_seconds": 1200
+  }
+}
+
+The implementation agent will not decide these boundaries during execution. It must operate inside boundaries already:
+
+    generated by the planner;
+
+    deterministically validated;
+
+    stored immutably;
+
+    reviewed by a human;
+
+    bound to exact requirements and architecture hashes;
+
+    bound to an exact Git commit.
+
+20. Milestone status
+
+Create project                       complete
+Immutable manifest                   complete
+Requirements Crew                    complete
+Requirements approval                complete
+Architecture Crew                    complete
+Architecture approval                complete
+Durable PostgreSQL worker            complete
+One bounded work package             complete
+Work-package approval                complete
+Disposable execution container       next
+Test execution                       next
+Patch generation                     next
+Independent patch review             next
+Complete audit-query API             partial
+No uncontrolled host change          contract established
+
+The next increment is the Disposable Execution Runtime. It will:
+
+verify approved work package
+verify repository base commit
+create isolated repository snapshot
+start unprivileged container
+disable network by default
+apply CPU, memory, PID and timeout limits
+mount repository snapshot only
+run the implementation agent
+run only approved test commands
+capture logs
+calculate changed-file statistics
+reject scope violations
+produce a patch without modifying the host repository
+
+
+
