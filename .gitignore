@@ -8,3 +8,5 @@ __pycache__/
 artifacts/*
 !artifacts/.gitkeep
 ai-enterprise/
+runtime-data/
+apps/api/runtime-data/

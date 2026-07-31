@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from ai_enterprise.api.routes.executions import router as executions_router
 from ai_enterprise.api.routes.projects import router as projects_router
 from ai_enterprise.config import get_settings
 
@@ -24,6 +25,7 @@ app = FastAPI(
 )
 
 app.include_router(projects_router, prefix="/api/v1")
+app.include_router(executions_router, prefix="/api/v1")
 
 
 @app.get("/health")

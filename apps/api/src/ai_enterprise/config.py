@@ -29,6 +29,20 @@ class Settings(BaseSettings):
         default=Path("/home/user/projects")
     )
 
+    execution_image: str = "ai-enterprise-execution-agent:local"
+    execution_snapshots_root: Path = Field(
+        default=Path("./runtime-data/snapshots")
+    )
+    execution_artifacts_root: Path = Field(
+        default=Path("./runtime-data/artifacts")
+    )
+    execution_temp_root: Path = Field(
+        default=Path("./runtime-data/tmp")
+    )
+    execution_maximum_patch_bytes: int = 1_048_576
+    execution_default_test_timeout_seconds: int = 300
+    execution_implementation_timeout_seconds: int = 600
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

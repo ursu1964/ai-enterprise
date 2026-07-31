@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+from ai_enterprise.domain.hashing import hash_text
+
 
 class RepositoryInspectionError(RuntimeError):
     pass
@@ -16,6 +18,13 @@ class RepositorySnapshot:
     branch: str
     is_clean: bool
     tracked_files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RepositoryFingerprint:
+    head_sha: str
+    status_sha256: str
+    diff_sha256: str
 
 
 class GitRepositoryInspector:
@@ -69,6 +78,35 @@ class GitRepositoryInspector:
             branch=branch.strip(),
             is_clean=not bool(status.strip()),
             tracked_files=tracked_files,
+        )
+
+    async def fingerprint(
+        self,
+        repository_path: str,
+    ) -> RepositoryFingerprint:
+        root = Path(repository_path).expanduser().resolve()
+
+        self._assert_allowed(root)
+
+        head_sha = (await self._git(root, "rev-parse", "HEAD")).strip()
+
+        status = await self._git(
+            root,
+            "status",
+            "--porcelain=v1",
+        )
+
+        diff = await self._git(
+            root,
+            "diff",
+            "--binary",
+            "HEAD",
+        )
+
+        return RepositoryFingerprint(
+            head_sha=head_sha,
+            status_sha256=hash_text(status),
+            diff_sha256=hash_text(diff),
         )
 
     def _assert_allowed(self, root: Path) -> None:

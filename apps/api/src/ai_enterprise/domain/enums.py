@@ -46,6 +46,7 @@ class JobType(StrEnum):
     RUN_REQUIREMENTS_CREW = "run_requirements_crew"
     RUN_ARCHITECTURE_CREW = "run_architecture_crew"
     PLAN_WORK_PACKAGE = "plan_work_package"
+    EXECUTE_WORK_PACKAGE = "execute_work_package"
 
 
 class ArtifactType(StrEnum):
@@ -53,6 +54,10 @@ class ArtifactType(StrEnum):
     REQUIREMENTS_SPECIFICATION = "requirements_specification"
     ARCHITECTURE_SPECIFICATION = "architecture_specification"
     WORK_PACKAGE = "work_package"
+    EXECUTION_LOG = "execution-log"
+    TEST_STDOUT = "test-stdout"
+    TEST_STDERR = "test-stderr"
+    CANDIDATE_PATCH = "candidate-patch"
 
 
 class ApprovalDecision(StrEnum):

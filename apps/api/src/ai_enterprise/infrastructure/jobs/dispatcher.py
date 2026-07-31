@@ -2,6 +2,9 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.execution_workflow import (
+    ExecutionApplicationService,
+)
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.config import Settings
 from ai_enterprise.domain.enums import JobType
@@ -39,6 +42,17 @@ class JobDispatcher:
         if job.job_type == JobType.PLAN_WORK_PACKAGE:
             await service.execute_work_package_planning(
                 run_id=self._required_uuid(job, "run_id")
+            )
+            return
+
+        if job.job_type == JobType.EXECUTE_WORK_PACKAGE:
+            execution_service = ExecutionApplicationService(
+                session=self._session,
+                settings=self._settings,
+            )
+
+            await execution_service.execute_work_package(
+                execution_id=self._required_uuid(job, "execution_id")
             )
             return
 

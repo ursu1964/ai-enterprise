@@ -2,8 +2,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -382,5 +393,222 @@ class WorkPackageModel(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ExecutionRunModel(Base):
+    __tablename__ = "execution_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "idempotency_key",
+            name="uq_execution_run_project_idempotency",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    work_package_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("work_packages.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="pending",
+        index=True,
+    )
+
+    base_commit: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    snapshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    container_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+    container_image: Mapped[str] = mapped_column(Text, nullable=False)
+    container_image_digest: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    implementation_exit_code: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    failure_code: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+    failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    cpu_limit: Mapped[float] = mapped_column(
+        Numeric(precision=6, scale=3),
+        nullable=False,
+    )
+    memory_limit_bytes: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+    pids_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    network_disabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    runtime_policy: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    changed_files: Mapped[list[str] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    changed_file_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    insertions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deletions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    patch_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    log_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    patch_sha256: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    idempotency_key: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ExecutionTestResultModel(Base):
+    __tablename__ = "execution_test_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "execution_run_id",
+            "sequence",
+            name="uq_execution_test_result_sequence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    execution_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("execution_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    command: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+    )
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    duration_ms: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    stdout_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    stderr_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class ExecutionEventModel(Base):
+    __tablename__ = "execution_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    execution_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("execution_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
         nullable=False,
     )
