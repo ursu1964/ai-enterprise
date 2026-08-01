@@ -188,20 +188,32 @@ def test_revision_api_exposes_history_without_artifact_mutation_route() -> None:
     assert all("overwrite" not in path and "update" not in path for path in paths)
 
 
-@pytest.mark.local_llm
-@pytest.mark.skipif(
-    os.getenv("RUN_LOCAL_LLM_SMOKE") != "1",
-    reason="set RUN_LOCAL_LLM_SMOKE=1 to invoke the configured real model",
-)
 @pytest.mark.asyncio
-async def test_opt_in_real_model_returns_valid_artifact() -> None:
-    config = RequirementsProviderConfig(
-        model=os.getenv("REQUIREMENTS_LLM_MODEL", "ollama/gemma3:12b"),
-        base_url=os.getenv("REQUIREMENTS_LLM_BASE_URL", "http://localhost:11434"),
-    )
-    provider = create_requirements_provider(config)
-    await provider.preflight()
-    adapter = StructuredRequirementsAdapter(CrewAIRequirementsExecutor(provider))
+async def test_model_provider_smoke_returns_valid_artifact() -> None:
+    if os.getenv("RUN_LOCAL_LLM_SMOKE") == "1":
+        config = RequirementsProviderConfig(
+            model=os.getenv("REQUIREMENTS_LLM_MODEL", "ollama/gemma3:12b"),
+            base_url=os.getenv("REQUIREMENTS_LLM_BASE_URL", "http://localhost:11434"),
+        )
+        provider = create_requirements_provider(config)
+        await provider.preflight()
+        executor = CrewAIRequirementsExecutor(provider)
+    else:
+        config = RequirementsProviderConfig(
+            model="ollama/gemma4:12b", base_url="http://ollama.local:11434"
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url == httpx.URL("http://ollama.local:11434/api/tags")
+            return httpx.Response(200, json={"models": [{"name": "gemma4:12b"}]})
+
+        provider = create_requirements_provider(config, transport=httpx.MockTransport(handler))
+        await provider.preflight()
+
+        async def executor(_prompt: str) -> str:
+            return json.dumps(_payload("Deterministic provider smoke artifact"))
+
+    adapter = StructuredRequirementsAdapter(executor)
     result = await adapter.run(
         RequirementsExecutionInput(
             "Smoke Project", "Create an auditable issue tracking API", {}, {}
