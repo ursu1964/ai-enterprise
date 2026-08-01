@@ -1,5 +1,18 @@
-from .entities import EnterpriseResource, EnterpriseSchedule
-from .exceptions import InvalidEnterpriseResource, InvalidEnterpriseSchedule
+from .entities import (
+    EnterpriseModule,
+    EnterpriseResource,
+    EnterpriseSchedule,
+    OperatingMaturitySnapshot,
+    OrganizationalThread,
+)
+from .enums import EnterpriseResourceType
+from .exceptions import (
+    InvalidEnterpriseModule,
+    InvalidEnterpriseResource,
+    InvalidEnterpriseSchedule,
+    InvalidOperatingMaturity,
+    InvalidOrganizationalThread,
+)
 
 
 class ResourceRegistrationPolicy:
@@ -46,3 +59,55 @@ class EnterpriseSchedulingPolicy:
             raise InvalidEnterpriseSchedule("Schedule resource claims must be positive")
         if not schedule.evidence:
             raise InvalidEnterpriseSchedule("Schedule requires supporting evidence")
+
+
+class EnterpriseModulePolicy:
+    """P11 invariant: replaceable modules enter through governed registration."""
+
+    def require_governed_module(self, module: EnterpriseModule) -> None:
+        if not module.capability_ids:
+            raise InvalidEnterpriseModule("Enterprise modules require capability bindings")
+        if not module.owned_resource_ids:
+            raise InvalidEnterpriseModule("Enterprise modules require managed owned resources")
+        if not module.governance_policy_ids:
+            raise InvalidEnterpriseModule("Enterprise modules require governance policies")
+        if not module.evidence:
+            raise InvalidEnterpriseModule("Enterprise modules require certification evidence")
+
+
+class OrganizationalThreadPolicy:
+    """P11 invariant: enterprise work has complete resource and schedule lineage."""
+
+    def require_thread_lineage(self, thread: OrganizationalThread) -> None:
+        if not thread.owner_id.strip():
+            raise InvalidOrganizationalThread("Organizational threads require an owner")
+        if thread.root_resource_id not in thread.resource_sequence:
+            raise InvalidOrganizationalThread("Thread root resource must be in the lineage")
+        if len(thread.resource_sequence) < 2:
+            raise InvalidOrganizationalThread("Thread lineage requires multiple resources")
+        if not thread.schedule_sequence:
+            raise InvalidOrganizationalThread("Thread lineage requires scheduled work")
+        if len(thread.resource_sequence) != len(set(thread.resource_sequence)):
+            raise InvalidOrganizationalThread("Thread resources must be unique")
+        if len(thread.schedule_sequence) != len(set(thread.schedule_sequence)):
+            raise InvalidOrganizationalThread("Thread schedules must be unique")
+        if not thread.evidence:
+            raise InvalidOrganizationalThread("Thread lineage requires evidence")
+
+
+class OperatingMaturityPolicy:
+    """P11 invariant: maturity claims are evidence-bound and cover the enterprise."""
+
+    def require_evidence_bound_coverage(self, snapshot: OperatingMaturitySnapshot) -> None:
+        if snapshot.maturity_level < 1 or snapshot.maturity_level > 5:
+            raise InvalidOperatingMaturity("Maturity level must be between 1 and 5")
+        if len(snapshot.evidence) < snapshot.maturity_level:
+            raise InvalidOperatingMaturity("Maturity level cannot exceed supporting evidence")
+        if snapshot.module_count < 1:
+            raise InvalidOperatingMaturity("Operating maturity requires registered modules")
+        if snapshot.active_thread_count < 0:
+            raise InvalidOperatingMaturity("Active thread count cannot be negative")
+        missing = set(EnterpriseResourceType) - set(snapshot.covered_resource_types)
+        if missing:
+            names = ", ".join(sorted(item.value for item in missing))
+            raise InvalidOperatingMaturity("Resource coverage is incomplete: " + names)

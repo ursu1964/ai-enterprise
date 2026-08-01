@@ -53,3 +53,54 @@ class EnterpriseScheduleResponse(BaseModel):
     scheduled_by: str
     scheduled_at: datetime
     content_hash: str
+
+
+class EnterpriseModuleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    module_key: str
+    display_name: str
+    capability_ids: tuple[str, ...]
+    owned_resource_ids: tuple[UUID, ...]
+    integration_resource_ids: tuple[UUID, ...]
+    governance_policy_ids: tuple[str, ...]
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...]
+    state: str
+    registered_by: str
+    registered_at: datetime
+    content_hash: str
+
+
+class OrganizationalThreadResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    thread_key: str
+    root_resource_id: UUID
+    resource_sequence: tuple[UUID, ...]
+    schedule_sequence: tuple[UUID, ...]
+    current_state: str
+    owner_id: str
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...]
+    opened_by: str
+    opened_at: datetime
+    content_hash: str
+
+
+class OperatingMaturitySnapshotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    snapshot_key: str
+    maturity_level: int
+    covered_resource_types: tuple[str, ...]
+    module_count: int
+    active_thread_count: int
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...]
+    recorded_by: str
+    recorded_at: datetime
+    content_hash: str

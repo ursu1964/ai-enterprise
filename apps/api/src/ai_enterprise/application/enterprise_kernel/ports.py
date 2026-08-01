@@ -2,9 +2,12 @@ from typing import Protocol
 from uuid import UUID
 
 from ai_enterprise.domain.enterprise_kernel.entities import (
+    EnterpriseModule,
     EnterpriseResource,
     EnterpriseResourceAuditRecord,
     EnterpriseSchedule,
+    OperatingMaturitySnapshot,
+    OrganizationalThread,
 )
 
 
@@ -25,6 +28,27 @@ class EnterpriseResourceRepository(Protocol):
     async def list_schedules_for_organization(
         self, organization_id: UUID
     ) -> tuple[EnterpriseSchedule, ...]: ...
+    async def add_module(self, module: EnterpriseModule) -> None: ...
+    async def get_module_by_key(
+        self, organization_id: UUID, module_key: str
+    ) -> EnterpriseModule | None: ...
+    async def list_modules_for_organization(
+        self, organization_id: UUID
+    ) -> tuple[EnterpriseModule, ...]: ...
+    async def add_thread(self, thread: OrganizationalThread) -> None: ...
+    async def get_thread_by_key(
+        self, organization_id: UUID, thread_key: str
+    ) -> OrganizationalThread | None: ...
+    async def list_threads_for_organization(
+        self, organization_id: UUID
+    ) -> tuple[OrganizationalThread, ...]: ...
+    async def add_maturity_snapshot(self, snapshot: OperatingMaturitySnapshot) -> None: ...
+    async def get_maturity_snapshot_by_key(
+        self, organization_id: UUID, snapshot_key: str
+    ) -> OperatingMaturitySnapshot | None: ...
+    async def list_maturity_snapshots_for_organization(
+        self, organization_id: UUID
+    ) -> tuple[OperatingMaturitySnapshot, ...]: ...
     async def commit(self) -> None: ...
 
 

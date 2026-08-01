@@ -40,3 +40,17 @@ class EnterpriseScheduleState(StrEnum):
     BLOCKED = "blocked"
     DISPATCHABLE = "dispatchable"
     CANCELLED = "cancelled"
+
+
+class EnterpriseModuleState(StrEnum):
+    REGISTERED = "registered"
+    CERTIFIED = "certified"
+    SUSPENDED = "suspended"
+    RETIRED = "retired"
+
+
+class OrganizationalThreadState(StrEnum):
+    OPEN = "open"
+    BLOCKED = "blocked"
+    COMPLETE = "complete"
+    CANCELLED = "cancelled"

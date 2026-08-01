@@ -102,3 +102,89 @@ class EnterpriseScheduleModel(Base):
     scheduled_by: Mapped[str] = mapped_column(String(200), nullable=False)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class EnterpriseModuleModel(Base):
+    __tablename__ = "enterprise_modules"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "module_key", name="uq_enterprise_module_key"),
+        CheckConstraint(
+            "state IN ('registered', 'certified', 'suspended', 'retired')",
+            name="ck_enterprise_module_state",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    module_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    capability_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    owned_resource_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    integration_resource_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    governance_policy_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    registered_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class OrganizationalThreadModel(Base):
+    __tablename__ = "organizational_threads"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "thread_key", name="uq_organizational_thread_key"),
+        CheckConstraint(
+            "current_state IN ('open', 'blocked', 'complete', 'cancelled')",
+            name="ck_organizational_thread_state",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    thread_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    root_resource_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    resource_sequence: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    schedule_sequence: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    current_state: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    opened_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class OperatingMaturitySnapshotModel(Base):
+    __tablename__ = "operating_maturity_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "snapshot_key", name="uq_operating_maturity_snapshot_key"
+        ),
+        CheckConstraint(
+            "maturity_level >= 1 AND maturity_level <= 5",
+            name="ck_operating_maturity_level",
+        ),
+        CheckConstraint("module_count >= 0", name="ck_operating_maturity_module_count"),
+        CheckConstraint(
+            "active_thread_count >= 0", name="ck_operating_maturity_thread_count"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    snapshot_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    maturity_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    covered_resource_types: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    module_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    active_thread_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    recorded_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

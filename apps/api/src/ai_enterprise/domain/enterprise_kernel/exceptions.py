@@ -24,3 +24,35 @@ class EnterpriseScheduleNotFound(EnterpriseKernelError):
 
 class InvalidEnterpriseSchedule(EnterpriseKernelError):
     code = "invalid_enterprise_schedule"
+
+
+class EnterpriseModuleAlreadyExists(EnterpriseKernelError):
+    code = "enterprise_module_already_exists"
+
+
+class EnterpriseModuleNotFound(EnterpriseKernelError):
+    code = "enterprise_module_not_found"
+
+
+class OrganizationalThreadAlreadyExists(EnterpriseKernelError):
+    code = "organizational_thread_already_exists"
+
+
+class OrganizationalThreadNotFound(EnterpriseKernelError):
+    code = "organizational_thread_not_found"
+
+
+class InvalidEnterpriseModule(EnterpriseKernelError):
+    code = "invalid_enterprise_module"
+
+
+class InvalidOrganizationalThread(EnterpriseKernelError):
+    code = "invalid_organizational_thread"
+
+
+class InvalidOperatingMaturity(EnterpriseKernelError):
+    code = "invalid_operating_maturity"
+
+
+class OperatingMaturityAlreadyExists(EnterpriseKernelError):
+    code = "operating_maturity_already_exists"

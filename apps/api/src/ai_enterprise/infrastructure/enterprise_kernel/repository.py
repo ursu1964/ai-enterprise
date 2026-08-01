@@ -5,20 +5,32 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.domain.enterprise_kernel.entities import (
+    EnterpriseModule,
     EnterpriseResource,
     EnterpriseResourceAuditRecord,
     EnterpriseResourceClaim,
     EnterpriseResourceEvidence,
     EnterpriseResourceRelation,
     EnterpriseSchedule,
+    OperatingMaturitySnapshot,
+    OrganizationalThread,
 )
 from ai_enterprise.domain.enterprise_kernel.enums import (
+    EnterpriseModuleState,
     EnterpriseResourceState,
     EnterpriseResourceType,
     EnterpriseScheduleState,
+    OrganizationalThreadState,
 )
 
-from .models import EnterpriseResourceAuditModel, EnterpriseResourceModel, EnterpriseScheduleModel
+from .models import (
+    EnterpriseModuleModel,
+    EnterpriseResourceAuditModel,
+    EnterpriseResourceModel,
+    EnterpriseScheduleModel,
+    OperatingMaturitySnapshotModel,
+    OrganizationalThreadModel,
+)
 
 
 def _relation_payload(value: EnterpriseResourceRelation) -> dict[str, Any]:
@@ -171,6 +183,125 @@ class SqlAlchemyEnterpriseResourceRepository:
         )
         return tuple(self._schedule(item) for item in result.all())
 
+    async def add_module(self, module: EnterpriseModule) -> None:
+        self._session.add(
+            EnterpriseModuleModel(
+                id=module.id,
+                organization_id=module.organization_id,
+                module_key=module.module_key,
+                display_name=module.display_name,
+                capability_ids=list(module.capability_ids),
+                owned_resource_ids=[str(item) for item in module.owned_resource_ids],
+                integration_resource_ids=[
+                    str(item) for item in module.integration_resource_ids
+                ],
+                governance_policy_ids=list(module.governance_policy_ids),
+                evidence=[_evidence_payload(item) for item in module.evidence],
+                state=module.state,
+                registered_by=module.registered_by,
+                registered_at=module.registered_at,
+                content_hash=module.content_hash,
+            )
+        )
+
+    async def get_module_by_key(
+        self, organization_id: uuid.UUID, module_key: str
+    ) -> EnterpriseModule | None:
+        model = await self._session.scalar(
+            select(EnterpriseModuleModel).where(
+                EnterpriseModuleModel.organization_id == organization_id,
+                EnterpriseModuleModel.module_key == module_key,
+            )
+        )
+        return self._module(model) if model else None
+
+    async def list_modules_for_organization(
+        self, organization_id: uuid.UUID
+    ) -> tuple[EnterpriseModule, ...]:
+        result = await self._session.scalars(
+            select(EnterpriseModuleModel)
+            .where(EnterpriseModuleModel.organization_id == organization_id)
+            .order_by(EnterpriseModuleModel.module_key)
+        )
+        return tuple(self._module(item) for item in result.all())
+
+    async def add_thread(self, thread: OrganizationalThread) -> None:
+        self._session.add(
+            OrganizationalThreadModel(
+                id=thread.id,
+                organization_id=thread.organization_id,
+                thread_key=thread.thread_key,
+                root_resource_id=thread.root_resource_id,
+                resource_sequence=[str(item) for item in thread.resource_sequence],
+                schedule_sequence=[str(item) for item in thread.schedule_sequence],
+                current_state=thread.current_state,
+                owner_id=thread.owner_id,
+                evidence=[_evidence_payload(item) for item in thread.evidence],
+                opened_by=thread.opened_by,
+                opened_at=thread.opened_at,
+                content_hash=thread.content_hash,
+            )
+        )
+
+    async def get_thread_by_key(
+        self, organization_id: uuid.UUID, thread_key: str
+    ) -> OrganizationalThread | None:
+        model = await self._session.scalar(
+            select(OrganizationalThreadModel).where(
+                OrganizationalThreadModel.organization_id == organization_id,
+                OrganizationalThreadModel.thread_key == thread_key,
+            )
+        )
+        return self._thread(model) if model else None
+
+    async def list_threads_for_organization(
+        self, organization_id: uuid.UUID
+    ) -> tuple[OrganizationalThread, ...]:
+        result = await self._session.scalars(
+            select(OrganizationalThreadModel)
+            .where(OrganizationalThreadModel.organization_id == organization_id)
+            .order_by(OrganizationalThreadModel.opened_at)
+        )
+        return tuple(self._thread(item) for item in result.all())
+
+    async def add_maturity_snapshot(self, snapshot: OperatingMaturitySnapshot) -> None:
+        self._session.add(
+            OperatingMaturitySnapshotModel(
+                id=snapshot.id,
+                organization_id=snapshot.organization_id,
+                snapshot_key=snapshot.snapshot_key,
+                maturity_level=snapshot.maturity_level,
+                covered_resource_types=[item.value for item in snapshot.covered_resource_types],
+                module_count=snapshot.module_count,
+                active_thread_count=snapshot.active_thread_count,
+                evidence=[_evidence_payload(item) for item in snapshot.evidence],
+                recorded_by=snapshot.recorded_by,
+                recorded_at=snapshot.recorded_at,
+                content_hash=snapshot.content_hash,
+            )
+        )
+
+    async def get_maturity_snapshot_by_key(
+        self, organization_id: uuid.UUID, snapshot_key: str
+    ) -> OperatingMaturitySnapshot | None:
+        model = await self._session.scalar(
+            select(OperatingMaturitySnapshotModel).where(
+                OperatingMaturitySnapshotModel.organization_id == organization_id,
+                OperatingMaturitySnapshotModel.snapshot_key == snapshot_key,
+            )
+        )
+        return self._maturity_snapshot(model) if model else None
+
+    async def list_maturity_snapshots_for_organization(
+        self, organization_id: uuid.UUID
+    ) -> tuple[OperatingMaturitySnapshot, ...]:
+        result = await self._session.scalars(
+            select(OperatingMaturitySnapshotModel)
+            .where(OperatingMaturitySnapshotModel.organization_id == organization_id)
+            .order_by(OperatingMaturitySnapshotModel.recorded_at)
+        )
+        return tuple(self._maturity_snapshot(item) for item in result.all())
+
     async def commit(self) -> None:
         await self._session.commit()
 
@@ -194,6 +325,63 @@ class SqlAlchemyEnterpriseResourceRepository:
             metadata=model.resource_metadata,
             registered_by=model.registered_by,
             registered_at=model.registered_at,
+            content_hash=model.content_hash,
+        )
+
+    @staticmethod
+    def _module(model: EnterpriseModuleModel) -> EnterpriseModule:
+        return EnterpriseModule(
+            id=model.id,
+            organization_id=model.organization_id,
+            module_key=model.module_key,
+            display_name=model.display_name,
+            capability_ids=tuple(model.capability_ids),
+            owned_resource_ids=tuple(uuid.UUID(str(item)) for item in model.owned_resource_ids),
+            integration_resource_ids=tuple(
+                uuid.UUID(str(item)) for item in model.integration_resource_ids
+            ),
+            governance_policy_ids=tuple(model.governance_policy_ids),
+            evidence=tuple(_evidence(item) for item in model.evidence),
+            state=EnterpriseModuleState(model.state),
+            registered_by=model.registered_by,
+            registered_at=model.registered_at,
+            content_hash=model.content_hash,
+        )
+
+    @staticmethod
+    def _thread(model: OrganizationalThreadModel) -> OrganizationalThread:
+        return OrganizationalThread(
+            id=model.id,
+            organization_id=model.organization_id,
+            thread_key=model.thread_key,
+            root_resource_id=model.root_resource_id,
+            resource_sequence=tuple(uuid.UUID(str(item)) for item in model.resource_sequence),
+            schedule_sequence=tuple(uuid.UUID(str(item)) for item in model.schedule_sequence),
+            current_state=OrganizationalThreadState(model.current_state),
+            owner_id=model.owner_id,
+            evidence=tuple(_evidence(item) for item in model.evidence),
+            opened_by=model.opened_by,
+            opened_at=model.opened_at,
+            content_hash=model.content_hash,
+        )
+
+    @staticmethod
+    def _maturity_snapshot(
+        model: OperatingMaturitySnapshotModel,
+    ) -> OperatingMaturitySnapshot:
+        return OperatingMaturitySnapshot(
+            id=model.id,
+            organization_id=model.organization_id,
+            snapshot_key=model.snapshot_key,
+            maturity_level=model.maturity_level,
+            covered_resource_types=tuple(
+                EnterpriseResourceType(item) for item in model.covered_resource_types
+            ),
+            module_count=model.module_count,
+            active_thread_count=model.active_thread_count,
+            evidence=tuple(_evidence(item) for item in model.evidence),
+            recorded_by=model.recorded_by,
+            recorded_at=model.recorded_at,
             content_hash=model.content_hash,
         )
 

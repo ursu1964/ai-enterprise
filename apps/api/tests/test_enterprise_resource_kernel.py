@@ -8,15 +8,21 @@ from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.enterprise_kernel_authority import enterprise_kernel_actor
 from ai_enterprise.api.routes.enterprise_kernel import router
 from ai_enterprise.application.enterprise_kernel.dto import (
+    OpenOrganizationalThread,
+    RecordOperatingMaturity,
+    RegisterEnterpriseModule,
     RegisterEnterpriseResource,
     ScheduleEnterpriseWork,
 )
 from ai_enterprise.application.enterprise_kernel.service import EnterpriseKernelService
 from ai_enterprise.domain.enterprise_kernel.entities import (
+    EnterpriseModule,
     EnterpriseResource,
     EnterpriseResourceAuditRecord,
     EnterpriseResourceEvidence,
     EnterpriseSchedule,
+    OperatingMaturitySnapshot,
+    OrganizationalThread,
 )
 from ai_enterprise.domain.enterprise_kernel.enums import (
     EnterpriseResourceState,
@@ -24,14 +30,21 @@ from ai_enterprise.domain.enterprise_kernel.enums import (
     EnterpriseScheduleState,
 )
 from ai_enterprise.domain.enterprise_kernel.exceptions import (
+    EnterpriseResourceNotFound,
+    EnterpriseScheduleNotFound,
     InvalidEnterpriseResource,
     InvalidEnterpriseSchedule,
+    InvalidOperatingMaturity,
+    InvalidOrganizationalThread,
 )
 from ai_enterprise.infrastructure.database.models import Base
 from ai_enterprise.infrastructure.enterprise_kernel.models import (
+    EnterpriseModuleModel,
     EnterpriseResourceAuditModel,
     EnterpriseResourceModel,
     EnterpriseScheduleModel,
+    OperatingMaturitySnapshotModel,
+    OrganizationalThreadModel,
 )
 from ai_enterprise.infrastructure.enterprise_kernel.repository import (
     SqlAlchemyEnterpriseResourceRepository,
@@ -43,6 +56,9 @@ class MemoryRepository:
     def __init__(self) -> None:
         self.values: dict[object, EnterpriseResource] = {}
         self.schedules: dict[object, EnterpriseSchedule] = {}
+        self.modules: dict[object, EnterpriseModule] = {}
+        self.threads: dict[object, OrganizationalThread] = {}
+        self.snapshots: dict[object, OperatingMaturitySnapshot] = {}
         self.committed = False
 
     async def add(self, resource: EnterpriseResource) -> None:
@@ -85,6 +101,60 @@ class MemoryRepository:
     async def list_schedules_for_organization(self, organization_id):
         return tuple(
             item for item in self.schedules.values() if item.organization_id == organization_id
+        )
+
+    async def add_module(self, module: EnterpriseModule) -> None:
+        self.modules[module.id] = module
+
+    async def get_module_by_key(self, organization_id, module_key):
+        return next(
+            (
+                item
+                for item in self.modules.values()
+                if item.organization_id == organization_id and item.module_key == module_key
+            ),
+            None,
+        )
+
+    async def list_modules_for_organization(self, organization_id):
+        return tuple(
+            item for item in self.modules.values() if item.organization_id == organization_id
+        )
+
+    async def add_thread(self, thread: OrganizationalThread) -> None:
+        self.threads[thread.id] = thread
+
+    async def get_thread_by_key(self, organization_id, thread_key):
+        return next(
+            (
+                item
+                for item in self.threads.values()
+                if item.organization_id == organization_id and item.thread_key == thread_key
+            ),
+            None,
+        )
+
+    async def list_threads_for_organization(self, organization_id):
+        return tuple(
+            item for item in self.threads.values() if item.organization_id == organization_id
+        )
+
+    async def add_maturity_snapshot(self, snapshot: OperatingMaturitySnapshot) -> None:
+        self.snapshots[snapshot.id] = snapshot
+
+    async def get_maturity_snapshot_by_key(self, organization_id, snapshot_key):
+        return next(
+            (
+                item
+                for item in self.snapshots.values()
+                if item.organization_id == organization_id and item.snapshot_key == snapshot_key
+            ),
+            None,
+        )
+
+    async def list_maturity_snapshots_for_organization(self, organization_id):
+        return tuple(
+            item for item in self.snapshots.values() if item.organization_id == organization_id
         )
 
     async def commit(self) -> None:
@@ -147,6 +217,77 @@ def schedule_request(target: EnterpriseResource, **overrides) -> ScheduleEnterpr
     }
     data.update(overrides)
     return ScheduleEnterpriseWork(**data)
+
+
+def module_request(resource: EnterpriseResource, **overrides) -> RegisterEnterpriseModule:
+    data = {
+        "organization_id": resource.organization_id,
+        "module_key": "module.requirements",
+        "display_name": "Requirements Module",
+        "capability_ids": ("requirements.analyze",),
+        "owned_resource_ids": (resource.id,),
+        "integration_resource_ids": (),
+        "governance_policy_ids": ("policy-governance",),
+        "evidence": (
+            {
+                "artifact_id": uuid4(),
+                "content_hash": "1" * 64,
+                "evidence_type": "module_certification",
+            },
+        ),
+    }
+    data.update(overrides)
+    return RegisterEnterpriseModule(**data)
+
+
+def thread_request(
+    root: EnterpriseResource,
+    next_resource: EnterpriseResource,
+    schedule: EnterpriseSchedule,
+    **overrides,
+) -> OpenOrganizationalThread:
+    data = {
+        "organization_id": root.organization_id,
+        "thread_key": "thread.project.alpha",
+        "root_resource_id": root.id,
+        "resource_sequence": (root.id, next_resource.id),
+        "schedule_sequence": (schedule.id,),
+        "owner_id": "alice",
+        "evidence": (
+            {
+                "artifact_id": uuid4(),
+                "content_hash": "2" * 64,
+                "evidence_type": "thread_lineage",
+            },
+        ),
+    }
+    data.update(overrides)
+    return OpenOrganizationalThread(**data)
+
+
+def maturity_request(**overrides) -> RecordOperatingMaturity:
+    data = {
+        "organization_id": uuid4(),
+        "snapshot_key": "maturity.2026-q3",
+        "maturity_level": 2,
+        "covered_resource_types": tuple(EnterpriseResourceType),
+        "module_count": 1,
+        "active_thread_count": 1,
+        "evidence": (
+            {
+                "artifact_id": uuid4(),
+                "content_hash": "3" * 64,
+                "evidence_type": "coverage_report",
+            },
+            {
+                "artifact_id": uuid4(),
+                "content_hash": "4" * 64,
+                "evidence_type": "operating_review",
+            },
+        ),
+    }
+    data.update(overrides)
+    return RecordOperatingMaturity(**data)
 
 
 @pytest.mark.asyncio
@@ -217,12 +358,179 @@ async def test_schedule_hashes_persists_and_audits_queued_work() -> None:
     assert audit.records[-1].payload["content_hash"] == schedule.content_hash
 
 
+@pytest.mark.asyncio
+async def test_module_registration_requires_managed_owned_resources() -> None:
+    repository = MemoryRepository()
+    service = EnterpriseKernelService(repository, MemoryAudit())
+    actor = enterprise_kernel_actor(
+        Actor("alice", "human", "enterprise_kernel_admin"),
+        "enterprise_module.register",
+    )
+    resource = await service.register_resource(request(), actor)
+
+    with pytest.raises(EnterpriseResourceNotFound, match="Module resources"):
+        await service.register_module(
+            module_request(resource, owned_resource_ids=(uuid4(),)),
+            actor,
+        )
+
+@pytest.mark.asyncio
+async def test_module_thread_and_maturity_records_close_p11_kernel_coverage() -> None:
+    repository = MemoryRepository()
+    audit = MemoryAudit()
+    service = EnterpriseKernelService(repository, audit)
+    actor = enterprise_kernel_actor(
+        Actor("alice", "human", "enterprise_kernel_admin"),
+        "enterprise_module.register",
+    )
+    organization_id = uuid4()
+    project = await service.register_resource(
+        request(organization_id=organization_id, resource_key="project.alpha"),
+        actor,
+    )
+    requirement = await service.register_resource(
+        request(
+            organization_id=organization_id,
+            resource_type=EnterpriseResourceType.REQUIREMENT,
+            resource_key="requirement.alpha",
+        ),
+        actor,
+    )
+    for resource_type in EnterpriseResourceType:
+        if resource_type in {EnterpriseResourceType.PROJECT, EnterpriseResourceType.REQUIREMENT}:
+            continue
+        await service.register_resource(
+            request(
+                organization_id=organization_id,
+                resource_type=resource_type,
+                resource_key=f"{resource_type.value}.alpha",
+                display_name=f"{resource_type.value} Alpha",
+            ),
+            actor,
+        )
+    schedule = await service.schedule_work(schedule_request(project), actor)
+
+    module = await service.register_module(module_request(project), actor)
+    thread = await service.open_thread(thread_request(project, requirement, schedule), actor)
+    snapshot = await service.record_maturity(
+        maturity_request(organization_id=organization_id),
+        actor,
+    )
+
+    assert repository.modules[module.id] == module
+    assert repository.threads[thread.id] == thread
+    assert repository.snapshots[snapshot.id] == snapshot
+    assert thread.resource_sequence == (project.id, requirement.id)
+    assert set(snapshot.covered_resource_types) == set(EnterpriseResourceType)
+    assert all(len(item.content_hash) == 64 for item in (module, thread, snapshot))
+    assert audit.records[-3].event_type == "enterprise_module.registered"
+    assert audit.records[-2].event_type == "organizational_thread.opened"
+    assert audit.records[-1].event_type == "operating_maturity.recorded"
+
+
+@pytest.mark.asyncio
+async def test_thread_requires_registered_schedules_and_complete_lineage() -> None:
+    repository = MemoryRepository()
+    service = EnterpriseKernelService(repository, MemoryAudit())
+    actor = enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x")
+    organization_id = uuid4()
+    project = await service.register_resource(request(organization_id=organization_id), actor)
+    requirement = await service.register_resource(
+        request(
+            organization_id=organization_id,
+            resource_type=EnterpriseResourceType.REQUIREMENT,
+            resource_key="requirement.alpha",
+        ),
+        actor,
+    )
+    other = await service.register_resource(
+        request(
+            organization_id=organization_id,
+            resource_type=EnterpriseResourceType.ARCHITECTURE,
+            resource_key="architecture.alpha",
+        ),
+        actor,
+    )
+    schedule = await service.schedule_work(schedule_request(project), actor)
+
+    with pytest.raises(EnterpriseScheduleNotFound, match="Thread schedules"):
+        await service.open_thread(
+            thread_request(project, requirement, schedule, schedule_sequence=(uuid4(),)),
+            actor,
+        )
+    with pytest.raises(InvalidOrganizationalThread, match="root"):
+        await service.open_thread(
+            thread_request(
+                project,
+                requirement,
+                schedule,
+                root_resource_id=other.id,
+                thread_key="thread.invalid",
+                resource_sequence=(project.id, requirement.id),
+            ),
+            actor,
+        )
+
+
+@pytest.mark.asyncio
+async def test_maturity_requires_full_resource_coverage_and_evidence_bound_level() -> None:
+    repository = MemoryRepository()
+    service = EnterpriseKernelService(repository, MemoryAudit())
+    actor = enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x")
+
+    with pytest.raises(InvalidOperatingMaturity, match="proven"):
+        await service.record_maturity(
+            maturity_request(covered_resource_types=(EnterpriseResourceType.PROJECT,)),
+            actor,
+        )
+    organization_id = uuid4()
+    project = None
+    for resource_type in EnterpriseResourceType:
+        resource = await service.register_resource(
+            request(
+                organization_id=organization_id,
+                resource_type=resource_type,
+                resource_key=f"{resource_type.value}.evidence",
+                display_name=f"{resource_type.value} Evidence",
+            ),
+            actor,
+        )
+        if resource_type is EnterpriseResourceType.PROJECT:
+            project = resource
+    assert project is not None
+    await service.register_module(module_request(project), actor)
+    with pytest.raises(InvalidOperatingMaturity, match="evidence"):
+        await service.record_maturity(
+            maturity_request(
+                organization_id=organization_id,
+                snapshot_key="maturity.invalid",
+                maturity_level=3,
+                module_count=1,
+                active_thread_count=0,
+                evidence=(
+                    {
+                        "artifact_id": uuid4(),
+                        "content_hash": "5" * 64,
+                        "evidence_type": "thin_review",
+                    },
+                ),
+            ),
+            actor,
+        )
+
+
 def test_enterprise_resource_models_are_registered_in_metadata() -> None:
     assert EnterpriseResourceModel.__tablename__ in Base.metadata.tables
     assert EnterpriseResourceAuditModel.__tablename__ in Base.metadata.tables
     assert EnterpriseScheduleModel.__tablename__ in Base.metadata.tables
+    assert EnterpriseModuleModel.__tablename__ in Base.metadata.tables
+    assert OrganizationalThreadModel.__tablename__ in Base.metadata.tables
+    assert OperatingMaturitySnapshotModel.__tablename__ in Base.metadata.tables
     assert EnterpriseResourceModel.__table__.c.content_hash.unique is True
     assert EnterpriseScheduleModel.__table__.c.content_hash.unique is True
+    assert EnterpriseModuleModel.__table__.c.content_hash.unique is True
+    assert OrganizationalThreadModel.__table__.c.content_hash.unique is True
+    assert OperatingMaturitySnapshotModel.__table__.c.content_hash.unique is True
     assert "updated_at" not in EnterpriseResourceModel.__table__.c
 
 
@@ -310,9 +618,15 @@ def test_enterprise_kernel_api_surface_is_registered() -> None:
     assert "/enterprise-kernel/resources" in paths
     assert "/enterprise-kernel/resources/{resource_id}" in paths
     assert "/enterprise-kernel/schedules" in paths
+    assert "/enterprise-kernel/modules" in paths
+    assert "/enterprise-kernel/threads" in paths
+    assert "/enterprise-kernel/maturity-snapshots" in paths
     registered = set(app.openapi()["paths"])
     assert "/api/v1/enterprise-kernel/resources" in registered
     assert "/api/v1/enterprise-kernel/schedules" in registered
+    assert "/api/v1/enterprise-kernel/modules" in registered
+    assert "/api/v1/enterprise-kernel/threads" in registered
+    assert "/api/v1/enterprise-kernel/maturity-snapshots" in registered
 
 
 def test_enterprise_kernel_authority_is_human_and_capability_bound() -> None:

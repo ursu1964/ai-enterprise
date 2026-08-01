@@ -3,6 +3,9 @@ from datetime import UTC, datetime
 
 from ai_enterprise.application.enterprise_kernel.dto import (
     KernelActor,
+    OpenOrganizationalThread,
+    RecordOperatingMaturity,
+    RegisterEnterpriseModule,
     RegisterEnterpriseResource,
     ScheduleEnterpriseWork,
 )
@@ -11,25 +14,38 @@ from ai_enterprise.application.enterprise_kernel.ports import (
     EnterpriseResourceRepository,
 )
 from ai_enterprise.domain.enterprise_kernel.entities import (
+    EnterpriseModule,
     EnterpriseResource,
     EnterpriseResourceAuditRecord,
     EnterpriseResourceClaim,
     EnterpriseResourceEvidence,
     EnterpriseResourceRelation,
     EnterpriseSchedule,
+    OperatingMaturitySnapshot,
+    OrganizationalThread,
 )
 from ai_enterprise.domain.enterprise_kernel.enums import (
+    EnterpriseModuleState,
     EnterpriseResourceState,
     EnterpriseScheduleState,
+    OrganizationalThreadState,
 )
 from ai_enterprise.domain.enterprise_kernel.exceptions import (
+    EnterpriseModuleAlreadyExists,
     EnterpriseResourceAlreadyExists,
     EnterpriseResourceNotFound,
     EnterpriseScheduleAlreadyExists,
+    EnterpriseScheduleNotFound,
     InvalidEnterpriseSchedule,
+    InvalidOperatingMaturity,
+    OperatingMaturityAlreadyExists,
+    OrganizationalThreadAlreadyExists,
 )
 from ai_enterprise.domain.enterprise_kernel.policies import (
+    EnterpriseModulePolicy,
     EnterpriseSchedulingPolicy,
+    OperatingMaturityPolicy,
+    OrganizationalThreadPolicy,
     ResourceRegistrationPolicy,
 )
 from ai_enterprise.domain.hashing import hash_json
@@ -45,6 +61,9 @@ class EnterpriseKernelService:
         self._audit = audit
         self._policy = ResourceRegistrationPolicy()
         self._scheduling = EnterpriseSchedulingPolicy()
+        self._modules = EnterpriseModulePolicy()
+        self._threads = OrganizationalThreadPolicy()
+        self._maturity = OperatingMaturityPolicy()
 
     async def register_resource(
         self, request: RegisterEnterpriseResource, actor: KernelActor
@@ -177,6 +196,204 @@ class EnterpriseKernelService:
         )
         await self._repository.commit()
         return schedule
+
+    async def register_module(
+        self, request: RegisterEnterpriseModule, actor: KernelActor
+    ) -> EnterpriseModule:
+        existing = await self._repository.get_module_by_key(
+            request.organization_id, request.module_key
+        )
+        if existing is not None:
+            raise EnterpriseModuleAlreadyExists(
+                "Enterprise module key is already registered for this organization"
+            )
+        await self._require_resources(
+            request.organization_id,
+            request.owned_resource_ids + request.integration_resource_ids,
+            "Module resources are not registered",
+        )
+        now = datetime.now(UTC)
+        material = request.model_dump(mode="json") | {
+            "state": EnterpriseModuleState.REGISTERED,
+            "registered_by": actor.subject,
+            "registered_at": now.isoformat(),
+        }
+        module = EnterpriseModule(
+            id=uuid.uuid4(),
+            organization_id=request.organization_id,
+            module_key=request.module_key,
+            display_name=request.display_name,
+            capability_ids=request.capability_ids,
+            owned_resource_ids=request.owned_resource_ids,
+            integration_resource_ids=request.integration_resource_ids,
+            governance_policy_ids=request.governance_policy_ids,
+            evidence=tuple(
+                EnterpriseResourceEvidence(**item.model_dump()) for item in request.evidence
+            ),
+            state=EnterpriseModuleState.REGISTERED,
+            registered_by=actor.subject,
+            registered_at=now,
+            content_hash=hash_json(material),
+        )
+        self._modules.require_governed_module(module)
+        await self._repository.add_module(module)
+        await self._record(
+            "enterprise_module.registered",
+            module.id,
+            actor.subject,
+            {
+                "organization_id": str(module.organization_id),
+                "module_key": module.module_key,
+                "capability_count": len(module.capability_ids),
+                "content_hash": module.content_hash,
+            },
+        )
+        await self._repository.commit()
+        return module
+
+    async def open_thread(
+        self, request: OpenOrganizationalThread, actor: KernelActor
+    ) -> OrganizationalThread:
+        existing = await self._repository.get_thread_by_key(
+            request.organization_id, request.thread_key
+        )
+        if existing is not None:
+            raise OrganizationalThreadAlreadyExists(
+                "Organizational thread key is already registered for this organization"
+            )
+        await self._require_resources(
+            request.organization_id,
+            request.resource_sequence,
+            "Thread resources are not registered",
+        )
+        missing_schedules = []
+        for schedule_id in request.schedule_sequence:
+            schedule = await self._repository.get_schedule(schedule_id)
+            if schedule is None or schedule.organization_id != request.organization_id:
+                missing_schedules.append(str(schedule_id))
+        if missing_schedules:
+            raise EnterpriseScheduleNotFound(
+                "Thread schedules are not registered: " + ", ".join(missing_schedules)
+            )
+        schedules = [
+            await self._repository.get_schedule(schedule_id)
+            for schedule_id in request.schedule_sequence
+        ]
+        if any(
+            schedule is not None and schedule.target_resource_id not in request.resource_sequence
+            for schedule in schedules
+        ):
+            raise InvalidEnterpriseSchedule("Thread schedules must target resources in lineage")
+        now = datetime.now(UTC)
+        material = request.model_dump(mode="json") | {
+            "state": OrganizationalThreadState.OPEN,
+            "opened_by": actor.subject,
+            "opened_at": now.isoformat(),
+        }
+        thread = OrganizationalThread(
+            id=uuid.uuid4(),
+            organization_id=request.organization_id,
+            thread_key=request.thread_key,
+            root_resource_id=request.root_resource_id,
+            resource_sequence=request.resource_sequence,
+            schedule_sequence=request.schedule_sequence,
+            current_state=OrganizationalThreadState.OPEN,
+            owner_id=request.owner_id,
+            evidence=tuple(
+                EnterpriseResourceEvidence(**item.model_dump()) for item in request.evidence
+            ),
+            opened_by=actor.subject,
+            opened_at=now,
+            content_hash=hash_json(material),
+        )
+        self._threads.require_thread_lineage(thread)
+        await self._repository.add_thread(thread)
+        await self._record(
+            "organizational_thread.opened",
+            thread.id,
+            actor.subject,
+            {
+                "organization_id": str(thread.organization_id),
+                "thread_key": thread.thread_key,
+                "resource_count": len(thread.resource_sequence),
+                "schedule_count": len(thread.schedule_sequence),
+                "content_hash": thread.content_hash,
+            },
+        )
+        await self._repository.commit()
+        return thread
+
+    async def record_maturity(
+        self, request: RecordOperatingMaturity, actor: KernelActor
+    ) -> OperatingMaturitySnapshot:
+        existing = await self._repository.get_maturity_snapshot_by_key(
+            request.organization_id, request.snapshot_key
+        )
+        if existing is not None:
+            raise OperatingMaturityAlreadyExists(
+                "Operating maturity snapshot key is already registered for this organization"
+            )
+        resources = await self._repository.list_for_organization(request.organization_id)
+        actual_resource_types = {resource.resource_type for resource in resources}
+        if set(request.covered_resource_types) - actual_resource_types:
+            raise InvalidOperatingMaturity(
+                "Resource coverage must be proven by registered resources"
+            )
+        modules = await self._repository.list_modules_for_organization(request.organization_id)
+        threads = await self._repository.list_threads_for_organization(request.organization_id)
+        if request.module_count != len(modules):
+            raise InvalidOperatingMaturity("Module count must match registered modules")
+        active_threads = sum(
+            thread.current_state is OrganizationalThreadState.OPEN for thread in threads
+        )
+        if request.active_thread_count != active_threads:
+            raise InvalidOperatingMaturity("Active thread count must match open threads")
+        now = datetime.now(UTC)
+        material = request.model_dump(mode="json") | {
+            "recorded_by": actor.subject,
+            "recorded_at": now.isoformat(),
+        }
+        snapshot = OperatingMaturitySnapshot(
+            id=uuid.uuid4(),
+            organization_id=request.organization_id,
+            snapshot_key=request.snapshot_key,
+            maturity_level=request.maturity_level,
+            covered_resource_types=request.covered_resource_types,
+            module_count=request.module_count,
+            active_thread_count=request.active_thread_count,
+            evidence=tuple(
+                EnterpriseResourceEvidence(**item.model_dump()) for item in request.evidence
+            ),
+            recorded_by=actor.subject,
+            recorded_at=now,
+            content_hash=hash_json(material),
+        )
+        self._maturity.require_evidence_bound_coverage(snapshot)
+        await self._repository.add_maturity_snapshot(snapshot)
+        await self._record(
+            "operating_maturity.recorded",
+            snapshot.id,
+            actor.subject,
+            {
+                "organization_id": str(snapshot.organization_id),
+                "snapshot_key": snapshot.snapshot_key,
+                "maturity_level": snapshot.maturity_level,
+                "content_hash": snapshot.content_hash,
+            },
+        )
+        await self._repository.commit()
+        return snapshot
+
+    async def _require_resources(
+        self, organization_id: uuid.UUID, resource_ids: tuple[uuid.UUID, ...], message: str
+    ) -> None:
+        missing = []
+        for resource_id in resource_ids:
+            resource = await self._repository.get(resource_id)
+            if resource is None or resource.organization_id != organization_id:
+                missing.append(str(resource_id))
+        if missing:
+            raise EnterpriseResourceNotFound(message + ": " + ", ".join(missing))
 
     async def _record(
         self, event_type: str, resource_id: uuid.UUID, actor_id: str, payload: dict[str, object]

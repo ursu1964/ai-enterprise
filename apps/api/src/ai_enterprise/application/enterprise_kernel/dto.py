@@ -53,6 +53,37 @@ class ScheduleEnterpriseWork(BaseModel):
     evidence: tuple[EnterpriseResourceEvidenceInput, ...] = Field(min_length=1)
 
 
+class RegisterEnterpriseModule(BaseModel):
+    organization_id: UUID
+    module_key: str = Field(min_length=1, max_length=200)
+    display_name: str = Field(min_length=1, max_length=300)
+    capability_ids: tuple[str, ...] = Field(min_length=1)
+    owned_resource_ids: tuple[UUID, ...] = Field(min_length=1)
+    integration_resource_ids: tuple[UUID, ...] = ()
+    governance_policy_ids: tuple[str, ...] = Field(min_length=1)
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...] = Field(min_length=1)
+
+
+class OpenOrganizationalThread(BaseModel):
+    organization_id: UUID
+    thread_key: str = Field(min_length=1, max_length=200)
+    root_resource_id: UUID
+    resource_sequence: tuple[UUID, ...] = Field(min_length=2)
+    schedule_sequence: tuple[UUID, ...] = Field(min_length=1)
+    owner_id: str = Field(min_length=1, max_length=200)
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...] = Field(min_length=1)
+
+
+class RecordOperatingMaturity(BaseModel):
+    organization_id: UUID
+    snapshot_key: str = Field(min_length=1, max_length=200)
+    maturity_level: int = Field(ge=1, le=5)
+    covered_resource_types: tuple[EnterpriseResourceType, ...] = Field(min_length=1)
+    module_count: int = Field(ge=0)
+    active_thread_count: int = Field(ge=0)
+    evidence: tuple[EnterpriseResourceEvidenceInput, ...] = Field(min_length=1)
+
+
 class KernelActor(BaseModel):
     subject: str
     roles: frozenset[str] = frozenset()

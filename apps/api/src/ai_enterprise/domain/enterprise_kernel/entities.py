@@ -3,7 +3,13 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from .enums import EnterpriseResourceState, EnterpriseResourceType, EnterpriseScheduleState
+from .enums import (
+    EnterpriseModuleState,
+    EnterpriseResourceState,
+    EnterpriseResourceType,
+    EnterpriseScheduleState,
+    OrganizationalThreadState,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,4 +82,52 @@ class EnterpriseSchedule:
     state: EnterpriseScheduleState
     scheduled_by: str
     scheduled_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class EnterpriseModule:
+    id: UUID
+    organization_id: UUID
+    module_key: str
+    display_name: str
+    capability_ids: tuple[str, ...]
+    owned_resource_ids: tuple[UUID, ...]
+    integration_resource_ids: tuple[UUID, ...]
+    governance_policy_ids: tuple[str, ...]
+    evidence: tuple[EnterpriseResourceEvidence, ...]
+    state: EnterpriseModuleState
+    registered_by: str
+    registered_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class OrganizationalThread:
+    id: UUID
+    organization_id: UUID
+    thread_key: str
+    root_resource_id: UUID
+    resource_sequence: tuple[UUID, ...]
+    schedule_sequence: tuple[UUID, ...]
+    current_state: OrganizationalThreadState
+    owner_id: str
+    evidence: tuple[EnterpriseResourceEvidence, ...]
+    opened_by: str
+    opened_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class OperatingMaturitySnapshot:
+    id: UUID
+    organization_id: UUID
+    snapshot_key: str
+    maturity_level: int
+    covered_resource_types: tuple[EnterpriseResourceType, ...]
+    module_count: int
+    active_thread_count: int
+    evidence: tuple[EnterpriseResourceEvidence, ...]
+    recorded_by: str
+    recorded_at: datetime
     content_hash: str
