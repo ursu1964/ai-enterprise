@@ -182,14 +182,14 @@ def test_api_surface_has_planning_but_no_activation_or_rollout_execution_route()
     assert "/change-proposals/{proposal_id}/transformation-plans" in paths
     assert "/change-proposals/{proposal_id}/impact-assessments" in paths
     assert "/change-proposals/{proposal_id}/validation-plans" in paths
-    assert "/change-proposals/{proposal_id}/rollout-plans" in paths
+    assert "/change-proposals/{proposal_id}/staged-release-plans" in paths
     assert "/change-proposals/{proposal_id}/rollback-plans" in paths
     assert "/change-proposals/{proposal_id}/decisions" in paths
     assert "/change-proposals/{proposal_id}/observations" in paths
     assert "/change-proposals/{proposal_id}/outcomes" in paths
     assert "/change-proposals/{proposal_id}/timeline" in paths
     assert all("activat" not in path for path in paths)
-    assert all("rollout" not in path or "rollout-plans" in path for path in paths)
+    assert all("rollout" not in path for path in paths)
     registered = set(app.openapi()["paths"])
     assert "/api/v1/change-proposals" in registered
     assert all(
@@ -197,7 +197,7 @@ def test_api_surface_has_planning_but_no_activation_or_rollout_execution_route()
             path.startswith("/api/v1/change-proposals")
             and (
                 "activat" in path
-                or ("rollout" in path and "rollout-plans" not in path)
+                or "rollout" in path
             )
         )
         for path in registered

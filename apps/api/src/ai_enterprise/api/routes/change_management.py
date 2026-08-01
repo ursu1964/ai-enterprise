@@ -183,11 +183,11 @@ async def create_validation_plan(
 
 
 @router.post(
-    "/{proposal_id}/rollout-plans",
+    "/{proposal_id}/staged-release-plans",
     response_model=RolloutPlanResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_rollout_plan(
+async def create_staged_release_plan(
     proposal_id: uuid.UUID,
     request: CreateRolloutPlan,
     session: SessionDependency,
