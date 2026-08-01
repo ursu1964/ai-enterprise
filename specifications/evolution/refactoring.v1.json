@@ -1,0 +1,9 @@
+{
+  "specification_id": "controlled-enterprise-refactoring",
+  "version": "1.0.0",
+  "status": "approved",
+  "transformations": [
+    {"transformation_id": "REF-001", "type": "replace-generator", "proposal_id": "EV-001", "proposer": "architecture-agent", "approver": "platform-architecture-board", "approval_status": "approved", "work_packages": ["REF-001-WP1", "REF-001-WP2"], "lineage": ["engineering-artifact-generator@1.0.0"], "rollback": {"artifact": "engineering-artifact-generator@1.0.0", "artifact_hash": "3bee92e706bf1eef6f7f4d4c9c202c9c6c1c0e5bfc5e049568025c4e288e2382", "steps": ["restore approved generator", "regenerate targets", "run engineering verifier"], "verification": "engineering-verifier", "tested_evidence_id": "rollback-test-ref1", "maximum_recovery_minutes": 30}, "success_measures": ["specification-coverage"]}
+  ],
+  "policy": {"work_packages_required": true, "rollback_required": true, "independent_human_approval_required": true, "self_execution_allowed": false}
+}

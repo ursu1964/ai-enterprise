@@ -1,0 +1,9 @@
+{
+  "specification_id": "enterprise-evolution-roadmap",
+  "version": "1.0.0",
+  "status": "approved",
+  "proposals": [
+    {"proposal_id": "EV-001", "current_state": "specification coverage 88 percent", "planned_improvement": "expand governed contract catalog", "dependencies": [], "dependency_attestation": true, "dependency_evidence_id": "dependency-review-ev1", "investment": {"owner": "platform-engineering", "capacity_units": 3}, "expected_outcomes": ["coverage above 95 percent"], "success_measures": ["specification-coverage"], "decision_status": "human-approved", "approval": {"actor_type": "human", "actor_id": "platform-governance-board", "evidence_id": "roadmap-approval-ev1"}},
+    {"proposal_id": "EV-002", "current_state": "recovery mean 55 minutes", "planned_improvement": "automate evidence reconciliation", "dependencies": ["EV-001"], "dependency_attestation": true, "dependency_evidence_id": "dependency-review-ev2", "investment": {"owner": "operations", "capacity_units": 2}, "expected_outcomes": ["recovery below 30 minutes"], "success_measures": ["mean-recovery-minutes"], "decision_status": "awaiting-human-review", "approval": null}
+  ]
+}

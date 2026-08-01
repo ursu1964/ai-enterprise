@@ -1,0 +1,1 @@
+"""Controlled-integration domain contracts."""

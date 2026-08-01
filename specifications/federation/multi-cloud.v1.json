@@ -1,0 +1,15 @@
+{
+  "specification_id": "multi-cloud-orchestration",
+  "version": "1.0.0",
+  "status": "approved",
+  "providers": [
+    {"provider_id": "aws-eu", "class": "aws", "regions": ["eu-central-1"], "jurisdictions": ["EU"], "adapter_version": "1.0.0", "jurisdiction_evidence_id": "aws-eu-residency"},
+    {"provider_id": "azure-eu", "class": "azure", "regions": ["westeurope"], "jurisdictions": ["EU"], "adapter_version": "1.0.0", "jurisdiction_evidence_id": "azure-eu-residency"},
+    {"provider_id": "on-prem-eu", "class": "on-premises", "regions": ["prague-dc1"], "jurisdictions": ["EU"], "adapter_version": "1.0.0", "jurisdiction_evidence_id": "onprem-eu-residency"}
+  ],
+  "workloads": [
+    {"workload_id": "control-plane-eu", "regulatory_deployment_id": "enterprise-eu", "deployment_specification": "infrastructure.ai-enterprise@1.0.0", "classification": "confidential", "required_jurisdictions": ["EU"], "primary_provider": "aws-eu", "fallback_providers": ["azure-eu", "on-prem-eu"], "generator_evidence_id": "cloud-generator-tests", "automatic_failover": false, "human_activation_required": true}
+  ],
+  "targets": ["aws", "azure", "gcp", "on-premises", "edge"],
+  "failover_policy": ["verify-provider-health", "verify-jurisdiction", "verify-regulatory-inheritance", "verify-data-residency", "obtain-human-approval", "record-audit", "activate-fallback"]
+}

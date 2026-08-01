@@ -1,0 +1,12 @@
+{
+  "specification_id": "deterministic-engineering.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "canonicalization": "json-sort-keys-utf8-v1",
+  "hash_algorithm": "sha256",
+  "generator_version_required": true,
+  "approved_specification_required": true,
+  "generated_artifact_manifest_required": true,
+  "reproduction_runs": 2,
+  "artifact_classes": ["source", "infrastructure", "api", "database", "deployment", "policy", "documentation"]
+}

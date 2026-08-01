@@ -1,0 +1,1 @@
+"""Untrusted decomposition Crew adapters."""

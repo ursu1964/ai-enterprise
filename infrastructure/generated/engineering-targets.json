@@ -1,0 +1,91 @@
+{
+  "generator": "engineering-artifact-generator@1.0.0",
+  "service_definitions": [
+    {
+      "cpu": "500m",
+      "dependencies": [
+        "postgres"
+      ],
+      "health_checks": [
+        "/health/live",
+        "/health/ready"
+      ],
+      "ingress": true,
+      "memory": "512Mi",
+      "ports": [
+        8000
+      ],
+      "replicas": 1,
+      "secret_references": [
+        "database-url",
+        "trusted-proxy-hmac"
+      ],
+      "service_id": "control-plane-api",
+      "volumes": []
+    },
+    {
+      "cpu": "1000m",
+      "dependencies": [],
+      "health_checks": [
+        "pg_isready"
+      ],
+      "ingress": false,
+      "memory": "1Gi",
+      "ports": [
+        5432
+      ],
+      "replicas": 1,
+      "secret_references": [
+        "database-credentials"
+      ],
+      "service_id": "postgres",
+      "volumes": [
+        "postgres-data"
+      ]
+    }
+  ],
+  "source": {
+    "path": "specifications/engineering/infrastructure.v1.json",
+    "sha256": "3bee92e706bf1eef6f7f4d4c9c202c9c6c1c0e5bfc5e049568025c4e288e2382",
+    "specification_id": "infrastructure.ai-enterprise",
+    "version": "1.0.0"
+  },
+  "targets": {
+    "compose": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    },
+    "kubernetes": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    },
+    "monitoring": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    },
+    "networking": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    },
+    "secrets": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    },
+    "terraform": {
+      "services": [
+        "control-plane-api",
+        "postgres"
+      ]
+    }
+  }
+}

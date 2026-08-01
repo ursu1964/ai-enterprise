@@ -1,0 +1,11 @@
+{
+  "specification_id": "strategic-intelligence-layer",
+  "version": "1.0.0",
+  "status": "approved",
+  "capabilities": ["strategic-recommendations", "investment-analysis", "enterprise-simulations", "organizational-diagnostics", "long-term-forecasting", "capability-roadmaps", "executive-decision-support"],
+  "recommendations": [
+    {"recommendation_id": "REC-STRAT-001", "category": "investment-prioritization", "objective": "Improve specification coverage and recovery performance.", "expected_benefit": "Reduced drift and recovery time.", "confidence": 0.72, "risk": "medium", "affected_systems": ["contract-catalog", "recovery-control-plane"], "required_investment_ids": ["INV-001", "INV-002"], "source_inference_ids": ["INF-001"], "evidence": ["strategy-objectives-2026", "incident-pattern-q3", "engineering-practice-report"], "proposed_by": "strategic-intelligence-agent", "status": "reviewed", "history": ["generated", "reviewed"], "review": {"actor_type": "human", "actor_id": "strategy-board", "evidence_id": "recommendation-review-rec1"}, "authority": "advisory-only"}
+  ],
+  "lifecycle": ["generated", "reviewed", "accepted", "planned", "implemented", "measured"],
+  "layer_boundaries": {"operational_layer": "executes-approved-work", "governance_layer": "determines-permitted-actions", "cognitive_layer": "proposes-considerations", "cognitive_execution_authority": false, "cognitive_approval_authority": false}
+}

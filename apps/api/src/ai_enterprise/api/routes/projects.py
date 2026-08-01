@@ -19,6 +19,7 @@ from ai_enterprise.application.project_workflow import (
     ProjectNotFoundError,
     ProjectWorkflowService,
 )
+from ai_enterprise.application.workflow.service import WorkflowService
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
     WorkPackageModel,
@@ -96,10 +97,7 @@ async def list_artifacts(
         .order_by(ArtifactModel.created_at)
     )
 
-    return [
-        ArtifactResponse.model_validate(artifact)
-        for artifact in result.scalars().all()
-    ]
+    return [ArtifactResponse.model_validate(artifact) for artifact in result.scalars().all()]
 
 
 @router.post(
@@ -133,6 +131,7 @@ async def approve_artifact(
     except InvalidProjectStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    await WorkflowService(session, settings).notify(project_id)
     return ProjectResponse.model_validate(project)
 
 
@@ -176,8 +175,7 @@ async def start_architecture_run(
 
 
 @router.post(
-    "/{project_id}/architecture-artifacts/"
-    "{artifact_id}/approval",
+    "/{project_id}/architecture-artifacts/{artifact_id}/approval",
     response_model=ProjectResponse,
 )
 async def approve_architecture_artifact(
@@ -216,6 +214,7 @@ async def approve_architecture_artifact(
             detail=str(exc),
         ) from exc
 
+    await WorkflowService(session, settings).notify(project_id)
     return ProjectResponse.model_validate(project)
 
 
@@ -272,10 +271,7 @@ async def list_work_packages(
         .order_by(WorkPackageModel.created_at)
     )
 
-    return [
-        WorkPackageResponse.model_validate(item)
-        for item in result.scalars().all()
-    ]
+    return [WorkPackageResponse.model_validate(item) for item in result.scalars().all()]
 
 
 @router.post(
@@ -318,4 +314,5 @@ async def approve_work_package(
             detail=str(exc),
         ) from exc
 
+    await WorkflowService(session, settings).notify(project_id)
     return WorkPackageResponse.model_validate(work_package)

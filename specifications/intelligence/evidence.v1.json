@@ -1,0 +1,20 @@
+{
+  "specification_id": "strategic-intelligence-evidence-catalog",
+  "version": "1.0.0",
+  "status": "approved",
+  "evidence": [
+    {"evidence_id": "strategy-objectives-2026", "type": "human-approved-strategy", "hash": "6161616161616161616161616161616161616161616161616161616161616161"},
+    {"evidence_id": "investment-capacity-q3", "type": "capacity-snapshot", "hash": "6262626262626262626262626262626262626262626262626262626262626262"},
+    {"evidence_id": "incident-pattern-q3", "type": "operational-evidence", "hash": "6363636363636363636363636363636363636363636363636363636363636363"},
+    {"evidence_id": "architecture-decision-0033", "type": "approved-adr", "hash": "6464646464646464646464646464646464646464646464646464646464646464"},
+    {"evidence_id": "engineering-practice-report", "type": "engineering-evidence", "hash": "6565656565656565656565656565656565656565656565656565656565656565"},
+    {"evidence_id": "training-coverage-q3", "type": "organizational-evidence", "hash": "6666666666666666666666666666666666666666666666666666666666666666"},
+    {"evidence_id": "business-impact-q3", "type": "business-evidence", "hash": "6767676767676767676767676767676767676767676767676767676767676767"},
+    {"evidence_id": "technology-retirement-python2", "type": "human-approved-decision", "hash": "6868686868686868686868686868686868686868686868686868686868686868"},
+    {"evidence_id": "modernization-program-ledger", "type": "program-outcome", "hash": "6969696969696969696969696969696969696969696969696969696969696969"},
+    {"evidence_id": "delivery-trend-five-year", "type": "longitudinal-metric", "hash": "7070707070707070707070707070707070707070707070707070707070707070"},
+    {"evidence_id": "cognitive-policy-approval", "type": "human-governance-approval", "hash": "7171717171717171717171717171717171717171717171717171717171717171"},
+    {"evidence_id": "recommendation-review-rec1", "type": "human-review", "hash": "7272727272727272727272727272727272727272727272727272727272727272"},
+    {"evidence_id": "organizational-evidence-placeholder", "type": "organizational-evidence", "hash": "7373737373737373737373737373737373737373737373737373737373737373"}
+  ]
+}

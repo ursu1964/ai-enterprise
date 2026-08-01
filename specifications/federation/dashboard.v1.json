@@ -1,0 +1,13 @@
+{
+  "specification_id": "enterprise-ecosystem-dashboard",
+  "version": "1.0.0",
+  "status": "approved",
+  "views": [
+    {"view_id": "partner-health", "metrics": [{"metric_id": "integration-status", "evidence_id": "partner-health-acme"}, {"metric_id": "sla-compliance", "evidence_id": "partner-health-acme"}, {"metric_id": "contract-version", "evidence_id": "partner-contract-acme"}, {"metric_id": "trust-level", "evidence_id": "federation-conformance"}]},
+    {"view_id": "supply-chain", "metrics": [{"metric_id": "approved-dependencies", "evidence_id": "dependency-scan-q3"}, {"metric_id": "vulnerable-components", "evidence_id": "dependency-scan-q3"}, {"metric_id": "pending-updates", "evidence_id": "dependency-scan-q3"}, {"metric_id": "licensing-issues", "evidence_id": "dependency-scan-q3"}]},
+    {"view_id": "federation", "metrics": [{"metric_id": "participating-enterprises", "evidence_id": "federation-conformance"}, {"metric_id": "shared-capabilities", "evidence_id": "federation-conformance"}, {"metric_id": "cross-enterprise-workflows", "evidence_id": "federation-conformance"}]},
+    {"view_id": "regulatory", "metrics": [{"metric_id": "jurisdiction-coverage", "evidence_id": "regulatory-compliance-q3"}, {"metric_id": "policy-compliance", "evidence_id": "regulatory-compliance-q3"}, {"metric_id": "outstanding-obligations", "evidence_id": "regulatory-compliance-q3"}]},
+    {"view_id": "external-operations", "metrics": [{"metric_id": "provider-health", "evidence_id": "provider-health-eu"}, {"metric_id": "cloud-utilization", "evidence_id": "provider-health-eu"}, {"metric_id": "connector-status", "evidence_id": "partner-health-acme"}, {"metric_id": "synchronization-latency", "evidence_id": "partner-health-acme"}]}
+  ],
+  "requirements": {"immutable_evidence": true, "classification_filtering": true, "authorization_before_aggregation": true, "relational_scope_filtering": true, "jurisdiction_filtering": true, "provenance_in_every_result": true, "raw_secrets_forbidden": true, "aggregation_minimum_group_size": 5}
+}

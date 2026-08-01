@@ -27,9 +27,13 @@ class RepositorySnapshotService:
         *,
         source_repository: Path,
         snapshots_root: Path,
+        runtime_uid: int = 10001,
+        runtime_gid: int = 10001,
     ) -> None:
         self._source_repository = source_repository.resolve()
         self._snapshots_root = snapshots_root.resolve()
+        self._runtime_uid = runtime_uid
+        self._runtime_gid = runtime_gid
 
     def verify_commit(self, expected_commit: str) -> str:
         result = self._git(
@@ -143,12 +147,20 @@ class RepositorySnapshotService:
         )
 
     def _make_tree_writable(self, root: Path) -> None:
-        subprocess.run(
-            ["chmod", "-R", "a+rwX", str(root)],
-            check=True,
-            capture_output=True,
-            timeout=120,
-        )
+        for path in root.rglob("*"):
+            if path.is_symlink():
+                continue
+
+            mode = 0o700 if path.is_dir() else 0o600
+
+            if path.is_file() and path.stat().st_mode & 0o111:
+                mode = 0o700
+
+            path.chmod(mode)
+            os.chown(path, self._runtime_uid, self._runtime_gid)
+
+        root.chmod(0o700)
+        os.chown(root, self._runtime_uid, self._runtime_gid)
 
     @staticmethod
     def _safe_extract(archive: tarfile.TarFile, destination: Path) -> None:

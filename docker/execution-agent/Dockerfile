@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12.11-slim-bookworm
 
 ARG RUNTIME_UID=10001
 ARG RUNTIME_GID=10001

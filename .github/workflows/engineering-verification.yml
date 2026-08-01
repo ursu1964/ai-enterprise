@@ -1,0 +1,30 @@
+name: Engineering Verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  specification-and-quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Static specification, contract, consistency, and determinism gates
+        run: python tools/engineering_verify.py --static --json
+      - name: Governed enterprise evolution assessment
+        run: python tools/evolution_verify.py --json
+      - name: Governed federation conformance
+        run: python tools/federation_verify.py --json
+      - name: Governed strategic intelligence conformance
+        run: python tools/intelligence_verify.py --json
+      - name: Install application and verification dependencies
+        run: pip install -e ./apps/api pytest pytest-asyncio ruff mypy psycopg[binary]
+      - name: Full continuous engineering verification
+        run: python tools/engineering_verify.py --full --json

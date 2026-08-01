@@ -1,0 +1,12 @@
+{
+  "specification_id": "digital-enterprise-federation-protocol",
+  "version": "1.0.0",
+  "status": "approved",
+  "stages": ["identity-exchange", "capability-discovery", "contract-negotiation", "evidence-sharing", "workflow-delegation", "audit-interoperability", "policy-negotiation", "trust-establishment"],
+  "identity": {"mutual_authentication": true, "signed_challenge": true, "key_rotation": true},
+  "delegation": {"local_authority_evaluation_required": true, "scope_and_expiry_required": true, "capability_subset_required": true, "receiving_authority_ceiling_required": true, "transitive_delegation": false, "redelegation": false, "maximum_hops": 1},
+  "trust": {"measured": true, "substitutes_for_validation": false, "inherited_authority": false},
+  "sovereignty": {"local_policy_precedence": true, "local_approval_required": true, "local_evidence_retained": true, "remote_state_mutation": false},
+  "negotiation": {"local_rejection_supported": true, "policy_conflict_result": "deny", "contract_downgrade_allowed": false, "classification_downgrade_allowed": false},
+  "failure": {"fail_closed": true, "replay_protection": true, "audit_required": true, "revocation_supported": true}
+}

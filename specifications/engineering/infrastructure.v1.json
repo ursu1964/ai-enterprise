@@ -1,0 +1,34 @@
+{
+  "specification_id": "infrastructure.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "generator": "engineering-artifact-generator@1.0.0",
+  "services": [
+    {
+      "service_id": "control-plane-api",
+      "replicas": 1,
+      "cpu": "500m",
+      "memory": "512Mi",
+      "ports": [8000],
+      "volumes": [],
+      "health_checks": ["/health/live", "/health/ready"],
+      "ingress": true,
+      "dependencies": ["postgres"],
+      "secret_references": ["database-url", "trusted-proxy-hmac"]
+    },
+    {
+      "service_id": "postgres",
+      "replicas": 1,
+      "cpu": "1000m",
+      "memory": "1Gi",
+      "ports": [5432],
+      "volumes": ["postgres-data"],
+      "health_checks": ["pg_isready"],
+      "ingress": false,
+      "dependencies": [],
+      "secret_references": ["database-credentials"]
+    }
+  ],
+  "targets": ["compose", "kubernetes", "terraform", "monitoring", "networking", "secrets"],
+  "approval": {"decision": "approved", "evidence_hash": "policy:etra-1.0"}
+}

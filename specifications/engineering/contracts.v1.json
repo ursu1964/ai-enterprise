@@ -1,0 +1,11 @@
+{
+  "specification_id": "contracts.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "contracts": [
+    {"contract_id": "service.health", "kind": "api", "version": "1", "implementation": "apps/api/src/ai_enterprise/main.py", "required_tokens": ["/health/live", "/health/ready"]},
+    {"contract_id": "service.metrics", "kind": "api", "version": "1", "implementation": "apps/api/src/ai_enterprise/main.py", "required_tokens": ["/metrics"]},
+    {"contract_id": "audit.event", "kind": "database", "version": "1", "implementation": "apps/api/src/ai_enterprise/infrastructure/database/models.py", "required_tokens": ["AuditEventModel", "correlation"]},
+    {"contract_id": "runtime.session", "kind": "specification", "version": "1", "implementation": "apps/api/src/ai_enterprise/infrastructure/agent_runtime/models.py", "required_tokens": ["AgentRuntimeSessionModel", "runtime_specification_hash"]}
+  ]
+}

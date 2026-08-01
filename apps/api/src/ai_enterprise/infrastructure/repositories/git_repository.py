@@ -23,6 +23,7 @@ class RepositorySnapshot:
 @dataclass(frozen=True)
 class RepositoryFingerprint:
     head_sha: str
+    tree_sha: str
     status_sha256: str
     diff_sha256: str
 
@@ -66,11 +67,7 @@ class GitRepositoryInspector:
             "ls-files",
         )
 
-        tracked_files = tuple(
-            line.strip()
-            for line in file_output.splitlines()
-            if line.strip()
-        )
+        tracked_files = tuple(line.strip() for line in file_output.splitlines() if line.strip())
 
         return RepositorySnapshot(
             root=root,
@@ -89,6 +86,7 @@ class GitRepositoryInspector:
         self._assert_allowed(root)
 
         head_sha = (await self._git(root, "rev-parse", "HEAD")).strip()
+        tree_sha = (await self._git(root, "rev-parse", "HEAD^{tree}")).strip()
 
         status = await self._git(
             root,
@@ -105,6 +103,7 @@ class GitRepositoryInspector:
 
         return RepositoryFingerprint(
             head_sha=head_sha,
+            tree_sha=tree_sha,
             status_sha256=hash_text(status),
             diff_sha256=hash_text(diff),
         )
@@ -113,19 +112,13 @@ class GitRepositoryInspector:
         try:
             root.relative_to(self._allowed_root)
         except ValueError as exc:
-            raise RepositoryInspectionError(
-                f"Repository is outside allowed root: {root}"
-            ) from exc
+            raise RepositoryInspectionError(f"Repository is outside allowed root: {root}") from exc
 
         if not root.is_dir():
-            raise RepositoryInspectionError(
-                f"Repository directory does not exist: {root}"
-            )
+            raise RepositoryInspectionError(f"Repository directory does not exist: {root}")
 
         if not (root / ".git").exists():
-            raise RepositoryInspectionError(
-                f"Path is not a Git repository: {root}"
-            )
+            raise RepositoryInspectionError(f"Path is not a Git repository: {root}")
 
     @staticmethod
     async def _git(
@@ -144,8 +137,6 @@ class GitRepositoryInspector:
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise RepositoryInspectionError(
-                stderr.decode("utf-8", errors="replace").strip()
-            )
+            raise RepositoryInspectionError(stderr.decode("utf-8", errors="replace").strip())
 
         return stdout.decode("utf-8", errors="replace")

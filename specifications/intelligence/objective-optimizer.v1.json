@@ -1,0 +1,16 @@
+{
+  "specification_id": "strategic-objective-optimizer",
+  "version": "1.0.0",
+  "status": "approved",
+  "objective_evidence_id": "strategy-objectives-2026",
+  "capacity_evidence_id": "investment-capacity-q3",
+  "dependency_evidence_id": "architecture-decision-0033",
+  "capacity_budget": 7,
+  "dependency_declarations_complete": true,
+  "weights": {"expected_value": 0.35, "confidence": 0.2, "risk_inverse": 0.2, "capacity_fit": 0.15, "constraint_fit": 0.1},
+  "investments": [
+    {"investment_id": "INV-001", "expected_value": 90, "confidence": 0.8, "risk": 30, "required_capacity": 3, "available_capacity": 7, "constraint_fit": 90, "dependencies": [], "affected_systems": ["contract-catalog"], "status": "candidate"},
+    {"investment_id": "INV-002", "expected_value": 75, "confidence": 0.9, "risk": 20, "required_capacity": 4, "available_capacity": 7, "constraint_fit": 80, "dependencies": ["INV-001"], "affected_systems": ["recovery-control-plane"], "status": "candidate"}
+  ],
+  "authority": {"recommendations_only": true, "final_prioritization": "external-human-governance", "automatic_funding": false, "automatic_execution": false}
+}

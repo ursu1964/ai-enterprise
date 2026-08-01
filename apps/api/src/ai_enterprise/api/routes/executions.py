@@ -16,7 +16,10 @@ from ai_enterprise.application.execution_workflow import (
     InvalidExecutionStateError,
 )
 from ai_enterprise.domain.execution.exceptions import (
+    ApprovalInvalidError,
+    BaseCommitMismatchError,
     IdempotencyConflictError,
+    WorkPackageNotApprovedError,
 )
 from ai_enterprise.infrastructure.database.models import (
     ExecutionEventModel,
@@ -28,12 +31,13 @@ router = APIRouter(prefix="/projects", tags=["executions"])
 
 
 @router.post(
-    "/{project_id}/executions",
+    "/{project_id}/work-packages/{work_package_id}/executions",
     response_model=ExecutionRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def request_execution(
     project_id: uuid.UUID,
+    work_package_id: uuid.UUID,
     request: RequestExecutionRequest,
     session: SessionDependency,
     settings: SettingsDependency,
@@ -46,7 +50,7 @@ async def request_execution(
     try:
         run = await service.request_execution(
             project_id=project_id,
-            work_package_id=request.work_package_id,
+            work_package_id=work_package_id,
             idempotency_key=request.idempotency_key,
             actor_id="local-user",
         )
@@ -55,7 +59,12 @@ async def request_execution(
             status_code=404,
             detail=str(exc),
         ) from exc
-    except InvalidExecutionStateError as exc:
+    except (
+        ApprovalInvalidError,
+        BaseCommitMismatchError,
+        InvalidExecutionStateError,
+        WorkPackageNotApprovedError,
+    ) as exc:
         raise HTTPException(
             status_code=409,
             detail=str(exc),

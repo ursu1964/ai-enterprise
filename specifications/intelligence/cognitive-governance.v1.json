@@ -1,0 +1,7 @@
+{
+  "specification_id": "cognitive-governance",
+  "version": "1.0.0",
+  "status": "approved",
+  "approval_evidence_id": "cognitive-policy-approval",
+  "policy": {"minimum_evidence_sources": 2, "minimum_distinct_domains": 2, "confidence_minimum": 0.5, "confidence_maximum": 0.95, "explanation_fields": ["claim", "source_evidence", "reasoning_rule", "confidence", "counterevidence", "affected_systems"], "prohibited_recommendation_domains": ["constitutional-amendment", "human-authority-grant", "production-secret-access", "autonomous-funding", "autonomous-deployment"], "mandatory_human_review_categories": ["investment-prioritization", "organizational-restructure", "technology-retirement", "policy-change", "high-risk-architecture"], "abstain_below_threshold": true, "conflicts_block_recommendation": true, "model_output_trusted": false}
+}

@@ -5,6 +5,9 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.requirements_revision.service import (
+    RequirementsRevisionService,
+)
 from ai_enterprise.config import Settings
 from ai_enterprise.domain.enums import (
     ApprovalDecision,
@@ -153,9 +156,7 @@ class ProjectWorkflowService:
             ProjectStatus.REQUIREMENTS_FAILED,
             ProjectStatus.REQUIREMENTS_REJECTED,
         }:
-            raise InvalidProjectStateError(
-                f"Cannot start requirements from state {project.status}"
-            )
+            raise InvalidProjectStateError(f"Cannot start requirements from state {project.status}")
 
         run_id = uuid.uuid4()
 
@@ -214,9 +215,7 @@ class ProjectWorkflowService:
         *,
         run_id: uuid.UUID,
     ) -> None:
-        result = await self._session.execute(
-            select(CrewRunModel).where(CrewRunModel.id == run_id)
-        )
+        result = await self._session.execute(select(CrewRunModel).where(CrewRunModel.id == run_id))
         run = result.scalar_one_or_none()
 
         if run is None:
@@ -226,9 +225,7 @@ class ProjectWorkflowService:
             RunStatus.QUEUED,
             RunStatus.FAILED,
         }:
-            raise InvalidProjectStateError(
-                f"Requirements run cannot execute from {run.status}"
-            )
+            raise InvalidProjectStateError(f"Requirements run cannot execute from {run.status}")
 
         project = await self._get_project(run.project_id)
 
@@ -253,11 +250,26 @@ class ProjectWorkflowService:
 
             runner = RequirementsCrewRunner(self._settings)
 
+            previous_artifact_content = None
+            previous_artifact_id = run.input_payload.get("previous_artifact_id")
+            if previous_artifact_id:
+                previous_artifact = await self._session.get(
+                    ArtifactModel, uuid.UUID(str(previous_artifact_id))
+                )
+                if previous_artifact is None:
+                    raise ArtifactNotFoundError(str(previous_artifact_id))
+                previous_artifact_content = previous_artifact.content
+
             crew_result = await asyncio.to_thread(
                 runner.run,
                 project_name=project.name,
                 project_description=project.description,
                 manifest_hash=project.manifest_hash,
+                previous_artifact=previous_artifact_content,
+                revision_cycle_number=run.input_payload.get("revision_cycle_number"),
+                revision_feedback_summary=run.input_payload.get("revision_feedback_summary"),
+                revision_feedback=run.input_payload.get("revision_feedback"),
+                revision_feedback_hash=run.input_payload.get("revision_feedback_hash"),
             )
 
             artifact = ArtifactModel(
@@ -269,6 +281,20 @@ class ProjectWorkflowService:
                 content=crew_result.markdown,
                 content_hash=hash_text(crew_result.markdown),
             )
+            self._session.add(artifact)
+            await self._session.flush()
+            revisions = RequirementsRevisionService(self._session)
+            if run.input_payload.get("revision_cycle_id"):
+                await revisions.complete_cycle(
+                    execution_run_id=run.id,
+                    artifact_id=artifact.id,
+                    raw_output_hash=hash_text(crew_result.raw_output),
+                    repair_attempted=False,
+                    repair_succeeded=None,
+                    validation_errors=None,
+                )
+            else:
+                await revisions.record_initial_artifact(artifact.id)
 
             run.status = RunStatus.SUCCEEDED
             run.completed_at = datetime.now(UTC)
@@ -314,10 +340,15 @@ class ProjectWorkflowService:
             await self._session.rollback()
 
             run = await self._session.get(CrewRunModel, run_id)
-            project = await self._session.get(
+            if run is None:
+                raise RuntimeError(f"Crew run {run_id} disappeared") from exc
+            failed_project = await self._session.get(
                 ProjectModel,
                 run.project_id,
             )
+            if failed_project is None:
+                raise ProjectNotFoundError(str(run.project_id)) from exc
+            project = failed_project
 
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
@@ -354,16 +385,13 @@ class ProjectWorkflowService:
         project = await self._get_project(project_id)
 
         if project.status != ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL:
-            raise InvalidProjectStateError(
-                "Project is not awaiting requirements approval"
-            )
+            raise InvalidProjectStateError("Project is not awaiting requirements approval")
 
         result = await self._session.execute(
             select(ArtifactModel).where(
                 ArtifactModel.id == artifact_id,
                 ArtifactModel.project_id == project_id,
-                ArtifactModel.artifact_type
-                == ArtifactType.REQUIREMENTS_SPECIFICATION,
+                ArtifactModel.artifact_type == ArtifactType.REQUIREMENTS_SPECIFICATION,
             )
         )
 
@@ -424,16 +452,13 @@ class ProjectWorkflowService:
             ProjectStatus.ARCHITECTURE_FAILED,
             ProjectStatus.ARCHITECTURE_REJECTED,
         }:
-            raise InvalidProjectStateError(
-                f"Cannot start architecture from state {project.status}"
-            )
+            raise InvalidProjectStateError(f"Cannot start architecture from state {project.status}")
 
         requirements_result = await self._session.execute(
             select(ArtifactModel)
             .where(
                 ArtifactModel.project_id == project.id,
-                ArtifactModel.artifact_type
-                == ArtifactType.REQUIREMENTS_SPECIFICATION,
+                ArtifactModel.artifact_type == ArtifactType.REQUIREMENTS_SPECIFICATION,
             )
             .order_by(ArtifactModel.created_at.desc())
             .limit(1)
@@ -442,9 +467,7 @@ class ProjectWorkflowService:
         requirements_artifact = requirements_result.scalar_one_or_none()
 
         if requirements_artifact is None:
-            raise ArtifactNotFoundError(
-                "Approved requirements artifact not found"
-            )
+            raise ArtifactNotFoundError("Approved requirements artifact not found")
 
         approval_result = await self._session.execute(
             select(ApprovalModel)
@@ -460,9 +483,7 @@ class ProjectWorkflowService:
         approval = approval_result.scalar_one_or_none()
 
         if approval is None:
-            raise InvalidProjectStateError(
-                "The selected requirements artifact is not approved"
-            )
+            raise InvalidProjectStateError("The selected requirements artifact is not approved")
 
         run_id = uuid.uuid4()
 
@@ -472,12 +493,8 @@ class ProjectWorkflowService:
             crew_name="architecture_crew",
             status=RunStatus.QUEUED,
             input_payload={
-                "requirements_artifact_id": str(
-                    requirements_artifact.id
-                ),
-                "requirements_artifact_hash": (
-                    requirements_artifact.content_hash
-                ),
+                "requirements_artifact_id": str(requirements_artifact.id),
+                "requirements_artifact_hash": (requirements_artifact.content_hash),
             },
         )
 
@@ -494,12 +511,8 @@ class ProjectWorkflowService:
             payload={
                 "project_id": str(project.id),
                 "run_id": str(run_id),
-                "requirements_artifact_id": str(
-                    requirements_artifact.id
-                ),
-                "requirements_artifact_hash": (
-                    requirements_artifact.content_hash
-                ),
+                "requirements_artifact_id": str(requirements_artifact.id),
+                "requirements_artifact_hash": (requirements_artifact.content_hash),
             },
             priority=100,
             max_attempts=3,
@@ -515,12 +528,8 @@ class ProjectWorkflowService:
                 payload={
                     "run_id": str(run_id),
                     "job_id": str(job.id),
-                    "requirements_artifact_id": str(
-                        requirements_artifact.id
-                    ),
-                    "requirements_artifact_hash": (
-                        requirements_artifact.content_hash
-                    ),
+                    "requirements_artifact_id": str(requirements_artifact.id),
+                    "requirements_artifact_hash": (requirements_artifact.content_hash),
                 },
             )
         )
@@ -535,40 +544,29 @@ class ProjectWorkflowService:
         *,
         run_id: uuid.UUID,
     ) -> None:
-        result = await self._session.execute(
-            select(CrewRunModel).where(
-                CrewRunModel.id == run_id
-            )
-        )
+        result = await self._session.execute(select(CrewRunModel).where(CrewRunModel.id == run_id))
 
         run = result.scalar_one_or_none()
 
         if run is None:
-            raise RuntimeError(
-                f"Architecture run {run_id} does not exist"
-            )
+            raise RuntimeError(f"Architecture run {run_id} does not exist")
 
         if run.status not in {
             RunStatus.QUEUED,
             RunStatus.FAILED,
         }:
-            raise InvalidProjectStateError(
-                f"Architecture run cannot execute from {run.status}"
-            )
+            raise InvalidProjectStateError(f"Architecture run cannot execute from {run.status}")
 
         project = await self._get_project(run.project_id)
 
         try:
-            artifact_id = uuid.UUID(
-                run.input_payload["requirements_artifact_id"]
-            )
+            artifact_id = uuid.UUID(run.input_payload["requirements_artifact_id"])
 
             artifact_result = await self._session.execute(
                 select(ArtifactModel).where(
                     ArtifactModel.id == artifact_id,
                     ArtifactModel.project_id == project.id,
-                    ArtifactModel.artifact_type
-                    == ArtifactType.REQUIREMENTS_SPECIFICATION,
+                    ArtifactModel.artifact_type == ArtifactType.REQUIREMENTS_SPECIFICATION,
                 )
             )
 
@@ -577,16 +575,12 @@ class ProjectWorkflowService:
             if requirements_artifact is None:
                 raise ArtifactNotFoundError(str(artifact_id))
 
-            expected_hash = run.input_payload[
-                "requirements_artifact_hash"
-            ]
+            expected_hash = run.input_payload["requirements_artifact_hash"]
 
             actual_hash = hash_text(requirements_artifact.content)
 
             if actual_hash != expected_hash:
-                raise RuntimeError(
-                    "Requirements artifact integrity check failed"
-                )
+                raise RuntimeError("Requirements artifact integrity check failed")
 
             approval_result = await self._session.execute(
                 select(ApprovalModel).where(
@@ -615,12 +609,8 @@ class ProjectWorkflowService:
                     actor_id="architecture-worker",
                     payload={
                         "run_id": str(run.id),
-                        "requirements_artifact_id": str(
-                            requirements_artifact.id
-                        ),
-                        "requirements_artifact_hash": (
-                            requirements_artifact.content_hash
-                        ),
+                        "requirements_artifact_id": str(requirements_artifact.id),
+                        "requirements_artifact_hash": (requirements_artifact.content_hash),
                     },
                 )
             )
@@ -635,9 +625,7 @@ class ProjectWorkflowService:
                 project_description=project.description,
                 project_manifest_hash=project.manifest_hash,
                 requirements_markdown=requirements_artifact.content,
-                requirements_artifact_hash=(
-                    requirements_artifact.content_hash
-                ),
+                requirements_artifact_hash=(requirements_artifact.content_hash),
             )
 
             architecture_artifact_id = uuid.uuid4()
@@ -656,21 +644,13 @@ class ProjectWorkflowService:
             run.completed_at = datetime.now(UTC)
             run.output_payload = {
                 "artifact_id": str(architecture_artifact_id),
-                "artifact_type": (
-                    ArtifactType.ARCHITECTURE_SPECIFICATION
-                ),
+                "artifact_type": (ArtifactType.ARCHITECTURE_SPECIFICATION),
                 "content_hash": architecture_artifact.content_hash,
-                "source_requirements_artifact_id": str(
-                    requirements_artifact.id
-                ),
-                "source_requirements_hash": (
-                    requirements_artifact.content_hash
-                ),
+                "source_requirements_artifact_id": str(requirements_artifact.id),
+                "source_requirements_hash": (requirements_artifact.content_hash),
             }
 
-            project.status = (
-                ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
-            )
+            project.status = ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
 
             self._session.add_all(
                 [
@@ -683,35 +663,21 @@ class ProjectWorkflowService:
                         actor_id="architecture-crew",
                         payload={
                             "run_id": str(run.id),
-                            "artifact_id": str(
-                                architecture_artifact_id
-                            ),
-                            "artifact_hash": (
-                                architecture_artifact.content_hash
-                            ),
-                            "requirements_artifact_id": str(
-                                requirements_artifact.id
-                            ),
-                            "requirements_artifact_hash": (
-                                requirements_artifact.content_hash
-                            ),
+                            "artifact_id": str(architecture_artifact_id),
+                            "artifact_hash": (architecture_artifact.content_hash),
+                            "requirements_artifact_id": str(requirements_artifact.id),
+                            "requirements_artifact_hash": (requirements_artifact.content_hash),
                         },
                     ),
                     AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
-                        event_type=(
-                            "architecture.approval.requested"
-                        ),
+                        event_type=("architecture.approval.requested"),
                         actor_type="system",
                         actor_id="workflow-engine",
                         payload={
-                            "artifact_id": str(
-                                architecture_artifact_id
-                            ),
-                            "artifact_hash": (
-                                architecture_artifact.content_hash
-                            ),
+                            "artifact_id": str(architecture_artifact_id),
+                            "artifact_hash": (architecture_artifact.content_hash),
                         },
                     ),
                 ]
@@ -723,10 +689,15 @@ class ProjectWorkflowService:
             await self._session.rollback()
 
             run = await self._session.get(CrewRunModel, run_id)
-            project = await self._session.get(
+            if run is None:
+                raise RuntimeError(f"Crew run {run_id} disappeared") from exc
+            failed_project = await self._session.get(
                 ProjectModel,
                 run.project_id,
             )
+            if failed_project is None:
+                raise ProjectNotFoundError(str(run.project_id)) from exc
+            project = failed_project
 
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
@@ -761,20 +732,14 @@ class ProjectWorkflowService:
     ) -> ProjectModel:
         project = await self._get_project(project_id)
 
-        if (
-            project.status
-            != ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
-        ):
-            raise InvalidProjectStateError(
-                "Project is not awaiting architecture approval"
-            )
+        if project.status != ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL:
+            raise InvalidProjectStateError("Project is not awaiting architecture approval")
 
         result = await self._session.execute(
             select(ArtifactModel).where(
                 ArtifactModel.id == artifact_id,
                 ArtifactModel.project_id == project_id,
-                ArtifactModel.artifact_type
-                == ArtifactType.ARCHITECTURE_SPECIFICATION,
+                ArtifactModel.artifact_type == ArtifactType.ARCHITECTURE_SPECIFICATION,
             )
         )
 
@@ -835,9 +800,7 @@ class ProjectWorkflowService:
             ProjectStatus.WORK_PACKAGE_FAILED,
             ProjectStatus.WORK_PACKAGE_REJECTED,
         }:
-            raise InvalidProjectStateError(
-                f"Cannot plan work package from state {project.status}"
-            )
+            raise InvalidProjectStateError(f"Cannot plan work package from state {project.status}")
 
         architecture_artifact = await self._get_latest_approved_artifact(
             project_id=project.id,
@@ -845,9 +808,7 @@ class ProjectWorkflowService:
         )
 
         if architecture_artifact.run_id is None:
-            raise InvalidProjectStateError(
-                "Architecture artifact has no source run"
-            )
+            raise InvalidProjectStateError("Architecture artifact has no source run")
 
         architecture_run = await self._session.get(
             CrewRunModel,
@@ -855,14 +816,13 @@ class ProjectWorkflowService:
         )
 
         if architecture_run is None:
-            raise InvalidProjectStateError(
-                "Architecture source run does not exist"
-            )
+            raise InvalidProjectStateError("Architecture source run does not exist")
+
+        if architecture_run.output_payload is None:
+            raise InvalidProjectStateError("Architecture source run has no output payload")
 
         requirements_artifact_id = uuid.UUID(
-            architecture_run.output_payload[
-                "source_requirements_artifact_id"
-            ]
+            architecture_run.output_payload["source_requirements_artifact_id"]
         )
 
         requirements_artifact = await self._session.get(
@@ -871,27 +831,17 @@ class ProjectWorkflowService:
         )
 
         if requirements_artifact is None:
-            raise ArtifactNotFoundError(
-                str(requirements_artifact_id)
-            )
+            raise ArtifactNotFoundError(str(requirements_artifact_id))
 
-        requirements_hash = hash_text(
-            requirements_artifact.content
-        )
+        requirements_hash = hash_text(requirements_artifact.content)
 
-        architecture_hash = hash_text(
-            architecture_artifact.content
-        )
+        architecture_hash = hash_text(architecture_artifact.content)
 
         if requirements_hash != requirements_artifact.content_hash:
-            raise RuntimeError(
-                "Requirements artifact integrity check failed"
-            )
+            raise RuntimeError("Requirements artifact integrity check failed")
 
         if architecture_hash != architecture_artifact.content_hash:
-            raise RuntimeError(
-                "Architecture artifact integrity check failed"
-            )
+            raise RuntimeError("Architecture artifact integrity check failed")
 
         run_id = uuid.uuid4()
 
@@ -901,18 +851,10 @@ class ProjectWorkflowService:
             crew_name="work_package_planner_crew",
             status=RunStatus.QUEUED,
             input_payload={
-                "requirements_artifact_id": str(
-                    requirements_artifact.id
-                ),
-                "requirements_artifact_hash": (
-                    requirements_artifact.content_hash
-                ),
-                "architecture_artifact_id": str(
-                    architecture_artifact.id
-                ),
-                "architecture_artifact_hash": (
-                    architecture_artifact.content_hash
-                ),
+                "requirements_artifact_id": str(requirements_artifact.id),
+                "requirements_artifact_hash": (requirements_artifact.content_hash),
+                "architecture_artifact_id": str(architecture_artifact.id),
+                "architecture_artifact_hash": (architecture_artifact.content_hash),
             },
         )
 
@@ -944,18 +886,10 @@ class ProjectWorkflowService:
                 payload={
                     "run_id": str(run_id),
                     "job_id": str(job.id),
-                    "requirements_artifact_id": str(
-                        requirements_artifact.id
-                    ),
-                    "requirements_artifact_hash": (
-                        requirements_artifact.content_hash
-                    ),
-                    "architecture_artifact_id": str(
-                        architecture_artifact.id
-                    ),
-                    "architecture_artifact_hash": (
-                        architecture_artifact.content_hash
-                    ),
+                    "requirements_artifact_id": str(requirements_artifact.id),
+                    "requirements_artifact_hash": (requirements_artifact.content_hash),
+                    "architecture_artifact_id": str(architecture_artifact.id),
+                    "architecture_artifact_hash": (architecture_artifact.content_hash),
                 },
             )
         )
@@ -973,28 +907,20 @@ class ProjectWorkflowService:
         run = await self._session.get(CrewRunModel, run_id)
 
         if run is None:
-            raise RuntimeError(
-                f"Work-package planning run {run_id} does not exist"
-            )
+            raise RuntimeError(f"Work-package planning run {run_id} does not exist")
 
         if run.status not in {
             RunStatus.QUEUED,
             RunStatus.FAILED,
         }:
-            raise InvalidProjectStateError(
-                f"Planning run cannot execute from {run.status}"
-            )
+            raise InvalidProjectStateError(f"Planning run cannot execute from {run.status}")
 
         project = await self._get_project(run.project_id)
 
         try:
-            requirements_artifact_id = uuid.UUID(
-                run.input_payload["requirements_artifact_id"]
-            )
+            requirements_artifact_id = uuid.UUID(run.input_payload["requirements_artifact_id"])
 
-            architecture_artifact_id = uuid.UUID(
-                run.input_payload["architecture_artifact_id"]
-            )
+            architecture_artifact_id = uuid.UUID(run.input_payload["architecture_artifact_id"])
 
             requirements_artifact = await self._session.get(
                 ArtifactModel,
@@ -1007,46 +933,26 @@ class ProjectWorkflowService:
             )
 
             if requirements_artifact is None:
-                raise ArtifactNotFoundError(
-                    str(requirements_artifact_id)
-                )
+                raise ArtifactNotFoundError(str(requirements_artifact_id))
 
             if architecture_artifact is None:
-                raise ArtifactNotFoundError(
-                    str(architecture_artifact_id)
-                )
+                raise ArtifactNotFoundError(str(architecture_artifact_id))
 
-            expected_requirements_hash = run.input_payload[
-                "requirements_artifact_hash"
-            ]
+            expected_requirements_hash = run.input_payload["requirements_artifact_hash"]
 
-            expected_architecture_hash = run.input_payload[
-                "architecture_artifact_hash"
-            ]
+            expected_architecture_hash = run.input_payload["architecture_artifact_hash"]
 
-            if (
-                hash_text(requirements_artifact.content)
-                != expected_requirements_hash
-            ):
-                raise RuntimeError(
-                    "Requirements artifact integrity check failed"
-                )
+            if hash_text(requirements_artifact.content) != expected_requirements_hash:
+                raise RuntimeError("Requirements artifact integrity check failed")
 
-            if (
-                hash_text(architecture_artifact.content)
-                != expected_architecture_hash
-            ):
-                raise RuntimeError(
-                    "Architecture artifact integrity check failed"
-                )
+            if hash_text(architecture_artifact.content) != expected_architecture_hash:
+                raise RuntimeError("Architecture artifact integrity check failed")
 
             inspector = GitRepositoryInspector(
                 allowed_root=self._settings.repository_allowed_root,
             )
 
-            repository = await inspector.inspect(
-                project.repository_path
-            )
+            repository = await inspector.inspect(project.repository_path)
 
             if not repository.is_clean:
                 raise InvalidProjectStateError(
@@ -1082,24 +988,12 @@ class ProjectWorkflowService:
                 project_name=project.name,
                 project_description=project.description,
                 base_commit_sha=repository.commit_sha,
-                requirements_artifact_id=str(
-                    requirements_artifact.id
-                ),
-                requirements_hash=(
-                    requirements_artifact.content_hash
-                ),
-                requirements_markdown=(
-                    requirements_artifact.content
-                ),
-                architecture_artifact_id=str(
-                    architecture_artifact.id
-                ),
-                architecture_hash=(
-                    architecture_artifact.content_hash
-                ),
-                architecture_markdown=(
-                    architecture_artifact.content
-                ),
+                requirements_artifact_id=str(requirements_artifact.id),
+                requirements_hash=(requirements_artifact.content_hash),
+                requirements_markdown=(requirements_artifact.content),
+                architecture_artifact_id=str(architecture_artifact.id),
+                architecture_hash=(architecture_artifact.content_hash),
+                architecture_markdown=(architecture_artifact.content),
                 tracked_files=list(repository.tracked_files),
             )
 
@@ -1109,62 +1003,30 @@ class ProjectWorkflowService:
             # crew cannot redirect the work package to different artifacts.
             parsed["project_id"] = str(project.id)
             parsed["base_commit_sha"] = repository.commit_sha
-            parsed["source_requirements_artifact_id"] = str(
-                requirements_artifact.id
-            )
-            parsed["source_requirements_hash"] = (
-                requirements_artifact.content_hash
-            )
-            parsed["source_architecture_artifact_id"] = str(
-                architecture_artifact.id
-            )
-            parsed["source_architecture_hash"] = (
-                architecture_artifact.content_hash
-            )
+            parsed["source_requirements_artifact_id"] = str(requirements_artifact.id)
+            parsed["source_requirements_hash"] = requirements_artifact.content_hash
+            parsed["source_architecture_artifact_id"] = str(architecture_artifact.id)
+            parsed["source_architecture_hash"] = architecture_artifact.content_hash
 
             contract = WorkPackageContract.model_validate(parsed)
 
             if contract.project_id != str(project.id):
-                raise RuntimeError(
-                    "Work package changed the project ID"
-                )
+                raise RuntimeError("Work package changed the project ID")
 
             if contract.base_commit_sha != repository.commit_sha:
-                raise RuntimeError(
-                    "Work package changed the base commit SHA"
-                )
+                raise RuntimeError("Work package changed the base commit SHA")
 
-            if (
-                contract.source_requirements_artifact_id
-                != str(requirements_artifact.id)
-            ):
-                raise RuntimeError(
-                    "Work package changed requirements artifact ID"
-                )
+            if contract.source_requirements_artifact_id != str(requirements_artifact.id):
+                raise RuntimeError("Work package changed requirements artifact ID")
 
-            if (
-                contract.source_requirements_hash
-                != requirements_artifact.content_hash
-            ):
-                raise RuntimeError(
-                    "Work package changed requirements hash"
-                )
+            if contract.source_requirements_hash != requirements_artifact.content_hash:
+                raise RuntimeError("Work package changed requirements hash")
 
-            if (
-                contract.source_architecture_artifact_id
-                != str(architecture_artifact.id)
-            ):
-                raise RuntimeError(
-                    "Work package changed architecture artifact ID"
-                )
+            if contract.source_architecture_artifact_id != str(architecture_artifact.id):
+                raise RuntimeError("Work package changed architecture artifact ID")
 
-            if (
-                contract.source_architecture_hash
-                != architecture_artifact.content_hash
-            ):
-                raise RuntimeError(
-                    "Work package changed architecture hash"
-                )
+            if contract.source_architecture_hash != architecture_artifact.content_hash:
+                raise RuntimeError("Work package changed architecture hash")
 
             validate_repository_boundaries(
                 contract=contract,
@@ -1198,18 +1060,10 @@ class ProjectWorkflowService:
                 objective=contract.objective,
                 repository_url=project.repository_url,
                 base_commit_sha=contract.base_commit_sha,
-                source_requirements_artifact_id=(
-                    requirements_artifact.id
-                ),
-                source_requirements_hash=(
-                    requirements_artifact.content_hash
-                ),
-                source_architecture_artifact_id=(
-                    architecture_artifact.id
-                ),
-                source_architecture_hash=(
-                    architecture_artifact.content_hash
-                ),
+                source_requirements_artifact_id=(requirements_artifact.id),
+                source_requirements_hash=(requirements_artifact.content_hash),
+                source_architecture_artifact_id=(architecture_artifact.id),
+                source_architecture_hash=(architecture_artifact.content_hash),
                 contract=contract_data,
                 contract_hash=contract_hash,
             )
@@ -1223,9 +1077,7 @@ class ProjectWorkflowService:
                 "base_commit_sha": contract.base_commit_sha,
             }
 
-            project.status = (
-                ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
-            )
+            project.status = ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
 
             self._session.add(artifact)
             await self._session.flush()
@@ -1244,9 +1096,7 @@ class ProjectWorkflowService:
                             "work_package_id": str(work_package_id),
                             "artifact_id": str(artifact_id),
                             "contract_hash": contract_hash,
-                            "base_commit_sha": (
-                                contract.base_commit_sha
-                            ),
+                            "base_commit_sha": (contract.base_commit_sha),
                         },
                     ),
                     AuditEventModel(
@@ -1270,10 +1120,15 @@ class ProjectWorkflowService:
             await self._session.rollback()
 
             run = await self._session.get(CrewRunModel, run_id)
-            project = await self._session.get(
+            if run is None:
+                raise RuntimeError(f"Crew run {run_id} disappeared") from exc
+            failed_project = await self._session.get(
                 ProjectModel,
                 run.project_id,
             )
+            if failed_project is None:
+                raise ProjectNotFoundError(str(run.project_id)) from exc
+            project = failed_project
 
             run.status = RunStatus.FAILED
             run.completed_at = datetime.now(UTC)
@@ -1308,31 +1163,19 @@ class ProjectWorkflowService:
     ) -> WorkPackageModel:
         project = await self._get_project(project_id)
 
-        if (
-            project.status
-            != ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
-        ):
-            raise InvalidProjectStateError(
-                "Project is not awaiting work-package approval"
-            )
+        if project.status != ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL:
+            raise InvalidProjectStateError("Project is not awaiting work-package approval")
 
         work_package = await self._session.get(
             WorkPackageModel,
             work_package_id,
         )
 
-        if (
-            work_package is None
-            or work_package.project_id != project.id
-        ):
-            raise ArtifactNotFoundError(
-                str(work_package_id)
-            )
+        if work_package is None or work_package.project_id != project.id:
+            raise ArtifactNotFoundError(str(work_package_id))
 
         if work_package.artifact_id is None:
-            raise InvalidProjectStateError(
-                "Work package has no immutable artifact"
-            )
+            raise InvalidProjectStateError("Work package has no immutable artifact")
 
         artifact = await self._session.get(
             ArtifactModel,
@@ -1340,16 +1183,12 @@ class ProjectWorkflowService:
         )
 
         if artifact is None:
-            raise ArtifactNotFoundError(
-                str(work_package.artifact_id)
-            )
+            raise ArtifactNotFoundError(str(work_package.artifact_id))
 
         recalculated_hash = hash_text(artifact.content)
 
         if recalculated_hash != work_package.contract_hash:
-            raise RuntimeError(
-                "Work-package artifact integrity check failed"
-            )
+            raise RuntimeError("Work-package artifact integrity check failed")
 
         approval = ApprovalModel(
             id=uuid.uuid4(),
@@ -1381,12 +1220,8 @@ class ProjectWorkflowService:
                     payload={
                         "work_package_id": str(work_package.id),
                         "artifact_id": str(artifact.id),
-                        "contract_hash": (
-                            work_package.contract_hash
-                        ),
-                        "base_commit_sha": (
-                            work_package.base_commit_sha
-                        ),
+                        "contract_hash": (work_package.contract_hash),
+                        "base_commit_sha": (work_package.base_commit_sha),
                         "comment": comment,
                     },
                 ),
@@ -1437,8 +1272,6 @@ class ProjectWorkflowService:
         artifact = result.scalar_one_or_none()
 
         if artifact is None:
-            raise ArtifactNotFoundError(
-                f"No approved {artifact_type} artifact found"
-            )
+            raise ArtifactNotFoundError(f"No approved {artifact_type} artifact found")
 
         return artifact

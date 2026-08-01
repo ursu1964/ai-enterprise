@@ -1,0 +1,17 @@
+{
+  "specification_id": "configuration.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "fields": [
+    {"key": "DATABASE_URL", "type": "uri", "required": true, "secret": true, "environments": ["local", "staging", "production"]},
+    {"key": "APP_ENV", "type": "enum", "required": true, "secret": false, "allowed": ["development", "local", "test", "staging", "production"], "environments": ["development", "local", "test", "staging", "production"]},
+    {"key": "TRUSTED_PROXY_HMAC_SECRET", "type": "secret-reference", "required": true, "secret": true, "environments": ["staging", "production"]},
+    {"key": "MODEL_PROVIDER_DEFAULT", "type": "string", "required": true, "secret": false, "environments": ["local", "staging", "production"]}
+  ],
+  "profiles": {
+    "development": {"fail_closed": false},
+    "local": {"fail_closed": false},
+    "staging": {"fail_closed": true},
+    "production": {"fail_closed": true}
+  }
+}

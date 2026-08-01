@@ -29,6 +29,9 @@ class ScopeValidator:
     ) -> ChangeStatistics:
         files = self._changed_files(repository)
 
+        self._validate_changed_symlinks(repository, files)
+        self._validate_no_submodule_pointer_changes(repository)
+
         violations: list[str] = []
 
         for changed_file in files:
@@ -91,18 +94,64 @@ class ScopeValidator:
             status = text[:2]
             path = text[3:]
 
-            if status[0] in {"R", "C"}:
+            if "R" in status or "C" in status:
                 index += 1
 
                 if index >= len(fields):
                     raise ScopeViolationError("Malformed Git rename record")
 
-                path = fields[index].decode("utf-8", errors="strict")
+                source_path = fields[index].decode("utf-8", errors="strict")
+                files.append(source_path)
 
             files.append(path)
             index += 1
 
         return sorted(set(files))
+
+    @staticmethod
+    def _validate_changed_symlinks(repository: Path, files: list[str]) -> None:
+        root = repository.resolve()
+
+        for relative_path in files:
+            path = repository / relative_path
+
+            if not path.is_symlink():
+                continue
+
+            target = path.resolve(strict=False)
+
+            if target != root and root not in target.parents:
+                raise ScopeViolationError(
+                    f"Changed symlink escapes snapshot: {relative_path}"
+                )
+
+    @staticmethod
+    def _validate_no_submodule_pointer_changes(repository: Path) -> None:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "diff",
+                "--raw",
+                "--no-renames",
+                "HEAD",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        for line in result.stdout.splitlines():
+            metadata = line.split("\t", maxsplit=1)[0].split()
+
+            modes = {value.lstrip(":") for value in metadata[:2]}
+
+            if "160000" in modes:
+                raise ScopeViolationError(
+                    "Submodule pointer changes require explicit approval"
+                )
 
     @staticmethod
     def _line_statistics(repository: Path) -> tuple[int, int]:

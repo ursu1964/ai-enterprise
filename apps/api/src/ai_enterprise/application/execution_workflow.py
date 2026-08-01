@@ -19,7 +19,9 @@ from ai_enterprise.domain.execution.enums import ExecutionStatus, TestStatus
 from ai_enterprise.domain.execution.exceptions import (
     ApprovalInvalidError,
     BaseCommitMismatchError,
+    ExecutionTimeoutError,
     IdempotencyConflictError,
+    ScopeViolationError,
     WorkPackageNotApprovedError,
 )
 from ai_enterprise.domain.execution.policies import (
@@ -27,7 +29,7 @@ from ai_enterprise.domain.execution.policies import (
     ExecutionScope,
     RuntimeLimits,
 )
-from ai_enterprise.domain.hashing import hash_text
+from ai_enterprise.domain.hashing import hash_json, hash_text
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
@@ -100,14 +102,18 @@ class ExecutionApplicationService:
         project = await self._get_project(project_id)
 
         if project.status != ProjectStatus.WORK_PACKAGE_APPROVED:
-            raise InvalidExecutionStateError(
-                f"Cannot execute from state {project.status}"
-            )
+            raise InvalidExecutionStateError(f"Cannot execute from state {project.status}")
 
         work_package = await self._get_approved_work_package(
             project_id=project.id,
             work_package_id=work_package_id,
         )
+
+        if hash_json(project.manifest) != project.manifest_hash:
+            raise ApprovalInvalidError("Project manifest is not immutable")
+
+        if hash_json(work_package.contract) != work_package.contract_hash:
+            raise ApprovalInvalidError("Work-package contract is not immutable")
 
         approval = await self._get_approval(work_package)
 
@@ -136,13 +142,9 @@ class ExecutionApplicationService:
             runtime_policy={
                 "schema_version": 1,
                 "execution_timeout_seconds": limits.timeout_seconds,
-                "implementation_timeout_seconds": (
-                    limits.implementation_timeout_seconds
-                ),
+                "implementation_timeout_seconds": (limits.implementation_timeout_seconds),
                 "test_timeout_seconds": limits.test_timeout_seconds,
-                "maximum_patch_bytes": (
-                    self._settings.execution_maximum_patch_bytes
-                ),
+                "maximum_patch_bytes": (self._settings.execution_maximum_patch_bytes),
                 "network": work_package.contract.get("network", {}),
             },
             idempotency_key=idempotency_key,
@@ -198,13 +200,8 @@ class ExecutionApplicationService:
         if run is None:
             raise ExecutionNotFoundError(str(execution_id))
 
-        if run.status not in {
-            ExecutionStatus.PENDING,
-            ExecutionStatus.FAILED,
-        }:
-            raise InvalidExecutionStateError(
-                f"Execution cannot run from {run.status}"
-            )
+        if run.status != ExecutionStatus.PENDING:
+            raise InvalidExecutionStateError(f"Execution cannot run from {run.status}")
 
         project = await self._get_project(run.project_id)
         work_package = await self._get_work_package(
@@ -242,15 +239,21 @@ class ExecutionApplicationService:
 
             await self._session.commit()
 
-            fingerprint_before = await inspector.fingerprint(
-                repository_path
+            await self._validate_execution_invariants(
+                run=run,
+                project=project,
+                work_package=work_package,
             )
+
+            fingerprint_before = await inspector.fingerprint(repository_path)
 
             if fingerprint_before.head_sha != run.base_commit:
                 raise BaseCommitMismatchError(
                     f"Expected base commit {run.base_commit}, "
                     f"host HEAD is {fingerprint_before.head_sha}"
                 )
+
+            run.base_tree_sha = fingerprint_before.tree_sha
 
             snapshot = await asyncio.to_thread(
                 snapshot_service.create,
@@ -335,14 +338,43 @@ class ExecutionApplicationService:
 
             run.container_id = result.container_id
             run.container_image_digest = result.container_image_digest
-            run.implementation_exit_code = result.implementation.get(
-                "exit_code"
-            )
+            run.implementation_exit_code = result.implementation.get("exit_code")
+
+            expected_test_count = len(work_package.contract["command_policy"]["test_commands"])
+            if len(result.tests) != expected_test_count:
+                raise RuntimeError(
+                    "Not every approved test command was attempted: "
+                    f"expected {expected_test_count}, got {len(result.tests)}"
+                )
+
+            if not result.success:
+                await self._record_artifacts_and_results(
+                    run=run,
+                    container_result=result,
+                )
+                run.status = ExecutionStatus.FAILED
+                run.failure_code = (
+                    "implementation_failed"
+                    if run.implementation_exit_code not in {None, 0}
+                    else "tests_failed"
+                )
+                run.failure_message = "Implementation or one or more required tests failed"
+                run.finished_at = datetime.now(UTC)
+                self._add_terminal_events(
+                    run=run,
+                    project=project,
+                    work_package=work_package,
+                    event_type="execution.failed",
+                    test_summary=self._test_summary(result),
+                )
+                await self._session.commit()
+                snapshot_service.delete(str(execution_id))
+                return
+
+            run.status = ExecutionStatus.VALIDATING
 
             scope = self._build_scope(work_package.contract)
-            maximum_changed_files = work_package.contract["file_scope"][
-                "maximum_changed_files"
-            ]
+            maximum_changed_files = work_package.contract["file_scope"]["maximum_changed_files"]
 
             validator = ScopeValidator()
 
@@ -374,27 +406,19 @@ class ExecutionApplicationService:
 
             await self._session.commit()
 
-            patch_builder = PatchBuilder(
-                self._settings.execution_artifacts_root
-            )
+            patch_builder = PatchBuilder(self._settings.execution_artifacts_root)
 
             patch = await asyncio.to_thread(
                 patch_builder.build,
                 execution_id=str(execution_id),
                 repository=snapshot.path,
-                maximum_patch_bytes=(
-                    self._settings.execution_maximum_patch_bytes
-                ),
+                maximum_patch_bytes=(self._settings.execution_maximum_patch_bytes),
             )
 
-            fingerprint_after = await inspector.fingerprint(
-                repository_path
-            )
+            fingerprint_after = await inspector.fingerprint(repository_path)
 
             if fingerprint_after != fingerprint_before:
-                raise RuntimeError(
-                    "Host repository fingerprint changed during execution"
-                )
+                raise RuntimeError("Host repository fingerprint changed during execution")
 
             await self._record_artifacts_and_results(
                 run=run,
@@ -421,9 +445,7 @@ class ExecutionApplicationService:
             else:
                 run.status = ExecutionStatus.FAILED
                 run.failure_code = "tests_failed"
-                run.failure_message = (
-                    "One or more required tests failed"
-                )
+                run.failure_message = "One or more required tests failed"
                 event_type = "execution.failed"
 
             run.finished_at = datetime.now(UTC)
@@ -469,7 +491,12 @@ class ExecutionApplicationService:
             )
 
             if run is not None:
-                run.status = ExecutionStatus.FAILED
+                if isinstance(exc, ScopeViolationError):
+                    run.status = ExecutionStatus.REJECTED
+                elif isinstance(exc, ExecutionTimeoutError):
+                    run.status = ExecutionStatus.TIMED_OUT
+                else:
+                    run.status = ExecutionStatus.FAILED
                 run.finished_at = datetime.now(UTC)
                 run.failure_code = getattr(exc, "code", "execution_failed")
                 run.failure_message = str(exc)
@@ -486,16 +513,16 @@ class ExecutionApplicationService:
                     )
                 )
 
-                project = await self._session.get(
+                failed_project = await self._session.get(
                     ProjectModel,
                     run.project_id,
                 )
 
-                if project is not None:
+                if failed_project is not None:
                     self._session.add(
                         AuditEventModel(
                             id=uuid.uuid4(),
-                            project_id=project.id,
+                            project_id=failed_project.id,
                             event_type="execution.failed",
                             actor_type="system",
                             actor_id="execution-worker",
@@ -518,18 +545,9 @@ class ExecutionApplicationService:
         *,
         run: ExecutionRunModel,
         container_result: Any,
-        patch_bytes: bytes,
-        patch_sha256: str,
+        patch_bytes: bytes | None = None,
+        patch_sha256: str | None = None,
     ) -> None:
-        patch_artifact = ArtifactModel(
-            id=uuid.uuid4(),
-            project_id=run.project_id,
-            artifact_type=ArtifactType.CANDIDATE_PATCH,
-            media_type="text/x-patch",
-            content=patch_bytes.decode("utf-8", errors="replace"),
-            content_hash=patch_sha256,
-        )
-
         log_artifact = ArtifactModel(
             id=uuid.uuid4(),
             project_id=run.project_id,
@@ -539,12 +557,26 @@ class ExecutionApplicationService:
             content_hash=hash_text(container_result.runtime_log),
         )
 
-        self._session.add_all([patch_artifact, log_artifact])
+        artifacts = [log_artifact]
+        patch_artifact: ArtifactModel | None = None
+        if patch_bytes is not None and patch_sha256 is not None:
+            patch_artifact = ArtifactModel(
+                id=uuid.uuid4(),
+                project_id=run.project_id,
+                artifact_type=ArtifactType.CANDIDATE_PATCH,
+                media_type="text/x-patch",
+                content=patch_bytes.decode("utf-8", errors="replace"),
+                content_hash=patch_sha256,
+            )
+            artifacts.append(patch_artifact)
+
+        self._session.add_all(artifacts)
         await self._session.flush()
 
-        run.patch_artifact_id = patch_artifact.id
         run.log_artifact_id = log_artifact.id
-        run.patch_sha256 = patch_sha256
+        if patch_artifact is not None:
+            run.patch_artifact_id = patch_artifact.id
+            run.patch_sha256 = patch_sha256
 
         for sequence, test in enumerate(container_result.tests):
             stdout_artifact = ArtifactModel(
@@ -589,6 +621,85 @@ class ExecutionApplicationService:
                 )
             )
 
+    async def _validate_execution_invariants(
+        self,
+        *,
+        run: ExecutionRunModel,
+        project: ProjectModel,
+        work_package: WorkPackageModel,
+    ) -> None:
+        if work_package.status != WorkPackageStatus.APPROVED:
+            raise WorkPackageNotApprovedError(f"Work package {work_package.id} is not approved")
+
+        approval = await self._get_approval(work_package)
+        if approval.id != run.approval_id:
+            raise ApprovalInvalidError(
+                "Execution approval is no longer the approved artifact approval"
+            )
+
+        if hash_json(project.manifest) != project.manifest_hash:
+            raise ApprovalInvalidError("Project manifest is not immutable")
+
+        if hash_json(work_package.contract) != work_package.contract_hash:
+            raise ApprovalInvalidError("Work-package contract is not immutable")
+
+        command_policy = work_package.contract.get("command_policy", {})
+        if not command_policy.get("test_commands"):
+            raise ApprovalInvalidError("Approved test commands are required")
+
+        file_scope = work_package.contract.get("file_scope", {})
+        if not (file_scope.get("allowed_files") or file_scope.get("allowed_directories")):
+            raise ApprovalInvalidError("Allowed changed paths are required")
+
+        if not (
+            file_scope.get("forbidden_files") is not None
+            and file_scope.get("forbidden_directories") is not None
+        ):
+            raise ApprovalInvalidError("Forbidden paths must be defined")
+
+        if run.container_image != self._settings.execution_image:
+            raise ApprovalInvalidError("Execution image is not permitted by current runtime policy")
+
+        if work_package.contract.get("network", {}).get("policy") != "none":
+            raise ApprovalInvalidError("Execution network must be disabled")
+
+    def _add_terminal_events(
+        self,
+        *,
+        run: ExecutionRunModel,
+        project: ProjectModel,
+        work_package: WorkPackageModel,
+        event_type: str,
+        test_summary: dict[str, Any],
+    ) -> None:
+        payload = {
+            "execution_id": str(run.id),
+            "work_package_id": str(work_package.id),
+            "failure_code": run.failure_code,
+            "test_summary": test_summary,
+        }
+        self._session.add(
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type=event_type,
+                actor_type="system",
+                actor_id="execution-worker",
+                payload=payload,
+            )
+        )
+        self._session.add(
+            ExecutionEventModel(
+                id=uuid.uuid4(),
+                execution_run_id=run.id,
+                event_type="execution.finished",
+                payload={
+                    "status": str(run.status),
+                    "failure_code": run.failure_code,
+                },
+            )
+        )
+
     def _build_runtime_input(
         self,
         *,
@@ -598,9 +709,7 @@ class ExecutionApplicationService:
     ) -> dict[str, Any]:
         limits = self._runtime_limits(work_package.contract)
 
-        test_commands = work_package.contract["command_policy"][
-            "test_commands"
-        ]
+        test_commands = work_package.contract["command_policy"]["test_commands"]
 
         tests = [
             {
@@ -642,9 +751,7 @@ class ExecutionApplicationService:
             implementation_timeout_seconds=(
                 self._settings.execution_implementation_timeout_seconds
             ),
-            test_timeout_seconds=(
-                self._settings.execution_default_test_timeout_seconds
-            ),
+            test_timeout_seconds=(self._settings.execution_default_test_timeout_seconds),
             nano_cpus=int(float(resources["cpu_count"]) * 1_000_000_000),
             memory_bytes=memory_bytes,
             memory_swap_bytes=memory_bytes,
@@ -661,9 +768,7 @@ class ExecutionApplicationService:
         allowed_paths.extend(file_scope.get("allowed_directories", []))
 
         forbidden_paths = list(file_scope.get("forbidden_files", []))
-        forbidden_paths.extend(
-            file_scope.get("forbidden_directories", [])
-        )
+        forbidden_paths.extend(file_scope.get("forbidden_directories", []))
         forbidden_paths.extend(DEFAULT_FORBIDDEN_PATHS)
 
         return ExecutionScope(
@@ -678,9 +783,7 @@ class ExecutionApplicationService:
         project = await self._session.get(ProjectModel, project_id)
 
         if project is None:
-            raise ExecutionNotFoundError(
-                f"Project {project_id} does not exist"
-            )
+            raise ExecutionNotFoundError(f"Project {project_id} does not exist")
 
         return project
 
@@ -696,9 +799,7 @@ class ExecutionApplicationService:
         )
 
         if work_package is None or work_package.project_id != project_id:
-            raise ExecutionNotFoundError(
-                f"Work package {work_package_id} does not exist"
-            )
+            raise ExecutionNotFoundError(f"Work package {work_package_id} does not exist")
 
         return work_package
 
@@ -714,9 +815,7 @@ class ExecutionApplicationService:
         )
 
         if work_package.status != WorkPackageStatus.APPROVED:
-            raise WorkPackageNotApprovedError(
-                f"Work package {work_package_id} is not approved"
-            )
+            raise WorkPackageNotApprovedError(f"Work package {work_package_id} is not approved")
 
         return work_package
 
@@ -725,9 +824,7 @@ class ExecutionApplicationService:
         work_package: WorkPackageModel,
     ) -> ApprovalModel:
         if work_package.artifact_id is None:
-            raise ApprovalInvalidError(
-                "Work package has no immutable artifact"
-            )
+            raise ApprovalInvalidError("Work package has no immutable artifact")
 
         result = await self._session.execute(
             select(ApprovalModel).where(
@@ -740,9 +837,7 @@ class ExecutionApplicationService:
         approval = result.scalar_one_or_none()
 
         if approval is None:
-            raise ApprovalInvalidError(
-                f"Work package {work_package.id} has no valid approval"
-            )
+            raise ApprovalInvalidError(f"Work package {work_package.id} has no valid approval")
 
         return approval
 
@@ -776,17 +871,14 @@ class ExecutionApplicationService:
 
         if resolved != work_package.base_commit_sha:
             raise BaseCommitMismatchError(
-                f"Base commit {work_package.base_commit_sha} "
-                f"resolved to {resolved}"
+                f"Base commit {work_package.base_commit_sha} resolved to {resolved}"
             )
 
     @staticmethod
     def _test_summary(container_result: Any) -> dict[str, Any]:
         total = len(container_result.tests)
         passed = sum(
-            1
-            for test in container_result.tests
-            if test.exit_code == 0 and not test.timed_out
+            1 for test in container_result.tests if test.exit_code == 0 and not test.timed_out
         )
 
         return {
@@ -808,8 +900,4 @@ def list_snapshot_tracked_files(repository: Path) -> list[str]:
         timeout=60,
     )
 
-    return [
-        line.strip()
-        for line in result.stdout.splitlines()
-        if line.strip()
-    ]
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]

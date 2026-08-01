@@ -1,0 +1,11 @@
+{
+  "specification_id": "long-term-strategic-memory",
+  "version": "1.0.0",
+  "status": "approved",
+  "items": [
+    {"memory_id": "MEM-001", "memory_type": "architecture-rationale", "statement": "The control-plane architecture was selected to externalize execution authority.", "recorded_at": "2026-01-01T00:00:00Z", "valid_from": "2026-01-01T00:00:00Z", "valid_until": null, "temporal_status": "current", "evidence": ["architecture-decision-0033"], "classification": "internal", "memory_hash": "edcbbb3644e8af8617b5f5b05a2230107d5d46d73596c375f37e9a4944017825", "supersedes": null},
+    {"memory_id": "MEM-002", "memory_type": "technology-retirement", "statement": "Python 2 was retired because its support lifecycle ended.", "recorded_at": "2026-01-01T00:00:00Z", "valid_from": "2026-01-01T00:00:00Z", "valid_until": null, "temporal_status": "current", "evidence": ["technology-retirement-python2"], "classification": "internal", "memory_hash": "1377c0ec5e5be5a32c7948c24873d79d79678082d6852cd3f1b80119467b794e", "supersedes": null},
+    {"memory_id": "MEM-003", "memory_type": "program-outcome", "statement": "Modernization outcomes remain bound to the approved program ledger.", "recorded_at": "2026-01-01T00:00:00Z", "valid_from": "2026-01-01T00:00:00Z", "valid_until": null, "temporal_status": "current", "evidence": ["modernization-program-ledger", "delivery-trend-five-year"], "classification": "internal", "memory_hash": "cf44202764b204ba3da8953e4e2db00d99f65a5e667a61ef88fbd42f6e4193df", "supersedes": null}
+  ],
+  "policy": {"immutable_items": true, "versioned_corrections": true, "evidence_required": true, "contradictions_explicit": true, "expiry_evaluated": true, "raw_reasoning_forbidden": true, "retention_years": 10}
+}

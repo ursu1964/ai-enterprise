@@ -1,12 +1,19 @@
 import uuid
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.domain.enums import JobStatus
 from ai_enterprise.infrastructure.database.models import JobModel
+from ai_enterprise.infrastructure.jobs.crash_safety import LeaseLostError
+from ai_enterprise.infrastructure.jobs.models import JobExecutionAttemptModel
+from ai_enterprise.infrastructure.requirements_revision.models import (
+    RequirementsRevisionCycleModel,
+)
 
 
 class JobRepository:
@@ -44,22 +51,31 @@ class JobRepository:
         *,
         worker_id: str,
         lease_duration: timedelta,
+        allowed_job_types: Collection[str] | None = None,
+        execution_timeout: timedelta = timedelta(minutes=30),
     ) -> JobModel | None:
         now = datetime.now(UTC)
 
+        if allowed_job_types is not None and not allowed_job_types:
+            return None
+
+        filters = [
+            JobModel.available_at <= now,
+            JobModel.attempt_count < JobModel.max_attempts,
+            or_(
+                JobModel.status == JobStatus.QUEUED,
+                JobModel.status == JobStatus.RETRY_WAIT,
+            ),
+            JobModel.lease_owner.is_(None),
+            JobModel.lease_token.is_(None),
+            JobModel.lease_expires_at.is_(None),
+        ]
+        if allowed_job_types is not None:
+            filters.append(JobModel.job_type.in_(tuple(allowed_job_types)))
+
         statement = (
             select(JobModel)
-            .where(
-                JobModel.available_at <= now,
-                JobModel.attempt_count < JobModel.max_attempts,
-                or_(
-                    JobModel.status == JobStatus.QUEUED,
-                    (
-                        (JobModel.status == JobStatus.LEASED)
-                        & (JobModel.lease_expires_at < now)
-                    ),
-                ),
-            )
+            .where(*filters)
             .order_by(
                 JobModel.priority.asc(),
                 JobModel.created_at.asc(),
@@ -77,7 +93,38 @@ class JobRepository:
         job.status = JobStatus.LEASED
         job.lease_owner = worker_id
         job.lease_expires_at = now + lease_duration
+        job.lease_token = uuid.uuid4()
+        job.lease_version += 1
+        job.last_leased_at = now
         job.attempt_count += 1
+        attempt = JobExecutionAttemptModel(
+            id=uuid.uuid4(),
+            job_id=job.id,
+            attempt_number=job.attempt_count,
+            worker_id=worker_id,
+            lease_token=job.lease_token,
+            lease_version=job.lease_version,
+            status="running",
+            started_at=now,
+            deadline_at=now + execution_timeout,
+            queue_wait_ms=max(0, int((now - job.created_at).total_seconds() * 1000)),
+            revision_cycle_id=(
+                uuid.UUID(str(job.payload["revision_cycle_id"]))
+                if job.payload.get("revision_cycle_id")
+                else None
+            ),
+            repair_attempted=False,
+        )
+        self._session.add(attempt)
+        if attempt.revision_cycle_id is not None:
+            cycle = await self._session.scalar(
+                select(RequirementsRevisionCycleModel)
+                .where(RequirementsRevisionCycleModel.id == attempt.revision_cycle_id)
+                .with_for_update()
+            )
+            if cycle is None or cycle.status != "pending":
+                raise RuntimeError("Revision cycle is not pending at lease acquisition")
+            cycle.status = "executing"
 
         await self._session.flush()
 
@@ -88,72 +135,152 @@ class JobRepository:
         *,
         job_id: uuid.UUID,
         worker_id: str,
+        lease_token: uuid.UUID,
+        lease_version: int,
         lease_duration: timedelta,
     ) -> bool:
-        job = await self._session.get(JobModel, job_id)
-
-        if (
-            job is None
-            or job.status != JobStatus.LEASED
-            or job.lease_owner != worker_id
-        ):
-            return False
-
-        job.lease_expires_at = datetime.now(UTC) + lease_duration
-        await self._session.flush()
-
-        return True
+        now = datetime.now(UTC)
+        result = cast(
+            CursorResult[Any],
+            await self._session.execute(
+                update(JobModel)
+                .where(
+                    JobModel.id == job_id,
+                    JobModel.status == JobStatus.LEASED,
+                    JobModel.lease_owner == worker_id,
+                    JobModel.lease_token == lease_token,
+                    JobModel.lease_version == lease_version,
+                    JobModel.lease_expires_at > now,
+                )
+                .values(lease_expires_at=now + lease_duration)
+            ),
+        )
+        return bool(result.rowcount == 1)
 
     async def mark_succeeded(
         self,
         *,
         job_id: uuid.UUID,
         worker_id: str,
+        lease_token: uuid.UUID,
+        lease_version: int,
     ) -> None:
-        job = await self._session.get(JobModel, job_id)
-
-        if job is None:
-            raise RuntimeError(f"Job {job_id} does not exist")
-
-        if job.lease_owner != worker_id:
-            raise RuntimeError(
-                f"Worker {worker_id} does not own job {job_id}"
-            )
-
-        job.status = JobStatus.SUCCEEDED
-        job.completed_at = datetime.now(UTC)
-        job.lease_owner = None
-        job.lease_expires_at = None
-
-        await self._session.flush()
+        now = datetime.now(UTC)
+        result = cast(
+            CursorResult[Any],
+            await self._session.execute(
+                update(JobModel)
+                .where(*self._fence(job_id, worker_id, lease_token, lease_version, now))
+                .values(
+                    status=JobStatus.SUCCEEDED,
+                    completed_at=now,
+                    lease_owner=None,
+                    lease_token=None,
+                    lease_expires_at=None,
+                )
+            ),
+        )
+        if result.rowcount != 1:
+            raise LeaseLostError(f"Lease lost for job {job_id}")
+        await self._finish_attempt(job_id, lease_token, "succeeded", now)
 
     async def mark_failed(
         self,
         *,
         job_id: uuid.UUID,
         worker_id: str,
+        lease_token: uuid.UUID,
+        lease_version: int,
         error: str,
         retry_delay: timedelta,
+        failure_class: str = "unknown",
+        failure_code: str = "execution_failed",
+        retryable: bool = True,
+        attempt_status: str = "failed",
     ) -> None:
-        job = await self._session.get(JobModel, job_id)
-
+        now = datetime.now(UTC)
+        job = await self._session.scalar(
+            select(JobModel)
+            .where(*self._fence(job_id, worker_id, lease_token, lease_version, now))
+            .with_for_update()
+        )
         if job is None:
-            raise RuntimeError(f"Job {job_id} does not exist")
-
-        if job.lease_owner != worker_id:
-            raise RuntimeError(
-                f"Worker {worker_id} does not own job {job_id}"
-            )
-
-        job.last_error = error
+            raise LeaseLostError(f"Lease lost for job {job_id}")
+        job.last_error = error[:4000]
+        job.last_failure_class = failure_class
         job.lease_owner = None
+        job.lease_token = None
         job.lease_expires_at = None
-
-        if job.attempt_count >= job.max_attempts:
+        exhausted = job.attempt_count >= job.max_attempts
+        if not retryable or exhausted:
             job.status = JobStatus.DEAD_LETTER
-            job.completed_at = datetime.now(UTC)
+            job.completed_at = now
         else:
-            job.status = JobStatus.QUEUED
-            job.available_at = datetime.now(UTC) + retry_delay
-
+            job.retry_count += 1
+            job.status = JobStatus.RETRY_WAIT
+            job.available_at = now + retry_delay
+        await self._finish_attempt(
+            job_id,
+            lease_token,
+            attempt_status,
+            now,
+            failure_class=failure_class,
+            failure_code=failure_code,
+            failure_message=error[:4000],
+            retryable=retryable and not exhausted,
+        )
+        revision_cycle_id = job.payload.get("revision_cycle_id")
+        if revision_cycle_id:
+            cycle = await self._session.get(
+                RequirementsRevisionCycleModel, uuid.UUID(str(revision_cycle_id))
+            )
+            if cycle is None:
+                raise LeaseLostError("Revision cycle disappeared during failure finalization")
+            cycle.status = "failed" if not retryable or exhausted else "pending"
+            cycle.completed_at = now if cycle.status == "failed" else None
         await self._session.flush()
+
+    @staticmethod
+    def _fence(
+        job_id: uuid.UUID,
+        worker_id: str,
+        lease_token: uuid.UUID,
+        lease_version: int,
+        now: datetime,
+    ) -> tuple[Any, ...]:
+        return (
+            JobModel.id == job_id,
+            JobModel.status == JobStatus.LEASED,
+            JobModel.lease_owner == worker_id,
+            JobModel.lease_token == lease_token,
+            JobModel.lease_version == lease_version,
+            JobModel.lease_expires_at > now,
+        )
+
+    async def _finish_attempt(
+        self,
+        job_id: uuid.UUID,
+        lease_token: uuid.UUID,
+        status: str,
+        now: datetime,
+        *,
+        failure_class: str | None = None,
+        failure_code: str | None = None,
+        failure_message: str | None = None,
+        retryable: bool | None = None,
+    ) -> None:
+        attempt = await self._session.scalar(
+            select(JobExecutionAttemptModel).where(
+                JobExecutionAttemptModel.job_id == job_id,
+                JobExecutionAttemptModel.lease_token == lease_token,
+            )
+        )
+        if attempt is None:
+            raise LeaseLostError("Fenced execution attempt is missing")
+        attempt.status = status
+        attempt.completed_at = now
+        attempt.execution_ms = max(0, int((now - attempt.started_at).total_seconds() * 1000))
+        attempt.failure_class = failure_class
+        attempt.failure_code = failure_code
+        attempt.failure_message = failure_message
+        attempt.retryable = retryable

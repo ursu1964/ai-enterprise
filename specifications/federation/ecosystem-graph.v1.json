@@ -1,0 +1,16 @@
+{
+  "specification_id": "ecosystem-knowledge-graph",
+  "version": "1.0.0",
+  "status": "approved",
+  "nodes": [
+    {"node_id": "partner-acme", "type": "partner", "classification": "internal", "visibility_scope": "enterprise", "evidence_id": "partner-contract-acme"},
+    {"node_id": "cloud-aws-eu", "type": "cloud-provider", "classification": "internal", "visibility_scope": "enterprise", "evidence_id": "cloud-generator-tests"},
+    {"node_id": "regulator-eu", "type": "regulator", "classification": "public", "visibility_scope": "enterprise", "evidence_id": "legal-gdpr-2026"}
+  ],
+  "edges": [
+    {"edge_id": "edge-acme-collaboration", "source": "partner-acme", "target": "cloud-aws-eu", "relationship": "collaborates", "classification": "internal", "visibility_scope": "enterprise", "evidence_id": "partner-contract-acme"},
+    {"edge_id": "edge-eu-regulates", "source": "regulator-eu", "target": "cloud-aws-eu", "relationship": "regulates", "classification": "internal", "visibility_scope": "enterprise", "evidence_id": "legal-gdpr-2026"}
+  ],
+  "allowed_relationships": ["consumes", "provides", "certifies", "regulates", "supplies", "collaborates"],
+  "external_claims_trusted_by_default": false
+}

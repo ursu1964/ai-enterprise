@@ -1,0 +1,22 @@
+{
+  "specification_id": "federation-evidence-catalog",
+  "version": "1.0.0",
+  "status": "approved",
+  "evidence": [
+    {"evidence_id": "legal-gdpr-2026", "type": "approved-legal-analysis", "hash": "4141414141414141414141414141414141414141414141414141414141414141"},
+    {"evidence_id": "legal-ccpa-2026", "type": "approved-legal-analysis", "hash": "4242424242424242424242424242424242424242424242424242424242424242"},
+    {"evidence_id": "legal-export-2026", "type": "approved-legal-analysis", "hash": "4343434343434343434343434343434343434343434343434343434343434343"},
+    {"evidence_id": "cloud-generator-tests", "type": "verification-report", "hash": "4444444444444444444444444444444444444444444444444444444444444444"},
+    {"evidence_id": "partner-contract-acme", "type": "signed-contract", "hash": "4545454545454545454545454545454545454545454545454545454545454545"},
+    {"evidence_id": "partner-health-acme", "type": "metric-snapshot", "hash": "4646464646464646464646464646464646464646464646464646464646464646"},
+    {"evidence_id": "provider-health-eu", "type": "metric-snapshot", "hash": "4747474747474747474747474747474747474747474747474747474747474747"},
+    {"evidence_id": "dependency-scan-q3", "type": "security-report", "hash": "4848484848484848484848484848484848484848484848484848484848484848"},
+    {"evidence_id": "federation-conformance", "type": "verification-report", "hash": "4949494949494949494949494949494949494949494949494949494949494949"},
+    {"evidence_id": "regulatory-compliance-q3", "type": "compliance-report", "hash": "5050505050505050505050505050505050505050505050505050505050505050"},
+    {"evidence_id": "deployment-classification-eu", "type": "deployment-classification", "hash": "5151515151515151515151515151515151515151515151515151515151515151"},
+    {"evidence_id": "deployment-classification-ca", "type": "deployment-classification", "hash": "5252525252525252525252525252525252525252525252525252525252525252"},
+    {"evidence_id": "aws-eu-residency", "type": "provider-jurisdiction-attestation", "hash": "5353535353535353535353535353535353535353535353535353535353535353"},
+    {"evidence_id": "azure-eu-residency", "type": "provider-jurisdiction-attestation", "hash": "5454545454545454545454545454545454545454545454545454545454545454"},
+    {"evidence_id": "onprem-eu-residency", "type": "provider-jurisdiction-attestation", "hash": "5555555555555555555555555555555555555555555555555555555555555555"}
+  ]
+}

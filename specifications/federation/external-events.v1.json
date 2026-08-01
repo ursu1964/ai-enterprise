@@ -1,0 +1,16 @@
+{
+  "specification_id": "external-event-federation",
+  "version": "1.0.0",
+  "status": "approved",
+  "required_envelope": ["event_id", "event_type", "occurred_at", "correlation_id", "causation_id", "issuer", "organization", "payload", "schema_version", "signature", "signature_algorithm", "key_id", "nonce"],
+  "gateway_pipeline": ["authenticate-issuer", "verify-signature", "reject-replay", "validate-time-window", "validate-schema", "evaluate-policy", "classify-payload", "create-candidate-enterprise-event"],
+  "accepted_algorithms": ["Ed25519"],
+  "signature_canonicalization": "jcs-rfc8785",
+  "signed_fields": ["event_id", "event_type", "occurred_at", "correlation_id", "causation_id", "issuer", "organization", "payload", "schema_version", "signature_algorithm", "key_id", "nonce"],
+  "occurred_at_format": "UTC-RFC3339",
+  "maximum_clock_skew_seconds": 300,
+  "replay_cache_required": true,
+  "replay_policy": {"key": ["issuer", "key_id", "nonce"], "retention_seconds": 86400, "atomic_insert_required": true},
+  "direct_internal_state_mutation": false,
+  "schemas": [{"event_type": "PartnerCapabilityPublished", "schema_version": "1.0.0", "issuer": "partner-acme", "contract_evidence_id": "partner-contract-acme", "permitted_result": "candidate-event"}]
+}

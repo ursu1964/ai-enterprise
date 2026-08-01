@@ -1,0 +1,12 @@
+{
+  "specification_id": "enterprise-self-reflection",
+  "version": "1.0.0",
+  "status": "approved",
+  "schedule": "quarterly",
+  "evolution_loop": ["execute", "observe", "measure", "learn", "propose", "simulate", "review", "approve", "implement", "validate", "measure-again"],
+  "questions": ["Which practices consistently produce superior outcomes?", "Which review policies create value versus delay?", "Which architectural decisions have aged well?", "Which capabilities should become enterprise standards?", "Which operational procedures require redesign?", "Where is complexity increasing faster than capability?"],
+  "recommendations": [
+    {"recommendation_id": "REC-001", "statement": "Evaluate broader contract catalog coverage.", "evidence": ["specification-report-q3", "engineering-verifier-214"], "roadmap_proposal_id": "EV-001", "status": "proposed", "decision_authority": "external-human-governance"}
+  ],
+  "constraints": {"recommendations_only": true, "autonomous_decisions": false, "autonomous_implementation": false, "human_approval_required": true}
+}

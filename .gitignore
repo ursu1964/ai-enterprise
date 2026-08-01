@@ -10,3 +10,8 @@ artifacts/*
 ai-enterprise/
 runtime-data/
 apps/api/runtime-data/
+*.local.env
+.bootstrap-state/
+graphify-out/
+apps/api/graphify-out/
+.codex/

@@ -1,0 +1,17 @@
+{
+  "specification_id": "continuous-enterprise-benchmarking",
+  "version": "1.0.0",
+  "status": "approved",
+  "observation_window": "2026-Q3",
+  "metrics": [
+    {"metric_id": "delivery-lead-hours", "direction": "lower", "historical": 72, "current": 48, "objective": 36, "unit": "hours", "historical_evidence_id": "workflow-timing-history", "current_evidence_id": "workflow-timing-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "review-duration-hours", "direction": "lower", "historical": 18, "current": 12, "objective": 8, "unit": "hours", "historical_evidence_id": "review-timing-history", "current_evidence_id": "review-timing-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "deployment-frequency", "direction": "higher", "historical": 4, "current": 6, "objective": 8, "unit": "per-month", "historical_evidence_id": "deployment-ledger-history", "current_evidence_id": "deployment-ledger-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "change-failure-rate", "direction": "lower", "historical": 12, "current": 8, "objective": 5, "unit": "percent", "historical_evidence_id": "incident-ledger-history", "current_evidence_id": "incident-ledger-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "mean-recovery-minutes", "direction": "lower", "historical": 90, "current": 55, "objective": 30, "unit": "minutes", "historical_evidence_id": "recovery-ledger-history", "current_evidence_id": "recovery-ledger-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "specification-coverage", "direction": "higher", "historical": 70, "current": 88, "objective": 95, "unit": "percent", "historical_evidence_id": "specification-report-history", "current_evidence_id": "specification-report-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "policy-compliance", "direction": "higher", "historical": 92, "current": 98, "objective": 100, "unit": "percent", "historical_evidence_id": "policy-report-history", "current_evidence_id": "policy-report-q3", "objective_evidence_id": "objectives-policy-q3"},
+    {"metric_id": "infrastructure-efficiency", "direction": "higher", "historical": 65, "current": 75, "objective": 82, "unit": "percent", "historical_evidence_id": "capacity-report-history", "current_evidence_id": "capacity-report-q3", "objective_evidence_id": "objectives-policy-q3"}
+  ],
+  "authority": {"recommendations_only": true, "automatic_investment_decisions": false}
+}

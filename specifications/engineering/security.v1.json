@@ -1,0 +1,13 @@
+{
+  "specification_id": "security.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "default_decision": "deny",
+  "roles": [
+    {"role_id": "platform-admin", "permissions": ["project.create", "worker.manage", "tool.register", "model.register"]},
+    {"role_id": "reviewer", "permissions": ["review.submit", "knowledge.review"]},
+    {"role_id": "operator", "permissions": ["job.recover", "runtime.cancel"]}
+  ],
+  "human_only_permissions": ["approval.issue", "authority.grant", "production.activate"],
+  "controls": ["mutual-authentication", "least-privilege", "encrypted-secrets", "signed-artifacts", "immutable-audit", "dependency-scanning", "runtime-isolation"]
+}

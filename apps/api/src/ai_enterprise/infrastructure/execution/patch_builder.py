@@ -19,6 +19,19 @@ class PatchBuilder:
     def __init__(self, artifacts_root: Path) -> None:
         self._artifacts_root = artifacts_root.resolve()
 
+    def materialize(
+        self,
+        *,
+        artifact_content: str,
+        base_name: str,
+    ) -> Path:
+        patch_path = self._artifacts_root / f"{base_name}.patch"
+        patch_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+        patch_path.write_text(artifact_content, encoding="utf-8")
+
+        return patch_path
+
     def build(
         self,
         *,

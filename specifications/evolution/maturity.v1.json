@@ -1,0 +1,18 @@
+{
+  "specification_id": "organizational-maturity-model",
+  "version": "1.0.0",
+  "status": "approved",
+  "scale": {"minimum": 0, "maximum": 5, "aggregation": "floor-average"},
+  "dimensions": [
+    {"dimension_id": "architecture", "expected_level": 4, "evidence": [{"evidence_id": "etra", "score": 5}, {"evidence_id": "architecture-tests", "score": 4}]},
+    {"dimension_id": "testing", "expected_level": 4, "evidence": [{"evidence_id": "multi-layer-suite", "score": 4}]},
+    {"dimension_id": "security", "expected_level": 5, "evidence": [{"evidence_id": "deny-default", "score": 5}]},
+    {"dimension_id": "automation", "expected_level": 5, "evidence": [{"evidence_id": "continuous-verification", "score": 5}]},
+    {"dimension_id": "documentation", "expected_level": 4, "evidence": [{"evidence_id": "versioned-standards", "score": 4}]},
+    {"dimension_id": "operations", "expected_level": 4, "evidence": [{"evidence_id": "runbook-suite", "score": 4}]},
+    {"dimension_id": "governance", "expected_level": 5, "evidence": [{"evidence_id": "externalized-authority", "score": 5}]},
+    {"dimension_id": "observability", "expected_level": 4, "evidence": [{"evidence_id": "lineage-metrics", "score": 4}]},
+    {"dimension_id": "reuse", "expected_level": 3, "evidence": [{"evidence_id": "reference-implementations", "score": 3}]},
+    {"dimension_id": "reliability", "expected_level": 4, "evidence": [{"evidence_id": "recovery-tests", "score": 4}]}
+  ]
+}

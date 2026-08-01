@@ -40,13 +40,19 @@ class JobStatus(StrEnum):
     FAILED = "failed"
     DEAD_LETTER = "dead_letter"
     CANCELLED = "cancelled"
+    RETRY_WAIT = "retry_wait"
 
 
 class JobType(StrEnum):
+    ADVANCE_WORKFLOW = "advance_workflow"
     RUN_REQUIREMENTS_CREW = "run_requirements_crew"
     RUN_ARCHITECTURE_CREW = "run_architecture_crew"
+    RUN_WORK_PACKAGE_DECOMPOSITION = "run_work_package_decomposition"
     PLAN_WORK_PACKAGE = "plan_work_package"
     EXECUTE_WORK_PACKAGE = "execute_work_package"
+    REVIEW_CANDIDATE_PATCH = "review_candidate_patch"
+    INTEGRATE_APPROVED_PATCH = "integrate_approved_patch"
+    RECOVER_INTEGRATION = "recover_integration"
 
 
 class ArtifactType(StrEnum):
@@ -58,6 +64,10 @@ class ArtifactType(StrEnum):
     TEST_STDOUT = "test-stdout"
     TEST_STDERR = "test-stderr"
     CANDIDATE_PATCH = "candidate-patch"
+    PATCH_REVIEW_REPORT = "patch-review-report"
+    REVIEW_CHECK_STDOUT = "review-check-stdout"
+    REVIEW_CHECK_STDERR = "review-check-stderr"
+    REVIEW_LOG = "review-log"
 
 
 class ApprovalDecision(StrEnum):

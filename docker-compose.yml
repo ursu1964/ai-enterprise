@@ -1,4 +1,22 @@
 services:
+  bootstrap:
+    profiles: ["dev-bootstrap"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "ai_enterprise.bootstrap", "--runtime-root", "/runtime-data"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+    volumes:
+      - ./runtime-data:/runtime-data
+      - ./apps/api/src:/app/src:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   postgres:
     image: postgres:17
     container_name: ai-enterprise-postgres
@@ -8,7 +26,7 @@ services:
       POSTGRES_USER: ai_enterprise
       POSTGRES_PASSWORD: ai_enterprise_dev
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ai_enterprise_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,6 +38,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
 
   api:
     build:
@@ -35,13 +72,28 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./apps/api/src:/app/src
+      - ./apps/api/src:/app/src:ro
       - ./artifacts:/app/artifacts
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   worker:
     build:
@@ -60,6 +112,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      WORKER_PROFILE: general
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -69,5 +122,115 @@ services:
       postgres:
         condition: service_healthy
 
+  integration-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-integration-worker
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "ai_enterprise.integration_worker"
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      WORKER_PROFILE: integration
+      INTEGRATION_WORK_ROOT: /integration-work
+      INTEGRATION_ARTIFACTS_ROOT: /artifacts
+      INTEGRATION_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
+      GIT_TERMINAL_PROMPT: "0"
+    secrets:
+      - integration_ssh_config
+    volumes:
+      - integration-work:/integration-work
+      - ./artifacts:/artifacts:ro
+      - ./apps/api/src:/app/src:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  recovery-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ai-enterprise-recovery-worker
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "ai_enterprise.recovery_worker"
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      WORKER_PROFILE: recovery
+      RECOVERY_WORK_ROOT: /recovery-work
+      RECOVERY_ARTIFACTS_ROOT: /artifacts
+      RECOVERY_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
+      GIT_TERMINAL_PROMPT: "0"
+    secrets:
+      - integration_ssh_config
+    volumes:
+      - recovery-work:/recovery-work
+      - ./artifacts:/artifacts:ro
+      - ./apps/api/src:/app/src:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-enterprise-ollama
+    profiles:
+      - ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 8g
+    cpus: 4.0
+
 volumes:
   ai_enterprise_postgres_data:
+  integration-work:
+  recovery-work:
+  ollama-data:
+
+secrets:
+  integration_ssh_config:
+    external: true

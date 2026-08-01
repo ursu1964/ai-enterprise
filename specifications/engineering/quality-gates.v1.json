@@ -1,0 +1,19 @@
+{
+  "specification_id": "quality-gates.ai-enterprise",
+  "version": "1.0.0",
+  "status": "approved",
+  "gates": [
+    {"gate_id": "specification-complete", "predecessors": [], "command": "python tools/engineering_verify.py --static"},
+    {"gate_id": "static-validation", "predecessors": ["specification-complete"], "command": "ruff check"},
+    {"gate_id": "generated-artifacts", "predecessors": ["static-validation"], "command": "python tools/generate_engineering_artifacts.py --check"},
+    {"gate_id": "compilation", "predecessors": ["generated-artifacts"], "command": "python -m compileall"},
+    {"gate_id": "unit-tests", "predecessors": ["compilation"], "command": "pytest"},
+    {"gate_id": "integration-tests", "predecessors": ["unit-tests"], "command": "pytest integration"},
+    {"gate_id": "contract-tests", "predecessors": ["integration-tests"], "command": "pytest contract"},
+    {"gate_id": "security-validation", "predecessors": ["contract-tests"], "command": "pytest security"},
+    {"gate_id": "performance-validation", "predecessors": ["security-validation"], "command": "pytest performance"},
+    {"gate_id": "independent-review", "predecessors": ["performance-validation"], "command": "review evidence"},
+    {"gate_id": "promotion-eligibility", "predecessors": ["independent-review"], "command": "verify signed evidence"}
+  ],
+  "evidence": {"canonical_json": true, "hash": "sha256", "signature_required_for_promotion": true, "bypass_allowed": false}
+}

@@ -1,0 +1,11 @@
+{
+  "specification_id": "enterprise-capability-evolution",
+  "version": "1.0.0",
+  "status": "approved",
+  "lifecycle": ["experimental", "internal", "stable", "enterprise-standard", "legacy", "retired"],
+  "capabilities": [
+    {"capability_id": "governed-agent-runtime", "state": "stable", "history": ["experimental", "internal", "stable"], "owner": "ai-runtime", "evidence": ["runtime-security-suite", "runtime-lineage-schema"], "reuse_policy": "approved-projects"},
+    {"capability_id": "specification-first-engineering", "state": "enterprise-standard", "history": ["experimental", "internal", "stable", "enterprise-standard"], "owner": "platform-engineering", "evidence": ["engineering-verifier-214", "etra-conformance-180"], "reuse_policy": "mandatory"}
+  ],
+  "authority": {"self_transition_allowed": false, "human_approval_required": true}
+}

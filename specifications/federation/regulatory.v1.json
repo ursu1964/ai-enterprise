@@ -1,0 +1,15 @@
+{
+  "specification_id": "regulatory-adaptation-layer",
+  "version": "1.0.0",
+  "status": "approved",
+  "modules": [
+    {"module_id": "gdpr-eu", "jurisdictions": ["EU", "EEA"], "customer_classes": ["natural-person"], "workload_classes": ["personal-data"], "obligations": ["lawful-basis", "data-minimization", "residency-eu", "erasure", "breach-notification"], "evidence_id": "legal-gdpr-2026", "approval": "human-legal-approved"},
+    {"module_id": "ccpa-california", "jurisdictions": ["US-CA"], "customer_classes": ["consumer"], "workload_classes": ["personal-data"], "obligations": ["notice", "access", "deletion", "opt-out"], "evidence_id": "legal-ccpa-2026", "approval": "human-legal-approved"},
+    {"module_id": "export-controlled", "jurisdictions": ["GLOBAL"], "customer_classes": ["all"], "workload_classes": ["export-controlled"], "obligations": ["sanctions-screening", "approved-region", "human-export-review"], "evidence_id": "legal-export-2026", "approval": "human-legal-approved"}
+  ],
+  "deployments": [
+    {"deployment_id": "enterprise-eu", "location": "EU", "customer_class": "natural-person", "workload_classes": ["personal-data"], "inherited_modules": ["gdpr-eu"], "classification_evidence_id": "deployment-classification-eu"},
+    {"deployment_id": "enterprise-ca", "location": "US-CA", "customer_class": "consumer", "workload_classes": ["personal-data"], "inherited_modules": ["ccpa-california"], "classification_evidence_id": "deployment-classification-ca"}
+  ],
+  "default": "deny-unclassified-deployment"
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from crewai import LLM, Agent, Crew, Process, Task
@@ -23,12 +24,43 @@ class RequirementsCrewRunner:
         project_name: str,
         project_description: str,
         manifest_hash: str,
+        previous_artifact: str | None = None,
+        revision_cycle_number: int | None = None,
+        revision_feedback_summary: str | None = None,
+        revision_feedback: list[dict[str, object]] | None = None,
+        revision_feedback_hash: str | None = None,
     ) -> RequirementsCrewResult:
+        if self._settings.requirements_crew_adapter.strip().lower() == "deterministic":
+            findings = revision_feedback or []
+            revision_section = ""
+            if revision_cycle_number is not None:
+                requested = "\n".join(
+                    f"- {item.get('requested_change', 'Address reviewer finding')}"
+                    for item in findings
+                )
+                revision_section = (
+                    f"\n## Revision cycle {revision_cycle_number}\n"
+                    f"Feedback hash: {revision_feedback_hash}\n"
+                    f"Summary: {revision_feedback_summary}\n{requested}\n"
+                )
+            markdown = (
+                f"# Requirements — {project_name}\n\n"
+                f"Manifest: `{manifest_hash}`\n\n"
+                f"## Objective\n{project_description}\n"
+                f"{revision_section}\n"
+                "## Functional requirements\n"
+                "- FR-001: The platform shall preserve immutable workflow evidence.\n"
+                "  - Acceptance: Every decision and generated artifact has a stable hash.\n"
+            )
+            return RequirementsCrewResult(markdown=markdown, raw_output=markdown)
+        if self._settings.requirements_crew_adapter.strip().lower() != "crewai":
+            raise RuntimeError("Unsupported requirements Crew adapter")
         llm = LLM(
-            model=self._settings.ollama_model,
-            base_url=self._settings.ollama_base_url,
-            temperature=0.1,
-            timeout=600,
+            model=self._settings.requirements_llm_model,
+            base_url=self._settings.requirements_llm_base_url,
+            temperature=self._settings.requirements_llm_temperature,
+            timeout=self._settings.requirements_llm_timeout_seconds,
+            max_tokens=self._settings.requirements_llm_max_tokens,
         )
 
         analyst = Agent(
@@ -54,6 +86,13 @@ class RequirementsCrewRunner:
                 "Manifest hash: {manifest_hash}\n\n"
                 "Project description:\n"
                 "{project_description}\n\n"
+                "Previous requirements artifact (preserve valid content):\n"
+                "{previous_artifact}\n\n"
+                "Immutable revision cycle: {revision_cycle_number}\n"
+                "Immutable feedback summary: {revision_feedback_summary}\n"
+                "Immutable actionable findings: {revision_feedback}\n"
+                "Feedback integrity hash: {revision_feedback_hash}\n\n"
+                "For revisions, address every finding without overwriting history.\n\n"
                 "Produce a rigorous requirements specification containing:\n"
                 "1. Executive summary\n"
                 "2. Problem statement\n"
@@ -93,6 +132,11 @@ class RequirementsCrewRunner:
                 "project_name": project_name,
                 "project_description": project_description,
                 "manifest_hash": manifest_hash,
+                "previous_artifact": previous_artifact or "none (initial version)",
+                "revision_cycle_number": revision_cycle_number or "none",
+                "revision_feedback_summary": revision_feedback_summary or "none",
+                "revision_feedback": json.dumps(revision_feedback or [], sort_keys=True),
+                "revision_feedback_hash": revision_feedback_hash or "none",
             }
         )
 

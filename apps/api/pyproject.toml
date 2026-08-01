@@ -36,6 +36,7 @@ packages = ["src/ai_enterprise"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["local_llm: requires an explicitly enabled real local LLM provider"]
 
 [tool.ruff]
 line-length = 100
@@ -43,3 +44,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[[tool.mypy.overrides]]
+module = ["docker", "docker.*"]
+ignore_errors = true
+ignore_missing_imports = true
+disable_error_code = ["import-untyped", "import-not-found", "attr-defined"]

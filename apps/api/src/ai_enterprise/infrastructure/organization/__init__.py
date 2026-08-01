@@ -1,0 +1,1 @@
+"""Persistent organizational governance adapters."""

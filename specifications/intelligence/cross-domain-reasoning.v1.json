@@ -1,0 +1,10 @@
+{
+  "specification_id": "cross-domain-reasoning",
+  "version": "1.0.0",
+  "status": "approved",
+  "domains": ["operations", "architecture", "engineering", "training", "organization", "business"],
+  "inferences": [
+    {"inference_id": "INF-001", "claim": "Repeated recovery delays may be associated with architecture ownership and training coverage.", "source_evidence": [{"domain": "operations", "evidence_id": "incident-pattern-q3"}, {"domain": "architecture", "evidence_id": "architecture-decision-0033"}, {"domain": "engineering", "evidence_id": "engineering-practice-report"}, {"domain": "training", "evidence_id": "training-coverage-q3"}, {"domain": "business", "evidence_id": "business-impact-q3"}], "reasoning_rule": "evidence-correlation-v1", "confidence": 0.72, "counterevidence": ["modernization-program-ledger"], "causality_claimed": false, "affected_systems": ["recovery-control-plane"], "status": "candidate-insight"}
+  ],
+  "requirements": {"minimum_domains": 2, "minimum_evidence": 2, "unsupported_causality_forbidden": true, "counterevidence_required": true, "explanation_required": true}
+}

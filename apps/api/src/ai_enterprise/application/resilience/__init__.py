@@ -1,0 +1,1 @@
+"""Resilience application contracts."""

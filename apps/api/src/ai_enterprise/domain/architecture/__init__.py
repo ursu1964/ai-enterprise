@@ -1,0 +1,1 @@
+"""Governed architecture aggregate."""
