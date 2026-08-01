@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, status
 from ai_enterprise.api.change_management_authority import governed_change_actor
 from ai_enterprise.api.change_management_schemas import (
     ChangeDecisionResponse,
+    ChangeObservationResponse,
+    ChangeOutcomeResponse,
     ChangeProposalResponse,
     ChangeSetResponse,
     ChangeTimelineResponse,
@@ -18,6 +20,8 @@ from ai_enterprise.application.change_management.dto import (
     CreateChangeSet,
     CreateValidationPlan,
     RecordChangeDecision,
+    RecordChangeObservation,
+    RecordChangeOutcome,
     RecordImpactAssessment,
 )
 from ai_enterprise.application.change_management.service import (
@@ -170,6 +174,46 @@ async def decide(
     except (GovernedChangeError, GovernedChangeNotFound) as exc:
         raise _translate(exc) from exc
     return ChangeDecisionResponse.model_validate(value)
+
+
+@router.post(
+    "/{proposal_id}/observations",
+    response_model=ChangeObservationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def record_observation(
+    proposal_id: uuid.UUID,
+    request: RecordChangeObservation,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> ChangeObservationResponse:
+    try:
+        value = await _service(session).record_observation(
+            proposal_id, request, governed_change_actor(actor, "change.observe")
+        )
+    except (GovernedChangeError, GovernedChangeNotFound) as exc:
+        raise _translate(exc) from exc
+    return ChangeObservationResponse.model_validate(value)
+
+
+@router.post(
+    "/{proposal_id}/outcomes",
+    response_model=ChangeOutcomeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def record_outcome(
+    proposal_id: uuid.UUID,
+    request: RecordChangeOutcome,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> ChangeOutcomeResponse:
+    try:
+        value = await _service(session).record_outcome(
+            proposal_id, request, governed_change_actor(actor, "change.outcome")
+        )
+    except (GovernedChangeError, GovernedChangeNotFound) as exc:
+        raise _translate(exc) from exc
+    return ChangeOutcomeResponse.model_validate(value)
 
 
 @router.get("/{proposal_id}/timeline", response_model=ChangeTimelineResponse)

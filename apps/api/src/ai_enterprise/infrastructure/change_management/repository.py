@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai_enterprise.domain.change_management.entities import (
     ChangeAuditRecord,
     ChangeDecision,
+    ChangeObservation,
     ChangeOperation,
+    ChangeOutcome,
     ChangeProposal,
     ChangeSet,
     EntityReference,
@@ -22,6 +24,7 @@ from ai_enterprise.domain.change_management.entities import (
 from ai_enterprise.domain.change_management.enums import (
     ChangeCategory,
     ChangeDecisionType,
+    ChangeOutcomeDisposition,
     ChangeRisk,
     ChangeStatus,
     ImpactKnowledge,
@@ -32,6 +35,8 @@ from .models import (
     ChangeDecisionModel,
     ChangeEvidenceModel,
     ChangeImpactAssessmentModel,
+    ChangeObservationModel,
+    ChangeOutcomeModel,
     ChangeProposalModel,
     ChangeSetModel,
     ChangeValidationPlanModel,
@@ -247,6 +252,53 @@ class SqlAlchemyGovernedChangeRepository:
         models = await self._models(ChangeDecisionModel, proposal_id)
         return tuple(self._decision(item) for item in models)
 
+    async def append_observation(self, value: ChangeObservation) -> None:
+        self._session.add(
+            ChangeObservationModel(
+                id=value.id,
+                proposal_id=value.proposal_id,
+                decision_id=value.decision_id,
+                version=value.version,
+                observed_by=value.observed_by,
+                observation_window_start=value.observation_window_start,
+                observation_window_end=value.observation_window_end,
+                metrics=value.metrics,
+                findings=list(value.findings),
+                created_at=value.created_at,
+                content_hash=value.content_hash,
+            )
+        )
+        for evidence in value.evidence:
+            self._add_evidence(value.proposal_id, "observation", value.id, evidence)
+
+    async def get_observation(self, value_id: uuid.UUID) -> ChangeObservation | None:
+        value = await self._session.get(ChangeObservationModel, value_id)
+        return await self._observation(value) if value else None
+
+    async def list_observations(self, proposal_id: uuid.UUID) -> tuple[ChangeObservation, ...]:
+        models = await self._models(ChangeObservationModel, proposal_id)
+        return tuple([await self._observation(item) for item in models])
+
+    async def append_outcome(self, value: ChangeOutcome) -> None:
+        self._session.add(
+            ChangeOutcomeModel(
+                id=value.id,
+                proposal_id=value.proposal_id,
+                observation_id=value.observation_id,
+                disposition=value.disposition,
+                decided_by=value.decided_by,
+                reason=value.reason,
+                decided_at=value.decided_at,
+                content_hash=value.content_hash,
+            )
+        )
+        for evidence in value.evidence:
+            self._add_evidence(value.proposal_id, "outcome", value.id, evidence)
+
+    async def list_outcomes(self, proposal_id: uuid.UUID) -> tuple[ChangeOutcome, ...]:
+        models = await self._models(ChangeOutcomeModel, proposal_id)
+        return tuple([await self._outcome(item) for item in models])
+
     async def timeline(self, proposal_id: uuid.UUID) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         proposal = await self.get_proposal(proposal_id)
@@ -300,6 +352,26 @@ class SqlAlchemyGovernedChangeRepository:
                     "at": decision.decided_at,
                     "decision": decision.decision,
                     "content_hash": decision.content_hash,
+                }
+            )
+        for observation in await self.list_observations(proposal_id):
+            records.append(
+                {
+                    "type": "observation",
+                    "id": str(observation.id),
+                    "at": observation.created_at,
+                    "version": observation.version,
+                    "content_hash": observation.content_hash,
+                }
+            )
+        for outcome in await self.list_outcomes(proposal_id):
+            records.append(
+                {
+                    "type": "outcome",
+                    "id": str(outcome.id),
+                    "at": outcome.decided_at,
+                    "disposition": outcome.disposition,
+                    "content_hash": outcome.content_hash,
                 }
             )
         return sorted(records, key=lambda item: (item["at"], item["type"], item["id"]))
@@ -439,6 +511,35 @@ class SqlAlchemyGovernedChangeRepository:
                 )
                 for item in value.validation_results
             ),
+            decided_at=value.decided_at,
+            content_hash=value.content_hash,
+        )
+
+    async def _observation(self, value: ChangeObservationModel) -> ChangeObservation:
+        return ChangeObservation(
+            id=value.id,
+            proposal_id=value.proposal_id,
+            decision_id=value.decision_id,
+            version=value.version,
+            observed_by=value.observed_by,
+            observation_window_start=value.observation_window_start,
+            observation_window_end=value.observation_window_end,
+            metrics=value.metrics,
+            findings=tuple(value.findings),
+            evidence=await self._evidence("observation", value.id),
+            created_at=value.created_at,
+            content_hash=value.content_hash,
+        )
+
+    async def _outcome(self, value: ChangeOutcomeModel) -> ChangeOutcome:
+        return ChangeOutcome(
+            id=value.id,
+            proposal_id=value.proposal_id,
+            observation_id=value.observation_id,
+            disposition=ChangeOutcomeDisposition(value.disposition),
+            decided_by=value.decided_by,
+            reason=value.reason,
+            evidence=await self._evidence("outcome", value.id),
             decided_at=value.decided_at,
             content_hash=value.content_hash,
         )

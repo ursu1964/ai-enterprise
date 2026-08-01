@@ -24,6 +24,8 @@ from ai_enterprise.infrastructure.change_management.models import (
     ChangeDecisionModel,
     ChangeEvidenceModel,
     ChangeImpactAssessmentModel,
+    ChangeObservationModel,
+    ChangeOutcomeModel,
     ChangeProposalModel,
     ChangeSetModel,
     ChangeValidationPlanModel,
@@ -42,6 +44,8 @@ def test_bounded_models_define_expected_tables() -> None:
         ChangeImpactAssessmentModel.__tablename__,
         ChangeValidationPlanModel.__tablename__,
         ChangeDecisionModel.__tablename__,
+        ChangeObservationModel.__tablename__,
+        ChangeOutcomeModel.__tablename__,
     } == {
         "change_proposals",
         "change_evidence",
@@ -49,8 +53,12 @@ def test_bounded_models_define_expected_tables() -> None:
         "change_impact_assessments",
         "change_validation_plans",
         "change_decisions",
+        "change_observations",
+        "change_outcomes",
     }
     assert ChangeDecisionModel.__table__.c.content_hash.unique is True
+    assert ChangeObservationModel.__table__.c.content_hash.unique is True
+    assert ChangeOutcomeModel.__table__.c.content_hash.unique is True
     assert "updated_at" not in ChangeDecisionModel.__table__.c
 
 
@@ -138,6 +146,13 @@ def test_actor_header_adapter_enforces_capability_and_human_decision() -> None:
     assert wrong_role.value.status_code == 403
     with pytest.raises(HTTPException, match="human"):
         governed_change_actor(Actor("agent", "agent", "change_approver"), "change.decide")
+    assert (
+        governed_change_actor(Actor("observer", "human", "change_observer"), "change.observe")
+        .subject
+        == "observer"
+    )
+    with pytest.raises(HTTPException, match="human"):
+        governed_change_actor(Actor("agent", "agent", "change_approver"), "change.outcome")
 
 
 def test_api_surface_has_no_activation_or_rollout_route() -> None:
@@ -147,6 +162,8 @@ def test_api_surface_has_no_activation_or_rollout_route() -> None:
     assert "/change-proposals/{proposal_id}/impact-assessments" in paths
     assert "/change-proposals/{proposal_id}/validation-plans" in paths
     assert "/change-proposals/{proposal_id}/decisions" in paths
+    assert "/change-proposals/{proposal_id}/observations" in paths
+    assert "/change-proposals/{proposal_id}/outcomes" in paths
     assert "/change-proposals/{proposal_id}/timeline" in paths
     assert all("activat" not in path and "rollout" not in path for path in paths)
     registered = set(app.openapi()["paths"])

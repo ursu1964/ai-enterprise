@@ -14,14 +14,21 @@ from ai_enterprise.application.change_management.dto import (
     GovernanceActor,
     ImpactFindingInput,
     RecordChangeDecision,
+    RecordChangeObservation,
+    RecordChangeOutcome,
     RecordImpactAssessment,
     ValidationRequirementInput,
     ValidationResultInput,
 )
-from ai_enterprise.application.change_management.service import GovernedChangeService
+from ai_enterprise.application.change_management.service import (
+    GovernedChangeNotFound,
+    GovernedChangeService,
+)
 from ai_enterprise.domain.change_management.entities import (
     ChangeAuditRecord,
     ChangeDecision,
+    ChangeObservation,
+    ChangeOutcome,
     ChangeProposal,
     ChangeSet,
     ImpactAssessment,
@@ -30,6 +37,7 @@ from ai_enterprise.domain.change_management.entities import (
 from ai_enterprise.domain.change_management.enums import (
     ChangeCategory,
     ChangeDecisionType,
+    ChangeOutcomeDisposition,
     ChangeRisk,
     ChangeStatus,
     ImpactKnowledge,
@@ -37,6 +45,7 @@ from ai_enterprise.domain.change_management.enums import (
 from ai_enterprise.domain.change_management.exceptions import (
     ActivationNotSupported,
     ChangeEvidenceRequired,
+    ChangeObservationRequired,
     ChangeRecordImmutable,
     ChangeRiskUnderstated,
     ChangeSelfApprovalForbidden,
@@ -58,6 +67,8 @@ class MemoryRepository:
         self.assessments: dict[UUID, ImpactAssessment] = {}
         self.plans: dict[UUID, ValidationPlan] = {}
         self.decisions: list[ChangeDecision] = []
+        self.observations: dict[UUID, ChangeObservation] = {}
+        self.outcomes: list[ChangeOutcome] = []
         self.commits = 0
 
     async def add_proposal(self, proposal: ChangeProposal) -> None:
@@ -101,6 +112,21 @@ class MemoryRepository:
 
     async def list_decisions(self, proposal_id: UUID) -> tuple[ChangeDecision, ...]:
         return tuple(item for item in self.decisions if item.proposal_id == proposal_id)
+
+    async def append_observation(self, value: ChangeObservation) -> None:
+        self.observations[value.id] = value
+
+    async def get_observation(self, value_id: UUID) -> ChangeObservation | None:
+        return self.observations.get(value_id)
+
+    async def list_observations(self, proposal_id: UUID) -> tuple[ChangeObservation, ...]:
+        return tuple(item for item in self.observations.values() if item.proposal_id == proposal_id)
+
+    async def append_outcome(self, value: ChangeOutcome) -> None:
+        self.outcomes.append(value)
+
+    async def list_outcomes(self, proposal_id: UUID) -> tuple[ChangeOutcome, ...]:
+        return tuple(item for item in self.outcomes if item.proposal_id == proposal_id)
 
     async def commit(self) -> None:
         self.commits += 1
@@ -298,6 +324,16 @@ def decision_request(
     )
 
 
+async def approved_change(kernel: tuple[GovernedChangeService, MemoryRepository, MemoryAudit]):
+    service, repository, proposal, change_set, assessment, plan = await ready_change(kernel)
+    decision = await service.decide(
+        proposal.id,
+        decision_request(change_set.id, assessment.id, plan.id),
+        actor("approver", "change_approver"),
+    )
+    return service, repository, proposal, decision
+
+
 @pytest.mark.asyncio
 async def test_proposer_cannot_approve_own_change(kernel) -> None:
     service, _, proposal, change_set, assessment, plan = await ready_change(kernel)
@@ -354,6 +390,115 @@ async def test_activation_and_rollout_are_explicitly_unsupported(kernel) -> None
     service, _, _ = kernel
     with pytest.raises(ActivationNotSupported, match="self-modification"):
         await service.activate(uuid4(), actor("approver", "change_approver"))
+
+
+@pytest.mark.asyncio
+async def test_observation_requires_approved_change(kernel) -> None:
+    service, _, proposal, change_set, assessment, plan = await ready_change(kernel)
+    decision = await service.decide(
+        proposal.id,
+        decision_request(change_set.id, assessment.id, plan.id, ChangeDecisionType.DEFERRED),
+        actor("approver", "change_approver"),
+    )
+    with pytest.raises(InvalidChangeTransition):
+        await service.record_observation(
+            proposal.id,
+            RecordChangeObservation(
+                decision_id=decision.id,
+                observation_window_start=decision.decided_at,
+                observation_window_end=decision.decided_at.replace(
+                    year=decision.decided_at.year + 1
+                ),
+                metrics={"policy_violations": 0},
+                findings=("Deferred changes are not observable.",),
+                evidence=(
+                    EvidenceReferenceInput(
+                        artifact_id=uuid4(), content_hash=HASH_A, evidence_type="metric"
+                    ),
+                ),
+            ),
+            actor("observer", "change_observer"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_observation_and_outcome_are_hash_bound_and_audited(kernel) -> None:
+    service, repository, proposal, decision = await approved_change(kernel)
+    observation = await service.record_observation(
+        proposal.id,
+        RecordChangeObservation(
+            decision_id=decision.id,
+            observation_window_start=decision.decided_at,
+            observation_window_end=decision.decided_at.replace(year=decision.decided_at.year + 1),
+            metrics={"policy_violations": 0},
+            findings=("No separation violations observed.",),
+            evidence=(
+                EvidenceReferenceInput(
+                    artifact_id=uuid4(), content_hash=HASH_A, evidence_type="metric"
+                ),
+            ),
+        ),
+        actor("observer", "change_observer"),
+    )
+    outcome = await service.record_outcome(
+        proposal.id,
+        RecordChangeOutcome(
+            observation_id=observation.id,
+            disposition=ChangeOutcomeDisposition.RETAIN,
+            reason="Observed metrics support retaining the approved change.",
+            evidence=(
+                EvidenceReferenceInput(
+                    artifact_id=uuid4(), content_hash=HASH_B, evidence_type="outcome_review"
+                ),
+            ),
+        ),
+        actor("approver", "change_approver"),
+    )
+    assert repository.observations[observation.id] == observation
+    assert repository.outcomes == [outcome]
+    assert len(observation.content_hash) == 64 and len(outcome.content_hash) == 64
+
+
+@pytest.mark.asyncio
+async def test_outcome_requires_existing_observation(kernel) -> None:
+    service, _, proposal, _ = await approved_change(kernel)
+    with pytest.raises(GovernedChangeNotFound):
+        await service.record_outcome(
+            proposal.id,
+            RecordChangeOutcome(
+                observation_id=uuid4(),
+                disposition=ChangeOutcomeDisposition.ROLLBACK,
+                reason="Missing observation cannot drive rollback.",
+                evidence=(
+                    EvidenceReferenceInput(
+                        artifact_id=uuid4(), content_hash=HASH_A, evidence_type="review"
+                    ),
+                ),
+            ),
+            actor("approver", "change_approver"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_observation_window_metrics_findings_and_evidence_are_required(kernel) -> None:
+    service, _, proposal, decision = await approved_change(kernel)
+    with pytest.raises(ChangeObservationRequired):
+        await service.record_observation(
+            proposal.id,
+            RecordChangeObservation(
+                decision_id=decision.id,
+                observation_window_start=decision.decided_at,
+                observation_window_end=decision.decided_at,
+                metrics={"policy_violations": 0},
+                findings=("Invalid window.",),
+                evidence=(
+                    EvidenceReferenceInput(
+                        artifact_id=uuid4(), content_hash=HASH_A, evidence_type="metric"
+                    ),
+                ),
+            ),
+            actor("observer", "change_observer"),
+        )
 
 
 def test_passing_validation_result_requires_evidence() -> None:

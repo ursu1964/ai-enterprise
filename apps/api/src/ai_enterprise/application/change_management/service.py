@@ -8,6 +8,8 @@ from ai_enterprise.application.change_management.dto import (
     CreateValidationPlan,
     GovernanceActor,
     RecordChangeDecision,
+    RecordChangeObservation,
+    RecordChangeOutcome,
     RecordImpactAssessment,
 )
 from ai_enterprise.application.change_management.ports import (
@@ -17,7 +19,9 @@ from ai_enterprise.application.change_management.ports import (
 from ai_enterprise.domain.change_management.entities import (
     ChangeAuditRecord,
     ChangeDecision,
+    ChangeObservation,
     ChangeOperation,
+    ChangeOutcome,
     ChangeProposal,
     ChangeSet,
     EntityReference,
@@ -41,6 +45,8 @@ from ai_enterprise.domain.change_management.exceptions import (
 from ai_enterprise.domain.change_management.hashing import canonical_hash
 from ai_enterprise.domain.change_management.policies import (
     ChangeDecisionPolicy,
+    ChangeObservationPolicy,
+    ChangeOutcomePolicy,
     ChangeRiskPolicy,
     ChangeSeparationPolicy,
     ChangeStatePolicy,
@@ -354,6 +360,93 @@ class GovernedChangeService:
         )
         await self._repository.commit()
         return decision
+
+    async def record_observation(
+        self, proposal_id: uuid.UUID, request: RecordChangeObservation, actor: GovernanceActor
+    ) -> ChangeObservation:
+        proposal = await self._proposal(proposal_id)
+        decisions = await self._repository.list_decisions(proposal.id)
+        decision = next((item for item in decisions if item.id == request.decision_id), None)
+        ChangeObservationPolicy().require_observable(
+            proposal=proposal, approved_decision=decision
+        )
+        existing = await self._repository.list_observations(proposal.id)
+        now = datetime.now(UTC)
+        evidence = tuple(EvidenceReference(**item.model_dump()) for item in request.evidence)
+        material = {
+            **request.model_dump(mode="json"),
+            "version": len(existing) + 1,
+            "observed_by": actor.subject,
+            "created_at": now,
+        }
+        observation = ChangeObservation(
+            id=uuid.uuid4(),
+            proposal_id=proposal.id,
+            decision_id=request.decision_id,
+            version=len(existing) + 1,
+            observed_by=actor.subject,
+            observation_window_start=request.observation_window_start,
+            observation_window_end=request.observation_window_end,
+            metrics=request.metrics,
+            findings=request.findings,
+            evidence=evidence,
+            created_at=now,
+            content_hash=canonical_hash(material),
+        )
+        ChangeObservationPolicy().require_complete(observation)
+        await self._repository.append_observation(observation)
+        await self._record(
+            "change.observation_recorded",
+            proposal.id,
+            actor.subject,
+            {
+                "observation_id": str(observation.id),
+                "version": observation.version,
+                "content_hash": observation.content_hash,
+            },
+        )
+        await self._repository.commit()
+        return observation
+
+    async def record_outcome(
+        self, proposal_id: uuid.UUID, request: RecordChangeOutcome, actor: GovernanceActor
+    ) -> ChangeOutcome:
+        proposal = await self._proposal(proposal_id)
+        observation = await self._repository.get_observation(request.observation_id)
+        if observation is None or observation.proposal_id != proposal.id:
+            raise GovernedChangeNotFound("Observation not found for proposal")
+        now = datetime.now(UTC)
+        evidence = tuple(EvidenceReference(**item.model_dump()) for item in request.evidence)
+        material = {
+            **request.model_dump(mode="json"),
+            "decided_by": actor.subject,
+            "decided_at": now,
+        }
+        outcome = ChangeOutcome(
+            id=uuid.uuid4(),
+            proposal_id=proposal.id,
+            observation_id=observation.id,
+            disposition=request.disposition,
+            decided_by=actor.subject,
+            reason=request.reason,
+            evidence=evidence,
+            decided_at=now,
+            content_hash=canonical_hash(material),
+        )
+        ChangeOutcomePolicy().require_complete(outcome)
+        await self._repository.append_outcome(outcome)
+        await self._record(
+            "change.outcome_recorded",
+            proposal.id,
+            actor.subject,
+            {
+                "outcome_id": str(outcome.id),
+                "disposition": outcome.disposition,
+                "content_hash": outcome.content_hash,
+            },
+        )
+        await self._repository.commit()
+        return outcome
 
     async def activate(self, proposal_id: uuid.UUID, actor: GovernanceActor) -> None:
         raise ActivationNotSupported(

@@ -6,6 +6,7 @@ from uuid import UUID
 from .enums import (
     ChangeCategory,
     ChangeDecisionType,
+    ChangeOutcomeDisposition,
     ChangeRisk,
     ChangeStatus,
     ImpactKnowledge,
@@ -137,6 +138,35 @@ class ChangeDecision:
     actor_roles: tuple[str, ...]
     reason: str
     validation_results: tuple[ValidationResult, ...]
+    decided_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeObservation:
+    id: UUID
+    proposal_id: UUID
+    decision_id: UUID
+    version: int
+    observed_by: str
+    observation_window_start: datetime
+    observation_window_end: datetime
+    metrics: dict[str, Any]
+    findings: tuple[str, ...]
+    evidence: tuple[EvidenceReference, ...]
+    created_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeOutcome:
+    id: UUID
+    proposal_id: UUID
+    observation_id: UUID
+    disposition: ChangeOutcomeDisposition
+    decided_by: str
+    reason: str
+    evidence: tuple[EvidenceReference, ...]
     decided_at: datetime
     content_hash: str
 

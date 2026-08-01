@@ -30,6 +30,10 @@ class ActivationNotSupported(GovernedChangeError):
     code = "ACTIVATION_NOT_SUPPORTED"
 
 
+class ChangeObservationRequired(GovernedChangeError):
+    code = "CHANGE_OBSERVATION_REQUIRED"
+
+
 class ChangeRiskUnderstated(GovernedChangeError):
     code = "CHANGE_RISK_UNDERSTATED"
 

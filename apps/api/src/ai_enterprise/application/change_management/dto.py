@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from ai_enterprise.domain.change_management.enums import (
     ChangeCategory,
     ChangeDecisionType,
+    ChangeOutcomeDisposition,
     ChangeRisk,
     ImpactKnowledge,
 )
@@ -102,6 +104,22 @@ class RecordChangeDecision(BaseModel):
             if result.passed and not result.evidence:
                 raise ValueError("Passing validation requires evidence")
         return self
+
+
+class RecordChangeObservation(BaseModel):
+    decision_id: UUID
+    observation_window_start: datetime
+    observation_window_end: datetime
+    metrics: dict[str, Any] = Field(min_length=1)
+    findings: tuple[str, ...] = Field(min_length=1)
+    evidence: tuple[EvidenceReferenceInput, ...] = Field(min_length=1)
+
+
+class RecordChangeOutcome(BaseModel):
+    observation_id: UUID
+    disposition: ChangeOutcomeDisposition
+    reason: str = Field(min_length=3, max_length=5000)
+    evidence: tuple[EvidenceReferenceInput, ...] = Field(min_length=1)
 
 
 class GovernanceActor(BaseModel):

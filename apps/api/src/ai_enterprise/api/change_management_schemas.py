@@ -83,6 +83,35 @@ class ChangeDecisionResponse(BaseModel):
     content_hash: str
 
 
+class ChangeObservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    proposal_id: UUID
+    decision_id: UUID
+    version: int
+    observed_by: str
+    observation_window_start: datetime
+    observation_window_end: datetime
+    metrics: dict[str, Any]
+    findings: tuple[str, ...]
+    evidence: tuple[EvidenceReferenceInput, ...]
+    created_at: datetime
+    content_hash: str
+
+
+class ChangeOutcomeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    proposal_id: UUID
+    observation_id: UUID
+    disposition: str
+    decided_by: str
+    reason: str
+    evidence: tuple[EvidenceReferenceInput, ...]
+    decided_at: datetime
+    content_hash: str
+
+
 class ChangeTimelineResponse(BaseModel):
     proposal_id: UUID
     records: list[dict[str, Any]]

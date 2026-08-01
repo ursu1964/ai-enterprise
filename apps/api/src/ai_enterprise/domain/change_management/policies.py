@@ -1,6 +1,8 @@
 from .entities import (
     ChangeDecision,
+    ChangeObservation,
     ChangeOperation,
+    ChangeOutcome,
     ChangeProposal,
     EntityReference,
     ImpactAssessment,
@@ -9,6 +11,7 @@ from .entities import (
 from .enums import ChangeCategory, ChangeDecisionType, ChangeRisk, ChangeStatus
 from .exceptions import (
     ChangeEvidenceRequired,
+    ChangeObservationRequired,
     ChangeRiskUnderstated,
     ChangeSelfApprovalForbidden,
     IndependentAssessmentRequired,
@@ -134,3 +137,29 @@ def resulting_status(decision: ChangeDecision) -> ChangeStatus:
         ChangeDecisionType.REJECTED: ChangeStatus.REJECTED,
         ChangeDecisionType.DEFERRED: ChangeStatus.DEFERRED,
     }[decision.decision]
+
+
+class ChangeObservationPolicy:
+    def require_observable(
+        self, *, proposal: ChangeProposal, approved_decision: ChangeDecision | None
+    ) -> None:
+        if proposal.status is not ChangeStatus.APPROVED or approved_decision is None:
+            raise InvalidChangeTransition("Only approved changes may be observed")
+
+    def require_complete(self, observation: ChangeObservation) -> None:
+        if observation.observation_window_end <= observation.observation_window_start:
+            raise ChangeObservationRequired("Observation window must move forward")
+        if not observation.metrics:
+            raise ChangeObservationRequired("Change observation requires measured metrics")
+        if not observation.findings:
+            raise ChangeObservationRequired("Change observation requires findings")
+        if not observation.evidence:
+            raise ChangeObservationRequired("Change observation requires evidence")
+
+
+class ChangeOutcomePolicy:
+    def require_complete(self, outcome: ChangeOutcome) -> None:
+        if not outcome.reason.strip():
+            raise ChangeObservationRequired("Change outcome requires rationale")
+        if not outcome.evidence:
+            raise ChangeObservationRequired("Change outcome requires evidence")

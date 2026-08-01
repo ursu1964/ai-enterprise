@@ -174,3 +174,59 @@ class ChangeDecisionModel(Base):
     validation_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class ChangeObservationModel(Base):
+    __tablename__ = "change_observations"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "version", name="uq_change_observation_proposal_version"),
+        CheckConstraint("version > 0", name="ck_change_observation_version_positive"),
+        CheckConstraint(
+            "observation_window_end > observation_window_start",
+            name="ck_change_observation_window",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_proposals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_decisions.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    observed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    observation_window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    observation_window_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    findings: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class ChangeOutcomeModel(Base):
+    __tablename__ = "change_outcomes"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "observation_id", name="uq_change_outcome_observation"),
+        CheckConstraint(
+            "disposition IN ('retain', 'revise', 'rollback', 'inconclusive')",
+            name="ck_change_outcome_disposition",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_proposals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    observation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_observations.id", ondelete="RESTRICT"), nullable=False
+    )
+    disposition: Mapped[str] = mapped_column(String(30), nullable=False)
+    decided_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

@@ -9,11 +9,14 @@ _CAPABILITY_ROLES = {
     "change.assess": {"change_assessor"},
     "change.validate": {"change_validator"},
     "change.decide": {"change_approver"},
+    "change.observe": {"change_observer", "change_approver"},
+    "change.outcome": {"change_approver"},
     "change.read": {
         "change_proposer",
         "change_assessor",
         "change_validator",
         "change_approver",
+        "change_observer",
         "audit_reader",
     },
 }
@@ -23,7 +26,10 @@ def governed_change_actor(actor: Actor, capability: str) -> GovernanceActor:
     allowed = _CAPABILITY_ROLES[capability]
     if actor.role not in allowed:
         raise HTTPException(status_code=403, detail=f"Missing capability: {capability}")
-    if capability in {"change.submit", "change.decide"} and actor.actor_type != "human":
+    if (
+        capability in {"change.submit", "change.decide", "change.outcome"}
+        and actor.actor_type != "human"
+    ):
         raise HTTPException(status_code=403, detail="A human governance actor is required")
     return GovernanceActor(
         subject=actor.subject,

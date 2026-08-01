@@ -42,3 +42,10 @@ class ChangeDecisionType(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     DEFERRED = "deferred"
+
+
+class ChangeOutcomeDisposition(StrEnum):
+    RETAIN = "retain"
+    REVISE = "revise"
+    ROLLBACK = "rollback"
+    INCONCLUSIVE = "inconclusive"
