@@ -67,6 +67,21 @@ class ChangeSet:
 
 
 @dataclass(frozen=True, slots=True)
+class TransformationPlan:
+    id: UUID
+    proposal_id: UUID
+    change_set_id: UUID
+    version: int
+    strategy: str
+    steps: tuple[str, ...]
+    prerequisites: tuple[str, ...]
+    evidence: tuple[EvidenceReference, ...]
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class ImpactFinding:
     code: str
     dimension: str
@@ -114,6 +129,39 @@ class ValidationPlan:
     version: int
     requirements: tuple[ValidationRequirement, ...]
     rollback_evidence_required: bool
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class RolloutPlan:
+    id: UUID
+    proposal_id: UUID
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    version: int
+    stages: tuple[str, ...]
+    eligible_scope: dict[str, Any]
+    excluded_scope: dict[str, Any]
+    success_criteria: tuple[str, ...]
+    rollback_criteria: tuple[str, ...]
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class RollbackPlan:
+    id: UUID
+    proposal_id: UUID
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    version: int
+    rollback_steps: tuple[str, ...]
+    trigger_criteria: tuple[str, ...]
+    recovery_time_objective_seconds: int
+    evidence: tuple[EvidenceReference, ...]
     created_by: str
     created_at: datetime
     content_hash: str

@@ -5,6 +5,9 @@ from datetime import UTC, datetime
 from ai_enterprise.application.change_management.dto import (
     CreateChangeProposal,
     CreateChangeSet,
+    CreateRollbackPlan,
+    CreateRolloutPlan,
+    CreateTransformationPlan,
     CreateValidationPlan,
     GovernanceActor,
     RecordChangeDecision,
@@ -28,6 +31,9 @@ from ai_enterprise.domain.change_management.entities import (
     EvidenceReference,
     ImpactAssessment,
     ImpactFinding,
+    RollbackPlan,
+    RolloutPlan,
+    TransformationPlan,
     ValidationPlan,
     ValidationRequirement,
     ValidationResult,
@@ -47,6 +53,7 @@ from ai_enterprise.domain.change_management.policies import (
     ChangeDecisionPolicy,
     ChangeObservationPolicy,
     ChangeOutcomePolicy,
+    ChangePlanningPolicy,
     ChangeRiskPolicy,
     ChangeSeparationPolicy,
     ChangeStatePolicy,
@@ -163,6 +170,50 @@ class GovernedChangeService:
         )
         await self._repository.commit()
         return value
+
+    async def create_transformation_plan(
+        self, proposal_id: uuid.UUID, request: CreateTransformationPlan, actor: GovernanceActor
+    ) -> TransformationPlan:
+        proposal = await self._proposal(proposal_id)
+        change_set = await self._repository.get_change_set(request.change_set_id)
+        if change_set is None or change_set.proposal_id != proposal.id:
+            raise GovernedChangeNotFound("Change set not found for proposal")
+        existing = await self._repository.list_transformation_plans(proposal.id)
+        ChangePlanningPolicy().require_transformation_ready(
+            proposal=proposal,
+            change_set_count=len(await self._repository.list_change_sets(proposal.id)),
+        )
+        now = datetime.now(UTC)
+        evidence = tuple(EvidenceReference(**item.model_dump()) for item in request.evidence)
+        material = {
+            **request.model_dump(mode="json"),
+            "version": len(existing) + 1,
+            "created_by": actor.subject,
+            "created_at": now,
+        }
+        plan = TransformationPlan(
+            id=uuid.uuid4(),
+            proposal_id=proposal.id,
+            change_set_id=change_set.id,
+            version=len(existing) + 1,
+            strategy=request.strategy,
+            steps=request.steps,
+            prerequisites=request.prerequisites,
+            evidence=evidence,
+            created_by=actor.subject,
+            created_at=now,
+            content_hash=canonical_hash(material),
+        )
+        ChangePlanningPolicy().require_transformation_complete(plan)
+        await self._repository.add_transformation_plan(plan)
+        await self._record(
+            "change.transformation_plan_created",
+            proposal.id,
+            actor.subject,
+            {"transformation_plan_id": str(plan.id), "content_hash": plan.content_hash},
+        )
+        await self._repository.commit()
+        return plan
 
     async def submit(self, proposal_id: uuid.UUID, actor: GovernanceActor) -> ChangeProposal:
         proposal = await self._proposal(proposal_id)
@@ -292,6 +343,112 @@ class GovernedChangeService:
             proposal.id,
             actor.subject,
             {"validation_plan_id": str(plan.id), "content_hash": plan.content_hash},
+        )
+        await self._repository.commit()
+        return plan
+
+    async def create_rollout_plan(
+        self, proposal_id: uuid.UUID, request: CreateRolloutPlan, actor: GovernanceActor
+    ) -> RolloutPlan:
+        proposal = await self._proposal(proposal_id)
+        transformation_plan = await self._repository.get_transformation_plan(
+            request.transformation_plan_id
+        )
+        validation_plan = await self._repository.get_validation_plan(request.validation_plan_id)
+        if (
+            transformation_plan is not None and transformation_plan.proposal_id != proposal.id
+        ) or (
+            validation_plan is not None and validation_plan.proposal_id != proposal.id
+        ):
+            raise GovernedChangeNotFound("Planning records belong to another proposal")
+        ChangePlanningPolicy().require_rollout_ready(
+            proposal=proposal,
+            transformation_plan=transformation_plan,
+            validation_plan=validation_plan,
+        )
+        existing = await self._repository.list_rollout_plans(proposal.id)
+        now = datetime.now(UTC)
+        material = {
+            **request.model_dump(mode="json"),
+            "version": len(existing) + 1,
+            "created_by": actor.subject,
+            "created_at": now,
+        }
+        plan = RolloutPlan(
+            id=uuid.uuid4(),
+            proposal_id=proposal.id,
+            transformation_plan_id=request.transformation_plan_id,
+            validation_plan_id=request.validation_plan_id,
+            version=len(existing) + 1,
+            stages=request.stages,
+            eligible_scope=request.eligible_scope,
+            excluded_scope=request.excluded_scope,
+            success_criteria=request.success_criteria,
+            rollback_criteria=request.rollback_criteria,
+            created_by=actor.subject,
+            created_at=now,
+            content_hash=canonical_hash(material),
+        )
+        ChangePlanningPolicy().require_rollout_complete(plan)
+        await self._repository.add_rollout_plan(plan)
+        await self._record(
+            "change.rollout_plan_created",
+            proposal.id,
+            actor.subject,
+            {"rollout_plan_id": str(plan.id), "content_hash": plan.content_hash},
+        )
+        await self._repository.commit()
+        return plan
+
+    async def create_rollback_plan(
+        self, proposal_id: uuid.UUID, request: CreateRollbackPlan, actor: GovernanceActor
+    ) -> RollbackPlan:
+        proposal = await self._proposal(proposal_id)
+        transformation_plan = await self._repository.get_transformation_plan(
+            request.transformation_plan_id
+        )
+        validation_plan = await self._repository.get_validation_plan(request.validation_plan_id)
+        if (
+            transformation_plan is not None and transformation_plan.proposal_id != proposal.id
+        ) or (
+            validation_plan is not None and validation_plan.proposal_id != proposal.id
+        ):
+            raise GovernedChangeNotFound("Planning records belong to another proposal")
+        ChangePlanningPolicy().require_rollout_ready(
+            proposal=proposal,
+            transformation_plan=transformation_plan,
+            validation_plan=validation_plan,
+        )
+        existing = await self._repository.list_rollback_plans(proposal.id)
+        now = datetime.now(UTC)
+        evidence = tuple(EvidenceReference(**item.model_dump()) for item in request.evidence)
+        material = {
+            **request.model_dump(mode="json"),
+            "version": len(existing) + 1,
+            "created_by": actor.subject,
+            "created_at": now,
+        }
+        plan = RollbackPlan(
+            id=uuid.uuid4(),
+            proposal_id=proposal.id,
+            transformation_plan_id=request.transformation_plan_id,
+            validation_plan_id=request.validation_plan_id,
+            version=len(existing) + 1,
+            rollback_steps=request.rollback_steps,
+            trigger_criteria=request.trigger_criteria,
+            recovery_time_objective_seconds=request.recovery_time_objective_seconds,
+            evidence=evidence,
+            created_by=actor.subject,
+            created_at=now,
+            content_hash=canonical_hash(material),
+        )
+        ChangePlanningPolicy().require_rollback_complete(plan)
+        await self._repository.add_rollback_plan(plan)
+        await self._record(
+            "change.rollback_plan_created",
+            proposal.id,
+            actor.subject,
+            {"rollback_plan_id": str(plan.id), "content_hash": plan.content_hash},
         )
         await self._repository.commit()
         return plan

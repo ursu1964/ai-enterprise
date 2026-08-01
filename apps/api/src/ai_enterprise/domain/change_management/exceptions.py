@@ -34,6 +34,10 @@ class ChangeObservationRequired(GovernedChangeError):
     code = "CHANGE_OBSERVATION_REQUIRED"
 
 
+class ChangePlanningRequired(GovernedChangeError):
+    code = "CHANGE_PLANNING_REQUIRED"
+
+
 class ChangeRiskUnderstated(GovernedChangeError):
     code = "CHANGE_RISK_UNDERSTATED"
 

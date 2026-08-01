@@ -40,6 +40,21 @@ class ChangeSetResponse(BaseModel):
     content_hash: str
 
 
+class TransformationPlanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    proposal_id: UUID
+    change_set_id: UUID
+    version: int
+    strategy: str
+    steps: tuple[str, ...]
+    prerequisites: tuple[str, ...]
+    evidence: tuple[EvidenceReferenceInput, ...]
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
 class ImpactAssessmentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -66,6 +81,39 @@ class ValidationPlanResponse(BaseModel):
     version: int
     requirements: tuple[dict[str, Any], ...]
     rollback_evidence_required: bool
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
+class RolloutPlanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    proposal_id: UUID
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    version: int
+    stages: tuple[str, ...]
+    eligible_scope: dict[str, Any]
+    excluded_scope: dict[str, Any]
+    success_criteria: tuple[str, ...]
+    rollback_criteria: tuple[str, ...]
+    created_by: str
+    created_at: datetime
+    content_hash: str
+
+
+class RollbackPlanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    proposal_id: UUID
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    version: int
+    rollback_steps: tuple[str, ...]
+    trigger_criteria: tuple[str, ...]
+    recovery_time_objective_seconds: int
+    evidence: tuple[EvidenceReferenceInput, ...]
     created_by: str
     created_at: datetime
     content_hash: str

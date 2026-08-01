@@ -90,6 +90,31 @@ class ChangeSetModel(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
 
 
+class ChangeTransformationPlanModel(Base):
+    __tablename__ = "change_transformation_plans"
+    __table_args__ = (
+        UniqueConstraint(
+            "proposal_id", "version", name="uq_change_transformation_proposal_version"
+        ),
+        CheckConstraint("version > 0", name="ck_change_transformation_version_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_proposals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    change_set_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_sets.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    strategy: Mapped[str] = mapped_column(Text, nullable=False)
+    steps: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    prerequisites: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
 class ChangeImpactAssessmentModel(Base):
     __tablename__ = "change_impact_assessments"
     __table_args__ = (
@@ -139,6 +164,64 @@ class ChangeValidationPlanModel(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     requirements: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     rollback_evidence_required: Mapped[bool] = mapped_column(nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class ChangeRolloutPlanModel(Base):
+    __tablename__ = "change_rollout_plans"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "version", name="uq_change_rollout_proposal_version"),
+        CheckConstraint("version > 0", name="ck_change_rollout_version_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_proposals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    transformation_plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_transformation_plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    validation_plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_validation_plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    stages: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    eligible_scope: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    excluded_scope: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    success_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    rollback_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+
+class ChangeRollbackPlanModel(Base):
+    __tablename__ = "change_rollback_plans"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "version", name="uq_change_rollback_proposal_version"),
+        CheckConstraint("version > 0", name="ck_change_rollback_version_positive"),
+        CheckConstraint(
+            "recovery_time_objective_seconds > 0",
+            name="ck_change_rollback_rto_positive",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_proposals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    transformation_plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_transformation_plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    validation_plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("change_validation_plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rollback_steps: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    trigger_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    recovery_time_objective_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

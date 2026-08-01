@@ -17,6 +17,9 @@ from ai_enterprise.domain.change_management.entities import (
     EvidenceReference,
     ImpactAssessment,
     ImpactFinding,
+    RollbackPlan,
+    RolloutPlan,
+    TransformationPlan,
     ValidationPlan,
     ValidationRequirement,
     ValidationResult,
@@ -38,7 +41,10 @@ from .models import (
     ChangeObservationModel,
     ChangeOutcomeModel,
     ChangeProposalModel,
+    ChangeRollbackPlanModel,
+    ChangeRolloutPlanModel,
     ChangeSetModel,
+    ChangeTransformationPlanModel,
     ChangeValidationPlanModel,
 )
 
@@ -152,6 +158,36 @@ class SqlAlchemyGovernedChangeRepository:
         value = await self._session.get(ChangeSetModel, value_id)
         return self._change_set(value) if value else None
 
+    async def add_transformation_plan(self, value: TransformationPlan) -> None:
+        self._session.add(
+            ChangeTransformationPlanModel(
+                id=value.id,
+                proposal_id=value.proposal_id,
+                change_set_id=value.change_set_id,
+                version=value.version,
+                strategy=value.strategy,
+                steps=list(value.steps),
+                prerequisites=list(value.prerequisites),
+                created_by=value.created_by,
+                created_at=value.created_at,
+                content_hash=value.content_hash,
+            )
+        )
+        for evidence in value.evidence:
+            self._add_evidence(value.proposal_id, "transformation_plan", value.id, evidence)
+
+    async def get_transformation_plan(
+        self, value_id: uuid.UUID
+    ) -> TransformationPlan | None:
+        value = await self._session.get(ChangeTransformationPlanModel, value_id)
+        return await self._transformation_plan(value) if value else None
+
+    async def list_transformation_plans(
+        self, proposal_id: uuid.UUID
+    ) -> tuple[TransformationPlan, ...]:
+        models = await self._models(ChangeTransformationPlanModel, proposal_id)
+        return tuple([await self._transformation_plan(item) for item in models])
+
     async def add_impact_assessment(self, value: ImpactAssessment) -> None:
         self._session.add(
             ChangeImpactAssessmentModel(
@@ -218,6 +254,54 @@ class SqlAlchemyGovernedChangeRepository:
     async def get_validation_plan(self, value_id: uuid.UUID) -> ValidationPlan | None:
         value = await self._session.get(ChangeValidationPlanModel, value_id)
         return self._plan(value) if value else None
+
+    async def add_rollout_plan(self, value: RolloutPlan) -> None:
+        self._session.add(
+            ChangeRolloutPlanModel(
+                id=value.id,
+                proposal_id=value.proposal_id,
+                transformation_plan_id=value.transformation_plan_id,
+                validation_plan_id=value.validation_plan_id,
+                version=value.version,
+                stages=list(value.stages),
+                eligible_scope=value.eligible_scope,
+                excluded_scope=value.excluded_scope,
+                success_criteria=list(value.success_criteria),
+                rollback_criteria=list(value.rollback_criteria),
+                created_by=value.created_by,
+                created_at=value.created_at,
+                content_hash=value.content_hash,
+            )
+        )
+
+    async def list_rollout_plans(self, proposal_id: uuid.UUID) -> tuple[RolloutPlan, ...]:
+        return tuple(
+            self._rollout_plan(item)
+            for item in await self._models(ChangeRolloutPlanModel, proposal_id)
+        )
+
+    async def add_rollback_plan(self, value: RollbackPlan) -> None:
+        self._session.add(
+            ChangeRollbackPlanModel(
+                id=value.id,
+                proposal_id=value.proposal_id,
+                transformation_plan_id=value.transformation_plan_id,
+                validation_plan_id=value.validation_plan_id,
+                version=value.version,
+                rollback_steps=list(value.rollback_steps),
+                trigger_criteria=list(value.trigger_criteria),
+                recovery_time_objective_seconds=value.recovery_time_objective_seconds,
+                created_by=value.created_by,
+                created_at=value.created_at,
+                content_hash=value.content_hash,
+            )
+        )
+        for evidence in value.evidence:
+            self._add_evidence(value.proposal_id, "rollback_plan", value.id, evidence)
+
+    async def list_rollback_plans(self, proposal_id: uuid.UUID) -> tuple[RollbackPlan, ...]:
+        models = await self._models(ChangeRollbackPlanModel, proposal_id)
+        return tuple([await self._rollback_plan(item) for item in models])
 
     async def append_decision(self, value: ChangeDecision) -> None:
         results: list[dict[str, Any]] = []
@@ -323,6 +407,16 @@ class SqlAlchemyGovernedChangeRepository:
                     "content_hash": change_set.content_hash,
                 }
             )
+        for plan in await self.list_transformation_plans(proposal_id):
+            records.append(
+                {
+                    "type": "transformation_plan",
+                    "id": str(plan.id),
+                    "at": plan.created_at,
+                    "version": plan.version,
+                    "content_hash": plan.content_hash,
+                }
+            )
         for assessment in await self.list_impact_assessments(proposal_id):
             records.append(
                 {
@@ -338,6 +432,26 @@ class SqlAlchemyGovernedChangeRepository:
             records.append(
                 {
                     "type": "validation_plan",
+                    "id": str(plan.id),
+                    "at": plan.created_at,
+                    "version": plan.version,
+                    "content_hash": plan.content_hash,
+                }
+            )
+        for plan in await self.list_rollout_plans(proposal_id):
+            records.append(
+                {
+                    "type": "rollout_plan",
+                    "id": str(plan.id),
+                    "at": plan.created_at,
+                    "version": plan.version,
+                    "content_hash": plan.content_hash,
+                }
+            )
+        for plan in await self.list_rollback_plans(proposal_id):
+            records.append(
+                {
+                    "type": "rollback_plan",
                     "id": str(plan.id),
                     "at": plan.created_at,
                     "version": plan.version,
@@ -438,6 +552,23 @@ class SqlAlchemyGovernedChangeRepository:
             content_hash=value.content_hash,
         )
 
+    async def _transformation_plan(
+        self, value: ChangeTransformationPlanModel
+    ) -> TransformationPlan:
+        return TransformationPlan(
+            id=value.id,
+            proposal_id=value.proposal_id,
+            change_set_id=value.change_set_id,
+            version=value.version,
+            strategy=value.strategy,
+            steps=tuple(value.steps),
+            prerequisites=tuple(value.prerequisites),
+            evidence=await self._evidence("transformation_plan", value.id),
+            created_by=value.created_by,
+            created_at=value.created_at,
+            content_hash=value.content_hash,
+        )
+
     @staticmethod
     def _assessment(value: ChangeImpactAssessmentModel) -> ImpactAssessment:
         return ImpactAssessment(
@@ -479,6 +610,40 @@ class SqlAlchemyGovernedChangeRepository:
             version=value.version,
             requirements=tuple(ValidationRequirement(**item) for item in value.requirements),
             rollback_evidence_required=value.rollback_evidence_required,
+            created_by=value.created_by,
+            created_at=value.created_at,
+            content_hash=value.content_hash,
+        )
+
+    @staticmethod
+    def _rollout_plan(value: ChangeRolloutPlanModel) -> RolloutPlan:
+        return RolloutPlan(
+            id=value.id,
+            proposal_id=value.proposal_id,
+            transformation_plan_id=value.transformation_plan_id,
+            validation_plan_id=value.validation_plan_id,
+            version=value.version,
+            stages=tuple(value.stages),
+            eligible_scope=value.eligible_scope,
+            excluded_scope=value.excluded_scope,
+            success_criteria=tuple(value.success_criteria),
+            rollback_criteria=tuple(value.rollback_criteria),
+            created_by=value.created_by,
+            created_at=value.created_at,
+            content_hash=value.content_hash,
+        )
+
+    async def _rollback_plan(self, value: ChangeRollbackPlanModel) -> RollbackPlan:
+        return RollbackPlan(
+            id=value.id,
+            proposal_id=value.proposal_id,
+            transformation_plan_id=value.transformation_plan_id,
+            validation_plan_id=value.validation_plan_id,
+            version=value.version,
+            rollback_steps=tuple(value.rollback_steps),
+            trigger_criteria=tuple(value.trigger_criteria),
+            recovery_time_objective_seconds=value.recovery_time_objective_seconds,
+            evidence=await self._evidence("rollback_plan", value.id),
             created_by=value.created_by,
             created_at=value.created_at,
             content_hash=value.content_hash,

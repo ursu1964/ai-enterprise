@@ -12,12 +12,18 @@ from ai_enterprise.api.change_management_schemas import (
     ChangeSetResponse,
     ChangeTimelineResponse,
     ImpactAssessmentResponse,
+    RollbackPlanResponse,
+    RolloutPlanResponse,
+    TransformationPlanResponse,
     ValidationPlanResponse,
 )
 from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
 from ai_enterprise.application.change_management.dto import (
     CreateChangeProposal,
     CreateChangeSet,
+    CreateRollbackPlan,
+    CreateRolloutPlan,
+    CreateTransformationPlan,
     CreateValidationPlan,
     RecordChangeDecision,
     RecordChangeObservation,
@@ -101,6 +107,26 @@ async def add_change_set(
     return ChangeSetResponse.model_validate(asdict(value))
 
 
+@router.post(
+    "/{proposal_id}/transformation-plans",
+    response_model=TransformationPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_transformation_plan(
+    proposal_id: uuid.UUID,
+    request: CreateTransformationPlan,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> TransformationPlanResponse:
+    try:
+        value = await _service(session).create_transformation_plan(
+            proposal_id, request, governed_change_actor(actor, "change.plan")
+        )
+    except (GovernedChangeError, GovernedChangeNotFound) as exc:
+        raise _translate(exc) from exc
+    return TransformationPlanResponse.model_validate(asdict(value))
+
+
 @router.post("/{proposal_id}/submit", response_model=ChangeProposalResponse)
 async def submit_proposal(
     proposal_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
@@ -154,6 +180,46 @@ async def create_validation_plan(
     except (GovernedChangeError, GovernedChangeNotFound) as exc:
         raise _translate(exc) from exc
     return ValidationPlanResponse.model_validate(asdict(value))
+
+
+@router.post(
+    "/{proposal_id}/rollout-plans",
+    response_model=RolloutPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_rollout_plan(
+    proposal_id: uuid.UUID,
+    request: CreateRolloutPlan,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> RolloutPlanResponse:
+    try:
+        value = await _service(session).create_rollout_plan(
+            proposal_id, request, governed_change_actor(actor, "change.plan")
+        )
+    except (GovernedChangeError, GovernedChangeNotFound) as exc:
+        raise _translate(exc) from exc
+    return RolloutPlanResponse.model_validate(asdict(value))
+
+
+@router.post(
+    "/{proposal_id}/rollback-plans",
+    response_model=RollbackPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_rollback_plan(
+    proposal_id: uuid.UUID,
+    request: CreateRollbackPlan,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> RollbackPlanResponse:
+    try:
+        value = await _service(session).create_rollback_plan(
+            proposal_id, request, governed_change_actor(actor, "change.plan")
+        )
+    except (GovernedChangeError, GovernedChangeNotFound) as exc:
+        raise _translate(exc) from exc
+    return RollbackPlanResponse.model_validate(asdict(value))
 
 
 @router.post(

@@ -50,6 +50,14 @@ class CreateChangeSet(BaseModel):
     operations: tuple[ChangeOperationInput, ...] = Field(min_length=1)
 
 
+class CreateTransformationPlan(BaseModel):
+    change_set_id: UUID
+    strategy: str = Field(min_length=3, max_length=5000)
+    steps: tuple[str, ...] = Field(min_length=1)
+    prerequisites: tuple[str, ...] = Field(min_length=1)
+    evidence: tuple[EvidenceReferenceInput, ...] = Field(min_length=1)
+
+
 class ImpactFindingInput(BaseModel):
     code: str = Field(min_length=1, max_length=100)
     dimension: str = Field(min_length=1, max_length=100)
@@ -82,6 +90,25 @@ class CreateValidationPlan(BaseModel):
     impact_assessment_id: UUID
     requirements: tuple[ValidationRequirementInput, ...] = Field(min_length=1)
     rollback_evidence_required: bool = True
+
+
+class CreateRolloutPlan(BaseModel):
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    stages: tuple[str, ...] = Field(min_length=2)
+    eligible_scope: dict[str, Any] = Field(default_factory=dict)
+    excluded_scope: dict[str, Any] = Field(default_factory=dict)
+    success_criteria: tuple[str, ...] = Field(min_length=1)
+    rollback_criteria: tuple[str, ...] = Field(min_length=1)
+
+
+class CreateRollbackPlan(BaseModel):
+    transformation_plan_id: UUID
+    validation_plan_id: UUID
+    rollback_steps: tuple[str, ...] = Field(min_length=1)
+    trigger_criteria: tuple[str, ...] = Field(min_length=1)
+    recovery_time_objective_seconds: int = Field(gt=0)
+    evidence: tuple[EvidenceReferenceInput, ...] = Field(min_length=1)
 
 
 class ValidationResultInput(BaseModel):

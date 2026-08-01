@@ -8,6 +8,9 @@ from ai_enterprise.application.change_management.dto import (
     ChangeOperationInput,
     CreateChangeProposal,
     CreateChangeSet,
+    CreateRollbackPlan,
+    CreateRolloutPlan,
+    CreateTransformationPlan,
     CreateValidationPlan,
     EntityReferenceInput,
     EvidenceReferenceInput,
@@ -32,6 +35,9 @@ from ai_enterprise.domain.change_management.entities import (
     ChangeProposal,
     ChangeSet,
     ImpactAssessment,
+    RollbackPlan,
+    RolloutPlan,
+    TransformationPlan,
     ValidationPlan,
 )
 from ai_enterprise.domain.change_management.enums import (
@@ -46,6 +52,7 @@ from ai_enterprise.domain.change_management.exceptions import (
     ActivationNotSupported,
     ChangeEvidenceRequired,
     ChangeObservationRequired,
+    ChangePlanningRequired,
     ChangeRecordImmutable,
     ChangeRiskUnderstated,
     ChangeSelfApprovalForbidden,
@@ -64,8 +71,11 @@ class MemoryRepository:
     def __init__(self) -> None:
         self.proposals: dict[UUID, ChangeProposal] = {}
         self.change_sets: dict[UUID, ChangeSet] = {}
+        self.transformation_plans: dict[UUID, TransformationPlan] = {}
         self.assessments: dict[UUID, ImpactAssessment] = {}
         self.plans: dict[UUID, ValidationPlan] = {}
+        self.rollout_plans: dict[UUID, RolloutPlan] = {}
+        self.rollback_plans: dict[UUID, RollbackPlan] = {}
         self.decisions: list[ChangeDecision] = []
         self.observations: dict[UUID, ChangeObservation] = {}
         self.outcomes: list[ChangeOutcome] = []
@@ -89,6 +99,19 @@ class MemoryRepository:
     async def get_change_set(self, value_id: UUID) -> ChangeSet | None:
         return self.change_sets.get(value_id)
 
+    async def add_transformation_plan(self, value: TransformationPlan) -> None:
+        self.transformation_plans[value.id] = value
+
+    async def get_transformation_plan(self, value_id: UUID) -> TransformationPlan | None:
+        return self.transformation_plans.get(value_id)
+
+    async def list_transformation_plans(
+        self, proposal_id: UUID
+    ) -> tuple[TransformationPlan, ...]:
+        return tuple(
+            item for item in self.transformation_plans.values() if item.proposal_id == proposal_id
+        )
+
     async def add_impact_assessment(self, value: ImpactAssessment) -> None:
         self.assessments[value.id] = value
 
@@ -106,6 +129,22 @@ class MemoryRepository:
 
     async def get_validation_plan(self, value_id: UUID) -> ValidationPlan | None:
         return self.plans.get(value_id)
+
+    async def add_rollout_plan(self, value: RolloutPlan) -> None:
+        self.rollout_plans[value.id] = value
+
+    async def list_rollout_plans(self, proposal_id: UUID) -> tuple[RolloutPlan, ...]:
+        return tuple(
+            item for item in self.rollout_plans.values() if item.proposal_id == proposal_id
+        )
+
+    async def add_rollback_plan(self, value: RollbackPlan) -> None:
+        self.rollback_plans[value.id] = value
+
+    async def list_rollback_plans(self, proposal_id: UUID) -> tuple[RollbackPlan, ...]:
+        return tuple(
+            item for item in self.rollback_plans.values() if item.proposal_id == proposal_id
+        )
 
     async def append_decision(self, value: ChangeDecision) -> None:
         self.decisions.append(value)
@@ -215,6 +254,47 @@ def impact_request(change_set_id: UUID, *, complete: bool = True) -> RecordImpac
     )
 
 
+def transformation_request(change_set_id: UUID) -> CreateTransformationPlan:
+    return CreateTransformationPlan(
+        change_set_id=change_set_id,
+        strategy="Create an immutable candidate and validate before any activation.",
+        steps=("prepare candidate", "verify candidate", "present for decision"),
+        prerequisites=("submitted proposal",),
+        evidence=(
+            EvidenceReferenceInput(
+                artifact_id=uuid4(), content_hash=HASH_A, evidence_type="design_review"
+            ),
+        ),
+    )
+
+
+def rollout_request(transformation_plan_id: UUID, validation_plan_id: UUID) -> CreateRolloutPlan:
+    return CreateRolloutPlan(
+        transformation_plan_id=transformation_plan_id,
+        validation_plan_id=validation_plan_id,
+        stages=("limited scope", "organization scope"),
+        eligible_scope={"organization_ids": ["all"]},
+        excluded_scope={"entities": []},
+        success_criteria=("no policy separation regressions",),
+        rollback_criteria=("any critical policy violation",),
+    )
+
+
+def rollback_request(transformation_plan_id: UUID, validation_plan_id: UUID) -> CreateRollbackPlan:
+    return CreateRollbackPlan(
+        transformation_plan_id=transformation_plan_id,
+        validation_plan_id=validation_plan_id,
+        rollback_steps=("disable candidate reference", "restore previous policy hash"),
+        trigger_criteria=("critical validation failure",),
+        recovery_time_objective_seconds=900,
+        evidence=(
+            EvidenceReferenceInput(
+                artifact_id=uuid4(), content_hash=HASH_B, evidence_type="rollback_rehearsal"
+            ),
+        ),
+    )
+
+
 async def ready_change(
     kernel: tuple[GovernedChangeService, MemoryRepository, MemoryAudit], *, complete: bool = True
 ):
@@ -267,6 +347,96 @@ async def test_change_set_cannot_change_after_submission(kernel) -> None:
     await service.submit(proposal.id, actor("proposer"))
     with pytest.raises(ChangeRecordImmutable):
         await service.add_change_set(proposal.id, set_request(), actor("proposer"))
+
+
+@pytest.mark.asyncio
+async def test_transformation_plan_requires_submitted_change_and_evidence(kernel) -> None:
+    service, _, _ = kernel
+    proposal = await service.create_proposal(proposal_request(), actor("proposer"))
+    change_set = await service.add_change_set(proposal.id, set_request(), actor("proposer"))
+    with pytest.raises(InvalidChangeTransition):
+        await service.create_transformation_plan(
+            proposal.id,
+            transformation_request(change_set.id),
+            actor("planner", "change_planner"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_planning_records_are_hash_bound_and_do_not_activate(kernel) -> None:
+    service, repository, _ = kernel
+    proposal = await service.create_proposal(proposal_request(), actor("proposer"))
+    change_set = await service.add_change_set(proposal.id, set_request(), actor("proposer"))
+    await service.submit(proposal.id, actor("proposer"))
+    transformation = await service.create_transformation_plan(
+        proposal.id,
+        transformation_request(change_set.id),
+        actor("planner", "change_planner"),
+    )
+    assessment = await service.assess_impact(
+        proposal.id, impact_request(change_set.id), actor("assessor")
+    )
+    plan = await service.create_validation_plan(
+        proposal.id,
+        CreateValidationPlan(
+            impact_assessment_id=assessment.id,
+            requirements=(
+                ValidationRequirementInput(
+                    code="policy-separation",
+                    description="Verify implementation and approval remain separate.",
+                ),
+            ),
+        ),
+        actor("validator"),
+    )
+    rollout = await service.create_rollout_plan(
+        proposal.id,
+        rollout_request(transformation.id, plan.id),
+        actor("planner", "change_planner"),
+    )
+    rollback = await service.create_rollback_plan(
+        proposal.id,
+        rollback_request(transformation.id, plan.id),
+        actor("planner", "change_planner"),
+    )
+
+    assert repository.transformation_plans[transformation.id] == transformation
+    assert repository.rollout_plans[rollout.id] == rollout
+    assert repository.rollback_plans[rollback.id] == rollback
+    assert all(
+        len(item.content_hash) == 64 for item in (transformation, rollout, rollback)
+    )
+    assert repository.proposals[proposal.id].status is ChangeStatus.READY_FOR_DECISION
+    assert repository.decisions == []
+    assert assessment.proposal_id == proposal.id
+
+
+@pytest.mark.asyncio
+async def test_rollout_and_rollback_require_decision_ready_validation(kernel) -> None:
+    service, _, proposal, change_set, _, _ = await ready_change(kernel)
+    not_ready = proposal_request().model_copy(update={"organization_id": uuid4()})
+    draft = await service.create_proposal(not_ready, actor("proposer"))
+    draft_set = await service.add_change_set(draft.id, set_request(), actor("proposer"))
+    await service.submit(draft.id, actor("proposer"))
+    transformation = await service.create_transformation_plan(
+        draft.id,
+        transformation_request(draft_set.id),
+        actor("planner", "change_planner"),
+    )
+
+    with pytest.raises((InvalidChangeTransition, ChangePlanningRequired)):
+        await service.create_rollout_plan(
+            draft.id,
+            rollout_request(transformation.id, uuid4()),
+            actor("planner", "change_planner"),
+        )
+    with pytest.raises((InvalidChangeTransition, ChangePlanningRequired)):
+        await service.create_rollback_plan(
+            draft.id,
+            rollback_request(transformation.id, uuid4()),
+            actor("planner", "change_planner"),
+        )
+    assert change_set.proposal_id == proposal.id
 
 
 @pytest.mark.asyncio

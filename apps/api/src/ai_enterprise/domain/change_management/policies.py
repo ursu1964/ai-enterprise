@@ -6,12 +6,16 @@ from .entities import (
     ChangeProposal,
     EntityReference,
     ImpactAssessment,
+    RollbackPlan,
+    RolloutPlan,
+    TransformationPlan,
     ValidationPlan,
 )
 from .enums import ChangeCategory, ChangeDecisionType, ChangeRisk, ChangeStatus
 from .exceptions import (
     ChangeEvidenceRequired,
     ChangeObservationRequired,
+    ChangePlanningRequired,
     ChangeRiskUnderstated,
     ChangeSelfApprovalForbidden,
     IndependentAssessmentRequired,
@@ -93,6 +97,58 @@ class ChangeSubmissionPolicy:
             raise ChangeEvidenceRequired("A material change requires affected entities")
         if change_set_count < 1:
             raise ChangeEvidenceRequired("A material change requires an immutable change set")
+
+
+class ChangePlanningPolicy:
+    def require_transformation_ready(
+        self, *, proposal: ChangeProposal, change_set_count: int
+    ) -> None:
+        if proposal.status is not ChangeStatus.SUBMITTED:
+            raise InvalidChangeTransition("Transformation plans require a submitted change")
+        if change_set_count < 1:
+            raise ChangePlanningRequired("Transformation plans require a change set")
+
+    def require_transformation_complete(self, plan: TransformationPlan) -> None:
+        if not plan.strategy.strip():
+            raise ChangePlanningRequired("Transformation plan requires a strategy")
+        if not plan.steps:
+            raise ChangePlanningRequired("Transformation plan requires ordered steps")
+        if not plan.prerequisites:
+            raise ChangePlanningRequired("Transformation plan requires prerequisites")
+        if not plan.evidence:
+            raise ChangePlanningRequired("Transformation plan requires evidence")
+
+    def require_rollout_ready(
+        self,
+        *,
+        proposal: ChangeProposal,
+        transformation_plan: TransformationPlan | None,
+        validation_plan: ValidationPlan | None,
+    ) -> None:
+        if proposal.status is not ChangeStatus.READY_FOR_DECISION:
+            raise InvalidChangeTransition("Rollout planning requires decision-ready validation")
+        if transformation_plan is None or validation_plan is None:
+            raise ChangePlanningRequired(
+                "Rollout planning requires transformation and validation plans"
+            )
+
+    def require_rollout_complete(self, plan: RolloutPlan) -> None:
+        if len(plan.stages) < 2:
+            raise ChangePlanningRequired("Rollout plan requires progressive stages")
+        if not plan.success_criteria:
+            raise ChangePlanningRequired("Rollout plan requires success criteria")
+        if not plan.rollback_criteria:
+            raise ChangePlanningRequired("Rollout plan requires rollback criteria")
+
+    def require_rollback_complete(self, plan: RollbackPlan) -> None:
+        if not plan.rollback_steps:
+            raise ChangePlanningRequired("Rollback plan requires rollback steps")
+        if not plan.trigger_criteria:
+            raise ChangePlanningRequired("Rollback plan requires trigger criteria")
+        if plan.recovery_time_objective_seconds <= 0:
+            raise ChangePlanningRequired("Rollback plan requires a positive recovery objective")
+        if not plan.evidence:
+            raise ChangePlanningRequired("Rollback plan requires evidence")
 
 
 class ChangeSeparationPolicy:

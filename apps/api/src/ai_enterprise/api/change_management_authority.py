@@ -8,11 +8,13 @@ _CAPABILITY_ROLES = {
     "change.submit": {"change_proposer"},
     "change.assess": {"change_assessor"},
     "change.validate": {"change_validator"},
+    "change.plan": {"change_planner", "change_validator", "change_approver"},
     "change.decide": {"change_approver"},
     "change.observe": {"change_observer", "change_approver"},
     "change.outcome": {"change_approver"},
     "change.read": {
         "change_proposer",
+        "change_planner",
         "change_assessor",
         "change_validator",
         "change_approver",
