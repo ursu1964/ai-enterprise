@@ -42,19 +42,14 @@ from ai_enterprise.infrastructure.performance.models import (
 )
 
 router = APIRouter(prefix="/performance", tags=["performance-governance"])
-BOARD_ROLES = {"certification-board", "platform-admin", "platform_administrator"}
-LEARNING_ROLES = {"organizational-governor", "platform-admin", "platform_administrator"}
-ADMIN_ROLES = {"platform-admin", "platform_administrator"}
-READ_ROLES = ADMIN_ROLES | {"performance-auditor", "certification-board", "organizational-governor"}
-ENGINE_ROLES = ADMIN_ROLES | {"performance-engine"}
 
 
 def _error(exc: PerformanceGovernanceError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
 
 
-def _require_human(actor: Actor, roles: set[str]) -> None:
-    if actor.actor_type != "human" or actor.role not in roles:
+def _require_human(actor: Actor) -> None:
+    if actor.actor_type != "human":
         raise HTTPException(403, "Explicit authorized human governance decision required")
 
 
@@ -65,11 +60,6 @@ def _require_org(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
         raise HTTPException(
             403, "Organization-scoped performance authority required"
         ) from exc
-
-
-def _require_role(actor: Actor, roles: set[str]) -> None:
-    if actor.role not in roles:
-        raise HTTPException(403, "Performance governance authority required")
 
 
 async def _audit_read(
@@ -93,12 +83,6 @@ async def _audit_read(
 async def collect_evidence(
     request: EvidenceCollectRequest, session: SessionDependency, actor: ActorDependency
 ) -> EvidenceResponse:
-    if actor.actor_type != "service" and actor.role not in {
-        "platform-admin",
-        "platform_administrator",
-        "performance-collector",
-    }:
-        raise HTTPException(403, "Governed evidence collector required")
     _require_org(actor, request.organization_id, "write")
     try:
         row = await PerformanceIntegrationService(session).collect_evidence(**request.model_dump())
@@ -117,7 +101,6 @@ async def list_evidence(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[EvidenceResponse]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     query = select(PerformanceEvidenceModel).where(
         PerformanceEvidenceModel.organization_id == organization_id
@@ -146,7 +129,6 @@ async def list_evidence(
 async def derive_metric(
     request: MetricDeriveRequest, session: SessionDependency, actor: ActorDependency
 ) -> MetricResponse:
-    _require_role(actor, ENGINE_ROLES)
     _require_org(actor, request.organization_id, "write")
     try:
         row = await PerformanceIntegrationService(session).derive_metric(
@@ -167,7 +149,6 @@ async def list_metrics(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[MetricResponse]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     query = select(PerformanceMetricModel).where(
         PerformanceMetricModel.organization_id == organization_id
@@ -209,7 +190,6 @@ async def assignment_quality(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[dict[str, Any]]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     rows = list(
         (
@@ -246,7 +226,6 @@ async def list_trends(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[dict[str, Any]]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     rows = list(
         (
@@ -287,7 +266,6 @@ async def list_trends(
 async def recommend_capability(
     request: RecommendationRequest, session: SessionDependency, actor: ActorDependency
 ) -> RecommendationResponse:
-    _require_role(actor, ENGINE_ROLES)
     _require_org(actor, request.organization_id, "write")
     try:
         row = await PerformanceIntegrationService(session).create_recommendation(
@@ -308,7 +286,7 @@ async def decide_capability(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> CertificationResponse | None:
-    _require_human(actor, BOARD_ROLES)
+    _require_human(actor)
     recommendation = await session.scalar(
         select(CapabilityRecommendationModel)
         .where(CapabilityRecommendationModel.id == recommendation_id)
@@ -340,7 +318,6 @@ async def list_certifications(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[CertificationResponse]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     query = select(CapabilityCertificationModel).where(
         CapabilityCertificationModel.organization_id == organization_id
@@ -362,7 +339,6 @@ async def list_certifications(
 async def create_learning_proposal(
     request: LearningProposalRequest, session: SessionDependency, actor: ActorDependency
 ) -> LearningProposalResponse:
-    _require_role(actor, ENGINE_ROLES)
     _require_org(actor, request.organization_id, "write")
     try:
         row = await PerformanceIntegrationService(session).create_learning_proposal(
@@ -380,7 +356,7 @@ async def review_learning_proposal(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> LearningProposalResponse:
-    _require_human(actor, LEARNING_ROLES)
+    _require_human(actor)
     proposal = await session.scalar(
         select(LearningProposalModel)
         .where(LearningProposalModel.id == proposal_id)
@@ -409,7 +385,6 @@ async def list_learning_proposals(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[LearningProposalResponse]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     rows = list(
         (
@@ -431,7 +406,6 @@ async def list_learning_proposals(
 async def reports(
     session: SessionDependency, actor: ActorDependency, organization_id: uuid.UUID
 ) -> dict[str, int | str]:
-    _require_role(actor, READ_ROLES)
     _require_org(actor, organization_id, "read")
     evidence = list(
         (

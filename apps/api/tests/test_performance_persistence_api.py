@@ -276,10 +276,11 @@ async def test_metric_recommendation_and_human_certificate_preserve_evidence_lin
 def test_agents_cannot_certify_or_approve_learning() -> None:
     agent = Actor("agent-1", "agent", "certification-board")
     with pytest.raises(HTTPException, match="human governance"):
-        _require_human(agent, {"certification-board"})
+        _require_human(agent)
     service = Actor("service-1", "service", "certification-board")
     with pytest.raises(HTTPException, match="human governance"):
-        _require_human(service, {"certification-board"})
+        _require_human(service)
+    _require_human(Actor("board", "human", "engineer"))
 
 
 def test_cross_organization_access_requires_scoped_capability() -> None:
@@ -290,6 +291,9 @@ def test_cross_organization_access_requires_scoped_capability() -> None:
     admin_without_scope = Actor("admin", "human", "platform-admin")
     with pytest.raises(HTTPException, match="Organization-scoped"):
         _require_org(admin_without_scope, organization_id, "read")
+    collector_without_scope = Actor("collector", "service", "performance-engine")
+    with pytest.raises(HTTPException, match="Organization-scoped"):
+        _require_org(collector_without_scope, organization_id, "write")
     scoped = Actor(
         "auditor",
         "human",
