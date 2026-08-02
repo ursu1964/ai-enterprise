@@ -10,7 +10,12 @@ from ai_enterprise.api.routes.projects import get_project
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.domain.hashing import canonical_json, hash_json
-from ai_enterprise.infrastructure.database.models import ArtifactModel, ProjectModel
+from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
+from ai_enterprise.infrastructure.database.models import (
+    ArtifactModel,
+    AuditEventModel,
+    ProjectModel,
+)
 from ai_enterprise.infrastructure.repositories.preparation import prepare_project_repository
 
 
@@ -33,6 +38,10 @@ class WriteSession:
 
     def add_all(self, rows: list[Any]) -> None:
         self.added.extend(rows)
+
+    async def scalar(self, statement: object) -> Any:
+        chain_records = [row for row in self.added if isinstance(row, AuditChainRecordModel)]
+        return chain_records[-1] if chain_records else None
 
     async def flush(self) -> None:
         self.flushed = True
@@ -121,6 +130,8 @@ async def test_create_project_persists_uploaded_manifest_content(tmp_path) -> No
     )
 
     manifest_artifact = next(row for row in session.added if isinstance(row, ArtifactModel))
+    audit_event = next(row for row in session.added if isinstance(row, AuditEventModel))
+    chain_record = next(row for row in session.added if isinstance(row, AuditChainRecordModel))
 
     assert session.flushed and session.committed
     assert project.manifest["client"] == "Example Client"
@@ -133,6 +144,11 @@ async def test_create_project_persists_uploaded_manifest_content(tmp_path) -> No
     assert project.manifest["repository_preparation"]["head_ready"] is True
     assert manifest_artifact.content == canonical_json(project.manifest)
     assert manifest_artifact.content_hash == hash_json(project.manifest)
+    assert audit_event.event_type == "project.created"
+    assert audit_event.payload["audit_chain"]["sequence"] == 1
+    assert chain_record.stream_id == f"project:{project.id}"
+    assert chain_record.payload["event_type"] == "project.created"
+    assert chain_record.payload["payload"]["manifest_hash"] == project.manifest_hash
 
 
 def test_prepare_project_repository_initializes_git_head(tmp_path) -> None:

@@ -8,10 +8,25 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.audit import export as export_audit
+from ai_enterprise.api.routes.audit import (
+    export as export_audit,
+)
+from ai_enterprise.api.routes.audit import (
+    integrity as audit_integrity,
+)
+from ai_enterprise.api.routes.audit import (
+    provenance as audit_provenance,
+)
+from ai_enterprise.api.routes.audit import (
+    summary as audit_summary,
+)
+from ai_enterprise.api.routes.audit import (
+    timeline as audit_timeline,
+)
 from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.audit.exceptions import InvalidAuditCursorError
 from ai_enterprise.domain.audit.policies import AuditCursor, sanitize_payload
+from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.infrastructure.audit.audit_exporter import AuditExporter
 from ai_enterprise.infrastructure.audit.event_hasher import (
     canonical_chain_record_hash,
@@ -19,6 +34,8 @@ from ai_enterprise.infrastructure.audit.event_hasher import (
     verify_chain_records,
     verify_hash_chain,
 )
+from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
+from ai_enterprise.infrastructure.database.models import ProjectModel
 
 
 def test_cursor_round_trip_and_invalid_value() -> None:
@@ -156,3 +173,95 @@ async def test_audit_export_requires_project_scoped_capability() -> None:
         await export_audit(project_id, object(), denied)  # type: ignore[arg-type]
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "capability"),
+    [
+        (audit_timeline, "audit.read"),
+        (audit_summary, "audit.read"),
+        (audit_provenance, "audit.read"),
+        (audit_integrity, "audit.read"),
+        (export_audit, "audit.export"),
+    ],
+)
+async def test_sensitive_audit_reads_reject_wrong_project_scope(route, capability: str) -> None:
+    project_id = uuid4()
+    denied = Actor(
+        "auditor",
+        "human",
+        "auditor",
+        frozenset({capability}),
+        scopes=frozenset({f"project:{uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await route(project_id, object(), denied)  # type: ignore[misc, arg-type]
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_audit_integrity_route_reports_tampered_chain_record() -> None:
+    project_id = uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Audit Integrity Project",
+        description="Project used for route-level audit integrity verification.",
+        repository_path="/tmp/audit-integrity",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+    payload = {
+        "audit_event_id": str(uuid4()),
+        "project_id": str(project_id),
+        "event_type": "project.created",
+        "actor_type": "human",
+        "actor_id": "operator",
+        "payload": {"status": "created"},
+    }
+    record = AuditChainRecordModel(
+        id=uuid4(),
+        stream_id=f"project:{project_id}",
+        sequence=1,
+        event_id=uuid4(),
+        previous_hash=None,
+        record_hash=canonical_chain_record_hash(
+            stream_id=f"project:{project_id}",
+            sequence=1,
+            previous_hash=None,
+            payload=payload,
+        ),
+        payload=payload | {"payload": {"status": "tampered"}},
+    )
+
+    class Result:
+        def scalars(self) -> "Result":
+            return self
+
+        def all(self) -> list[AuditChainRecordModel]:
+            return [record]
+
+    class Session:
+        async def get(self, model: type, identity: object) -> object | None:
+            return project
+
+        async def execute(self, statement: object) -> Result:
+            return Result()
+
+    actor = Actor(
+        "auditor",
+        "human",
+        "auditor",
+        frozenset({"audit.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    response = await audit_integrity(project_id, Session(), actor)  # type: ignore[arg-type]
+
+    assert response.integrity_status == "failed"
+    assert response.failures[0]["reason"] == "record_hash_mismatch"

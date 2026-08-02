@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.requirements_revision.service import (
     RequirementsRevisionService,
 )
@@ -132,8 +133,15 @@ class ProjectWorkflowService:
             content_hash=manifest_hash,
         )
 
-        audit_event = AuditEventModel(
-            id=uuid.uuid4(),
+        self._session.add(project)
+        await self._session.flush()
+
+        self._session.add_all(
+            [
+                manifest_artifact,
+            ]
+        )
+        await AuditWriter(self._session).append_project_event(
             project_id=project_id,
             event_type="project.created",
             actor_type="human",
@@ -142,16 +150,6 @@ class ProjectWorkflowService:
                 "project_id": str(project_id),
                 "manifest_hash": manifest_hash,
             },
-        )
-
-        self._session.add(project)
-        await self._session.flush()
-
-        self._session.add_all(
-            [
-                manifest_artifact,
-                audit_event,
-            ]
         )
 
         await self._session.commit()
