@@ -1,6 +1,7 @@
 # ProjectRAG Deep Analysis and Improvement Plan
 
 Date: 2026-08-01  
+Last updated: 2026-08-02  
 Repository analyzed: `/home/user/projects/project-rag`  
 Checkpoint branch: `ai-enterprise-analysis-checkpoint`  
 Checkpoint commit: `4e9870bdd69d66331cc29a916fe96cfe133cb3cc`  
@@ -10,7 +11,7 @@ Requirements artifact currently pending: `b72a4c22-7c2b-4991-8ad5-faddcb4ff0d5`
 
 ## Scope
 
-This is a read-only analysis of the real ProjectRAG checkpoint. No implementation changes were made in `/home/user/projects/project-rag`.
+This began as a read-only analysis of the real ProjectRAG checkpoint. On 2026-08-02, Phase 1 readiness-profile work was implemented in `/home/user/projects/project-rag` and verified.
 
 The requested analysis covers code structure, checkpoint scope, tests, runtime modules, AIOS execution modules, NORA tools, security modules, execution risks, missing tests, expected business effect, verification commands, risk level, and rollback path.
 
@@ -26,6 +27,7 @@ git -C /home/user/projects/project-rag ls-tree -d --name-only HEAD
 python -m pytest -q tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_voice_eval.py tests/unit/test_nora_agent_dashboard.py tests/unit/test_nora_confirmation_contract.py tests/unit/test_nora_reasoning_style.py tests/unit/test_nora_voice_e2e.py tests/unit/test_nora_voice_memory_policy.py tests/unit/test_runtime_symbol_integrity.py
 python -m pytest -q tests/unit/test_aios_execution_controller.py tests/unit/test_aios_execution_executor.py tests/unit/test_aios_execution_loop.py tests/unit/test_aios_execution_plan_runner.py
 python -m apps.cli.main ax-status --format json --strict
+python -m apps.cli.main ax-status --profile release --format json --strict
 python -m apps.cli.main ax-status --probe-health --format json --strict
 gitleaks detect --source /home/user/projects/project-rag --config /home/user/projects/project-rag/.gitleaks.toml --no-banner
 git -C /home/user/projects/project-rag status --short
@@ -40,6 +42,10 @@ ax-status ready: true
 unavailable capabilities: lint.execute
 gitleaks: command not found
 project-rag git status: clean
+2026-08-02 update: status tests 10 passed, controller/executor loop tests 41 passed, ruff check passed, local and release readiness both true in the current environment.
+2026-08-02 update: `scripts/scan_secrets.py` now wraps Gitleaks when available and falls back to a built-in tracked-file scanner with clear release-mode failure via `--require-gitleaks`.
+2026-08-02 update: Makefile aliases now expose `make secret-scan` for local fallback scanning and `make secret-scan-release` for release scans that require Gitleaks.
+2026-08-02 update: `TenantContext` now requires an explicit `tenant_id`; API/job/agent production boundary resolvers reject missing tenants; tenant and authorization test slices passed.
 ```
 
 ## Repository Operating Picture
@@ -82,7 +88,7 @@ Tests: tests/unit/test_aios_execution_*, tests/unit/test_nora_*, test_runtime_sy
 Roadmap artifacts: p1.txt, po.txt
 ```
 
-The checkpoint is stable enough for deeper analysis because the focused tests passed and the worktree is clean. It is not yet release-ready because the release validation surface is incomplete.
+The original checkpoint was stable enough for deeper analysis because the focused tests passed and the worktree was clean. On 2026-08-02, readiness reporting was improved so local execution readiness and release readiness are explicit machine-readable states.
 
 ## Positive Evidence
 
@@ -94,20 +100,32 @@ ax-cycle-full, ax-auto, ax-loop, ax-synth, ax-plan, ax-review,
 ax-ask, ax-serve
 ```
 
-`ax-status --strict` reports the local execution environment as ready for workspace and verification providers:
+`ax-status --strict` now reports selected readiness plus both local and release readiness states:
 
 ```json
 {
   "ready": true,
+  "readiness": {
+    "profile": "local",
+    "local": {
+      "ready": true,
+      "blockers": []
+    },
+    "release": {
+      "ready": true,
+      "blockers": []
+    }
+  },
   "providers": {
     "workspace": "available",
-    "verification": "available"
+    "verification": "available",
+    "lint": "available"
   },
   "tools": {
     "git": "available",
-    "pytest": "available"
-  },
-  "unavailable_capabilities": ["lint.execute"]
+    "pytest": "available",
+    "ruff": "available"
+  }
 }
 ```
 
@@ -123,7 +141,7 @@ Runtime symbol integrity tests passed. This is important because the checkpoint 
 
 ## Core Risks
 
-### R1. Release validation is not complete
+### R1. Release validation clarity
 
 Affected files:
 
@@ -135,38 +153,40 @@ packages/aios_execution/executor.py
 packages/aios_execution/cli.py
 ```
 
-Evidence:
+Status:
 
 ```text
-ax-status reports unavailable_capabilities: ["lint.execute"]
+2026-08-02 implemented: ax-status now supports --profile local|release and reports both local and release readiness in JSON/text output.
 ```
 
 Likely problem:
 
-The local execution loop can run workspace and pytest verification, but the registry still reports lint execution unavailable. Release-profile logic only adds lint/typecheck checks when tools are installed, which is practical locally but not strong enough for a production-grade release gate.
+The original status output could make local execution readiness and release readiness look like one promise. That ambiguity is now reduced, but type-check readiness is still not modeled as a separate gate.
 
 Business effect:
 
-The system can demonstrate autonomous repair, but it cannot yet honestly claim full release-quality engineering validation. A customer-facing demo should say "controlled local repair and verification" unless lint/typecheck capability is made mandatory for release mode.
+Operators can now show "local ready" and "release ready" separately. This makes dashboards safer and gives clients a clearer explanation of what the system can execute today.
 
 Plan:
 
-1. Decide whether `lint.execute` is required for local readiness or only release readiness.
-2. Add a separate `ax-status --release` or `--profile release` output that clearly distinguishes local execution readiness from production/release readiness.
-3. Register lint capability as healthy only when the selected lint tool is installed and command execution is verified.
-4. Add tests for healthy, missing, and degraded lint states.
+1. Done: separate `ax-status --profile local|release`.
+2. Done: JSON includes `readiness.local` and `readiness.release`.
+3. Done: release profile blocks on lint/ruff availability.
+4. Remaining: add type-check capability when the project standardizes a type checker.
 
 Verification:
 
 ```bash
 python -m apps.cli.main ax-status --format json --strict
+python -m apps.cli.main ax-status --profile release --format json --strict
 python -m apps.cli.main ax-status --probe-health --format json --strict
 python -m pytest -q tests/unit/test_aios_execution_status_cli.py
 python -m pytest -q tests/unit/test_aios_execution_controller.py tests/unit/test_aios_execution_executor.py
+python -m ruff check packages/aios_execution/status_cli.py packages/aios_execution/cli.py tests/unit/test_aios_execution_status_cli.py
 ```
 
-Risk level: Medium  
-Rollback path: revert changes to `packages/aios_execution/status_cli.py`, capability registry changes, and new tests.
+Risk level: Low after implementation  
+Rollback path: revert changes to `packages/aios_execution/status_cli.py`, `packages/aios_execution/cli.py`, and `tests/unit/test_aios_execution_status_cli.py`.
 
 ### R2. Autonomy proof still uses local/scripted providers
 
@@ -269,36 +289,40 @@ packages/security/tenant_isolation/guard.py
 app/security/tenant_context.py
 ```
 
-Evidence:
+Status:
 
-`resolve_tenant_context` fails closed when tenant ID is missing unless local fallback is explicitly allowed. That is strong. However, `TenantContext.tenant_id` still has a default value of `"default"`.
+```text
+2026-08-02 implemented: TenantContext.tenant_id no longer defaults to "default"; direct TenantContext() construction now fails validation.
+```
 
 Likely problem:
 
-Callers that instantiate `TenantContext()` directly can bypass resolver fail-closed behavior and silently create a default tenant.
+Before the change, callers that instantiated `TenantContext()` directly could bypass resolver fail-closed behavior and silently create a default tenant.
 
 Business effect:
 
-In a multi-tenant product, silent default tenant behavior can cause data mixing, audit ambiguity, or authorization mistakes.
+In a multi-tenant product, explicit tenant context reduces data mixing risk, audit ambiguity, and authorization mistakes.
 
 Plan:
 
-1. Search for direct `TenantContext()` construction through the indexed project workflow.
-2. Replace unsafe direct construction with resolver functions.
-3. Consider removing the schema default or marking direct construction as test-only.
-4. Add tests that production/API/job/agent paths reject missing tenant IDs.
-5. Add a migration note because removing the default can break legacy callers.
+1. Done: removed the schema default.
+2. Done: added regression coverage that direct `TenantContext()` construction fails.
+3. Done: added API/job/agent production boundary resolver tests for missing tenant IDs.
+4. Done: verified broader tenant and authorization slices.
+5. Remaining: perform a full repository test pass before release because the schema change is intentionally strict.
 
 Verification:
 
 ```bash
-python -m pytest -q tests/unit tests/integration
+python -m pytest -q tests/unit/test_tenant_context_guard.py tests/unit/test_tenant_contract.py tests/unit/test_tenant_isolation.py
+python -m pytest -q tests/unit/test_chunks_repository_tenant_filter.py tests/unit/test_cognitive_cache_tenant.py tests/unit/test_memory_store_tenant.py tests/unit/test_multi_tenant_isolation.py tests/unit/test_tenant_aware_service.py tests/unit/test_tenant_context_guard.py tests/unit/test_tenant_contract.py tests/unit/test_tenant_isolation.py
+python -m pytest -q tests/unit/test_authorize_request_context.py tests/unit/test_central_authorize.py tests/unit/test_content_boundary.py tests/unit/test_delegated_authority.py
 python -m apps.cli.main enterprise-production-check
 python -m apps.cli.main enterprise-doctor
 ```
 
-Risk level: High  
-Rollback path: keep schema default but enforce resolver usage at boundaries; revert only the schema change if legacy callers break.
+Risk level: Medium after focused verification  
+Rollback path: restore `tenant_id: str = Field(default="default", min_length=1)` in `packages/security/tenant_isolation/schema.py` and remove the new strictness tests if a legacy caller cannot be fixed immediately.
 
 ### R5. Security scanner is configured but not locally available
 
@@ -310,36 +334,41 @@ Affected files:
 docs/security/credential_handling.md
 ```
 
-Evidence:
+Status:
 
 ```text
-gitleaks: command not found
+2026-08-02 implemented: python scripts/scan_secrets.py gives a clear fallback when Gitleaks is missing, and python scripts/scan_secrets.py --require-gitleaks fails with exit code 2.
 ```
 
 Likely problem:
 
-CI can scan via GitHub Actions, but local contributors cannot run the documented command unless Gitleaks is installed.
+CI can scan via GitHub Actions. Local contributors now have a stable wrapper, but release operators still need Gitleaks installed for complete Git history scanning.
 
 Business effect:
 
-Secrets may be detected late in CI instead of before commit. This slows delivery and increases exposure risk.
+Secrets are more likely to be detected before commit because the local command now works even without Gitleaks. Release gates can fail explicitly when Gitleaks is missing.
 
 Plan:
 
-1. Add a local wrapper script that checks for Gitleaks and prints installation guidance when missing.
-2. Add a make target or CLI command for secret scanning.
-3. Update documentation to use the wrapper instead of assuming the binary exists.
-4. Expand workflow branches or rely on all PRs plus protected branches.
+1. Done: `scripts/scan_secrets.py` checks for Gitleaks and prints installation guidance when missing.
+2. Done: `--require-gitleaks` makes release scans fail when Gitleaks is unavailable.
+3. Done: credential-handling documentation now points to the wrapper.
+4. Done: added Makefile targets `secret-scan` and `secret-scan-release`.
+5. Remaining: confirm protected-branch workflow coverage.
 
 Verification:
 
 ```bash
-gitleaks detect --source . --config .gitleaks.toml
-python -m pytest -q tests/unit/test_runtime_symbol_integrity.py
+python scripts/scan_secrets.py
+python scripts/scan_secrets.py --require-gitleaks
+make secret-scan
+make secret-scan-release
+python -m pytest -q tests/unit/test_scan_secrets.py
+python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
 ```
 
-Risk level: Medium  
-Rollback path: revert wrapper and docs; CI workflow can remain.
+Risk level: Low after wrapper implementation  
+Rollback path: revert `scripts/scan_secrets.py`, `tests/unit/test_scan_secrets.py`, and `docs/security/credential_handling.md`; CI workflow can remain.
 
 ### R6. NORA voice dashboard is readable but not proven end-to-end in product UI
 
@@ -595,3 +624,54 @@ python -m pytest -q tests/unit/test_aios_execution_controller.py tests/unit/test
 
 If these remain green, start Phase 1.
 
+## Worktree Stabilization Result
+
+Updated: 2026-08-02
+
+ProjectRAG is now clean on branch `ai-enterprise-analysis-checkpoint`.
+
+```bash
+git status --short --branch
+```
+
+Observed result:
+
+```text
+## ai-enterprise-analysis-checkpoint
+```
+
+The dirty work was split into explicit commits:
+
+```text
+bd7331b feat(aios): add release readiness gates
+392ab92 fix(security): require explicit tenant and wrap secret scan
+2204b76 chore(mcp): clean imports and type-safe helpers
+8c4671f docs: archive project rag analysis
+4ea2a92 chore(mcp): satisfy package lint checks
+```
+
+The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
+
+```text
+docs/analysis/project-rag-deep-analysis.md
+```
+
+Final focused verification:
+
+```bash
+python -m ruff check app/mcp packages/aios_execution/status_cli.py packages/aios_execution/cli.py scripts/scan_secrets.py tests/unit/test_scan_secrets.py packages/security/tenant_isolation/schema.py tests/unit/test_tenant_context_guard.py
+python -m pytest -q tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_capabilities.py tests/unit/test_scan_secrets.py tests/unit/test_tenant_context_guard.py tests/unit/test_runtime_symbol_integrity.py tests/unit/test_mcp_planning_step43.py tests/unit/test_context_integrity.py tests/unit/test_nora_capability_registry.py tests/test_nora_runtime.py
+python -m apps.cli.main ax-status --profile release --probe-health --format json --strict
+graphify update .
+```
+
+Observed result:
+
+```text
+ruff: all checks passed
+pytest: 123 passed
+ax-status release readiness: ready=true
+graphify: updated
+```
+
+Phase 3 can now start from a clean ProjectRAG baseline. No commits were pushed.
