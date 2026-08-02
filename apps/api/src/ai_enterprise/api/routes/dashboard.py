@@ -2828,9 +2828,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="phase-graph">
           ${payload.phases.map(phase => `
             <button class="phase-node ${esc(phase.status)} ${phase.name === selectedName ? "selected" : ""}" data-phase="${esc(phase.name)}">
-              <strong>${esc(phase.name.replace(/_/g, " "))}</strong>
+              <strong>${esc(phase.label || phase.name.replace(/_/g, " "))}</strong>
               <span>Status: ${esc(humanStatus(phase.status))}</span>
-              <span>Transitions: ${esc(phase.transition_count)}</span>
+              <span>Confidence: ${esc(phase.confidence || "Not calibrated")}</span>
+              <span>Owner: ${esc(phase.owner_crew || "workflow-engine")}</span>
+              <span>Next: ${esc(phase.next_action || "Continue the guided workflow.")}</span>
             </button>
           `).join("")}
         </div>
@@ -2841,10 +2843,20 @@ DASHBOARD_HTML = r"""<!doctype html>
           byId("phaseDetail").dataset.phase = phase.name;
           byId("phaseDetail").innerHTML = `
             <div class="cards">
-              ${infoCard("Selected Phase", phase.name.replace(/_/g, " "), [
+              ${infoCard("Selected Phase", phase.label || phase.name.replace(/_/g, " "), [
                 ["Status", humanStatus(phase.status)],
-                ["States", phase.states.join(", ") || "No states reported"]
+                ["Confidence", phase.confidence || "Not calibrated"],
+                ["Owner crew", phase.owner_crew || "workflow-engine"],
+                ["Next action", phase.next_action || "Continue the guided workflow."]
               ], statusClass(phase.status))}
+              ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? `${phase.completed_evidence.length} proof item(s)` : "No proof yet", [
+                ["Evidence", (phase.completed_evidence || []).join(", ") || "No evidence recorded for this phase yet."],
+                ["Last transition", phase.last_transition_at || "No transition recorded"]
+              ], phase.completed_evidence && phase.completed_evidence.length ? "ok" : "warn")}
+              ${infoCard("Remaining Work", phase.remaining_work || "Continue the guided workflow.", [
+                ["Current issues", `${(phase.current_issues || []).length}`],
+                ["Reviewed history", `${(phase.historical_issues || []).length}`]
+              ], (phase.current_issues || []).length ? "bad" : "info")}
               ${infoCard("Executed Steps", payload.executed_steps.length ? `${payload.executed_steps.length} done` : "None yet", [
                 ["Steps", payload.executed_steps.join(" -> ") || "No transitions recorded"]
               ], payload.executed_steps.length ? "ok" : "warn")}
@@ -2858,6 +2870,8 @@ DASHBOARD_HTML = r"""<!doctype html>
             </div>
             <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
             <div class="grid" style="margin-top: 10px;">
+              <div class="mini span-6"><strong>Current Issues</strong>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No current issues are attached to this phase.")}</div>
+              <div class="mini span-6"><strong>Reviewed History</strong>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No reviewed historical issues are attached to this phase.")}</div>
               <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "No crew runs are linked to this project phase yet.")}</div>
               <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "No job history is linked to this project yet.")}</div>
               <div class="mini span-6"><strong>Calibration</strong>${listbox(payload.calibration, item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No calibration checks are available yet.")}</div>

@@ -176,6 +176,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No active errors are attached to this project" in response.text
     assert "No records." not in response.text
     assert "Plan approved, execution not started" in response.text
+    assert "Confidence:" in response.text
+    assert "Owner:" in response.text
+    assert "Completed Evidence" in response.text
+    assert "Remaining Work" in response.text
+    assert "Current Issues" in response.text
     assert "/api/v1/operator/jobs" in response.text
     assert "/metrics" in response.text
     assert "/dashboard/graphify" in response.text
@@ -369,6 +374,12 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["phases"][2]["confidence"] == "live workflow"
     assert response["phases"][2]["owner_crew"] == "architecture"
     assert response["phases"][2]["next_action"] == "Approve architecture."
+    assert response["phases"][2]["completed_evidence"] == ["1 workflow transition(s)"]
+    assert response["phases"][2]["remaining_work"] == (
+        "Finish the current gate and record the next transition."
+    )
+    assert response["phases"][2]["current_issues"] == []
+    assert response["phases"][2]["historical_issues"] == []
     assert response["remaining_steps"]
     assert response["crew"][0]["crew_name"] == "architecture"
     assert response["jobs"][0]["job_type"] == "plan_work_package"
