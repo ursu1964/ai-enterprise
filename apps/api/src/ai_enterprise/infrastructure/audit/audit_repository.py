@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.domain.audit.policies import AuditCursor
+from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
@@ -52,6 +53,14 @@ class AuditRepository:
 
     async def get_project(self, project_id: UUID) -> ProjectModel | None:
         return await self._session.get(ProjectModel, project_id)
+
+    async def list_project_chain_records(self, project_id: UUID) -> list[AuditChainRecordModel]:
+        records = await self._session.execute(
+            select(AuditChainRecordModel)
+            .where(AuditChainRecordModel.stream_id == f"project:{project_id}")
+            .order_by(AuditChainRecordModel.sequence.asc())
+        )
+        return list(records.scalars().all())
 
     async def list_timeline(
         self, *, project_id: UUID, limit: int, cursor: AuditCursor | None,

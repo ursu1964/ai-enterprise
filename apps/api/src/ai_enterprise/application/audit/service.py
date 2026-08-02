@@ -14,7 +14,7 @@ from ai_enterprise.application.audit.dto import (
 from ai_enterprise.domain.audit.exceptions import AuditProjectNotFoundError
 from ai_enterprise.domain.audit.policies import AuditCursor, sanitize_payload
 from ai_enterprise.infrastructure.audit.audit_repository import AuditRepository
-from ai_enterprise.infrastructure.audit.event_hasher import verify_hash_chain
+from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records, verify_hash_chain
 from ai_enterprise.infrastructure.audit.provenance_builder import ProvenanceBuilder
 
 
@@ -79,6 +79,26 @@ class AuditQueryService:
         return ProvenanceBuilder().build(project=project, **lifecycle)
 
     async def integrity(self, project_id: UUID) -> IntegrityResponse:
+        await self._require_project(project_id)
+        chain_records = await self._repository.list_project_chain_records(project_id)
+        if chain_records:
+            failures = verify_chain_records([
+                {
+                    "stream_id": record.stream_id,
+                    "sequence": record.sequence,
+                    "previous_hash": record.previous_hash,
+                    "record_hash": record.record_hash,
+                    "payload": record.payload,
+                }
+                for record in chain_records
+            ])
+            return IntegrityResponse(
+                project_id=project_id,
+                integrity_status="failed" if failures else "verified",
+                event_count=len(chain_records),
+                failures=failures,
+            )
+
         timeline = await self.timeline(project_id=project_id, limit=10_000)
         events: list[dict[str, Any]] = [
             {"id": str(event.id), "event_type": event.event_type,

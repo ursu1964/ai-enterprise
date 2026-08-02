@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.domain.foundation import EventEnvelope, SignatureProvider
 from ai_enterprise.domain.hashing import hash_json
+from ai_enterprise.infrastructure.audit.event_hasher import canonical_chain_record_hash
 from ai_enterprise.infrastructure.database.foundation_models import (
     AuditChainRecordModel,
     ExternalEffectModel,
@@ -28,13 +29,11 @@ class FoundationRepository:
         sequence = 1 if previous is None else previous.sequence + 1
         previous_hash = None if previous is None else previous.record_hash
         payload = event.model_dump(mode="json")
-        record_hash = hash_json(
-            {
-                "stream_id": str(event.aggregate_id),
-                "sequence": sequence,
-                "previous_hash": previous_hash,
-                "payload": payload,
-            }
+        record_hash = canonical_chain_record_hash(
+            stream_id=str(event.aggregate_id),
+            sequence=sequence,
+            previous_hash=previous_hash,
+            payload=payload,
         )
         signature = self.signer.sign(record_hash.encode()) if self.signer else None
         record = AuditChainRecordModel(

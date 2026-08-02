@@ -9,11 +9,14 @@ from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.routes.audit import export as export_audit
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.audit.exceptions import InvalidAuditCursorError
 from ai_enterprise.domain.audit.policies import AuditCursor, sanitize_payload
 from ai_enterprise.infrastructure.audit.audit_exporter import AuditExporter
 from ai_enterprise.infrastructure.audit.event_hasher import (
+    canonical_chain_record_hash,
     canonical_event_hash,
+    verify_chain_records,
     verify_hash_chain,
 )
 
@@ -46,6 +49,80 @@ def test_hash_chain_detects_tampering() -> None:
     assert verify_hash_chain([first, second]) == []
     second["payload"]["status"] = "rejected"
     assert verify_hash_chain([first, second])[0]["reason"] == "event_hash_mismatch"
+
+
+def test_chain_record_hash_detects_payload_and_link_tampering() -> None:
+    first = {
+        "stream_id": "project:1",
+        "sequence": 1,
+        "previous_hash": None,
+        "payload": {"status": "created"},
+    }
+    first["record_hash"] = canonical_chain_record_hash(**first)
+    second = {
+        "stream_id": "project:1",
+        "sequence": 2,
+        "previous_hash": first["record_hash"],
+        "payload": {"status": "approved"},
+    }
+    second["record_hash"] = canonical_chain_record_hash(**second)
+    assert verify_chain_records([first, second]) == []
+
+    second["payload"]["status"] = "rejected"
+    assert verify_chain_records([first, second])[0]["reason"] == "record_hash_mismatch"
+
+    second["payload"]["status"] = "approved"
+    second["previous_hash"] = "0" * 64
+    assert verify_chain_records([first, second])[0]["reason"] == "previous_hash_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_audit_writer_appends_read_event_and_chain_record() -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.records = []
+            self.added = []
+
+        async def scalar(self, _statement: object) -> object | None:
+            return self.records[-1] if self.records else None
+
+        def add_all(self, values: list[object]) -> None:
+            self.added.extend(values)
+            self.records.append(values[1])
+
+        async def flush(self) -> None:
+            return None
+
+    project_id = uuid4()
+    session = FakeSession()
+    first = await AuditWriter(session).append_project_event(
+        project_id=project_id,
+        event_type="project.created",
+        actor_type="human",
+        actor_id="alice",
+        payload={"name": "Platform hardening"},
+    )
+    second = await AuditWriter(session).append_project_event(
+        project_id=project_id,
+        event_type="project.approved",
+        actor_type="system",
+        actor_id="approval-policy",
+        payload={"mode": "manual"},
+    )
+
+    assert first.event.payload["audit_chain"]["sequence"] == 1
+    assert second.event.payload["audit_chain"]["sequence"] == 2
+    assert second.chain_record.previous_hash == first.chain_record.record_hash
+    assert verify_chain_records([
+        {
+            "stream_id": item.stream_id,
+            "sequence": item.sequence,
+            "previous_hash": item.previous_hash,
+            "record_hash": item.record_hash,
+            "payload": item.payload,
+        }
+        for item in session.records
+    ]) == []
 
 
 def test_export_contains_checksums_and_root_hash() -> None:
