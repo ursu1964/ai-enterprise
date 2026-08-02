@@ -44,8 +44,22 @@ class QuerySession:
         return self.project
 
 
-def actor(role: str = "operator", actor_type: str = "human") -> Actor:
-    return Actor(subject="local-dashboard-admin", actor_type=actor_type, role=role)
+def actor(
+    role: str = "operator",
+    actor_type: str = "human",
+    scopes: frozenset[str] = frozenset({"global"}),
+) -> Actor:
+    return Actor(
+        subject="local-dashboard-admin",
+        actor_type=actor_type,
+        role=role,
+        capabilities=frozenset({"query.read"}),
+        scopes=scopes,
+    )
+
+
+def project_query_actor(project_id: uuid.UUID) -> Actor:
+    return actor(scopes=frozenset({f"project:{project_id}"}))
 
 
 def project(now: datetime, project_id: uuid.UUID | None = None) -> ProjectModel:
@@ -303,7 +317,21 @@ async def test_operating_picture_graph_exposes_friendly_status_labels() -> None:
 @pytest.mark.asyncio
 async def test_operating_picture_blocks_non_human_actor() -> None:
     with pytest.raises(HTTPException) as exc:
-        await operating_picture(QuerySession([]), actor(role="worker", actor_type="service"))  # type: ignore[arg-type]
+        await operating_picture(
+            QuerySession([]),  # type: ignore[arg-type]
+            actor(role="worker", actor_type="service", scopes=frozenset()),
+        )
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_operating_picture_requires_global_query_scope() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await operating_picture(
+            QuerySession([]),  # type: ignore[arg-type]
+            actor(scopes=frozenset({f"project:{uuid.uuid4()}"})),
+        )
 
     assert exc.value.status_code == 403
 
@@ -347,7 +375,7 @@ async def test_project_operating_picture_links_project_evidence() -> None:
     rows = [[workflow(now, project_id)], [job(now, project_id)], [artifact], [crew_run], [audit]]
 
     response = await project_operating_picture(
-        project_id, QuerySession(rows, row), actor()  # type: ignore[arg-type]
+        project_id, QuerySession(rows, row), project_query_actor(project_id)  # type: ignore[arg-type]
     )
 
     assert response["project"]["id"] == project_id
@@ -355,3 +383,19 @@ async def test_project_operating_picture_links_project_evidence() -> None:
     assert response["status_counts"]["artifacts"]["project_manifest"] == 1
     assert response["latest_audit_events"][0]["human_summary"]
     assert any(node["kind"] == "job" for node in response["graph"]["nodes"])
+
+
+@pytest.mark.asyncio
+async def test_project_operating_picture_rejects_wrong_project_scope() -> None:
+    now = datetime.now(UTC)
+    project_id = uuid.uuid4()
+    row = project(now, project_id)
+
+    with pytest.raises(HTTPException) as exc:
+        await project_operating_picture(
+            project_id,
+            QuerySession([], row),  # type: ignore[arg-type]
+            project_query_actor(uuid.uuid4()),
+        )
+
+    assert exc.value.status_code == 403

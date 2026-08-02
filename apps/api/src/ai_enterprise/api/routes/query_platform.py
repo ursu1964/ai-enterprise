@@ -8,7 +8,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.application.operator_job_resolution import (
     job_is_acknowledged,
     job_resolution,
@@ -44,20 +49,14 @@ from ai_enterprise.infrastructure.performance.models import (
 
 router = APIRouter(prefix="/query", tags=["query-platform"])
 
-READ_ROLES = {
-    "admin",
-    "administrator",
-    "operator",
-    "platform-admin",
-    "platform_administrator",
-    "performance-auditor",
-    "organizational-governor",
-}
-
-
-def _require_query_actor(actor: ActorDependency) -> None:
-    if actor.actor_type != "human" or actor.role not in READ_ROLES:
+def _require_query_read(actor: Actor, project_id: uuid.UUID | None = None) -> None:
+    if actor.actor_type != "human":
         raise HTTPException(403, "Human query authority is required")
+    require_capability(
+        actor,
+        "query.read",
+        "global" if project_id is None else f"project:{project_id}",
+    )
 
 
 def _status_counts(rows: list[Any], field: str = "status") -> dict[str, int]:
@@ -446,7 +445,7 @@ async def dashboard_manager(
     organization_id: uuid.UUID | None = None,
     limit: int = 25,
 ) -> dict[str, Any]:
-    _require_query_actor(actor)
+    _require_query_read(actor)
     if limit < 1 or limit > 100:
         raise HTTPException(422, "limit must be between 1 and 100")
 
@@ -791,7 +790,7 @@ async def operating_picture(
     organization_id: uuid.UUID | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
-    _require_query_actor(actor)
+    _require_query_read(actor)
     if limit < 1 or limit > 200:
         raise HTTPException(422, "limit must be between 1 and 200")
 
@@ -992,7 +991,7 @@ async def project_operating_picture(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> dict[str, Any]:
-    _require_query_actor(actor)
+    _require_query_read(actor, project_id)
     project = await session.get(ProjectModel, project_id)
     if project is None:
         raise HTTPException(404, "Project not found")
