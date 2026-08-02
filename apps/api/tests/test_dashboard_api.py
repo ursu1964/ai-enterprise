@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.routes.dashboard import dashboard_context, dashboard_telemetry_summary
 from ai_enterprise.api.routes.projects import list_projects, project_intelligence
 from ai_enterprise.config import get_settings
@@ -62,6 +63,26 @@ class DashboardSession:
 
     async def scalars(self, statement: object) -> Scalars:
         return Scalars(self.scalars_rows.pop(0) if self.scalars_rows else [])
+
+
+def project_reader(project_id: uuid.UUID) -> Actor:
+    return Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"project.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+
+def global_project_reader() -> Actor:
+    return Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"project.read"}),
+        scopes=frozenset({"global"}),
+    )
 
 
 def test_dashboard_page_links_operator_surfaces() -> None:
@@ -273,10 +294,23 @@ async def test_list_projects_returns_current_projects() -> None:
         updated_at=now,
     )
 
-    response = await list_projects(Session([project]))  # type: ignore[arg-type]
+    response = await list_projects(
+        Session([project]),  # type: ignore[arg-type]
+        global_project_reader(),
+    )
 
     assert len(response) == 1
     assert response[0].name == "Dashboard Project"
+
+
+@pytest.mark.asyncio
+async def test_list_projects_requires_global_project_read_scope() -> None:
+    denied = project_reader(uuid.uuid4())
+
+    with pytest.raises(HTTPException) as exc:
+        await list_projects(Session([]), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -367,7 +401,11 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
 
     session = Session([project], scalar=workflow, scalar_rows=[[transition], [job], [run], [], []])
 
-    response = await project_intelligence(project_id, session)  # type: ignore[arg-type]
+    response = await project_intelligence(
+        project_id,
+        session,  # type: ignore[arg-type]
+        project_reader(project_id),
+    )
 
     assert response["project"]["name"] == "Intelligence Project"
     assert "ORDER BY workflow_instances.updated_at DESC" in str(session.scalar_statement)
@@ -408,6 +446,31 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["blueprints"][0]["improvement_proposals"] == []
     assert response["blueprints"][1]["kind"] == "agent_team_pattern"
     assert response["blueprints"][2]["kind"] == "business_effect_pattern"
+
+
+@pytest.mark.asyncio
+async def test_project_intelligence_rejects_wrong_project_scope() -> None:
+    project_id = uuid.uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Scoped Intelligence Project",
+        description="A project protected by project-scoped authority.",
+        repository_path="/home/user/projects/scoped-intelligence-project",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await project_intelligence(
+            project_id,
+            Session([project]),  # type: ignore[arg-type]
+            project_reader(uuid.uuid4()),
+        )
+
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -485,6 +548,7 @@ async def test_project_intelligence_uses_observed_transition_timing_for_estimate
     response = await project_intelligence(
         project_id,
         Session([project], scalar=workflow, scalar_rows=[transitions, [], [], [], []]),  # type: ignore[arg-type]
+        project_reader(project_id),
     )
 
     assert response["estimate"]["label"] == "Observed estimate"
@@ -515,6 +579,7 @@ async def test_project_intelligence_keeps_new_project_in_intake_until_workflow_s
     response = await project_intelligence(
         project_id,
         Session([project], scalar=None, scalar_rows=[[], [], [], [], []]),  # type: ignore[arg-type]
+        project_reader(project_id),
     )
 
     assert response["project_phase"] == "intake"
@@ -571,6 +636,7 @@ async def test_project_intelligence_classifies_worker_errors_for_humans() -> Non
     response = await project_intelligence(
         project_id,
         Session([project], scalar=None, scalar_rows=[[failed_job], [], [], []]),  # type: ignore[arg-type]
+        project_reader(project_id),
     )
 
     assert response["errors"][0]["explanation"] == (
@@ -634,6 +700,7 @@ async def test_project_intelligence_treats_acknowledged_dead_letters_as_history(
     response = await project_intelligence(
         project_id,
         Session([project], scalar=None, scalar_rows=[[acknowledged], [], [], []]),  # type: ignore[arg-type]
+        project_reader(project_id),
     )
 
     assert response["errors"] == []

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 
+from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.routes.projects import get_project
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.domain.enums import ProjectStatus
@@ -60,6 +61,16 @@ class WriteSession:
         return None
 
 
+def project_reader(project_id: uuid.UUID) -> Actor:
+    return Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"project.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+
 @pytest.mark.asyncio
 async def test_get_project_returns_current_p0_lifecycle_state() -> None:
     now = datetime.now(UTC)
@@ -84,7 +95,11 @@ async def test_get_project_returns_current_p0_lifecycle_state() -> None:
         updated_at=now,
     )
 
-    response = await get_project(project_id, Session(project))  # type: ignore[arg-type]
+    response = await get_project(
+        project_id,
+        Session(project),  # type: ignore[arg-type]
+        project_reader(project_id),
+    )
 
     assert response.id == project_id
     assert response.status == ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL
@@ -94,10 +109,37 @@ async def test_get_project_returns_current_p0_lifecycle_state() -> None:
 @pytest.mark.asyncio
 async def test_get_project_returns_404_for_unknown_project() -> None:
     with pytest.raises(HTTPException) as exc:
-        await get_project(uuid.uuid4(), Session())  # type: ignore[arg-type]
+        project_id = uuid.uuid4()
+        await get_project(
+            project_id,
+            Session(),  # type: ignore[arg-type]
+            project_reader(project_id),
+        )
 
     assert exc.value.status_code == 404
     assert exc.value.detail == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_get_project_rejects_wrong_project_scope() -> None:
+    project_id = uuid.uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Scoped Project",
+        description="Project protected by project-scoped authority.",
+        repository_path="/home/user/projects/scoped-project",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+    denied = project_reader(uuid.uuid4())
+
+    with pytest.raises(HTTPException) as exc:
+        await get_project(project_id, Session(project), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
 
 
 def test_p0_manifest_content_is_canonical_json_not_python_repr() -> None:

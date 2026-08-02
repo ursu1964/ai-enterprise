@@ -3,7 +3,13 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import SessionDependency, SettingsDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    SettingsDependency,
+    require_capability,
+)
 from ai_enterprise.api.schemas import (
     ApprovalRequest,
     ArtifactResponse,
@@ -41,8 +47,19 @@ from ai_enterprise.infrastructure.database.workflow_models import (
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+def _require_project_read(actor: Actor, project_id: uuid.UUID | None = None) -> None:
+    require_capability(
+        actor,
+        "project.read",
+        "global" if project_id is None else f"project:{project_id}",
+    )
+
+
 @router.get("", response_model=list[ProjectResponse])
-async def list_projects(session: SessionDependency) -> list[ProjectResponse]:
+async def list_projects(
+    session: SessionDependency, actor: ActorDependency
+) -> list[ProjectResponse]:
+    _require_project_read(actor)
     projects = (
         await session.scalars(select(ProjectModel).order_by(ProjectModel.updated_at.desc()))
     ).all()
@@ -50,20 +67,24 @@ async def list_projects(session: SessionDependency) -> list[ProjectResponse]:
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: uuid.UUID, session: SessionDependency) -> ProjectResponse:
+async def get_project(
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> ProjectResponse:
     project = await session.get(ProjectModel, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_project_read(actor, project_id)
     return ProjectResponse.model_validate(project)
 
 
 @router.get("/{project_id}/intelligence")
 async def project_intelligence(
-    project_id: uuid.UUID, session: SessionDependency
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> dict[str, object]:
     project = await session.get(ProjectModel, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    _require_project_read(actor, project_id)
     workflow = await session.scalar(
         select(WorkflowInstanceModel)
         .where(WorkflowInstanceModel.project_id == project_id)
