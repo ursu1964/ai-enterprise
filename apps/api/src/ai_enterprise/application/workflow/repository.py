@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
-from ai_enterprise.domain.workflow.state_machine import require_transition
+from ai_enterprise.domain.workflow.state_machine import WorkflowPhasePolicy
 from ai_enterprise.infrastructure.database.workflow_models import (
     WorkflowCheckpointModel,
     WorkflowContextModel,
@@ -60,7 +60,7 @@ class WorkflowRepository:
         checkpoint: bool = True,
     ) -> WorkflowContext:
         previous = WorkflowState(workflow.state)
-        require_transition(previous, next_state)
+        decision = WorkflowPhasePolicy().classify(previous, next_state)
         sequence = (
             int(
                 await self.session.scalar(
@@ -95,6 +95,7 @@ class WorkflowRepository:
                     actor_type=actor_type,
                     actor_id=actor_id,
                     reason=reason,
+                    policy_evidence=decision.policy_evidence(step),
                     workflow_version=workflow.workflow_version,
                     correlation_id=workflow.correlation_id,
                 ),

@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
-from ai_enterprise.domain.workflow.enums import WorkflowState
+from ai_enterprise.domain.hashing import hash_json
+from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
 
 
 class IllegalWorkflowTransition(ValueError):
@@ -21,6 +23,26 @@ class WorkflowTransitionDecision:
     current: WorkflowState
     kind: WorkflowTransitionKind
     requires_policy_evidence: bool = False
+
+    def policy_evidence(self, step: WorkflowStepName | None) -> dict[str, Any]:
+        evidence = {
+            "transition_kind": self.kind,
+            "requires_policy_evidence": self.requires_policy_evidence,
+            "from_state": self.previous,
+            "to_state": self.current,
+            "phase": step,
+        }
+        if self.kind is WorkflowTransitionKind.VERSIONED_AUTO_APPROVAL:
+            policy = {
+                "policy_name": "workflow-phase-auto-approval",
+                "policy_version": "1.0",
+                "phase": step,
+                "risk_class": "low",
+                "from_state": self.previous,
+                "to_state": self.current,
+            }
+            evidence["auto_approval"] = policy | {"policy_hash": hash_json(policy)}
+        return evidence
 
 
 AUTO_APPROVAL_TRANSITIONS: frozenset[tuple[WorkflowState, WorkflowState]] = frozenset(

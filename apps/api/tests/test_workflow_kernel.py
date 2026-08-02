@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from ai_enterprise.application.workflow.completeness import verify_completeness
+from ai_enterprise.application.workflow.repository import WorkflowRepository
 from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.contracts import RequirementsContract
 from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
@@ -16,6 +17,32 @@ from ai_enterprise.domain.workflow.state_machine import (
     require_transition,
 )
 from ai_enterprise.domain.workflow.step import StepResult, WorkflowStep
+from ai_enterprise.infrastructure.database.workflow_models import WorkflowTransitionModel
+
+
+class Scalars:
+    def __init__(self, rows: list[object]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[object]:
+        return self.rows
+
+
+class WorkflowAppendSession:
+    def __init__(self) -> None:
+        self.added: list[object] = []
+
+    async def scalar(self, statement: object) -> int:
+        return 0
+
+    def add(self, row: object) -> None:
+        self.added.append(row)
+
+    def add_all(self, rows: list[object]) -> None:
+        self.added.extend(rows)
+
+    async def flush(self) -> None:
+        return None
 
 
 def context() -> WorkflowContext:
@@ -25,6 +52,22 @@ def context() -> WorkflowContext:
         current_state=WorkflowState.PROJECT_CREATED,
         correlation_id=uuid.uuid4(),
         actor_id="tester",
+    )
+
+
+def workflow_instance(state: WorkflowState):
+    from ai_enterprise.infrastructure.database.workflow_models import WorkflowInstanceModel
+
+    return WorkflowInstanceModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        definition_name="vertical_slice",
+        workflow_version="1.0",
+        state=state,
+        current_step=None,
+        context_version=1,
+        correlation_id=uuid.uuid4(),
+        optimistic_version=1,
     )
 
 
@@ -61,6 +104,30 @@ def test_terminal_and_failure_transitions_are_classified_fail_closed() -> None:
     assert cancellation.kind is WorkflowTransitionKind.CANCELLATION
     with pytest.raises(IllegalWorkflowTransition):
         policy.classify(WorkflowState.COMPLETED, WorkflowState.CANCELLING)
+
+
+@pytest.mark.asyncio
+async def test_repository_persists_auto_approval_policy_evidence() -> None:
+    session = WorkflowAppendSession()
+    workflow = workflow_instance(WorkflowState.REQUIREMENTS_RUNNING)
+
+    await WorkflowRepository(session).append_transition(  # type: ignore[arg-type]
+        workflow=workflow,
+        context=context(),
+        next_state=WorkflowState.ARCHITECTURE_RUNNING,
+        step=WorkflowStepName.ARCHITECTURE,
+        actor_type="system",
+        actor_id="workflow-engine",
+        reason="Auto-approved by policy.",
+    )
+
+    transition = next(item for item in session.added if isinstance(item, WorkflowTransitionModel))
+    evidence = transition.policy_evidence
+    assert evidence["transition_kind"] == WorkflowTransitionKind.VERSIONED_AUTO_APPROVAL
+    assert evidence["requires_policy_evidence"] is True
+    assert evidence["auto_approval"]["policy_version"] == "1.0"
+    assert len(evidence["auto_approval"]["policy_hash"]) == 64
+    assert evidence["auto_approval"]["phase"] == WorkflowStepName.ARCHITECTURE
 
 
 def test_context_updates_are_immutable_and_hash_bound() -> None:

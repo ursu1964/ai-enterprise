@@ -74,6 +74,7 @@ class WorkflowTransitionModel(Base):
     actor_type: Mapped[str] = mapped_column(String(40), nullable=False)
     actor_id: Mapped[str] = mapped_column(String(200), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     workflow_version: Mapped[str] = mapped_column(String(40), nullable=False)
     correlation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, index=True

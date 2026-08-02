@@ -312,6 +312,7 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
         actor_type="service",
         actor_id="workflow",
         reason="Architecture artifact is ready for review.",
+        policy_evidence={},
         workflow_version="1",
         correlation_id=workflow.correlation_id,
         occurred_at=now,

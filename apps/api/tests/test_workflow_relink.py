@@ -164,6 +164,7 @@ def test_relinked_workflow_history_accepts_bootstrap_previous_state() -> None:
         actor_type="human",
         actor_id="local-dashboard-admin",
         reason="Relink historical project.",
+        policy_evidence={},
         workflow_version="1.0",
         correlation_id=uuid.uuid4(),
         occurred_at=now,
