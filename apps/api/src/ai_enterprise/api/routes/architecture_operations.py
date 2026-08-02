@@ -3,7 +3,13 @@ import os
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select, text
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, SettingsDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    SettingsDependency,
+    require_capability,
+)
 from ai_enterprise.domain.architecture.enums import ArchitectureRunStatus
 from ai_enterprise.infrastructure.architecture.models import ArchitectureRunModel
 from ai_enterprise.infrastructure.architecture.provider_factory import (
@@ -14,6 +20,15 @@ from ai_enterprise.infrastructure.architecture.provider_factory import (
 router = APIRouter(prefix="/internal/health", tags=["internal-architecture-operations"])
 
 
+def _require_architecture_operator(actor: Actor) -> None:
+    try:
+        require_capability(actor, "architecture.worker.readiness", "global")
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403, detail="Architecture operator capability required"
+        ) from exc
+
+
 @router.get("/architecture-worker")
 async def architecture_worker_health(
     session: SessionDependency,
@@ -21,8 +36,7 @@ async def architecture_worker_health(
     actor: ActorDependency,
 ) -> dict[str, object]:
     """Authenticated deep readiness probe; this route must not be publicly exposed."""
-    if actor.role not in {"platform_operator", "architecture_operator"}:
-        raise HTTPException(status_code=403, detail="Architecture operator role required")
+    _require_architecture_operator(actor)
     try:
         await session.execute(text("SELECT 1"))
         active = int(
