@@ -101,6 +101,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Documentation Hub" in response.text
     assert "/dashboard/documentation-hub" in response.text
     assert "Data source freshness" in response.text
+    assert "managerSectionSource" in response.text
+    assert "dashboardManagerSources" in response.text
+    assert "freshness_age_seconds" in response.text
+    assert "stale_after_seconds" in response.text
+    assert "stale after" in response.text
     assert "Business decision board" in response.text
     assert "Guided Route" in response.text
     assert 'data-view="execution"' in response.text

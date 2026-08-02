@@ -2086,6 +2086,53 @@ DASHBOARD_HTML = r"""<!doctype html>
       return { label, target, status: "needs review", className: "bad", detail: `${summary}. Open this panel and refresh; if it repeats, check API logs.` };
     }
 
+    function managerSectionSource(section, target) {
+      if (!section) {
+        return {
+          label: "Source",
+          target,
+          status: "not_observed",
+          className: "info",
+          detail: "This source section is not reported by the dashboard manager yet.",
+        };
+      }
+      const status = section.freshness || section.state || "not_observed";
+      const className = section.state === "unavailable"
+        ? "bad"
+        : section.state === "stale"
+          ? "warn"
+          : section.state === "empty"
+            ? "info"
+            : "ok";
+      const age = section.freshness_age_seconds == null
+        ? "No source timestamp yet"
+        : `${Math.round(section.freshness_age_seconds)}s old`;
+      const staleWindow = section.stale_after_seconds == null
+        ? ""
+        : ` · stale after ${section.stale_after_seconds}s`;
+      return {
+        label: section.source,
+        target,
+        status,
+        className,
+        detail: `${section.operator_action || section.empty_reason || "Use this section for the current operating picture."} ${age}${staleWindow}`,
+      };
+    }
+
+    function dashboardManagerSources(fallbackSources) {
+      const sections = state.dashboardManager?.sections;
+      if (!sections) return fallbackSources;
+      return {
+        ...fallbackSources,
+        projects: managerSectionSource(sections.projects, "projects"),
+        jobs: managerSectionSource(sections.jobs, "problems"),
+        workers: managerSectionSource(sections.workers, "problems"),
+        metrics: managerSectionSource(sections.telemetry, "metrics"),
+        manager: managerSectionSource(sections.graph, "execution"),
+        workflows: managerSectionSource(sections.workflows, "projects"),
+      };
+    }
+
     function isProblemJob(job) {
       return ["failed", "dead_letter", "abandoned"].includes(job.status);
     }
@@ -3763,6 +3810,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness is unavailable"),
         infrastructure: sourceStatus(infrastructureChoices, "Infrastructure Choices", "metrics", state.infrastructureChoices ? state.infrastructureChoices.summary : "Infrastructure choices are unavailable")
       };
+      state.sources = dashboardManagerSources(state.sources);
       render();
       renderSourceStrip();
       renderBusinessBoard();
