@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check engineering-static evolution-check federation-check intelligence-check etra-check engineering-full
+.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify engineering-static evolution-check federation-check intelligence-check etra-check engineering-full
 
 build:
 	docker compose build
@@ -53,6 +53,10 @@ docker-smoke:
 migration-check:
 	cd apps/api && .venv/bin/alembic heads
 	cd apps/api && .venv/bin/alembic upgrade head --sql >/dev/null
+	python tools/migration_verify.py --json
+
+migration-verify:
+	python tools/migration_verify.py --json
 
 engineering-static:
 	python tools/engineering_verify.py --static --json
