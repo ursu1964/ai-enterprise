@@ -896,6 +896,46 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     .mini strong { display: block; margin-bottom: 6px; }
+    .info-card {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+    .card-kicker {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 780;
+      text-transform: uppercase;
+    }
+    .card-value {
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 780;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }
+    .field-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.32;
+    }
+    .field-row span:first-child {
+      color: var(--muted);
+      font-weight: 760;
+    }
+    .field-row span:last-child {
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
     .listbox {
       display: grid;
       gap: 8px;
@@ -1156,6 +1196,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       .business-board { grid-template-columns: 1fr; }
       .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
+      .field-row { grid-template-columns: 1fr; gap: 2px; }
       .movement-wrap { grid-template-columns: 1fr; }
       table { font-size: 0.82rem; }
     }
@@ -2501,6 +2542,22 @@ DASHBOARD_HTML = r"""<!doctype html>
       return new Date(value).toLocaleString();
     }
 
+    function fieldRows(rows) {
+      return `<div class="field-list">${rows.map(([label, value]) => `
+        <div class="field-row"><span>${esc(label)}</span><span>${esc(value)}</span></div>
+      `).join("")}</div>`;
+    }
+
+    function infoCard(kicker, value, rows, className = "") {
+      return `
+        <div class="mini info-card">
+          <div class="card-kicker">${esc(kicker)}</div>
+          <div class="card-value ${esc(className)}">${esc(value)}</div>
+          ${fieldRows(rows)}
+        </div>
+      `;
+    }
+
     function render() {
       const online = state.workers.filter(worker => worker.status === "online").length;
       const problemJobs = unresolvedProblemJobs().length;
@@ -2651,22 +2708,53 @@ DASHBOARD_HTML = r"""<!doctype html>
     function renderProjectIntelligence(payload) {
       const workflow = payload.workflow || {};
       const selectedName = byId("phaseDetail").dataset.phase || "";
+      const projectStatus = humanStatus(payload.project.status);
+      const workflowStatus = humanStatus(workflow.state || "not_started");
+      const workflowLinkStatus = payload.operating_state.degraded ? "Needs workflow link" : "Workflow linked";
+      const telemetryStatus = humanStatus(payload.telemetry.signal);
+      const economicStatus = humanStatus(payload.economic_effects.viability);
       byId("projectGraph").innerHTML = `
         <div class="cards">
-          <div class="mini"><strong>${esc(payload.project.name)}</strong><div class="${statusClass(payload.project.status)}">${esc(humanStatus(payload.project.status))}</div><div class="muted">${esc(payload.project.repository_path)}</div></div>
-          <div class="mini"><strong>${esc(humanStatus(workflow.state || "no workflow"))}</strong><div>${esc(workflow.current_step || "No active step")}</div><div class="muted">${esc(workflow.recommended_operator_action || "")}</div></div>
-          <div class="mini"><strong>${payload.operating_state.degraded ? "Needs workflow link" : "Workflow linked"}</strong><div>${esc(payload.operating_state.reason || "Project state and workflow tracking agree.")}</div><div class="muted">${esc(payload.operating_state.recommended_action || "Continue with the guided route.")}</div></div>
-          <div class="mini"><strong>${esc(payload.estimate.estimated_minutes_remaining)} min</strong><div>Estimated remaining</div><div class="muted">${esc(payload.estimate.basis)}</div></div>
-          <div class="mini"><strong>${esc(payload.reuse.work_package_count)} packages</strong><div>${esc(payload.reuse.artifact_count)} artifacts</div><div class="muted">${esc(payload.reuse.artifact_types.join(", ") || "No artifact types yet")}</div></div>
-          <div class="mini"><strong>${esc(humanStatus(payload.telemetry.signal))}</strong><div>Telemetry always active</div><div class="muted">${esc(payload.telemetry.phase_completion_percent)}% phase completion · ${esc(payload.telemetry.problem_count)} current problem(s)</div></div>
-          <div class="mini"><strong>${esc(payload.reuse.template.template_key)}</strong><div>Reusable template</div><div class="muted">${esc(payload.reuse.template.project_type)}</div></div>
-          <div class="mini"><strong>${esc(humanStatus(payload.economic_effects.viability))}</strong><div>Economic proof</div><div class="muted">${esc(payload.economic_effects.estimated_manual_hours_avoided)}h avoided · reuse x${esc(payload.economic_effects.reuse_multiplier)}</div></div>
+          ${infoCard("Project", payload.project.name, [
+            ["Status", projectStatus],
+            ["Repository", payload.project.repository_path],
+            ["Project ID", payload.project.id]
+          ], statusClass(payload.project.status))}
+          ${infoCard("Workflow", workflowStatus, [
+            ["Current step", workflow.current_step || "No active step"],
+            ["Next action", workflow.recommended_operator_action || "Continue with the guided route."]
+          ], statusClass(workflow.state || "not_started"))}
+          ${infoCard("Link Health", workflowLinkStatus, [
+            ["Reason", payload.operating_state.reason || "Project state and workflow tracking agree."],
+            ["Action", payload.operating_state.recommended_action || "Continue with the guided route."]
+          ], payload.operating_state.degraded ? "warn" : "ok")}
+          ${infoCard("Time Estimate", `${payload.estimate.estimated_minutes_remaining} min`, [
+            ["Meaning", "Estimated remaining work"],
+            ["Basis", payload.estimate.basis]
+          ], "info")}
+          ${infoCard("Evidence", `${payload.reuse.work_package_count} packages`, [
+            ["Artifacts", `${payload.reuse.artifact_count}`],
+            ["Types", payload.reuse.artifact_types.join(", ") || "No artifact types yet"]
+          ], "info")}
+          ${infoCard("Telemetry", telemetryStatus, [
+            ["Phase complete", `${payload.telemetry.phase_completion_percent}%`],
+            ["Problems", `${payload.telemetry.problem_count} current problem(s)`]
+          ], statusClass(payload.telemetry.signal))}
+          ${infoCard("Reusable Template", payload.reuse.template.template_key, [
+            ["Project type", payload.reuse.template.project_type],
+            ["Use", "Starting point for similar future projects"]
+          ], "ok")}
+          ${infoCard("Economic Proof", economicStatus, [
+            ["Manual work avoided", `${payload.economic_effects.estimated_manual_hours_avoided}h`],
+            ["Reuse multiplier", `x${payload.economic_effects.reuse_multiplier}`]
+          ], statusClass(payload.economic_effects.viability))}
         </div>
         <div class="phase-graph">
           ${payload.phases.map(phase => `
             <button class="phase-node ${esc(phase.status)} ${phase.name === selectedName ? "selected" : ""}" data-phase="${esc(phase.name)}">
-              <strong>${esc(phase.name.replace("_", " "))}</strong>
-              <span>${esc(phase.status)} · ${esc(phase.transition_count)} transition(s)</span>
+              <strong>${esc(phase.name.replace(/_/g, " "))}</strong>
+              <span>Status: ${esc(humanStatus(phase.status))}</span>
+              <span>Transitions: ${esc(phase.transition_count)}</span>
             </button>
           `).join("")}
         </div>
@@ -2677,10 +2765,20 @@ DASHBOARD_HTML = r"""<!doctype html>
           byId("phaseDetail").dataset.phase = phase.name;
           byId("phaseDetail").innerHTML = `
             <div class="cards">
-              <div class="mini"><strong>${esc(phase.name.replace("_", " "))}</strong><div class="${statusClass(phase.status)}">${esc(phase.status)}</div><div class="muted">${esc(phase.states.join(", "))}</div></div>
-              <div class="mini"><strong>Executed</strong><div>${esc(payload.executed_steps.join(" → ") || "No transitions recorded")}</div></div>
-              <div class="mini"><strong>Remaining</strong><div>${esc(payload.remaining_steps.join(" → ") || "No remaining phases")}</div></div>
-              <div class="mini"><strong>Project Life</strong><div>${esc(payload.life.transition_count)} transitions · ${esc(payload.life.job_count)} jobs</div></div>
+              ${infoCard("Selected Phase", phase.name.replace(/_/g, " "), [
+                ["Status", humanStatus(phase.status)],
+                ["States", phase.states.join(", ") || "No states reported"]
+              ], statusClass(phase.status))}
+              ${infoCard("Executed Steps", payload.executed_steps.length ? `${payload.executed_steps.length} done` : "None yet", [
+                ["Steps", payload.executed_steps.join(" -> ") || "No transitions recorded"]
+              ], payload.executed_steps.length ? "ok" : "warn")}
+              ${infoCard("Remaining Steps", payload.remaining_steps.length ? `${payload.remaining_steps.length} left` : "Complete", [
+                ["Steps", payload.remaining_steps.join(" -> ") || "No remaining phases"]
+              ], payload.remaining_steps.length ? "info" : "ok")}
+              ${infoCard("Project Life", `${payload.life.transition_count} transitions`, [
+                ["Jobs", `${payload.life.job_count}`],
+                ["Meaning", "Recorded project movement and work history"]
+              ], "info")}
             </div>
             <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
             <div class="grid" style="margin-top: 10px;">
@@ -2904,6 +3002,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     refresh().then(() => {
       const projectId = new URL(window.location.href).searchParams.get("project");
       if (projectId) {
+        switchView("projects");
         byId("projectSelect").value = projectId;
         loadProjectDashboard(projectId);
       }
