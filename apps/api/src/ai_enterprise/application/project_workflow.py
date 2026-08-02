@@ -37,7 +37,6 @@ from ai_enterprise.infrastructure.crews.work_package_crew import (
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     CrewRunModel,
     ProjectModel,
     WorkPackageModel,
@@ -205,18 +204,15 @@ class ProjectWorkflowService:
             max_attempts=3,
         )
 
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="requirements.run.queued",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "run_id": str(run_id),
-                    "job_id": str(job.id),
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="requirements.run.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run_id),
+                "job_id": str(job.id),
+            },
         )
 
         await self._session.commit()
@@ -249,15 +245,12 @@ class ProjectWorkflowService:
             run.error_message = None
             project.status = ProjectStatus.REQUIREMENTS_RUNNING
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="requirements.run.started",
-                    actor_type="system",
-                    actor_id="requirements-worker",
-                    payload={"run_id": str(run.id)},
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="requirements.run.started",
+                actor_type="system",
+                actor_id="requirements-worker",
+                payload={"run_id": str(run.id)},
             )
 
             await self._session.commit()
@@ -318,7 +311,7 @@ class ProjectWorkflowService:
             }
 
             project.status = ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL
-            auto_approval = self._auto_approval(
+            auto_approval = await self._auto_approval(
                 project=project,
                 artifact=artifact,
                 event_type="requirements.auto_approved",
@@ -328,33 +321,37 @@ class ProjectWorkflowService:
 
             events: list[object] = [
                 artifact,
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type="requirements.run.succeeded",
-                        actor_type="agent",
-                        actor_id="requirements-crew",
-                        payload={
-                            "run_id": str(run.id),
-                            "artifact_id": str(artifact.id),
-                            "content_hash": artifact.content_hash,
-                        },
-                ),
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type="requirements.approval.requested",
-                        actor_type="system",
-                        actor_id="workflow-engine",
-                        payload={
-                            "run_id": str(run.id),
-                            "artifact_id": str(artifact.id),
-                        },
-                ),
             ]
             if auto_approval is not None:
-                events.extend(auto_approval)
+                events.append(auto_approval)
             self._session.add_all(events)
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="requirements.run.succeeded",
+                actor_type="agent",
+                actor_id="requirements-crew",
+                payload={
+                    "run_id": str(run.id),
+                    "artifact_id": str(artifact.id),
+                    "content_hash": artifact.content_hash,
+                },
+            )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="requirements.approval.requested",
+                actor_type="system",
+                actor_id="workflow-engine",
+                payload={
+                    "run_id": str(run.id),
+                    "artifact_id": str(artifact.id),
+                },
+            )
+            if auto_approval is not None:
+                await self._append_auto_approval_event(
+                    project=project,
+                    artifact=artifact,
+                    event_type="requirements.auto_approved",
+                )
 
             await self._session.commit()
 
@@ -378,18 +375,15 @@ class ProjectWorkflowService:
 
             project.status = ProjectStatus.REQUIREMENTS_FAILED
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="requirements.run.failed",
-                    actor_type="system",
-                    actor_id="requirements-worker",
-                    payload={
-                        "run_id": str(run.id),
-                        "error": str(exc),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="requirements.run.failed",
+                actor_type="system",
+                actor_id="requirements-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "error": str(exc),
+                },
             )
 
             await self._session.commit()
@@ -438,22 +432,17 @@ class ProjectWorkflowService:
             project.status = ProjectStatus.REQUIREMENTS_REJECTED
             event_type = "requirements.rejected"
 
-        self._session.add_all(
-            [
-                approval,
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type=event_type,
-                    actor_type="human",
-                    actor_id=reviewer,
-                    payload={
-                        "artifact_id": str(artifact.id),
-                        "artifact_hash": artifact.content_hash,
-                        "comment": comment,
-                    },
-                ),
-            ]
+        self._session.add(approval)
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type=event_type,
+            actor_type="human",
+            actor_id=reviewer,
+            payload={
+                "artifact_id": str(artifact.id),
+                "artifact_hash": artifact.content_hash,
+                "comment": comment,
+            },
         )
 
         await self._session.commit()
@@ -540,20 +529,17 @@ class ProjectWorkflowService:
             max_attempts=3,
         )
 
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="architecture.run.queued",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "run_id": str(run_id),
-                    "job_id": str(job.id),
-                    "requirements_artifact_id": str(requirements_artifact.id),
-                    "requirements_artifact_hash": (requirements_artifact.content_hash),
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="architecture.run.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run_id),
+                "job_id": str(job.id),
+                "requirements_artifact_id": str(requirements_artifact.id),
+                "requirements_artifact_hash": (requirements_artifact.content_hash),
+            },
         )
 
         await self._session.commit()
@@ -622,19 +608,16 @@ class ProjectWorkflowService:
             run.error_message = None
             project.status = ProjectStatus.ARCHITECTURE_RUNNING
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="architecture.run.started",
-                    actor_type="system",
-                    actor_id="architecture-worker",
-                    payload={
-                        "run_id": str(run.id),
-                        "requirements_artifact_id": str(requirements_artifact.id),
-                        "requirements_artifact_hash": (requirements_artifact.content_hash),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="architecture.run.started",
+                actor_type="system",
+                actor_id="architecture-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "requirements_artifact_id": str(requirements_artifact.id),
+                    "requirements_artifact_hash": (requirements_artifact.content_hash),
+                },
             )
 
             await self._session.commit()
@@ -676,7 +659,7 @@ class ProjectWorkflowService:
             await self._session.flush()
 
             project.status = ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
-            auto_approval = self._auto_approval(
+            auto_approval = await self._auto_approval(
                 project=project,
                 artifact=architecture_artifact,
                 event_type="architecture.auto_approved",
@@ -684,36 +667,39 @@ class ProjectWorkflowService:
             if auto_approval is not None:
                 project.status = ProjectStatus.ARCHITECTURE_APPROVED
 
-            events: list[object] = [
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type="architecture.run.succeeded",
-                        actor_type="agent",
-                        actor_id="architecture-crew",
-                        payload={
-                            "run_id": str(run.id),
-                            "artifact_id": str(architecture_artifact_id),
-                            "artifact_hash": (architecture_artifact.content_hash),
-                            "requirements_artifact_id": str(requirements_artifact.id),
-                            "requirements_artifact_hash": (requirements_artifact.content_hash),
-                        },
-                ),
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type=("architecture.approval.requested"),
-                        actor_type="system",
-                        actor_id="workflow-engine",
-                        payload={
-                            "artifact_id": str(architecture_artifact_id),
-                            "artifact_hash": (architecture_artifact.content_hash),
-                        },
-                ),
-            ]
+            events: list[object] = []
             if auto_approval is not None:
-                events.extend(auto_approval)
+                events.append(auto_approval)
             self._session.add_all(events)
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="architecture.run.succeeded",
+                actor_type="agent",
+                actor_id="architecture-crew",
+                payload={
+                    "run_id": str(run.id),
+                    "artifact_id": str(architecture_artifact_id),
+                    "artifact_hash": (architecture_artifact.content_hash),
+                    "requirements_artifact_id": str(requirements_artifact.id),
+                    "requirements_artifact_hash": (requirements_artifact.content_hash),
+                },
+            )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="architecture.approval.requested",
+                actor_type="system",
+                actor_id="workflow-engine",
+                payload={
+                    "artifact_id": str(architecture_artifact_id),
+                    "artifact_hash": (architecture_artifact.content_hash),
+                },
+            )
+            if auto_approval is not None:
+                await self._append_auto_approval_event(
+                    project=project,
+                    artifact=architecture_artifact,
+                    event_type="architecture.auto_approved",
+                )
 
             await self._session.commit()
 
@@ -736,18 +722,15 @@ class ProjectWorkflowService:
             run.error_message = str(exc)
             project.status = ProjectStatus.ARCHITECTURE_FAILED
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="architecture.run.failed",
-                    actor_type="system",
-                    actor_id="architecture-worker",
-                    payload={
-                        "run_id": str(run.id),
-                        "error": str(exc),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="architecture.run.failed",
+                actor_type="system",
+                actor_id="architecture-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "error": str(exc),
+                },
             )
 
             await self._session.commit()
@@ -796,22 +779,17 @@ class ProjectWorkflowService:
             project.status = ProjectStatus.ARCHITECTURE_REJECTED
             event_type = "architecture.rejected"
 
-        self._session.add_all(
-            [
-                approval,
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type=event_type,
-                    actor_type="human",
-                    actor_id=reviewer,
-                    payload={
-                        "artifact_id": str(artifact.id),
-                        "artifact_hash": artifact.content_hash,
-                        "comment": comment,
-                    },
-                ),
-            ]
+        self._session.add(approval)
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type=event_type,
+            actor_type="human",
+            actor_id=reviewer,
+            payload={
+                "artifact_id": str(artifact.id),
+                "artifact_hash": artifact.content_hash,
+                "comment": comment,
+            },
         )
 
         await self._session.commit()
@@ -908,22 +886,19 @@ class ProjectWorkflowService:
             max_attempts=3,
         )
 
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="work_package.planning.queued",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "run_id": str(run_id),
-                    "job_id": str(job.id),
-                    "requirements_artifact_id": str(requirements_artifact.id),
-                    "requirements_artifact_hash": (requirements_artifact.content_hash),
-                    "architecture_artifact_id": str(architecture_artifact.id),
-                    "architecture_artifact_hash": (architecture_artifact.content_hash),
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="work_package.planning.queued",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "run_id": str(run_id),
+                "job_id": str(job.id),
+                "requirements_artifact_id": str(requirements_artifact.id),
+                "requirements_artifact_hash": (requirements_artifact.content_hash),
+                "architecture_artifact_id": str(architecture_artifact.id),
+                "architecture_artifact_hash": (architecture_artifact.content_hash),
+            },
         )
 
         await self._session.commit()
@@ -996,18 +971,15 @@ class ProjectWorkflowService:
             run.error_message = None
             project.status = ProjectStatus.WORK_PACKAGE_PLANNING
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="work_package.planning.started",
-                    actor_type="system",
-                    actor_id="work-package-worker",
-                    payload={
-                        "run_id": str(run.id),
-                        "base_commit_sha": repository.commit_sha,
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="work_package.planning.started",
+                actor_type="system",
+                actor_id="work-package-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "base_commit_sha": repository.commit_sha,
+                },
             )
 
             await self._session.commit()
@@ -1110,7 +1082,7 @@ class ProjectWorkflowService:
             }
 
             project.status = ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
-            auto_approval = self._auto_approval(
+            auto_approval = await self._auto_approval(
                 project=project,
                 artifact=artifact,
                 event_type="work_package.auto_approved",
@@ -1124,36 +1096,40 @@ class ProjectWorkflowService:
 
             events: list[object] = [
                 work_package,
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type="work_package.planning.succeeded",
-                        actor_type="agent",
-                        actor_id="work-package-planner-crew",
-                        payload={
-                            "run_id": str(run.id),
-                            "work_package_id": str(work_package_id),
-                            "artifact_id": str(artifact_id),
-                            "contract_hash": contract_hash,
-                            "base_commit_sha": (contract.base_commit_sha),
-                        },
-                ),
-                AuditEventModel(
-                        id=uuid.uuid4(),
-                        project_id=project.id,
-                        event_type="work_package.approval.requested",
-                        actor_type="system",
-                        actor_id="workflow-engine",
-                        payload={
-                            "work_package_id": str(work_package_id),
-                            "artifact_id": str(artifact_id),
-                            "contract_hash": contract_hash,
-                        },
-                ),
             ]
             if auto_approval is not None:
-                events.extend(auto_approval)
+                events.append(auto_approval)
             self._session.add_all(events)
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="work_package.planning.succeeded",
+                actor_type="agent",
+                actor_id="work-package-planner-crew",
+                payload={
+                    "run_id": str(run.id),
+                    "work_package_id": str(work_package_id),
+                    "artifact_id": str(artifact_id),
+                    "contract_hash": contract_hash,
+                    "base_commit_sha": (contract.base_commit_sha),
+                },
+            )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="work_package.approval.requested",
+                actor_type="system",
+                actor_id="workflow-engine",
+                payload={
+                    "work_package_id": str(work_package_id),
+                    "artifact_id": str(artifact_id),
+                    "contract_hash": contract_hash,
+                },
+            )
+            if auto_approval is not None:
+                await self._append_auto_approval_event(
+                    project=project,
+                    artifact=artifact,
+                    event_type="work_package.auto_approved",
+                )
 
             await self._session.commit()
 
@@ -1176,18 +1152,15 @@ class ProjectWorkflowService:
             run.error_message = str(exc)
             project.status = ProjectStatus.WORK_PACKAGE_FAILED
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="work_package.planning.failed",
-                    actor_type="system",
-                    actor_id="work-package-worker",
-                    payload={
-                        "run_id": str(run.id),
-                        "error": str(exc),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type="work_package.planning.failed",
+                actor_type="system",
+                actor_id="work-package-worker",
+                payload={
+                    "run_id": str(run.id),
+                    "error": str(exc),
+                },
             )
 
             await self._session.commit()
@@ -1249,24 +1222,19 @@ class ProjectWorkflowService:
             project.status = ProjectStatus.WORK_PACKAGE_REJECTED
             event_type = "work_package.rejected"
 
-        self._session.add_all(
-            [
-                approval,
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type=event_type,
-                    actor_type="human",
-                    actor_id=reviewer,
-                    payload={
-                        "work_package_id": str(work_package.id),
-                        "artifact_id": str(artifact.id),
-                        "contract_hash": (work_package.contract_hash),
-                        "base_commit_sha": (work_package.base_commit_sha),
-                        "comment": comment,
-                    },
-                ),
-            ]
+        self._session.add(approval)
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type=event_type,
+            actor_type="human",
+            actor_id=reviewer,
+            payload={
+                "work_package_id": str(work_package.id),
+                "artifact_id": str(artifact.id),
+                "contract_hash": (work_package.contract_hash),
+                "base_commit_sha": (work_package.base_commit_sha),
+                "comment": comment,
+            },
         )
 
         await self._session.commit()
@@ -1289,13 +1257,30 @@ class ProjectWorkflowService:
 
         return project
 
-    def _auto_approval(
+    async def _append_audit_event(
+        self,
+        *,
+        project_id: uuid.UUID,
+        event_type: str,
+        actor_type: str,
+        actor_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type=event_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
+        )
+
+    async def _auto_approval(
         self,
         *,
         project: ProjectModel,
         artifact: ArtifactModel,
         event_type: str,
-    ) -> list[ApprovalModel | AuditEventModel] | None:
+    ) -> ApprovalModel | None:
         policy = project.manifest.get("autonomous_execution")
         if not isinstance(policy, dict) or policy.get("enabled") is not True:
             return None
@@ -1308,32 +1293,40 @@ class ProjectWorkflowService:
         }.get(event_type)
         if phase_key is None or policy.get(phase_key) is not True:
             return None
-        return [
-            ApprovalModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                artifact_id=artifact.id,
-                decision=ApprovalDecision.APPROVED,
-                reviewer="manifest-autonomy-policy",
-                comment=(
-                    "Approved automatically because the ingested manifesto enabled "
-                    "controlled autonomous execution."
-                ),
+        return ApprovalModel(
+            id=uuid.uuid4(),
+            project_id=project.id,
+            artifact_id=artifact.id,
+            decision=ApprovalDecision.APPROVED,
+            reviewer="manifest-autonomy-policy",
+            comment=(
+                "Approved automatically because the ingested manifesto enabled "
+                "controlled autonomous execution."
             ),
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type=event_type,
-                actor_type="system",
-                actor_id="manifest-autonomy-policy",
-                payload={
-                    "artifact_id": str(artifact.id),
-                    "artifact_hash": artifact.content_hash,
-                    "authority": "manifest_ingestion",
-                    "mode": policy.get("mode", "controlled_demo"),
-                },
-            ),
-        ]
+        )
+
+    async def _append_auto_approval_event(
+        self,
+        *,
+        project: ProjectModel,
+        artifact: ArtifactModel,
+        event_type: str,
+    ) -> None:
+        policy = project.manifest.get("autonomous_execution")
+        if not isinstance(policy, dict):
+            raise RuntimeError("Auto-approval policy disappeared before audit write")
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type=event_type,
+            actor_type="system",
+            actor_id="manifest-autonomy-policy",
+            payload={
+                "artifact_id": str(artifact.id),
+                "artifact_hash": artifact.content_hash,
+                "authority": "manifest_ingestion",
+                "mode": policy.get("mode", "controlled_demo"),
+            },
+        )
 
     async def _get_latest_approved_artifact(
         self,

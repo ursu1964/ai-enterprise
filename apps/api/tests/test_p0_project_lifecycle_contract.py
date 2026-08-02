@@ -10,10 +10,13 @@ from ai_enterprise.api.routes.projects import get_project
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.domain.hashing import canonical_json, hash_json
+from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records
 from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
     AuditEventModel,
+    CrewRunModel,
+    JobModel,
     ProjectModel,
 )
 from ai_enterprise.infrastructure.repositories.preparation import prepare_project_repository
@@ -28,7 +31,8 @@ class Session:
 
 
 class WriteSession:
-    def __init__(self) -> None:
+    def __init__(self, row: Any = None) -> None:
+        self.row = row
         self.added: list[Any] = []
         self.flushed = False
         self.committed = False
@@ -42,6 +46,9 @@ class WriteSession:
     async def scalar(self, statement: object) -> Any:
         chain_records = [row for row in self.added if isinstance(row, AuditChainRecordModel)]
         return chain_records[-1] if chain_records else None
+
+    async def execute(self, statement: object) -> Any:
+        return SimpleNamespace(scalar_one_or_none=lambda: self.row)
 
     async def flush(self) -> None:
         self.flushed = True
@@ -149,6 +156,65 @@ async def test_create_project_persists_uploaded_manifest_content(tmp_path) -> No
     assert chain_record.stream_id == f"project:{project.id}"
     assert chain_record.payload["event_type"] == "project.created"
     assert chain_record.payload["payload"]["manifest_hash"] == project.manifest_hash
+
+
+@pytest.mark.asyncio
+async def test_queue_requirements_run_writes_tamper_evident_audit_chain(tmp_path) -> None:
+    project_id = uuid.uuid4()
+    manifest = {
+        "schema_version": "1.0",
+        "project_id": str(project_id),
+        "name": "Queued Project",
+    }
+    project = ProjectModel(
+        id=project_id,
+        name="Queued Project",
+        description="Project queued for requirements.",
+        repository_path=str(tmp_path / "queued-project"),
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash=hash_json(manifest),
+        manifest=manifest,
+    )
+    session = WriteSession(project)
+    service = ProjectWorkflowService(
+        session=session,
+        settings=SimpleNamespace(repository_allowed_root=tmp_path),  # type: ignore[arg-type]
+    )
+
+    run = await service.queue_requirements_run(project_id=project_id, actor_id="local-user")
+
+    audit_event = next(
+        row
+        for row in session.added
+        if isinstance(row, AuditEventModel) and row.event_type == "requirements.run.queued"
+    )
+    chain_record = next(row for row in session.added if isinstance(row, AuditChainRecordModel))
+    job = next(row for row in session.added if isinstance(row, JobModel))
+
+    assert session.flushed and session.committed
+    assert isinstance(run, CrewRunModel)
+    assert project.status == ProjectStatus.REQUIREMENTS_QUEUED
+    assert audit_event.payload["audit_chain"]["sequence"] == 1
+    assert audit_event.payload["audit_chain"]["record_hash"] == chain_record.record_hash
+    assert chain_record.stream_id == f"project:{project_id}"
+    assert chain_record.payload["event_type"] == "requirements.run.queued"
+    assert chain_record.payload["payload"]["job_id"] == str(job.id)
+    assert (
+        verify_chain_records(
+            [
+                {
+                    "stream_id": chain_record.stream_id,
+                    "sequence": chain_record.sequence,
+                    "previous_hash": chain_record.previous_hash,
+                    "record_hash": chain_record.record_hash,
+                    "payload": chain_record.payload,
+                }
+            ]
+        )
+        == []
+    )
 
 
 def test_prepare_project_repository_initializes_git_head(tmp_path) -> None:
