@@ -82,7 +82,7 @@ async def _authorize(
         )
     )
     if not decision.allowed:
-        repository.audit(
+        await repository.audit(
             event_type="continuity.capability_denied",
             actor_id=actor.subject,
             payload={"capability": capability, "reason": decision.reason},
@@ -105,7 +105,7 @@ async def create_service(
         raise HTTPException(status_code=422, detail="Primary and deputy must be distinct")
     value = ResilienceServiceModel(id=uuid.uuid4(), status="draft", **request.model_dump())
     session.add(value)
-    repository.audit(
+    await repository.audit(
         event_type="resilience.service_created",
         actor_id=actor.subject,
         payload={"service_id": str(value.id), "name": value.name},
@@ -171,7 +171,7 @@ async def create_objective(
     )
     session.add(row)
     service.status = "active"
-    repository.audit(
+    await repository.audit(
         event_type="resilience.objective_approved",
         actor_id=actor.subject,
         payload={"service_id": str(service_id), "policy_version": objective.policy_version},
@@ -215,7 +215,7 @@ async def create_dependency(
         raise HTTPException(status_code=404, detail="Service or dependency not found")
     row = ServiceDependencyModel(service_id=service_id, **request.model_dump())
     session.add(row)
-    repository.audit(
+    await repository.audit(
         event_type="resilience.dependency_recorded",
         actor_id=actor.subject,
         payload={
@@ -302,7 +302,7 @@ async def activate_continuity(
     )
     session.add(row)
     repo = SqlAlchemyResilienceRepository(session)
-    repo.audit(
+    await repo.audit(
         event_type="continuity.mode_activated",
         actor_id=actor.subject,
         payload={"activation_id": str(row.id), "mode": row.mode},
@@ -324,7 +324,7 @@ async def close_continuity(
     row.exit_reviewed_by = actor.subject
     row.closed_at = datetime.now(UTC)
     repo = SqlAlchemyResilienceRepository(session)
-    repo.audit(
+    await repo.audit(
         event_type="continuity.mode_closed",
         actor_id=actor.subject,
         payload={"activation_id": str(row.id)},
@@ -355,7 +355,7 @@ async def declare_backup(
     await _authorize(repository, Capability.APPEND_AUDIT, actor)
     row = BackupManifestModel(id=uuid.uuid4(), status=BackupStatus.CREATED, **request.model_dump())
     session.add(row)
-    repository.audit(
+    await repository.audit(
         event_type="backup.manifest_declared",
         actor_id=actor.subject,
         payload={"backup_id": str(row.id), "status": row.status},
@@ -414,7 +414,7 @@ async def record_restore_verification(
     try:
         recovered = ResilienceControlPlane().verify_restore(backup, verification)
     except ResiliencePolicyError as exc:
-        repository.audit(
+        await repository.audit(
             event_type="backup.restore_verification_failed",
             actor_id=actor.subject,
             payload={"backup_id": str(backup_id), "reason": str(exc)},
@@ -422,7 +422,7 @@ async def record_restore_verification(
         await session.commit()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     backup_row.status = recovered.status
-    repository.audit(
+    await repository.audit(
         event_type="backup.restore_verified",
         actor_id=actor.subject,
         payload={"backup_id": str(backup_id), "verification_id": str(row.id)},
@@ -477,7 +477,7 @@ async def create_dr_run(
         id=uuid.uuid4(), status=DisasterRecoveryStatus.DECLARED, **request.model_dump()
     )
     session.add(row)
-    repository.audit(
+    await repository.audit(
         event_type="dr.run_declared",
         actor_id=actor.subject,
         payload={"run_id": str(row.id), "recovery_site": row.recovery_site},
@@ -511,7 +511,7 @@ async def create_dr_plan(
         **request.model_dump(),
     )
     session.add(row)
-    repository.audit(
+    await repository.audit(
         event_type="dr.plan_approved",
         actor_id=actor.subject,
         payload={"plan_id": str(row.id), "plan_version": row.plan_version},
@@ -584,7 +584,7 @@ async def transition_dr_run(
         "exit_reviewed_by",
     ):
         setattr(row, field, getattr(updated, field))
-    repository.audit(
+    await repository.audit(
         event_type="dr.run_transitioned",
         actor_id=actor.subject,
         payload={"run_id": str(run_id), "status": updated.status},

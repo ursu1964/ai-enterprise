@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.integration.processor import IntegrationCommand
 from ai_enterprise.domain.execution.policies import DEFAULT_FORBIDDEN_PATHS, ExecutionScope
 from ai_enterprise.domain.hashing import hash_json, hash_text
@@ -17,7 +18,6 @@ from ai_enterprise.domain.integration.enums import (
 )
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
-    AuditEventModel,
     ExecutionRunModel,
     IntegrationApprovalModel,
     IntegrationAttemptModel,
@@ -101,7 +101,7 @@ class SqlAlchemyIntegrationAttemptStore:
         attempt.started_at = datetime.now(UTC)
         attempt.failure_code = None
         attempt.failure_message = None
-        self._audit(
+        await self._audit(
             attempt,
             "integration.verifying",
             {
@@ -163,7 +163,7 @@ class SqlAlchemyIntegrationAttemptStore:
             attempt.actual_base_tree_sha = str(value)
         if value := evidence.get("candidate_tree_sha") or evidence.get("tested_tree_sha"):
             attempt.resulting_tree_sha = str(value)
-        self._audit(attempt, event_type, evidence)
+        await self._audit(attempt, event_type, evidence)
         await self._session.commit()
 
     async def fail(
@@ -181,7 +181,7 @@ class SqlAlchemyIntegrationAttemptStore:
         execution = await self._session.get(ExecutionRunModel, attempt.execution_run_id)
         if execution is not None:
             execution.patch_status = PatchStatus.INTEGRATION_FAILED
-        self._audit(
+        await self._audit(
             attempt,
             "integration.attempt_failed",
             {"status": status, "failure_code": code, "failure_message": message},
@@ -205,7 +205,7 @@ class SqlAlchemyIntegrationAttemptStore:
         if execution is None:
             raise IntegrationAttemptLoadError("EXECUTION_NOT_FOUND")
         execution.patch_status = PatchStatus.INTEGRATED
-        self._audit(
+        await self._audit(
             attempt,
             "integration.completed",
             {
@@ -338,25 +338,22 @@ class SqlAlchemyIntegrationAttemptStore:
         )
         return ExecutionScope(allowed_paths=allowed, forbidden_paths=forbidden)
 
-    def _audit(
+    async def _audit(
         self,
         attempt: IntegrationAttemptModel,
         event_type: str,
         payload: dict[str, Any],
     ) -> None:
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=attempt.project_id,
-                event_type=event_type,
-                actor_type="integration_worker",
-                actor_id=attempt.worker_id or "unclaimed",
-                payload={
-                    "attempt_id": str(attempt.id),
-                    "correlation_id": str(attempt.correlation_id),
-                    **payload,
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=attempt.project_id,
+            event_type=event_type,
+            actor_type="integration_worker",
+            actor_id=attempt.worker_id or "unclaimed",
+            payload={
+                "attempt_id": str(attempt.id),
+                "correlation_id": str(attempt.correlation_id),
+                **payload,
+            },
         )
 
     @staticmethod

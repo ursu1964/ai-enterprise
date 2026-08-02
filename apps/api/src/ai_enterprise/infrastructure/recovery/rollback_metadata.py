@@ -6,12 +6,12 @@ from pathlib import Path, PurePosixPath
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.integration.processor import IntegrationCommand
 from ai_enterprise.domain.recovery.bindings import hash_changed_paths, rollback_binding_hash
 from ai_enterprise.domain.recovery.entities import ChangedPath
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
-    AuditEventModel,
     IntegrationApprovalModel,
     IntegrationAttemptModel,
     IntegrationCommitModel,
@@ -139,22 +139,23 @@ class SqlAlchemyRollbackMetadataHook:
             recovery_policy_version=self.POLICY_VERSION,
             rollback_binding_sha256=binding,
         )
-        self._session.add_all((artifact, integration_commit, rollback))
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(), project_id=attempt.project_id,
-                event_type="integration.rollback_metadata_created",
-                actor_type="integration_worker", actor_id=command.worker_id,
-                payload={
-                    "attempt_id": str(attempt.id), "commit_sha": remote.commit_sha,
-                    "tree_sha": remote.tree_sha, "parent_sha": remote.parent_sha,
-                    "inverse_diff_sha256": inverse_hash,
-                    "changed_paths_sha256": changed_hash,
-                    "rollback_binding_sha256": binding,
-                    "artifact_id": str(artifact.id),
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=attempt.project_id,
+            event_type="integration.rollback_metadata_created",
+            actor_type="integration_worker",
+            actor_id=command.worker_id,
+            payload={
+                "attempt_id": str(attempt.id),
+                "commit_sha": remote.commit_sha,
+                "tree_sha": remote.tree_sha,
+                "parent_sha": remote.parent_sha,
+                "inverse_diff_sha256": inverse_hash,
+                "changed_paths_sha256": changed_hash,
+                "rollback_binding_sha256": binding,
+                "artifact_id": str(artifact.id),
+            },
         )
+        self._session.add_all((artifact, integration_commit, rollback))
         await self._session.commit()
 
     @staticmethod

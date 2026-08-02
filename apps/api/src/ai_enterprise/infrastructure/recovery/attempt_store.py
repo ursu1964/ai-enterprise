@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.recovery.processor import RecoveryCommand
 from ai_enterprise.domain.execution.policies import DEFAULT_FORBIDDEN_PATHS, ExecutionScope
 from ai_enterprise.domain.hashing import canonical_json, hash_json, hash_text
@@ -20,7 +21,6 @@ from ai_enterprise.domain.recovery.enums import (
 )
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
-    AuditEventModel,
     ProjectModel,
     RecoveryAssessmentModel,
     RecoveryAttemptModel,
@@ -146,7 +146,7 @@ class SqlAlchemyRecoveryAttemptStore:
         )
         attempt.worker_id = worker_id
         attempt.started_at = attempt.started_at or now
-        self._audit(
+        await self._audit(
             attempt,
             "recovery.attempt_claimed",
             worker_id,
@@ -248,7 +248,9 @@ class SqlAlchemyRecoveryAttemptStore:
                 duration_ms=None,
             )
         )
-        self._audit(attempt, event_type, command.worker_id, {"run_id": str(run.id), **evidence})
+        await self._audit(
+            attempt, event_type, command.worker_id, {"run_id": str(run.id), **evidence}
+        )
         await self._session.commit()
 
     async def record_tests(
@@ -275,7 +277,7 @@ class SqlAlchemyRecoveryAttemptStore:
                     ),
                 )
             )
-        self._audit(
+        await self._audit(
             attempt,
             "recovery.tests_completed",
             command.worker_id,
@@ -319,7 +321,7 @@ class SqlAlchemyRecoveryAttemptStore:
                 author_email=email,
             )
         )
-        self._audit(
+        await self._audit(
             attempt,
             "recovery.commit_created",
             command.worker_id,
@@ -420,7 +422,7 @@ class SqlAlchemyRecoveryAttemptStore:
         run.failure_code = code
         run.completed_at = datetime.now(UTC)
         await self._close_stage(run.id, status="failed", failure_code=code)
-        self._audit(
+        await self._audit(
             attempt,
             "recovery.attempt_failed",
             command.worker_id,
@@ -447,7 +449,7 @@ class SqlAlchemyRecoveryAttemptStore:
         run.status = "completed"
         run.completed_at = datetime.now(UTC)
         await self._close_stage(run.id, status="completed")
-        self._audit(
+        await self._audit(
             attempt,
             "recovery.completed",
             command.worker_id,
@@ -609,22 +611,19 @@ class SqlAlchemyRecoveryAttemptStore:
             content_hash=hash_text(content),
         )
 
-    def _audit(
+    async def _audit(
         self, attempt: RecoveryAttemptModel, event: str, actor: str, payload: dict[str, Any]
     ) -> None:
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=attempt.project_id,
-                event_type=event,
-                actor_type="recovery_worker",
-                actor_id=actor,
-                payload={
-                    "attempt_id": str(attempt.id),
-                    "correlation_id": str(attempt.correlation_id),
-                    **payload,
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=attempt.project_id,
+            event_type=event,
+            actor_type="recovery_worker",
+            actor_id=actor,
+            payload={
+                "attempt_id": str(attempt.id),
+                "correlation_id": str(attempt.correlation_id),
+                **payload,
+            },
         )
 
     @staticmethod

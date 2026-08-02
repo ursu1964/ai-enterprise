@@ -1,3 +1,4 @@
+import inspect
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -57,7 +58,7 @@ class AuditWriter:
                 .limit(1)
                 .with_for_update()
             ) if hasattr(self._session, "scalar") else None
-        except IndexError:
+        except (IndexError, StopAsyncIteration):
             previous = None
         sequence = 1 if previous is None else previous.sequence + 1
         previous_hash = None if previous is None else previous.record_hash
@@ -109,5 +110,7 @@ class AuditWriter:
             self._session.add(event)
             self._session.add(chain_record)
         if hasattr(self._session, "flush"):
-            await self._session.flush()
+            flush_result = self._session.flush()
+            if inspect.isawaitable(flush_result):
+                await flush_result
         return AuditWriteResult(event=event, chain_record=chain_record)

@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.change_management.entities import (
     ChangeAuditRecord,
     ChangeDecision,
@@ -32,7 +33,6 @@ from ai_enterprise.domain.change_management.enums import (
     ChangeStatus,
     ImpactKnowledge,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 
 from .models import (
     ChangeDecisionModel,
@@ -715,18 +715,16 @@ class SqlAlchemyChangeAuditSink:
         self._session = session
 
     async def append(self, record: ChangeAuditRecord) -> None:
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=None,
-                event_type=record.event_type,
-                actor_type="governance_actor",
-                actor_id=record.actor_id,
-                payload={
-                    "aggregate_id": str(record.aggregate_id),
-                    "occurred_at": record.occurred_at.isoformat(),
-                    "payload_hash": record.payload_hash,
-                    **record.payload,
-                },
-            )
+        await AuditWriter(self._session).append_event(
+            stream_id=f"change:{record.aggregate_id}",
+            project_id=None,
+            event_type=record.event_type,
+            actor_type="governance_actor",
+            actor_id=record.actor_id,
+            payload={
+                "aggregate_id": str(record.aggregate_id),
+                "occurred_at": record.occurred_at.isoformat(),
+                "payload_hash": record.payload_hash,
+                **record.payload,
+            },
         )

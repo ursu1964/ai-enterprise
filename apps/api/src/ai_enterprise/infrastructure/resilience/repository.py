@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.resilience.entities import (
     BackupManifest,
     ContinuityActivation,
@@ -18,7 +18,6 @@ from ai_enterprise.domain.resilience.enums import (
     ContinuityMode,
     CriticalityTier,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.resilience.models import (
     BackupManifestModel,
     ContinuityActivationModel,
@@ -115,21 +114,18 @@ class SqlAlchemyResilienceRepository:
             BackupStatus(row.status),
         )
 
-    def audit(
+    async def audit(
         self,
         *,
         event_type: str,
         actor_id: str,
         payload: dict[str, object],
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=None,
-                event_type=event_type,
-                actor_type="human",
-                actor_id=actor_id,
-                payload=payload,
-                created_at=datetime.now(UTC),
-            )
+        await AuditWriter(self.session).append_event(
+            stream_id=f"resilience:{actor_id}",
+            project_id=None,
+            event_type=event_type,
+            actor_type="human",
+            actor_id=actor_id,
+            payload=payload,
         )
