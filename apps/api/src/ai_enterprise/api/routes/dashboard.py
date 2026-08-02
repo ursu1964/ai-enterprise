@@ -3510,6 +3510,60 @@ DASHBOARD_HTML = r"""<!doctype html>
       return "history";
     }
 
+    function jobRecoveryGroup(job) {
+      if (isProblemJob(job) && !isAcknowledgedJob(job)) {
+        return recoveryGroupMeta("needs_action");
+      }
+      if (["queued", "running", "leased", "retry_wait"].includes(job.status)) {
+        return recoveryGroupMeta("being_retried");
+      }
+      if (isAcknowledgedJob(job)) {
+        return recoveryGroupMeta("reviewed_history");
+      }
+      return recoveryGroupMeta("healthy_history");
+    }
+
+    function recoveryGroupMeta(key) {
+      return {
+        needs_action: {
+          key: "needs_action",
+          label: "Needs action",
+          className: "bad",
+          summary: "Failed work that needs operator recovery before retry.",
+        },
+        being_retried: {
+          key: "being_retried",
+          label: "Being retried",
+          className: "warn",
+          summary: "Work that is queued, leased, running, or waiting for retry.",
+        },
+        reviewed_history: {
+          key: "reviewed_history",
+          label: "Reviewed history",
+          className: "info",
+          summary: "Acknowledged failures preserved as evidence, not current blockers.",
+        },
+        healthy_history: {
+          key: "healthy_history",
+          label: "Healthy history",
+          className: "ok",
+          summary: "Completed or non-blocking historical work evidence.",
+        },
+      }[key];
+    }
+
+    function groupedJobs(jobs) {
+      const order = ["needs_action", "being_retried", "reviewed_history", "healthy_history"];
+      const groups = Object.fromEntries(order.map(key => [key, []]));
+      jobs.forEach(job => {
+        const group = jobRecoveryGroup(job);
+        groups[group.key].push(job);
+      });
+      return order
+        .map(key => ({ ...recoveryGroupMeta(key), jobs: groups[key] }))
+        .filter(group => group.jobs.length);
+    }
+
     function readableTime(value) {
       if (!value) return "Not reported yet";
       return new Date(value).toLocaleString();
@@ -3596,17 +3650,23 @@ DASHBOARD_HTML = r"""<!doctype html>
         if (filter === "current" || filter === "history") return jobGroup(job) === filter;
         return job.status === filter;
       });
-      byId("jobsTable").innerHTML = listbox(filtered, job => `
-        <div class="list-item">
-          <div>
-            <div class="list-title">${esc(humanJobType(job.job_type))}</div>
-            <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
-            <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
-            <details><summary>Technical detail</summary><div class="list-meta">${esc(job.last_error || "No raw diagnostic reported.")}</div></details>
-          </div>
-          <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
+      byId("jobsTable").innerHTML = groupedJobs(filtered).map(group => `
+        <div class="mini">
+          <strong class="${esc(group.className)}">${esc(group.label)}</strong>
+          <div class="list-meta">${esc(group.summary)}</div>
+          ${listbox(group.jobs, job => `
+            <div class="list-item">
+              <div>
+                <div class="list-title">${esc(humanJobType(job.job_type))}</div>
+                <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
+                <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
+                <details><summary>Technical detail</summary><div class="list-meta">${esc(job.last_error || "No raw diagnostic reported.")}</div></details>
+              </div>
+              <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
+            </div>
+          `, "No jobs in this recovery group.")}
         </div>
-      `, filter === "history"
+      `).join("") || listbox([], job => job, filter === "history"
         ? "No reviewed history is visible yet. Resolved jobs will appear here after completion or acknowledgment."
         : "No current work needs action. The factory is clear to inspect projects or create new work.");
       const workerFilter = byId("workerFilter").value;

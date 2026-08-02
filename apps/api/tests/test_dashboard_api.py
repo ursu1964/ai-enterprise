@@ -192,6 +192,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Historical worker instance. It is not part of current capacity." in response.text
     assert "Current action" in response.text
     assert "Reviewed history" in response.text
+    assert "Needs action" in response.text
+    assert "Being retried" in response.text
+    assert "Healthy history" in response.text
+    assert "groupedJobs" in response.text
+    assert "jobRecoveryGroup" in response.text
     assert "Business Telemetry" in response.text
     assert "Server Readiness" in response.text
     assert "/dashboard/server-readiness" in response.text
