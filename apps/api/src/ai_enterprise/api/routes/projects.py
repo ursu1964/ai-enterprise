@@ -13,13 +13,18 @@ from ai_enterprise.api.schemas import (
     WorkPackageApprovalRequest,
     WorkPackageResponse,
 )
-from ai_enterprise.application.operator_job_resolution import unresolved_problem_jobs
+from ai_enterprise.application.operator_job_resolution import (
+    job_is_acknowledged,
+    job_resolution,
+    unresolved_problem_jobs,
+)
 from ai_enterprise.application.project_workflow import (
     ArtifactNotFoundError,
     InvalidProjectStateError,
     ProjectNotFoundError,
     ProjectWorkflowService,
 )
+from ai_enterprise.application.query.read_models import meaning_for
 from ai_enterprise.application.workflow.service import WorkflowService
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
@@ -137,6 +142,12 @@ async def project_intelligence(
         ),
         0,
     )
+    problem_jobs = unresolved_problem_jobs(jobs)
+    historical_problem_jobs = [
+        job
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
     phases = []
     for index, (name, states) in enumerate(phase_states):
         phase_transitions = [
@@ -155,20 +166,42 @@ async def project_intelligence(
             status_value = "executed"
         else:
             status_value = "remaining"
+        phase_evidence = _phase_evidence(name, phase_transitions, artifacts, jobs)
+        is_current = status_value == "current"
         phases.append(
             {
                 "name": name,
+                "label": name.replace("_", " ").title(),
                 "status": status_value,
+                "status_meaning": meaning_for(status_value),
+                "confidence": _phase_confidence(status_value, phase_evidence, workflow),
                 "states": sorted(states),
                 "transition_count": len(phase_transitions),
                 "last_transition_at": (
                     None if not phase_transitions else phase_transitions[-1].occurred_at
                 ),
                 "details": [transition.reason for transition in phase_transitions[-3:]],
+                "owner_crew": _owner_crew_for_phase(name, runs),
+                "completed_evidence": phase_evidence,
+                "remaining_work": _phase_remaining_work(name, status_value),
+                "next_action": _phase_next_action(
+                    name,
+                    status_value,
+                    workflow.recommended_operator_action if workflow is not None else None,
+                ),
+                "current_issues": [
+                    _classified_error(job) for job in problem_jobs
+                ]
+                if is_current
+                else [],
+                "historical_issues": [
+                    _historical_issue(job) for job in historical_problem_jobs
+                ]
+                if is_current
+                else [],
             }
         )
     remaining_count = sum(1 for phase in phases if phase["status"] == "remaining")
-    problem_jobs = unresolved_problem_jobs(jobs)
     project_type = _project_type(project)
     specialist_agents = _specialist_agents(project_type)
     economic_effects = _economic_effects(jobs, runs, artifacts, work_packages, phases)
@@ -211,6 +244,8 @@ async def project_intelligence(
             _classified_error(job)
             for job in problem_jobs
         ],
+        "current_issues": [_classified_error(job) for job in problem_jobs],
+        "historical_issues": [_historical_issue(job) for job in historical_problem_jobs],
         "improvements": _improvements(problem_jobs, workflow, phases),
         "economic_effects": economic_effects,
         "reuse": {
@@ -285,6 +320,12 @@ def _telemetry(
         else round((completed_phases / total_phases) * 100, 1),
         "job_count": len(jobs),
         "problem_count": problem_count,
+        "historical_problem_count": sum(
+            1
+            for job in jobs
+            if job.status in {"failed", "dead_letter", "abandoned"}
+            and job_is_acknowledged(job)
+        ),
         "crew_run_count": len(runs),
         "artifact_count": len(artifacts),
         "work_package_count": len(work_packages),
@@ -437,6 +478,20 @@ def _classified_error(job: JobModel) -> dict[str, object]:
         "explanation": explanation,
         "likely_cause": likely_cause,
         "next_action": _job_recommendation(job),
+        "raw_diagnostic": job.last_error,
+    }
+
+
+def _historical_issue(job: JobModel) -> dict[str, object]:
+    resolution = job_resolution(job) or {}
+    return {
+        "job_id": job.id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "status_meaning": meaning_for("dead_letter" if job.status == "dead_letter" else job.status),
+        "resolution": resolution,
+        "explanation": "Reviewed history. The evidence is preserved but is not current risk.",
+        "operator_action": "Use this as learning evidence; do not block current project health.",
         "raw_diagnostic": job.last_error,
     }
 
@@ -646,6 +701,92 @@ def _artifact_proves_phase(name: str, artifacts: list[ArtifactModel]) -> bool:
         or name == "patch_review"
         and "patch-review-report" in artifact_types
     )
+
+
+def _phase_evidence(
+    name: str,
+    transitions: list[WorkflowTransitionModel],
+    artifacts: list[ArtifactModel],
+    jobs: list[JobModel],
+) -> list[str]:
+    evidence: list[str] = []
+    if transitions:
+        evidence.append(f"{len(transitions)} workflow transition(s)")
+    if _artifact_proves_phase(name, artifacts):
+        evidence.append("phase artifact")
+    if _job_proves_phase(name, jobs):
+        evidence.append("worker job evidence")
+    return evidence
+
+
+def _phase_confidence(
+    status: str,
+    evidence: list[str],
+    workflow: WorkflowInstanceModel | None,
+) -> str:
+    if status == "current" and workflow is not None:
+        return "live workflow"
+    if evidence:
+        return "evidence backed"
+    if status == "remaining":
+        return "planned"
+    return "inferred"
+
+
+def _owner_crew_for_phase(name: str, runs: list[CrewRunModel]) -> str:
+    phase_keywords = {
+        "requirements": ("requirements",),
+        "architecture": ("architecture",),
+        "planning": ("work_package", "planning"),
+        "execution": ("execution", "implementation"),
+        "patch_review": ("review",),
+        "integration": ("integration",),
+    }.get(name, (name,))
+    for run in reversed(runs):
+        crew_name = run.crew_name.lower()
+        if any(keyword in crew_name for keyword in phase_keywords):
+            return run.crew_name
+    if name in {"intake", "completed"}:
+        return "workflow-engine"
+    return f"{name.replace('_', ' ')} crew"
+
+
+def _phase_remaining_work(name: str, status: str) -> str:
+    if status == "executed":
+        return "Preserve evidence and continue to later phases."
+    if status == "current":
+        return "Finish the current gate and record the next transition."
+    return {
+        "requirements": "Produce and approve requirements evidence.",
+        "architecture": "Produce and approve architecture evidence.",
+        "planning": "Create and approve work packages.",
+        "execution": "Run implementation work under worker control.",
+        "patch_review": "Review implementation evidence before integration.",
+        "integration": "Integrate approved changes and verify recovery signals.",
+        "completed": "Collect completion evidence and reusable blueprints.",
+    }.get(name, "Wait for earlier phases to complete.")
+
+
+def _phase_next_action(
+    name: str,
+    status: str,
+    workflow_action: str | None,
+) -> str:
+    if status == "current" and workflow_action:
+        return workflow_action
+    if status == "executed":
+        return "Use this phase evidence when reviewing project proof."
+    if status == "current":
+        return "Complete the current phase and record the workflow transition."
+    return {
+        "requirements": "Start requirements when intake is complete.",
+        "architecture": "Approve requirements before architecture starts.",
+        "planning": "Approve architecture before work-package planning starts.",
+        "execution": "Approve the work package before execution starts.",
+        "patch_review": "Run implementation before patch review.",
+        "integration": "Approve patch review before integration.",
+        "completed": "Verify all evidence before marking the project complete.",
+    }.get(name, "Continue the guided workflow.")
 
 
 def _job_proves_phase(name: str, jobs: list[JobModel]) -> bool:

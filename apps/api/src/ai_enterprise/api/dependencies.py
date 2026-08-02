@@ -26,6 +26,7 @@ class Actor:
     role: str
     capabilities: frozenset[str] = frozenset()
     trusted: bool = False
+    scopes: frozenset[str] = frozenset()
 
 
 async def get_actor(
@@ -73,6 +74,7 @@ async def get_actor(
         )
     )
     capabilities: frozenset[str] = frozenset()
+    scopes: frozenset[str] = frozenset()
     durable_role = actor_role
     if identity is not None:
         now = datetime.now(UTC)
@@ -92,6 +94,7 @@ async def get_actor(
             ).all()
         )
         capabilities = frozenset(item.capability for item in grants)
+        scopes = frozenset(item.scope for item in grants)
         matching = next((item for item in grants if item.role == actor_role), None)
         if matching is None and settings.app_env.lower() in {"production", "staging"}:
             raise HTTPException(status_code=403, detail="No active authority grant")
@@ -105,6 +108,7 @@ async def get_actor(
         role=durable_role,
         capabilities=capabilities,
         trusted=trusted,
+        scopes=scopes,
     )
 
 

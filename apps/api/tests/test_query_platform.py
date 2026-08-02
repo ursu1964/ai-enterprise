@@ -193,17 +193,43 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
 
     assert response["query_policy"]["mode"] == "dashboard_manager_projection"
     assert response["headline"]["state"] == "active"
+    assert response["headline"]["meaning"]["label"] == "Active"
     assert response["totals"]["projects"] == 1
     assert response["totals"]["tasks_done"] == 1
     assert response["totals"]["tasks_active"] == 1
     assert response["totals"]["online_workers"] == 1
     assert response["projects"][0]["phase"] == "requirements"
+    assert response["projects"][0]["state_meaning"]["label"] == "Active"
+    assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
     assert response["projects"][0]["tasks"]["done"] == 1
     assert response["projects"][0]["tasks"]["active"] == 1
     assert response["projects"][0]["crews"][0]["name"] == "run requirements crew"
     assert response["projects"][0]["recent_events"][0]["event_type"] == "ManifestoIngested"
+    assert response["sections"]["projects"]["available"] is True
+    assert response["sections"]["projects"]["record_count"] == 1
+    assert response["sections"]["workers"]["record_count"] == 1
+    assert response["sections"]["graph"]["operator_action"] == (
+        "Use this section for the current operating picture."
+    )
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "assigns" for edge in response["graph"]["edges"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_manager_explains_empty_source_sections() -> None:
+    response = await dashboard_manager(
+        QuerySession([[], [], [], [], [], [], [], []]), actor()
+    )  # type: ignore[arg-type]
+
+    assert response["headline"]["state"] == "waiting_for_manifesto"
+    assert response["sections"]["projects"]["state"] == "empty"
+    assert response["sections"]["projects"]["empty_reason"] == (
+        "No manifesto project has been created yet."
+    )
+    assert response["sections"]["graph"]["meaning"]["label"] == "No records yet"
+    assert response["sections"]["workers"]["operator_action"] == (
+        "Start worker services before scaling parallel work."
+    )
 
 
 @pytest.mark.asyncio

@@ -4,10 +4,12 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from ai_enterprise.api.routes.dashboard import dashboard_context, dashboard_telemetry_summary
 from ai_enterprise.api.routes.projects import list_projects, project_intelligence
+from ai_enterprise.config import get_settings
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.infrastructure.database.models import CrewRunModel, JobModel, ProjectModel
 from ai_enterprise.infrastructure.database.workflow_models import (
@@ -359,6 +361,10 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["project_phase"] == "architecture"
     assert response["project_status_phase"] == "intake"
     assert response["phases"][2]["status"] == "current"
+    assert response["phases"][2]["label"] == "Architecture"
+    assert response["phases"][2]["confidence"] == "live workflow"
+    assert response["phases"][2]["owner_crew"] == "architecture"
+    assert response["phases"][2]["next_action"] == "Approve architecture."
     assert response["remaining_steps"]
     assert response["crew"][0]["crew_name"] == "architecture"
     assert response["jobs"][0]["job_type"] == "plan_work_package"
@@ -515,7 +521,13 @@ async def test_project_intelligence_treats_acknowledged_dead_letters_as_history(
     )
 
     assert response["errors"] == []
+    assert response["current_issues"] == []
+    assert len(response["historical_issues"]) == 1
+    assert response["historical_issues"][0]["explanation"] == (
+        "Reviewed history. The evidence is preserved but is not current risk."
+    )
     assert response["telemetry"]["problem_count"] == 0
+    assert response["telemetry"]["historical_problem_count"] == 1
     assert response["telemetry"]["signal"] == "nominal"
     assert response["economic_effects"]["viability"] == "viable"
     assert response["calibration"][2]["name"] == "error_followup"
@@ -553,6 +565,20 @@ async def test_dashboard_context_supplies_local_graph_authority_and_ids() -> Non
     assert response["project_id"] == str(project.id)
     assert response["actor_headers"]["X-Actor-Role"] == "platform-admin"
     assert response["authority"]["mode"] == "local-dashboard-context"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_context_is_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await dashboard_context(DashboardSession([], []))  # type: ignore[arg-type]
+    finally:
+        get_settings.cache_clear()
+
+    assert getattr(exc.value, "status_code", None) == 403
+    assert "disabled outside development" in str(getattr(exc.value, "detail", ""))
 
 
 @pytest.mark.asyncio

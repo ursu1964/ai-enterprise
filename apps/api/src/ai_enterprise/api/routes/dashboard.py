@@ -15,6 +15,7 @@ from ai_enterprise.application.operator_job_resolution import (
     job_is_acknowledged,
     unresolved_problem_jobs,
 )
+from ai_enterprise.config import get_settings
 from ai_enterprise.infrastructure.database.models import JobModel, ProjectModel
 from ai_enterprise.infrastructure.organization.models import OrganizationModel
 from ai_enterprise.infrastructure.performance.models import PerformanceMetricModel
@@ -72,6 +73,12 @@ async def graphify_dashboard() -> FileResponse:
 
 @router.get("/dashboard/context")
 async def dashboard_context(session: SessionDependency) -> dict[str, object]:
+    settings = get_settings()
+    if settings.app_env.lower() in {"production", "staging"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Local dashboard context is disabled outside development.",
+        )
     organization = await session.scalar(select(OrganizationModel).order_by(OrganizationModel.name))
     project = await session.scalar(select(ProjectModel).order_by(ProjectModel.updated_at.desc()))
     headers = {

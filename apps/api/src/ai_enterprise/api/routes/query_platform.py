@@ -14,6 +14,7 @@ from ai_enterprise.application.operator_job_resolution import (
     job_resolution,
     unresolved_problem_jobs,
 )
+from ai_enterprise.application.query.read_models import meaning_for, source_contract
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
     AuditEventModel,
@@ -579,13 +580,18 @@ async def dashboard_manager(
             if project_workflow or project_jobs
             else "intake"
         )
+        current_meaning = meaning_for(state)
+        phase_meaning = meaning_for(phase)
         summaries.append(
             {
                 "id": project.id,
                 "name": project.name,
                 "status": project.status,
+                "status_meaning": meaning_for(project.status),
                 "phase": phase,
+                "phase_meaning": phase_meaning,
                 "state": state,
+                "state_meaning": current_meaning,
                 "repository_path": project.repository_path,
                 "project_type": project.manifest.get("project_type", "enterprise_project")
                 if isinstance(project.manifest, dict)
@@ -646,6 +652,7 @@ async def dashboard_manager(
         },
         "headline": {
             "state": manager_state,
+            "meaning": meaning_for(manager_state),
             "summary": (
                 f"{_count_phrase(len(summaries), 'project')}, "
                 f"{_count_phrase(total_done, 'done task')}, "
@@ -671,6 +678,59 @@ async def dashboard_manager(
             "worker_signals": len(workers),
             "events": len(audits),
             "governed_metrics": len(metrics),
+        },
+        "sections": {
+            "projects": source_contract(
+                name="Projects",
+                endpoint="/api/v1/projects",
+                record_count=len(projects),
+                latest_at=_latest_time(projects, "updated_at"),
+                empty_reason="No manifesto project has been created yet.",
+                operator_action="Open Factory and create or ingest a manifesto project.",
+            ),
+            "workflows": source_contract(
+                name="Workflows",
+                endpoint="/api/v1/workflows",
+                record_count=len(workflows),
+                latest_at=_latest_time(workflows, "updated_at"),
+                empty_reason="Projects exist without durable workflow records.",
+                operator_action="Start or relink workflows before presenting execution proof.",
+            ),
+            "jobs": source_contract(
+                name="Jobs",
+                endpoint="/api/v1/operator/jobs",
+                record_count=len(jobs),
+                latest_at=_latest_time(jobs, "created_at"),
+                empty_reason="No worker jobs have been queued or executed for these projects.",
+                operator_action="Start workflow execution to create job evidence.",
+            ),
+            "workers": source_contract(
+                name="Workers",
+                endpoint="/api/v1/operator/jobs/worker-instances",
+                record_count=len(workers),
+                latest_at=_latest_time(workers, "last_heartbeat_at"),
+                empty_reason="No worker heartbeat is visible.",
+                operator_action="Start worker services before scaling parallel work.",
+            ),
+            "telemetry": source_contract(
+                name="Telemetry",
+                endpoint="/dashboard/telemetry-summary",
+                record_count=len(metrics) + len(audits),
+                latest_at=_latest_time(metrics, "calculated_at")
+                or _latest_time(audits, "created_at"),
+                empty_reason="No governed metrics or audit events are visible for this view.",
+                operator_action="Run work and collect audit or performance evidence.",
+            ),
+            "graph": source_contract(
+                name="Execution Graph",
+                endpoint="/api/v1/query/dashboard-manager",
+                record_count=len(summaries),
+                latest_at=datetime.now(UTC) if summaries else None,
+                empty_reason=(
+                    "The graph has no project nodes because no project records are visible."
+                ),
+                operator_action="Use this section for the current operating picture.",
+            ),
         },
         "projects": summaries,
         "telemetry": {
