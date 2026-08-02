@@ -8,19 +8,31 @@ class IllegalWorkflowTransition(ValueError):
 LEGAL_TRANSITIONS: dict[WorkflowState, frozenset[WorkflowState]] = {
     WorkflowState.PROJECT_CREATED: frozenset({WorkflowState.REQUIREMENTS_RUNNING}),
     WorkflowState.REQUIREMENTS_RUNNING: frozenset(
-        {WorkflowState.WAITING_REQUIREMENTS_APPROVAL, WorkflowState.FAILED}
+        {
+            WorkflowState.WAITING_REQUIREMENTS_APPROVAL,
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowState.FAILED,
+        }
     ),
     WorkflowState.WAITING_REQUIREMENTS_APPROVAL: frozenset(
         {WorkflowState.ARCHITECTURE_RUNNING, WorkflowState.FAILED}
     ),
     WorkflowState.ARCHITECTURE_RUNNING: frozenset(
-        {WorkflowState.WAITING_ARCHITECTURE_APPROVAL, WorkflowState.FAILED}
+        {
+            WorkflowState.WAITING_ARCHITECTURE_APPROVAL,
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowState.FAILED,
+        }
     ),
     WorkflowState.WAITING_ARCHITECTURE_APPROVAL: frozenset(
         {WorkflowState.PLANNING_RUNNING, WorkflowState.FAILED}
     ),
     WorkflowState.PLANNING_RUNNING: frozenset(
-        {WorkflowState.WAITING_WORK_PACKAGE_APPROVAL, WorkflowState.FAILED}
+        {
+            WorkflowState.WAITING_WORK_PACKAGE_APPROVAL,
+            WorkflowState.EXECUTION_RUNNING,
+            WorkflowState.FAILED,
+        }
     ),
     WorkflowState.WAITING_WORK_PACKAGE_APPROVAL: frozenset(
         {WorkflowState.EXECUTION_RUNNING, WorkflowState.FAILED}

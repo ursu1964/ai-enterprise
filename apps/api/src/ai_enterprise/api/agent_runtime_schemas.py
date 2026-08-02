@@ -43,6 +43,33 @@ class ModelHealthRequest(BaseModel):
     detail: str = ""
 
 
+class CreatePromptRequest(RuntimeCommand):
+    organization_id: uuid.UUID
+    prompt_key: str = Field(min_length=3, max_length=160)
+    name: str = Field(min_length=3, max_length=240)
+    owner: str = Field(min_length=2, max_length=200)
+    department: str = Field(min_length=2, max_length=120)
+    applicable_crew: str = Field(min_length=2, max_length=120)
+
+
+class CreatePromptVersionRequest(RuntimeCommand):
+    prompt_layers: dict[str, Any]
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    policy_document: dict[str, Any] = Field(default_factory=dict)
+
+
+class CompiledPromptResponse(BaseModel):
+    prompt_id: uuid.UUID
+    prompt_key: str
+    version_id: uuid.UUID
+    version_number: int
+    prompt_hash: str
+    approval_status: str
+    compiled_layers: list[dict[str, Any]]
+    output_schema: dict[str, Any]
+    policy_document: dict[str, Any]
+
+
 class CreateRuntimeSessionRequest(RuntimeCommand):
     workflow_type: str
     workflow_run_id: uuid.UUID
@@ -75,6 +102,29 @@ class SkillVersionResponse(OrmResult):
     version_number: int
     skill_document: dict[str, Any]
     skill_hash: str
+    approval_status: str
+
+
+class PromptResponse(OrmResult):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    prompt_key: str
+    name: str
+    owner: str
+    department: str
+    applicable_crew: str
+    status: str
+    current_version_id: uuid.UUID | None
+
+
+class PromptVersionResponse(OrmResult):
+    id: uuid.UUID
+    prompt_id: uuid.UUID
+    version_number: int
+    prompt_layers: dict[str, Any]
+    output_schema: dict[str, Any]
+    policy_document: dict[str, Any]
+    prompt_hash: str
     approval_status: str
 
 

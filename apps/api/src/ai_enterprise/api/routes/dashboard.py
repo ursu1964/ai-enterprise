@@ -1,0 +1,3086 @@
+"""API-hosted operator dashboard."""
+
+# ruff: noqa: E501
+
+import uuid
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from sqlalchemy import select
+
+from ai_enterprise.api.dependencies import SessionDependency
+from ai_enterprise.application.operator_job_resolution import (
+    job_is_acknowledged,
+    unresolved_problem_jobs,
+)
+from ai_enterprise.infrastructure.database.models import JobModel, ProjectModel
+from ai_enterprise.infrastructure.organization.models import OrganizationModel
+from ai_enterprise.infrastructure.performance.models import PerformanceMetricModel
+
+router = APIRouter(tags=["dashboard"])
+
+GRAPHIFY_HTML = Path("/app/graphify-out/graph.html")
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+async def enterprise_dashboard() -> HTMLResponse:
+    return HTMLResponse(DASHBOARD_HTML)
+
+
+@router.get("/dashboard/demo", response_class=HTMLResponse)
+async def enterprise_demo() -> HTMLResponse:
+    return HTMLResponse(DEMO_HTML)
+
+
+@router.get("/dashboard/documentation-hub", response_class=HTMLResponse)
+async def documentation_hub() -> HTMLResponse:
+    return HTMLResponse(DOCUMENTATION_HUB_HTML)
+
+
+@router.get("/dashboard/client-manifest-template", response_class=PlainTextResponse)
+async def client_manifest_template() -> PlainTextResponse:
+    return PlainTextResponse(
+        CLIENT_MANIFEST_TEMPLATE,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="ai-enterprise-client-project-manifest.md"'
+            )
+        },
+    )
+
+
+@router.get("/dashboard/project-foundry-core", response_class=PlainTextResponse)
+async def project_foundry_core() -> PlainTextResponse:
+    return PlainTextResponse(
+        PROJECT_FOUNDRY_CORE_DOWNLOAD,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="project-foundry-core-v0.1.md"'
+        },
+    )
+
+
+@router.get("/dashboard/graphify", response_class=FileResponse)
+async def graphify_dashboard() -> FileResponse:
+    if not GRAPHIFY_HTML.exists():
+        raise HTTPException(status_code=404, detail="Graphify dashboard is not mounted")
+    return FileResponse(GRAPHIFY_HTML, media_type="text/html")
+
+
+@router.get("/dashboard/context")
+async def dashboard_context(session: SessionDependency) -> dict[str, object]:
+    organization = await session.scalar(select(OrganizationModel).order_by(OrganizationModel.name))
+    project = await session.scalar(select(ProjectModel).order_by(ProjectModel.updated_at.desc()))
+    headers = {
+        "X-Actor-ID": "local-dashboard-admin",
+        "X-Actor-Type": "human",
+        "X-Actor-Role": "platform-admin",
+    }
+    return {
+        "actor_headers": headers,
+        "organization_id": None if organization is None else str(organization.id),
+        "organization_name": None if organization is None else organization.name,
+        "project_id": None if project is None else str(project.id),
+        "project_name": None if project is None else project.name,
+        "authority": {
+            "mode": "local-dashboard-context",
+            "role": "platform-admin",
+            "explanation": (
+                "Local development context for dashboard graph checks. Production still requires "
+                "trusted proxy authentication and durable authority grants."
+            ),
+        },
+    }
+
+
+@router.get("/dashboard/telemetry-summary")
+async def dashboard_telemetry_summary(
+    session: SessionDependency, organization_id: uuid.UUID | None = None
+) -> dict[str, Any]:
+    projects = list((await session.scalars(select(ProjectModel))).all())
+    jobs = list((await session.scalars(select(JobModel))).all())
+    performance_metrics: list[PerformanceMetricModel] = []
+    if organization_id is not None:
+        performance_metrics = list(
+            (
+                await session.scalars(
+                    select(PerformanceMetricModel)
+                    .where(PerformanceMetricModel.organization_id == organization_id)
+                    .order_by(PerformanceMetricModel.calculated_at.desc())
+                    .limit(20)
+                )
+            ).all()
+        )
+    problem_jobs = unresolved_problem_jobs(jobs)
+    acknowledged_problem_jobs = [
+        job
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
+    running_jobs = [job for job in jobs if job.status in {"running", "leased"}]
+    queued_jobs = [job for job in jobs if job.status in {"queued", "retry_wait"}]
+    return {
+        "runtime": {
+            "project_count": len(projects),
+            "job_count": len(jobs),
+            "running_job_count": len(running_jobs),
+            "queued_job_count": len(queued_jobs),
+            "problem_job_count": len(problem_jobs),
+            "acknowledged_problem_job_count": len(acknowledged_problem_jobs),
+            "signal": "attention_required" if problem_jobs else "nominal",
+        },
+        "governed_performance": {
+            "organization_id": None if organization_id is None else str(organization_id),
+            "metric_count": len(performance_metrics),
+            "metrics": [
+                {
+                    "metric_name": row.metric_key,
+                    "scope_type": row.scope_type,
+                    "score": float(row.metric_value),
+                    "calculated_at": row.calculated_at,
+                    "policy_version": row.policy_version,
+                }
+                for row in performance_metrics
+            ],
+            "status": "context_required" if organization_id is None else "available",
+        },
+        "operator_summary": (
+            "Telemetry is nominal."
+            if not problem_jobs
+            else "Telemetry shows failed or dead-letter work that needs operator attention."
+        ),
+    }
+
+
+CLIENT_MANIFEST_TEMPLATE = """# AI-Enterprise Client Project Manifest
+
+This document collects the information AI Enterprise needs before creating a project.
+Complete what you know. If something is unknown, leave it blank and AI Enterprise will identify the
+gap during intake.
+
+## Chapter 1 - Project Identity
+
+Project Name:
+Company / Organization:
+Primary Contact:
+Project Sponsor:
+Date:
+Version:
+Confidentiality Level:
+Preferred Communication Method:
+Project Base Directory:
+GitHub Repository URL:
+Default Branch: main
+
+## Chapter 2 - Executive Vision
+
+Why does this project exist?
+What problem are you trying to solve?
+Why is solving it important?
+What would success look like?
+What happens if this project is never built?
+What business opportunity does it create?
+Why now?
+
+## Chapter 3 - Business Profile
+
+Describe your company.
+What industry are you in?
+How large is the organization?
+How many employees?
+Which countries do you operate in?
+Describe your business model.
+What products or services do you offer?
+
+## Chapter 4 - Current Situation
+
+Describe your current environment.
+Include current software, infrastructure, manual processes, pain points, repeated work, and current
+workflows.
+
+## Chapter 5 - Project Objectives
+
+Critical Objectives:
+High Priority:
+Medium Priority:
+Future Ideas:
+
+## Chapter 6 - Problems to Solve
+
+Problem:
+Impact:
+Frequency:
+Business Cost:
+Current Workaround:
+Desired Outcome:
+
+## Chapter 7 - Target Users
+
+Who will use the system?
+How many users?
+Technical skill level?
+Languages?
+Accessibility requirements?
+
+## Chapter 8 - Functional Expectations
+
+Describe what the system should do. Examples: user management, reports, AI assistant, voice
+commands, automation, notifications, dashboards, integrations, scheduling, payments, inventory,
+CRM, ERP.
+
+## Chapter 9 - Non-Functional Expectations
+
+Performance:
+Security:
+Reliability:
+Availability:
+Scalability:
+Offline Support:
+Cloud:
+Local Installation:
+Cross Platform:
+Mobile:
+Accessibility:
+Compliance:
+
+## Chapter 10 - Existing Systems
+
+What already exists? Include CRM, ERP, accounting, database, website, desktop software, cloud
+services, email, authentication, storage, APIs, and legacy systems.
+
+## Chapter 11 - Data
+
+What data already exists?
+Where is it stored?
+Estimated size?
+Sensitive data?
+Retention rules?
+
+## Chapter 12 - AI Requirements
+
+Do you want chatbot, voice assistant, automation, document analysis, predictions, image processing,
+speech recognition, natural language processing, agent teams, decision support, or other AI
+capabilities?
+
+## Chapter 13 - Automation
+
+Which repetitive tasks should disappear?
+What currently requires manual work?
+What approvals exist?
+Who performs them?
+
+## Chapter 14 - Integrations
+
+What systems should communicate? Include internal software, external APIs, hardware, IoT, payment
+systems, email, cloud services, ERP, and CRM.
+
+## Chapter 15 - Security
+
+Required authentication:
+Multi-factor authentication:
+User roles:
+Permissions:
+Encryption:
+Audit logs:
+Compliance:
+Backups:
+Disaster recovery:
+
+## Chapter 16 - Infrastructure
+
+Desktop:
+Web:
+Mobile:
+Windows:
+Linux:
+Mac:
+Cloud:
+On-premise:
+Hybrid:
+Virtualization:
+Containers:
+
+## Chapter 17 - User Experience
+
+Preferred interface:
+Dark Mode:
+Accessibility:
+Multiple languages:
+Branding:
+Voice:
+Touch:
+Keyboard:
+
+## Chapter 18 - Constraints
+
+Budget:
+Deadline:
+Technology restrictions:
+Legal restrictions:
+Existing contracts:
+Mandatory software:
+Forbidden software:
+Performance limits:
+
+## Chapter 19 - Risks
+
+What worries you most? Budget, security, time, adoption, training, migration, data loss, or
+compliance?
+
+## Chapter 20 - Success Criteria
+
+How will success be measured?
+Business KPIs:
+Technical KPIs:
+User Satisfaction:
+Performance:
+Cost Reduction:
+Time Savings:
+Revenue:
+Quality:
+
+## Chapter 21 - Future Vision
+
+Where should this system be in 1 year, 3 years, and 5 years?
+
+## Chapter 22 - Supporting Material
+
+List PDFs, Word documents, spreadsheets, architecture, images, videos, audio, emails, existing code,
+diagrams, contracts, or anything useful.
+
+## Chapter 23 - Final Notes
+
+Anything not already covered. Ideas, concerns, or special requests.
+"""
+
+
+PROJECT_FOUNDRY_CORE_DOWNLOAD = """# Project Foundry Core v0.1
+
+Project Foundry is the AEOS operating framework for turning a client idea into a governed project.
+
+## Lifecycle
+
+Project idea -> structured intake -> requirements -> risk analysis -> architecture -> work
+breakdown -> specialist agents -> integration -> testing -> security validation -> deployment
+package -> documentation -> operations -> improvement.
+
+## Core Contracts
+
+- Project Intake Schema
+- Requirements Schema
+- Execution Plan Schema
+- Agent Task Schema
+- Review Report Schema
+- Approval Matrix
+- Quality Gates
+- Root AGENTS.md
+- Prompt Contracts
+- Repository Template
+
+## Agent Hierarchy
+
+- Executive Orchestrator
+- Project Manager Agent
+- Requirements Analyst Agent
+- Solution Architect Agent
+- Domain Expert Agents
+- Implementation Agents
+- Verification Agents
+- Release Manager Agent
+
+## Quality Gates
+
+Gate 0: intake completeness.
+Gate 1: requirements approval.
+Gate 2: architecture approval.
+Gate 3: implementation readiness.
+Gate 4: component verification.
+Gate 5: integration verification.
+Gate 6: release readiness.
+
+## Autonomy Boundary
+
+Project Foundry targets controlled autonomy. It can analyze repositories, draft architecture,
+decompose work, generate code, run tests, prepare integration, and create release artifacts. It must
+not deploy to production, delete customer data, expose services publicly, change enterprise security
+policy, use unrestricted administrator credentials, purchase services, make legal commitments, or
+approve its own security exceptions.
+
+Canonical repo artifacts:
+
+- docs/aeos/README.md
+- docs/aeos/project-foundry-core-v0.1.md
+- specifications/aeos/
+- templates/project-foundry/
+"""
+
+
+DOCUMENTATION_HUB_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Enterprise Documentation Hub</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: rgba(13, 18, 24, 0.9);
+      --border: rgba(143, 166, 190, 0.24);
+      --text: #edf4fb;
+      --muted: #a6b4c2;
+      --blue: #5db8ff;
+      --green: #56e39f;
+      --amber: #ffd166;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 12% 12%, rgba(93, 184, 255, 0.22), transparent 30%),
+        linear-gradient(135deg, #07090d, #0d1418 52%, #080a0e);
+      color: var(--text);
+    }
+    main { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 40px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.5rem, 3vw, 2.35rem); }
+    h2 { margin: 0 0 10px; font-size: 1rem; }
+    p { color: var(--muted); line-height: 1.48; margin: 0; }
+    a { color: inherit; }
+    .button {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(15, 23, 31, 0.86);
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 650;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
+    }
+    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
+    .span-12 { grid-column: span 12; }
+    .listbox { display: grid; gap: 8px; max-height: 360px; overflow: auto; padding-right: 4px; }
+    .item {
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.78);
+      padding: 10px;
+      display: grid;
+      gap: 4px;
+      text-decoration: none;
+    }
+    .item strong { color: var(--text); }
+    .item span, code { color: var(--muted); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .pill { color: var(--green); font-weight: 700; }
+    @media (max-width: 760px) { .span-4, .span-6 { grid-column: span 12; } header { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Documentation Hub</h1>
+        <p>One place for project documents, graph views, operator commands, and the required close-out discipline.</p>
+      </div>
+      <a class="button" href="/dashboard">Back to Command Center</a>
+    </header>
+    <section class="grid">
+      <article class="panel span-12">
+        <h2>Working Method</h2>
+        <div class="listbox">
+          <div class="item"><strong>1. Plan</strong><span>Write or update the implementation plan before changing behavior.</span></div>
+          <div class="item"><strong>2. Execute</strong><span>Implement the smallest disciplined slice connected to real data sources.</span></div>
+          <div class="item"><strong>3. Verify</strong><span>Run focused tests, full gates when needed, live endpoint checks, and graphify update.</span></div>
+          <div class="item"><strong>4. Document</strong><span>If verification passes, update affected documentation in the same change.</span></div>
+        </div>
+      </article>
+      <article class="panel span-4">
+        <h2>Operator Documents</h2>
+        <div class="listbox">
+          <a class="item" href="/dashboard/client-manifest-template"><strong>Client Manifest Template</strong><span>Download and send to a client or requesting service.</span></a>
+          <a class="item" href="/dashboard/project-foundry-core"><strong>Project Foundry Core</strong><span>AEOS project factory contracts, gates, and prompt rules.</span></a>
+          <div class="item"><strong>Operator Startup Guide</strong><span><code>docs/enterprise/operator-startup-guide.md</code></span></div>
+          <div class="item"><strong>Project Execution Walkthrough</strong><span><code>docs/enterprise/project-execution-walkthrough.md</code></span></div>
+          <div class="item"><strong>Working Method</strong><span><code>docs/enterprise/working-method.md</code></span></div>
+        </div>
+      </article>
+      <article class="panel span-4">
+        <h2>Graphs and Images</h2>
+        <div class="listbox">
+          <a class="item" href="/dashboard"><strong>Execution Graph</strong><span>Open the Execution tab for live project advancement.</span></a>
+          <a class="item" href="/dashboard/graphify"><strong>Code Graph</strong><span>Architecture graph generated from graphify.</span></a>
+          <div class="item"><strong>Enterprise Movement Graph</strong><span>Open Overview in the command center.</span></div>
+          <div class="item"><strong>Future Visual Library</strong><span>Store reference images, project diagrams, and proof screenshots beside project docs.</span></div>
+        </div>
+      </article>
+      <article class="panel span-4">
+        <h2>Commands</h2>
+        <div class="listbox">
+          <div class="item"><strong>Start stack</strong><span><code>docker compose up --build -d</code></span></div>
+          <div class="item"><strong>Readiness</strong><span><code>curl http://localhost:8000/health/ready</code></span></div>
+          <div class="item"><strong>Execution manager</strong><span><code>curl /api/v1/query/dashboard-manager</code></span></div>
+          <div class="item"><strong>Verification</strong><span><code>pytest -q</code>, <code>ruff check</code>, <code>mypy src</code></span></div>
+          <div class="item"><strong>Graph update</strong><span><code>graphify update .</code></span></div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
+DASHBOARD_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Enterprise Command Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06080b;
+      --panel: rgba(14, 18, 24, 0.86);
+      --panel-strong: rgba(20, 27, 35, 0.94);
+      --border: rgba(143, 166, 190, 0.24);
+      --text: #edf4fb;
+      --muted: #9eafbf;
+      --green: #56e39f;
+      --blue: #5db8ff;
+      --amber: #ffd166;
+      --red: #ff6b6b;
+      --line: rgba(93, 184, 255, 0.28);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: radial-gradient(circle at 12% 10%, rgba(45, 115, 141, 0.24), transparent 30%),
+        radial-gradient(circle at 88% 18%, rgba(78, 116, 99, 0.18), transparent 26%),
+        linear-gradient(135deg, #06080b 0%, #0a1116 48%, #090b0f 100%);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    canvas#field {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.55;
+    }
+
+    a { color: inherit; }
+    .shell {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 32px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .identity h1 {
+      margin: 0 0 4px;
+      font-size: clamp(1.35rem, 3vw, 2.15rem);
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .identity p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    button, .link-button {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(15, 23, 31, 0.86);
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 650;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    button:hover, .link-button:hover { border-color: rgba(93, 184, 255, 0.72); }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .coach {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      border-color: rgba(86, 227, 159, 0.36);
+      background: rgba(8, 18, 18, 0.9);
+    }
+
+    .coach strong { display: block; margin-bottom: 4px; }
+    .coach p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .coach .coach-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .orientation {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+      border-color: rgba(93, 184, 255, 0.36);
+    }
+
+    .orientation-steps {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .orientation-step {
+      min-height: 72px;
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.74);
+      padding: 10px;
+    }
+
+    .orientation-step strong { display: block; margin-bottom: 4px; font-size: 0.82rem; }
+    .orientation-step span { display: block; color: var(--muted); font-size: 0.76rem; line-height: 1.3; }
+    .orientation-step.done { border-color: rgba(86, 227, 159, 0.54); }
+    .orientation-step.current { border-color: rgba(93, 184, 255, 0.9); background: rgba(93, 184, 255, 0.15); }
+
+    .orientation-next {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .orientation-next p { margin: 0; color: var(--muted); line-height: 1.4; }
+    .source-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .source-card {
+      min-height: 66px;
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.76);
+      padding: 10px;
+      color: var(--text);
+      text-align: left;
+      display: block;
+      width: 100%;
+      white-space: normal;
+    }
+
+    .source-card:hover { border-color: rgba(93, 184, 255, 0.72); }
+    .source-card strong { display: block; margin-bottom: 4px; }
+    .source-card span { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+
+    .business-board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .business-card {
+      min-height: 132px;
+      border: 1px solid rgba(143, 166, 190, 0.2);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.82);
+      padding: 12px;
+      display: grid;
+      align-content: space-between;
+      gap: 10px;
+    }
+
+    .business-card strong { display: block; font-size: 0.92rem; }
+    .business-card p { margin: 0; color: var(--muted); line-height: 1.42; font-size: 0.86rem; }
+    .business-card button { width: 100%; }
+
+    .tab[aria-selected="true"] {
+      background: rgba(93, 184, 255, 0.17);
+      border-color: rgba(93, 184, 255, 0.78);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(10px);
+    }
+
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      letter-spacing: 0;
+    }
+
+    .metric {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .living-signal {
+      display: grid;
+      gap: 8px;
+    }
+
+    .pulse-row {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.86rem;
+    }
+
+    .pulse-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(143, 166, 190, 0.14);
+      overflow: hidden;
+    }
+
+    .pulse-fill {
+      height: 100%;
+      min-width: 8%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+      animation: breathe 2.8s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      50% { filter: brightness(1.35); opacity: 0.82; }
+    }
+
+    .muted { color: var(--muted); }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 720;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--muted);
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .ok { color: var(--green); }
+    .warn { color: var(--amber); }
+    .bad { color: var(--red); }
+    .info { color: var(--blue); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid rgba(143, 166, 190, 0.14);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      font-weight: 780;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    input, select, textarea {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(3, 7, 11, 0.72);
+      color: var(--text);
+      padding: 0 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 108px;
+      padding: 10px;
+      resize: vertical;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .mini {
+      background: var(--panel-strong);
+      border: 1px solid rgba(143, 166, 190, 0.16);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 92px;
+    }
+
+    .mini strong { display: block; margin-bottom: 6px; }
+    .listbox {
+      display: grid;
+      gap: 8px;
+      max-height: 420px;
+      overflow: auto;
+      padding: 2px 4px 2px 0;
+      scrollbar-color: rgba(93, 184, 255, 0.68) rgba(143, 166, 190, 0.12);
+      scrollbar-width: thin;
+    }
+
+    .listbox::-webkit-scrollbar { width: 10px; }
+    .listbox::-webkit-scrollbar-track { background: rgba(143, 166, 190, 0.12); border-radius: 999px; }
+    .listbox::-webkit-scrollbar-thumb { background: rgba(93, 184, 255, 0.68); border-radius: 999px; }
+
+    .list-item {
+      width: 100%;
+      min-height: 72px;
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.72);
+      color: var(--text);
+      padding: 10px;
+      text-align: left;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .list-item:hover { border-color: rgba(93, 184, 255, 0.72); }
+    .list-item.selected { border-color: rgba(93, 184, 255, 0.88); background: rgba(93, 184, 255, 0.14); }
+    .list-title { font-weight: 760; margin-bottom: 4px; overflow-wrap: anywhere; }
+    .list-meta { color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+    .pill {
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 780;
+      white-space: nowrap;
+    }
+
+    .phase-graph {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .phase-node {
+      min-height: 96px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.76);
+      color: var(--text);
+      padding: 10px;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .phase-node::after {
+      content: "";
+      position: absolute;
+      inset: auto 10px 10px 10px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--muted);
+    }
+
+    .phase-node.executed::after { background: var(--green); }
+    .phase-node.current::after { background: var(--amber); }
+    .phase-node.remaining::after { background: var(--blue); opacity: 0.45; }
+    .phase-node.selected { border-color: rgba(93, 184, 255, 0.88); }
+    .phase-node span { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 5px; }
+    .movement-wrap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .movement-graph {
+      width: 100%;
+      min-height: 430px;
+      border: 1px solid rgba(143, 166, 190, 0.16);
+      border-radius: 8px;
+      background: rgba(3, 7, 11, 0.42);
+    }
+
+    .movement-edge {
+      stroke: rgba(93, 184, 255, 0.44);
+      stroke-width: 2;
+      marker-end: url(#arrowhead);
+    }
+
+    .movement-edge.pulse {
+      stroke: rgba(86, 227, 159, 0.72);
+      stroke-dasharray: 8 9;
+      animation: flowLine 2.4s linear infinite;
+    }
+
+    .movement-node { cursor: pointer; }
+    .movement-node rect {
+      fill: rgba(12, 20, 28, 0.94);
+      stroke: rgba(143, 166, 190, 0.32);
+      stroke-width: 1.2;
+      rx: 8;
+    }
+
+    .movement-node:hover rect, .movement-node.selected rect {
+      stroke: rgba(93, 184, 255, 0.92);
+      fill: rgba(93, 184, 255, 0.16);
+    }
+
+    .movement-node text {
+      fill: var(--text);
+      font-weight: 740;
+      font-size: 13px;
+      letter-spacing: 0;
+      pointer-events: none;
+    }
+
+    .movement-node .node-subtitle {
+      fill: var(--muted);
+      font-weight: 560;
+      font-size: 11px;
+    }
+
+    .control-inspector {
+      min-height: 430px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .control-inspector .signal {
+      display: grid;
+      gap: 8px;
+      max-height: 214px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .surface-graph {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      position: relative;
+    }
+
+    #problemGraph.surface-graph {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .surface-node {
+      min-height: 184px;
+      border: 1px solid rgba(143, 166, 190, 0.2);
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(12, 20, 28, 0.94), rgba(5, 10, 15, 0.88));
+      color: var(--text);
+      padding: 12px;
+      text-align: left;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      align-content: start;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+      white-space: normal;
+      min-width: 0;
+    }
+
+    .surface-node::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-top: 2px solid rgba(93, 184, 255, 0.4);
+      transform: translateX(-100%);
+      animation: scanNode 3.2s linear infinite;
+    }
+
+    .surface-node:hover, .surface-node.selected {
+      border-color: rgba(93, 184, 255, 0.88);
+      background: rgba(93, 184, 255, 0.14);
+    }
+
+    .surface-node strong, .surface-node span, .surface-node small {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+
+    .surface-node strong {
+      display: block;
+      line-height: 1.18;
+      font-size: 0.94rem;
+    }
+
+    .surface-node small {
+      display: block;
+      color: var(--muted);
+      line-height: 1.32;
+      font-size: 0.8rem;
+    }
+
+    .human-copy {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.32;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .human-copy span {
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .human-copy b { color: var(--text); font-weight: 760; }
+
+    .surface-node > .pill {
+      align-self: end;
+      justify-self: start;
+      max-width: 100%;
+      white-space: normal;
+      line-height: 1.15;
+    }
+
+    @keyframes scanNode {
+      55%, 100% { transform: translateX(100%); }
+    }
+
+    @keyframes flowLine {
+      to { stroke-dashoffset: -68; }
+    }
+
+    .hidden { display: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .footer-note { margin-top: 14px; color: var(--muted); font-size: 0.82rem; }
+
+    @media (max-width: 900px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .top-actions { justify-content: flex-start; }
+      .coach { grid-template-columns: 1fr; }
+      .coach .coach-actions { justify-content: flex-start; }
+      .orientation-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .orientation-next { grid-template-columns: 1fr; }
+      .business-board { grid-template-columns: 1fr; }
+      .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
+      .movement-wrap { grid-template-columns: 1fr; }
+      table { font-size: 0.82rem; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="field"></canvas>
+  <main class="shell">
+    <header>
+      <div class="identity">
+        <h1>AI Enterprise Command Center</h1>
+        <p id="updated">Synchronizing operator surfaces...</p>
+      </div>
+      <div class="top-actions">
+        <a class="link-button" href="/docs">API Docs</a>
+        <a class="link-button" href="/dashboard/documentation-hub">Documentation Hub</a>
+        <a class="link-button" href="/dashboard/demo">Demo Story</a>
+        <a class="link-button" href="/metrics">Raw Metrics</a>
+        <a class="link-button" href="/dashboard/graphify">Code Graph</a>
+        <button id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Dashboards">
+      <button class="tab" data-view="overview" aria-selected="true">Overview</button>
+      <button class="tab" data-view="execution" aria-selected="false">Execution</button>
+      <button class="tab" data-view="factory" aria-selected="false">Factory</button>
+      <button class="tab" data-view="problems" aria-selected="false">Problems</button>
+      <button class="tab" data-view="metrics" aria-selected="false">Metrics</button>
+      <button class="tab" data-view="projects" aria-selected="false">Projects</button>
+      <button class="tab" data-view="graph" aria-selected="false">Graph</button>
+    </nav>
+
+    <section class="panel coach" aria-live="polite">
+      <div>
+        <strong id="coachTitle">Enterprise Guide</strong>
+        <p id="coachMessage">Start with the Factory tab. Attach a manifesto, choose the project type, then start one project or a parallel manifesto batch. The manager will open the execution graph when work begins.</p>
+      </div>
+      <div class="coach-actions">
+        <button id="coachPrimary">Go to Factory</button>
+        <button id="coachSecondary">Open Projects</button>
+      </div>
+    </section>
+
+    <section class="panel orientation" aria-live="polite">
+      <div class="toolbar">
+        <h2>Guided Route</h2>
+        <span id="orientationStage" class="muted">Start with a client idea or manifesto.</span>
+      </div>
+      <div id="orientationSteps" class="orientation-steps"></div>
+      <div class="orientation-next">
+        <p id="orientationMessage">Step 1: go to Factory. Add a client idea or attach a manifesto. The dashboard will tell you the next action.</p>
+        <button id="orientationAction">Go to Factory</button>
+      </div>
+    </section>
+
+    <section id="sourceStrip" class="source-strip" aria-label="Data source freshness"></section>
+    <section id="businessBoard" class="business-board" aria-label="Business decision board"></section>
+
+    <section id="overview" class="view grid">
+      <article class="panel span-3"><h2>API</h2><div id="apiStatus" class="status muted"><span class="dot"></span>Checking</div></article>
+      <article class="panel span-3"><h2>Workers Online</h2><div id="workersOnline" class="metric">0</div></article>
+      <article class="panel span-3"><h2>Needs Attention</h2><div id="problemJobs" class="metric">0</div></article>
+      <article class="panel span-3"><h2>Projects</h2><div id="projectCount" class="metric">0</div></article>
+      <article class="panel span-12"><h2>Living Enterprise Pulse</h2><div id="livingPulse" class="living-signal"></div></article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Enterprise Ecosystem Modules</h2>
+          <span class="muted">Optional growth paths. Activate only when the client or enterprise needs them.</span>
+        </div>
+        <div id="ecosystemModules" class="surface-graph"></div>
+      </article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Enterprise Movement Graph</h2>
+          <span class="muted">Manifesto, factory, agents, telemetry, proof, blueprints, and evolution in one control panel.</span>
+        </div>
+        <div class="movement-wrap">
+          <svg id="movementGraph" class="movement-graph" viewBox="0 0 980 430" role="img" aria-label="Enterprise movement graph"></svg>
+          <div id="movementInspector" class="control-inspector mini"></div>
+        </div>
+      </article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Operating Picture Signals</h2>
+          <span class="muted">The same governed read model, translated into business signals.</span>
+        </div>
+        <div id="operatingPictureSignals" class="surface-graph"></div>
+      </article>
+      <article class="panel span-8"><h2>What Needs Attention</h2><div id="problemSummary" class="cards"></div></article>
+      <article class="panel span-4"><h2>Start Here</h2><div id="quickLinks" class="cards"></div></article>
+    </section>
+
+    <section id="execution" class="view grid hidden">
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Project Execution Control</h2>
+          <span id="executionHeadline" class="muted">Manifesto projects, workflow phases, task movement, crews, events, and telemetry.</span>
+        </div>
+        <div class="movement-wrap">
+          <svg id="executionGraph" class="movement-graph" viewBox="0 0 980 430" role="img" aria-label="Live project execution graph"></svg>
+          <div id="executionInspector" class="control-inspector mini"></div>
+        </div>
+      </article>
+      <article class="panel span-4"><h2>Parallel Projects</h2><div id="executionProjects" class="listbox"></div></article>
+      <article class="panel span-4"><h2>Tasks and Crews</h2><div id="executionTasks" class="listbox"></div></article>
+      <article class="panel span-4"><h2>Events and Telemetry</h2><div id="executionTelemetry" class="listbox"></div></article>
+    </section>
+
+    <section id="factory" class="view grid hidden">
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Vision Clarifier</h2>
+          <span class="muted">Turn unclear client input into objective, production route, proof, and market message.</span>
+        </div>
+        <textarea id="clientVision" placeholder="Write the client idea, even if it is not clear yet. The dashboard will structure it before project creation."></textarea>
+        <div class="toolbar" style="margin-top: 10px;">
+          <button id="clarifyVision">Clarify Vision</button>
+          <span id="visionStatus" class="muted">Use this before creating a manifesto-driven project.</span>
+        </div>
+        <div id="visionGraph" class="surface-graph"></div>
+      </article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Factory Creation Graph</h2>
+          <span id="factoryGraphStatus" class="muted">Manifesto to active workflow.</span>
+        </div>
+        <div id="factoryGraph" class="surface-graph"></div>
+      </article>
+      <article class="panel span-4">
+        <h2>Project Type</h2>
+        <div id="capabilityList" class="listbox"></div>
+      </article>
+      <article class="panel span-8">
+        <div class="toolbar">
+          <h2>Manifesto Launcher</h2>
+          <a class="link-button" href="/dashboard/client-manifest-template">Download Client Manifest</a>
+          <input id="manifestFile" type="file" accept="application/json,.json,text/plain,.txt,text/markdown,.md">
+        </div>
+        <div class="grid">
+          <div class="span-6"><input id="factoryName" placeholder="Project name"></div>
+          <div class="span-6"><input id="factoryBranch" placeholder="Default branch" value="main"></div>
+          <div class="span-12"><input id="factoryRepo" placeholder="/home/user/projects/my-project"></div>
+          <div class="span-12"><input id="factoryGithub" placeholder="GitHub repository URL, optional"></div>
+          <div class="span-12"><textarea id="factoryDescription" placeholder="Project manifesto summary"></textarea></div>
+        </div>
+        <div class="toolbar" style="margin-top: 10px;">
+          <button id="startFactory">Start Process</button>
+          <button id="startManifestBatch">Start Manifesto Batch</button>
+          <button id="startMockFactory">Launch Mock Factory Test</button>
+          <span id="factoryStatus" class="muted">Attach a manifesto or fill the fields manually.</span>
+        </div>
+        <div id="manifestPreview" class="mini muted">Download the client manifest, send it to the client or requesting service, then upload the completed document here.</div>
+      </article>
+    </section>
+
+    <section id="problems" class="view grid hidden">
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Problem Resolution Graph</h2>
+          <span class="muted">Failures link to worker state, retry pressure, recovery, and improvement proposals.</span>
+        </div>
+        <div id="problemGraph" class="surface-graph"></div>
+      </article>
+      <article class="panel span-12">
+        <div class="toolbar"><h2>Recovery and Work History</h2><select id="jobFilter"><option value="current">Current action</option><option value="history">Reviewed history</option><option value="">All records</option><option value="queued">Queued</option><option value="running">Running</option><option value="failed">Failed</option><option value="dead_letter">Dead Letter</option><option value="succeeded">Succeeded</option></select></div>
+        <div id="jobsTable"></div>
+      </article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Worker Capacity</h2>
+          <select id="workerFilter" aria-label="Worker capacity view">
+            <option value="current">Current capacity</option>
+            <option value="history">Offline history</option>
+            <option value="all">All worker signals</option>
+          </select>
+        </div>
+        <div id="workersTable"></div>
+      </article>
+    </section>
+
+    <section id="metrics" class="view grid hidden">
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Telemetry Pulse Graph</h2>
+          <span class="muted">Runtime signals remain active and feed calibration decisions.</span>
+        </div>
+        <div id="telemetryGraph" class="surface-graph"></div>
+      </article>
+      <article class="panel span-12"><h2>Business Telemetry</h2><div id="metricsTable"></div></article>
+    </section>
+
+    <section id="projects" class="view grid hidden">
+      <article class="panel span-12"><h2>Projects</h2><div id="projectsTable"></div></article>
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Project Intelligence Graph</h2>
+          <div>
+            <select id="projectSelect"></select>
+            <button id="loadProject">Open Project Dashboard</button>
+          </div>
+        </div>
+        <div id="projectGraph"></div>
+        <div id="phaseDetail"></div>
+      </article>
+      <article class="panel span-12"><h2>Workflow Lookup</h2><div class="toolbar"><input id="workflowId" placeholder="Workflow ID"><button id="loadWorkflow">Load</button></div><div id="workflowDetail"></div></article>
+    </section>
+
+    <section id="graph" class="view grid hidden">
+      <article class="panel span-12">
+        <div class="toolbar">
+          <h2>Blueprint Graph Hub</h2>
+          <span class="muted">Code graph, ecosystem graph, evidence graph, decomposition graph, and project blueprints.</span>
+        </div>
+        <div id="blueprintGraph" class="surface-graph"></div>
+      </article>
+      <article class="panel span-6"><h2>Architecture Graph</h2><p class="muted">The code graph is ready when graphify output is mounted.</p><div class="cards"><a class="link-button" href="/dashboard/graphify">Open Code Graph</a><a class="link-button" href="/docs">Open API Docs</a></div></article>
+      <article class="panel span-6">
+        <h2>Authenticated Graph Context</h2>
+        <p class="muted">Use this panel to confirm whether enterprise relationships and project proof are linked for the current work.</p>
+        <div class="grid">
+          <div class="span-12"><input id="graphOrganizationId" placeholder="Current organization context"></div>
+          <div class="span-12"><input id="graphProjectId" placeholder="Current project context"></div>
+        </div>
+        <div class="toolbar" style="margin-top: 10px;">
+          <button id="checkEcosystemGraph">Check Ecosystem</button>
+          <button id="checkEvidenceGraph">Check Evidence</button>
+        </div>
+        <div id="authenticatedGraphStatus" class="mini muted">The dashboard will use the current organization and project when you check a graph.</div>
+      </article>
+      <article class="panel span-6"><h2>Development Map</h2><div id="graphStatus" class="mini muted">Graphify output is available when graphify-out/graph.html is mounted.</div></article>
+    </section>
+
+    <p class="footer-note">Local dashboard context loads development graph authority and IDs automatically; production still requires trusted identity and durable grants.</p>
+  </main>
+
+  <script>
+    let actorHeaders = {
+      "X-Actor-ID": "local-admin",
+      "X-Actor-Type": "human",
+      "X-Actor-Role": "admin"
+    };
+    const state = { jobs: [], workers: [], projects: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, context: null, sources: {} };
+    let loadedManifestDocument = null;
+    let selectedMovementNode = "manifesto";
+    let selectedExecutionNode = "factory";
+    let orientationIndex = 0;
+    const orientationFlow = [
+      { key: "idea", title: "Idea", detail: "Listen or attach manifesto", target: "factory", action: "Go to Factory" },
+      { key: "direction", title: "Direction", detail: "Choose the version", target: "factory", action: "Clarify Vision" },
+      { key: "launch", title: "Launch", detail: "Start project or batch", target: "factory", action: "Start Process" },
+      { key: "execution", title: "Execution", detail: "Open live execution", target: "execution", action: "Open Execution" },
+      { key: "proof", title: "Proof", detail: "Check telemetry and issues", target: "metrics", action: "Open Metrics" },
+      { key: "demo", title: "Demo", detail: "Show product story", target: "demo", action: "Open Demo" }
+    ];
+    const capabilities = [
+      ["requirements_engineering", "Requirements Engineering"],
+      ["architecture_design", "Architecture Design"],
+      ["ai_software_development", "AI Software Development"],
+      ["multi_agent_orchestration", "Multi-Agent Orchestration"],
+      ["automated_testing", "Automated Testing"],
+      ["security_compliance", "Security & Compliance"],
+      ["data_engineering", "Data Engineering"],
+      ["ai_ml_solutions", "AI/ML Solutions"],
+      ["web_mobile_app_development", "Web & Mobile App Development"],
+      ["api_integration_development", "API & Integration Development"],
+      ["devops_infrastructure", "DevOps & Infrastructure"],
+      ["monitoring_observability", "Monitoring & Observability"],
+      ["dashboards_reporting", "Dashboards & Reporting"],
+      ["user_tenant_management", "User & Tenant Management"],
+      ["chatbots_ai_assistants", "Chatbots & AI Assistants"],
+      ["voice_modules", "Voice Assistants & Modules"],
+      ["rpa_process_automation", "RPA & Process Automation"],
+      ["document_processing", "Document Processing"],
+      ["globalization", "Multi-Language & Globalization"],
+      ["scalability_performance", "Scalability & Performance"]
+    ];
+    let selectedCapability = capabilities[0][0];
+
+    function byId(id) { return document.getElementById(id); }
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[char]));
+    }
+    async function json(url, options = {}) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return response.json();
+    }
+    async function text(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return response.text();
+    }
+
+    function table(rows, columns, emptyMessage = "No evidence has been recorded for this section yet.") {
+      if (!rows.length) return `<div class="mini muted">${esc(emptyMessage)}</div>`;
+      return `<table><thead><tr>${columns.map(col => `<th>${esc(col.label)}</th>`).join("")}</tr></thead><tbody>` +
+        rows.map(row => `<tr>${columns.map(col => `<td>${esc(col.value(row))}</td>`).join("")}</tr>`).join("") +
+        `</tbody></table>`;
+    }
+
+    function listbox(rows, renderItem, emptyMessage = "No live records are available for this section yet.") {
+      if (!rows.length) return `<div class="mini muted">${esc(emptyMessage)}</div>`;
+      return `<div class="listbox">${rows.map(renderItem).join("")}</div>`;
+    }
+
+    function countSentence(count, singular, plural = `${singular}s`) {
+      const word = Number(count) === 1 ? singular : plural;
+      return `${count} ${word}`;
+    }
+
+    function coach(title, message, primary = ["Go to Factory", "factory"], secondary = ["Open Projects", "projects"]) {
+      byId("coachTitle").textContent = title;
+      byId("coachMessage").textContent = message;
+      byId("coachPrimary").textContent = primary[0];
+      byId("coachPrimary").dataset.target = primary[1];
+      byId("coachSecondary").textContent = secondary[0];
+      byId("coachSecondary").dataset.target = secondary[1];
+    }
+
+    function goTarget(target) {
+      if (target === "demo") {
+        window.location.href = "/dashboard/demo";
+        return;
+      }
+      switchView(target);
+    }
+
+    function setOrientation(index, message = "") {
+      orientationIndex = Math.max(0, Math.min(index, orientationFlow.length - 1));
+      const current = orientationFlow[orientationIndex];
+      byId("orientationStage").textContent = `${current.title}: ${current.detail}`;
+      byId("orientationMessage").textContent = message || `Next: ${current.detail}.`;
+      byId("orientationAction").textContent = current.action;
+      byId("orientationAction").dataset.target = current.target;
+      byId("orientationSteps").innerHTML = orientationFlow.map((step, index) => `
+        <div class="orientation-step ${index < orientationIndex ? "done" : ""} ${index === orientationIndex ? "current" : ""}">
+          <strong>${esc(index + 1)}. ${esc(step.title)}</strong>
+          <span>${esc(step.detail)}</span>
+        </div>
+      `).join("");
+    }
+
+    function sourceStatus(result, label, target, summary) {
+      if (result.status === "fulfilled") {
+        return { label, target, status: "fresh", className: "ok", detail: `${summary}. Updated ${new Date().toLocaleTimeString()}` };
+      }
+      return { label, target, status: "needs review", className: "bad", detail: `${summary}. Open this panel and refresh; if it repeats, check API logs.` };
+    }
+
+    function isProblemJob(job) {
+      return ["failed", "dead_letter", "abandoned"].includes(job.status);
+    }
+
+    function isAcknowledgedJob(job) {
+      return job.operator_resolution && job.operator_resolution.state === "acknowledged";
+    }
+
+    function unresolvedProblemJobs() {
+      return state.jobs.filter(job => isProblemJob(job) && !isAcknowledgedJob(job));
+    }
+
+    function renderSourceStrip() {
+      const sources = Object.values(state.sources);
+      byId("sourceStrip").innerHTML = sources.map(source => `
+        <button class="source-card" data-source-target="${esc(source.target)}">
+          <strong class="${esc(source.className)}">${esc(source.label)} · ${esc(source.status)}</strong>
+          <span>${esc(source.detail)}</span>
+        </button>
+      `).join("");
+      document.querySelectorAll(".source-card").forEach(item => {
+        item.addEventListener("click", () => goTarget(item.dataset.sourceTarget));
+      });
+    }
+
+    function businessBrief() {
+      if (state.operatingPicture) {
+        const headline = state.operatingPicture.headline;
+        const firstAction = state.operatingPicture.recommendations?.[0];
+        const target = firstAction?.next_action?.toLowerCase().includes("problem")
+          ? "problems"
+          : firstAction?.next_action?.toLowerCase().includes("project")
+            ? "projects"
+            : "factory";
+        const unresolved = state.operatingPicture.counts?.unresolved_problem_jobs ?? 0;
+        const online = state.operatingPicture.status_counts?.workers?.online ?? state.workers.filter(worker => worker.status === "online").length;
+        const nextMessage = firstAction ? firstAction.message : headline.business_meaning;
+        return {
+          health: headline.state.replace(/_/g, " "),
+          value: headline.summary,
+          risk: unresolved
+            ? `${unresolved} issue(s) need review before scaling parallel work.`
+            : headline.business_meaning,
+          next: [
+            firstAction?.next_action || "Open Projects",
+            target,
+            nextMessage
+          ],
+          online
+        };
+      }
+      const online = state.workers.filter(worker => worker.status === "online").length;
+      const failed = unresolvedProblemJobs().length;
+      const moving = state.jobs.filter(job => ["queued", "running"].includes(job.status)).length;
+      const staleSources = Object.values(state.sources).filter(source => source.status !== "fresh").length;
+      const health = staleSources ? "Data is incomplete" : failed ? "Action required" : "Factory is stable";
+      const value = state.projects.length
+        ? `${countSentence(state.projects.length, "project")} visible. ${countSentence(moving, "work item")} moving or waiting.`
+        : "No active project is visible. Start with a manifesto to create business value.";
+      const risk = failed
+        ? `${failed} issue(s) need review. Open Problems and follow the recommended recovery path.`
+        : staleSources
+          ? `${staleSources} data source(s) are unavailable. Refresh before making delivery decisions.`
+          : "No urgent delivery risk is visible. Continue creating or inspecting projects.";
+      const next = failed
+        ? ["Resolve Issues", "problems", "Review failed work first."]
+        : state.projects.length
+          ? ["Inspect Projects", "projects", "Open a project graph and check phase, crew, proof, and remaining work."]
+          : ["Create Project", "factory", "Attach a manifesto and start the first governed workflow."];
+      return { health, value, risk, next, online };
+    }
+
+    function renderBusinessBoard() {
+      const brief = businessBrief();
+      const cards = [
+        ["Business State", brief.health, `${brief.online} worker(s) online. The board refreshes every 15 seconds.`, "overview"],
+        ["Value in Motion", brief.value, "Use this to see whether delivery capacity is producing outcomes.", "projects"],
+        ["Risk and Attention", brief.risk, "Fix risk before scaling parallel work.", brief.next[1]],
+        ["Recommended Next Move", brief.next[2], "This is the best next action from the current live state.", brief.next[1]]
+      ];
+      byId("businessBoard").innerHTML = cards.map(([title, message, effect, target], index) => `
+        <article class="business-card">
+          <div>
+            <strong>${esc(title)}</strong>
+            <p>${esc(message)}</p>
+            <p>${esc(effect)}</p>
+          </div>
+          <button class="business-open" data-target="${esc(target)}">${index === 3 ? esc(brief.next[0]) : "Open"}</button>
+        </article>
+      `).join("");
+      document.querySelectorAll(".business-open").forEach(item => {
+        item.addEventListener("click", () => goTarget(item.dataset.target));
+      });
+      coach("Decision Ready", `${brief.health}. ${brief.next[2]}`, [brief.next[0], brief.next[1]], ["Open Overview", "overview"]);
+    }
+
+    function renderEcosystemModules() {
+      const hasProjects = state.projects.length > 0;
+      const hasProblems = unresolvedProblemJobs().length > 0;
+      const modules = [
+        { title: "Listen and Clarify", detail: "Use when the client idea is weak or emotional.", idea: "Create practical, growth, and visionary options.", effect: "Turns poor input into a choice the client can understand.", signal: "optional", kind: "info", action: "factory" },
+        { title: "Vision Presentation", detail: "Use when the client must see the future before buying.", idea: "Prepare objective, proof, route, and market message.", effect: "Improves trust and makes the offer easier to sell.", signal: "optional", kind: "ok", action: "factory" },
+        { title: "ISO and Compliance", detail: "Use when governance, certification, or audit readiness matters.", idea: "Create evidence, controls, gaps, and corrective actions.", effect: "Connects delivery to business assurance.", signal: "optional", kind: "warn", action: "factory" },
+        { title: "Verification and Debug", detail: "Use when quality or failures are blocking progress.", idea: "Inspect defects, test, fix, and convert lessons into patterns.", effect: hasProblems ? "Recommended now: issues are visible." : "Prevents repeated failures later.", signal: hasProblems ? "recommended" : "optional", kind: hasProblems ? "bad" : "info", action: "problems" },
+        { title: "Production Route", detail: "Use when the client asks how the idea becomes real.", idea: "Show steps from manifesto to workflow, proof, and release.", effect: hasProjects ? "Recommended now: projects exist." : "Clarifies delivery before work starts.", signal: hasProjects ? "recommended" : "optional", kind: hasProjects ? "ok" : "info", action: "projects" },
+        { title: "Blueprint Marketplace", detail: "Use when repeated work should become a product asset.", idea: "Promote proven workflows and crew patterns into templates.", effect: "Creates brand value and reusable enterprise capability.", signal: "future", kind: "ok", action: "graph" }
+      ];
+      renderSurfaceNodes("ecosystemModules", modules);
+    }
+
+    function switchView(viewName) {
+      const tab = document.querySelector(`[data-view="${viewName}"]`);
+      if (!tab) return;
+      document.querySelectorAll(".tab").forEach(item => item.setAttribute("aria-selected", "false"));
+      document.querySelectorAll(".view").forEach(view => view.classList.add("hidden"));
+      tab.setAttribute("aria-selected", "true");
+      byId(viewName).classList.remove("hidden");
+    }
+
+    function movementModel() {
+      const problemCount = unresolvedProblemJobs().length;
+      const online = state.workers.filter(worker => worker.status === "online").length;
+      const metricCount = Object.keys(state.metrics).length;
+      return [
+        { id: "manifesto", label: "Manifesto", subtitle: "project intent", x: 36, y: 38, target: "factory", details: "Attach one or more manifestos, select a project type, and start the process from the Factory tab." },
+        { id: "factory", label: "Factory", subtitle: "parallel launch", x: 258, y: 38, target: "factory", details: "Creates projects, starts workflows, and keeps the enterprise active while multiple plans run in parallel." },
+        { id: "projects", label: "Projects", subtitle: `${state.projects.length} active`, x: 480, y: 38, target: "projects", details: "The project switchboard opens each project dashboard with phase graph, life signals, estimates, and remaining steps." },
+        { id: "agents", label: "Agent Crew", subtitle: `${online} workers online`, x: 702, y: 38, target: "problems", details: "Specialist crews execute requirements, architecture, planning, development, testing, review, integration, recovery, and governance work." },
+        { id: "telemetry", label: "Telemetry", subtitle: `${metricCount} signals`, x: 148, y: 176, target: "metrics", details: "Metrics stay active so performance, queues, runtime health, and operating pressure are visible continuously." },
+        { id: "calibration", label: "Calibration", subtitle: "quality gates", x: 370, y: 176, target: "projects", details: "Calibration checks manifest integrity, workflow phase alignment, error follow-up, reuse capture, and evidence quality." },
+        { id: "errors", label: "Errors", subtitle: `${problemCount} followed`, x: 592, y: 176, target: "problems", details: "Problems are surfaced as first-class operating signals with worker/job context and improvement recommendations." },
+        { id: "proof", label: "Economic Proof", subtitle: "viability", x: 814, y: 176, target: "projects", details: "Each project exposes avoided manual effort, reusable assets, automation units, risk signals, and viability basis." },
+        { id: "blueprints", label: "Blueprints", subtitle: "reusable patterns", x: 258, y: 314, target: "graph", details: "Successful structures become workflow, specialist-crew, and economic-proof patterns for future projects." },
+        { id: "evolution", label: "Evolution", subtitle: "future factory", x: 592, y: 314, target: "graph", details: "Telemetry and reusable blueprints feed the next generation of projects, agents, templates, and enterprise operating maturity." }
+      ];
+    }
+
+    function renderMovementGraph() {
+      const svg = byId("movementGraph");
+      if (!svg) return;
+      const nodes = movementModel();
+      const byNode = Object.fromEntries(nodes.map(node => [node.id, node]));
+      const edges = [
+        ["manifesto", "factory"], ["factory", "projects"], ["projects", "agents"],
+        ["agents", "telemetry"], ["telemetry", "calibration"], ["calibration", "errors"],
+        ["errors", "proof"], ["proof", "blueprints"], ["blueprints", "evolution"],
+        ["evolution", "manifesto"], ["projects", "calibration"], ["telemetry", "proof"]
+      ];
+      const edgeMarkup = edges.map(([from, to], index) => {
+        const a = byNode[from];
+        const b = byNode[to];
+        return `<line class="movement-edge ${index < 9 ? "pulse" : ""}" x1="${a.x + 136}" y1="${a.y + 38}" x2="${b.x}" y2="${b.y + 38}"></line>`;
+      }).join("");
+      const nodeMarkup = nodes.map(node => `
+        <g class="movement-node ${node.id === selectedMovementNode ? "selected" : ""}" data-node="${esc(node.id)}" data-target="${esc(node.target)}">
+          <rect x="${node.x}" y="${node.y}" width="136" height="76"></rect>
+          <text x="${node.x + 14}" y="${node.y + 31}">${esc(node.label)}</text>
+          <text class="node-subtitle" x="${node.x + 14}" y="${node.y + 53}">${esc(node.subtitle)}</text>
+        </g>
+      `).join("");
+      svg.innerHTML = `
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="rgba(93, 184, 255, 0.62)"></polygon>
+          </marker>
+        </defs>
+        ${edgeMarkup}
+        ${nodeMarkup}
+      `;
+      svg.querySelectorAll(".movement-node").forEach(node => {
+        node.addEventListener("click", () => {
+          selectedMovementNode = node.dataset.node;
+          renderMovementGraph();
+          switchView(node.dataset.target);
+          coach(
+            `${byNode[selectedMovementNode].label} Selected`,
+            byNode[selectedMovementNode].details,
+            [`Open ${byNode[selectedMovementNode].label}`, node.dataset.target],
+            ["Review Projects", "projects"]
+          );
+        });
+      });
+      const selected = byNode[selectedMovementNode] || nodes[0];
+      byId("movementInspector").innerHTML = `
+        <strong>${esc(selected.label)}</strong>
+        <div class="muted">${esc(selected.details)}</div>
+        <div class="mini">
+          <strong>Why it matters</strong>
+          <div class="muted">This keeps the enterprise understandable: the operator sees what is being created, what is moving, what is blocked, what improved, and what becomes reusable.</div>
+        </div>
+        <div class="mini">
+          <strong>Measurable effect</strong>
+          <div class="muted">${esc(countSentence(state.projects.length, "project"))}, ${esc(countSentence(state.jobs.length, "job signal"))}, ${esc(countSentence(Object.keys(state.metrics).length, "telemetry signal"))}, ${esc(countSentence(state.workers.filter(worker => worker.status === "online").length, "online worker"))}.</div>
+        </div>
+        <div class="signal">
+          <div class="list-item"><div><div class="list-title">Creation</div><div class="list-meta">Manifesto becomes governed project workflow.</div></div><span class="pill info">live</span></div>
+          <div class="list-item"><div><div class="list-title">Movement</div><div class="list-meta">Workers, jobs, telemetry, and phase transitions update the graph.</div></div><span class="pill ok">tracked</span></div>
+          <div class="list-item"><div><div class="list-title">Evolution</div><div class="list-meta">Blueprints and improvements are captured for the next project.</div></div><span class="pill ok">reusable</span></div>
+        </div>
+        <button data-open-node="${esc(selected.target)}">Open ${esc(selected.label)} Surface</button>
+      `;
+      byId("movementInspector").querySelector("button").addEventListener("click", event => {
+        switchView(event.currentTarget.dataset.openNode);
+      });
+    }
+
+    function executionNodeModel() {
+      const manager = state.dashboardManager;
+      if (!manager || !manager.projects) {
+        return {
+          nodes: [{
+            id: "factory",
+            label: "Manifesto Factory",
+            subtitle: "waiting",
+            kind: "factory",
+            status: "waiting_for_manifesto",
+            x: 38,
+            y: 46,
+            details: "Attach a manifesto in Factory to create governed projects and live execution proof."
+          }],
+          edges: []
+        };
+      }
+      const nodes = [{
+        id: "factory",
+        label: "Manifesto Factory",
+        subtitle: `${manager.projects.length} projects`,
+        kind: "factory",
+        status: manager.headline.state,
+        x: 38,
+        y: 46,
+        details: manager.headline.business_meaning
+      }];
+      const edges = [];
+      manager.projects.slice(0, 5).forEach((project, index) => {
+        const y = 42 + index * 74;
+        const projectId = `project:${project.id}`;
+        const workflowId = `workflow:${project.id}`;
+        const crewId = `crew:${project.id}`;
+        const telemetryId = `telemetry:${project.id}`;
+        nodes.push(
+          {
+            id: projectId,
+            label: project.name,
+            subtitle: `${project.phase} · ${project.tasks.active} active`,
+            kind: "project",
+            status: project.state,
+            x: 218,
+            y,
+            project
+          },
+          {
+            id: workflowId,
+            label: project.phase,
+            subtitle: project.workflow ? humanStatus(project.workflow.state) : "Not started",
+            kind: "workflow",
+            status: project.workflow ? project.workflow.state : "not_started",
+            x: 406,
+            y,
+            project
+          },
+          {
+            id: crewId,
+            label: "Crew",
+            subtitle: `${project.crews.length} signal(s)`,
+            kind: "crew",
+            status: project.crews.length || project.tasks.active ? "active" : "standby",
+            x: 594,
+            y,
+            project
+          },
+          {
+            id: telemetryId,
+            label: "Telemetry",
+            subtitle: `${project.telemetry.event_count} event(s)`,
+            kind: "telemetry",
+            status: project.telemetry.signal,
+            x: 782,
+            y,
+            project
+          }
+        );
+        edges.push(
+          ["factory", projectId],
+          [projectId, workflowId],
+          [workflowId, crewId],
+          [crewId, telemetryId],
+          [telemetryId, projectId]
+        );
+      });
+      return { nodes, edges };
+    }
+
+    function renderExecutionInspector(node) {
+      const project = node.project;
+      if (!project) {
+        byId("executionInspector").innerHTML = `
+          <strong>${esc(node.label)}</strong>
+          <div class="muted">${esc(node.details || "The manifesto factory creates projects and connects workflows, crews, events, and telemetry.")}</div>
+          <div class="signal">
+            <div class="list-item"><div><div class="list-title">Next action</div><div class="list-meta">Open Factory, attach a manifesto, and start the governed process.</div></div><span class="pill info">start</span></div>
+          </div>
+          <button data-execution-target="factory">Open Factory</button>
+        `;
+        byId("executionInspector").querySelector("button").addEventListener("click", () => switchView("factory"));
+        return;
+      }
+      byId("executionInspector").innerHTML = `
+        <strong>${esc(project.name)}</strong>
+        <div class="muted">${esc(project.human_summary)}</div>
+        <div class="signal">
+          <div class="list-item"><div><div class="list-title">Where we are</div><div class="list-meta">${esc(project.phase)} · ${esc(project.next_action)}</div></div><span class="pill ${statusClass(project.state)}">${esc(humanStatus(project.state))}</span></div>
+          <div class="list-item"><div><div class="list-title">Tasks</div><div class="list-meta">${esc(project.tasks.done)} done, ${esc(project.tasks.active)} active, ${esc(project.tasks.standby)} standby, ${esc(project.tasks.problems)} problem.</div></div><span class="pill info">${esc(project.tasks.total)} total</span></div>
+          <div class="list-item"><div><div class="list-title">Crew</div><div class="list-meta">${esc(project.crews[0]?.assignment || "No active crew signal yet.")}</div></div><span class="pill ${project.crews.length ? "ok" : "info"}">${esc(project.crews.length)} signal(s)</span></div>
+          <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(project.telemetry.job_signal_count)} job signal(s), ${esc(project.telemetry.event_count)} event(s), ${esc(project.telemetry.work_package_count)} work package(s).</div></div><span class="pill ${statusClass(project.telemetry.signal)}">${esc(humanStatus(project.telemetry.signal))}</span></div>
+        </div>
+        <button data-project-id="${esc(project.id)}">Open Full Project Graph</button>
+      `;
+      byId("executionInspector").querySelector("button").addEventListener("click", event => {
+        switchView("projects");
+        byId("projectSelect").value = event.currentTarget.dataset.projectId;
+        loadProjectDashboard(event.currentTarget.dataset.projectId);
+      });
+    }
+
+    function renderExecutionDashboard() {
+      const manager = state.dashboardManager;
+      const headline = manager ? manager.headline : null;
+      byId("executionHeadline").textContent = headline
+        ? `${headline.summary} ${headline.business_meaning}`
+        : "Execution manager is loading project, task, crew, event, and telemetry signals.";
+      const svg = byId("executionGraph");
+      const model = executionNodeModel();
+      const byNode = Object.fromEntries(model.nodes.map(node => [node.id, node]));
+      const edgeMarkup = model.edges.map(([from, to]) => {
+        const a = byNode[from];
+        const b = byNode[to];
+        return `<line class="movement-edge pulse" x1="${a.x + 136}" y1="${a.y + 38}" x2="${b.x}" y2="${b.y + 38}"></line>`;
+      }).join("");
+      const nodeMarkup = model.nodes.map(node => `
+        <g class="movement-node ${node.id === selectedExecutionNode ? "selected" : ""}" data-node="${esc(node.id)}">
+          <rect x="${node.x}" y="${node.y}" width="136" height="66"></rect>
+          <text x="${node.x + 12}" y="${node.y + 28}">${esc(node.label).slice(0, 22)}</text>
+          <text class="node-subtitle" x="${node.x + 12}" y="${node.y + 49}">${esc(node.subtitle || humanStatus(node.status)).slice(0, 24)}</text>
+        </g>
+      `).join("");
+      svg.innerHTML = `
+        <defs>
+          <marker id="executionArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="rgba(93, 184, 255, 0.62)"></polygon>
+          </marker>
+        </defs>
+        ${edgeMarkup}
+        ${nodeMarkup}
+      `;
+      svg.querySelectorAll(".movement-node").forEach(node => {
+        node.addEventListener("click", () => {
+          selectedExecutionNode = node.dataset.node;
+          renderExecutionDashboard();
+        });
+      });
+      renderExecutionInspector(byNode[selectedExecutionNode] || model.nodes[0]);
+      const projects = manager?.projects || [];
+      byId("executionProjects").innerHTML = listbox(projects, project => `
+        <button class="list-item execution-project-open" data-execution-node="project:${esc(project.id)}">
+          <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">${esc(project.human_summary)}</div></div>
+          <span class="pill ${statusClass(project.state)}">${esc(humanStatus(project.state))}</span>
+        </button>
+      `, "No manifesto project is visible yet. Open Factory, attach a manifesto, and start a governed project.");
+      document.querySelectorAll(".execution-project-open").forEach(item => {
+        item.addEventListener("click", () => {
+          selectedExecutionNode = item.dataset.executionNode;
+          renderExecutionDashboard();
+        });
+      });
+      byId("executionTasks").innerHTML = listbox(projects, project => `
+        <div class="list-item">
+          <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">Done ${esc(project.tasks.done)} · active ${esc(project.tasks.active)} · standby ${esc(project.tasks.standby)} · problems ${esc(project.tasks.problems)}</div><div class="list-meta">${esc(project.crews[0]?.name || "Crew waits for assigned work.")}</div></div>
+          <span class="pill info">${esc(project.tasks.total)} task(s)</span>
+        </div>
+      `, "No tasks have been created yet. Start the workflow so crews can produce work signals.");
+      const telemetryRows = projects.flatMap(project =>
+        (project.recent_events.length ? project.recent_events : [{ event_type: "No event yet", summary: "Project is waiting for more execution evidence.", created_at: "" }])
+          .slice(0, 2)
+          .map(event => ({ project, event }))
+      );
+      byId("executionTelemetry").innerHTML = listbox(telemetryRows, row => `
+        <div class="list-item">
+          <div><div class="list-title">${esc(row.project.name)}</div><div class="list-meta">${esc(row.event.summary)}</div><div class="list-meta">${esc(row.event.created_at || "No timestamp yet")}</div></div>
+          <span class="pill ${statusClass(row.project.telemetry.signal)}">${esc(humanStatus(row.project.telemetry.signal))}</span>
+        </div>
+      `, "No event telemetry is visible yet. Project events will appear as workflow and crew activity progresses.");
+    }
+
+    function renderSurfaceNodes(containerId, nodes) {
+      const container = byId(containerId);
+      if (!container) return;
+      container.innerHTML = nodes.map(node => `
+        <button class="surface-node" data-action="${esc(node.action || "")}">
+          <strong>${esc(node.title)}</strong>
+          <small>${esc(node.detail)}</small>
+          <div class="human-copy">
+            <span><b>Idea:</b> ${esc(node.idea || "Use this signal to decide the next controlled action.")}</span>
+            <span><b>Effect:</b> ${esc(node.effect || "Improves visibility, reduces operator guesswork, and preserves evidence.")}</span>
+          </div>
+          <span class="pill ${esc(node.kind || "info")}">${esc(node.signal)}</span>
+        </button>
+      `).join("");
+      container.querySelectorAll(".surface-node").forEach(node => {
+        node.addEventListener("click", () => {
+          const model = nodes.find(item => item.action === node.dataset.action);
+          if (model) {
+            coach(
+              model.title,
+              `${model.detail} Idea: ${model.idea || "Use this signal for the next controlled action"}. Effect: ${model.effect || "better visibility and reduced operator delay"}.`,
+              ["Continue Here", model.action || "factory"],
+              ["Open Projects", "projects"]
+            );
+          }
+          const action = node.dataset.action;
+          if (action === "manifest") byId("manifestFile").click();
+          if (action === "name") byId("factoryName").focus();
+          if (action === "start") byId("startFactory").focus();
+          if (action === "batch") byId("startManifestBatch").focus();
+          if (action === "mock") startMockFactoryTest().catch(error => {
+            byId("factoryStatus").textContent = friendlyLaunchError(error);
+          });
+          if (action === "factory") goTarget("factory");
+          if (action === "execution") goTarget("execution");
+          if (action === "projects") goTarget("projects");
+          if (action === "problems") goTarget("problems");
+          if (action === "metrics") goTarget("metrics");
+          if (action === "graphify") window.location.href = "/dashboard/graphify";
+          if (action === "foundry") window.location.href = "/dashboard/project-foundry-core";
+          if (action === "ecosystem" || action === "evidence") {
+            switchView("graph");
+            byId("authenticatedGraphStatus").innerHTML = `<strong>Ready to check</strong><div class="muted">The dashboard has loaded the current organization${action === "evidence" ? " and project" : ""}. Press the check button to see whether records are linked yet.</div>`;
+          }
+        });
+      });
+    }
+
+    function capabilityLabel() {
+      const found = capabilities.find(([key]) => key === selectedCapability);
+      return found ? found[1] : "Enterprise Project";
+    }
+
+    function visionVersions(rawVision, type) {
+      const input = rawVision || "Create a clear enterprise product from a client idea.";
+      return [
+        {
+          name: "Practical Version",
+          objective: `Deliver a focused ${type.toLowerCase()} solution for the clearest client need.`,
+          route: "Define scope, create the project, execute the governed workflow, verify quality, then prepare a production handoff.",
+          proof: "Show working output, test evidence, issue status, and reusable delivery notes.",
+          market: `A reliable ${type} service for clients who need controlled delivery and visible progress.`,
+          best_for: "Fast validation with low risk.",
+          source: input
+        },
+        {
+          name: "Growth Version",
+          objective: `Create a reusable ${type.toLowerCase()} module that can serve multiple clients or departments.`,
+          route: "Clarify the offer, build the first module, capture reusable blueprints, then package it as a repeatable service.",
+          proof: "Measure reusable patterns, avoided manual work, quality checks, and client-ready reporting.",
+          market: `A scalable AI Enterprise capability that turns one client idea into a repeatable business offer.`,
+          best_for: "Building a productized service.",
+          source: input
+        },
+        {
+          name: "Visionary Version",
+          objective: `Transform the rough idea into an intelligent operating capability with specialist agents, telemetry, proof, and continuous improvement.`,
+          route: "Map the client vision, launch parallel work, coordinate specialist crews, prove value live, then evolve the result into future templates.",
+          proof: "Show the idea becoming reality through project graph movement, crew activity, telemetry, economic proof, and blueprints.",
+          market: `An AI Enterprise factory experience where clients see their idea become governed production work in real time.`,
+          best_for: "Strong presentation, differentiation, and long-term platform value.",
+          source: input
+        }
+      ];
+    }
+
+    function applyVisionVersion(version) {
+      byId("factoryName").value = version.name.replace("Version", capabilityLabel()).trim();
+      byId("factoryDescription").value = [
+        `Client vision: ${version.source}`,
+        `Chosen direction: ${version.name}`,
+        `Objective: ${version.objective}`,
+        `Production route: ${version.route}`,
+        `Proof: ${version.proof}`,
+        `Market message: ${version.market}`
+      ].join("\n\n");
+      byId("visionStatus").textContent = `${version.name} selected. Start the process when repository details are ready.`;
+      setOrientation(2, `${version.name} selected. Check repository details, then start the project or manifesto batch.`);
+      coach(
+        "Client Direction Selected",
+        `${version.name} is now prepared as a project brief. Verify repository details, then start the governed workflow.`,
+        ["Start Project", "factory"],
+        ["Open Projects", "projects"]
+      );
+    }
+
+    function clarifyVision() {
+      const rawVision = byId("clientVision").value.trim();
+      const type = capabilityLabel();
+      const versions = visionVersions(rawVision, type);
+      byId("visionStatus").textContent = "Three directions created. Select the one the client understands and wants.";
+      setOrientation(1, "Three directions are ready. Choose practical, growth, or visionary before creating the project.");
+      byId("visionGraph").innerHTML = versions.map((version, index) => `
+        <button class="surface-node vision-choice" data-version="${index}">
+          <strong>${esc(version.name)}</strong>
+          <small>${esc(version.objective)}</small>
+          <div class="human-copy">
+            <span><b>Route:</b> ${esc(version.route)}</span>
+            <span><b>Proof:</b> ${esc(version.proof)}</span>
+            <span><b>Market:</b> ${esc(version.market)}</span>
+          </div>
+          <span class="pill ${index === 2 ? "warn" : index === 1 ? "ok" : "info"}">${esc(version.best_for)}</span>
+        </button>
+      `).join("");
+      document.querySelectorAll(".vision-choice").forEach(item => {
+        item.addEventListener("click", () => applyVisionVersion(versions[Number(item.dataset.version)]));
+      });
+      coach(
+        "Vision Versions Ready",
+        "The same rough idea is now shown as practical, growth, and visionary options. Select one direction so the client can see how the idea becomes real work.",
+        ["Choose Direction", "factory"],
+        ["Open Projects", "projects"]
+      );
+    }
+
+    function renderManagementGraphs() {
+      const queued = state.jobs.filter(job => job.status === "queued").length;
+      const running = state.jobs.filter(job => job.status === "running").length;
+      const failed = unresolvedProblemJobs().length;
+      const online = state.workers.filter(worker => worker.status === "online").length;
+      const requestCount = state.metrics.ai_enterprise_http_requests_total || 0;
+      const dashboardHits = state.metrics.ai_enterprise_http_route_dashboard_total || 0;
+      renderSurfaceNodes("factoryGraph", [
+        { title: "Attach Manifesto", detail: "Load the business goal, repository path, default branch, project type, and reusable operating rules.", idea: "Treat the manifesto as the contract between the human operator and the AI factory.", effect: "Cuts setup ambiguity before work starts.", signal: loadedManifestDocument ? "loaded" : "input", kind: loadedManifestDocument ? "ok" : "info", action: "manifest" },
+        { title: "Select Factory Type", detail: `Current template: ${selectedCapability.replace(/_/g, " ")}. This controls which specialist path the project follows.`, idea: "Match the project type to the economic outcome you want to prove.", effect: "Improves crew routing and reusable blueprint quality.", signal: "template", kind: "info", action: "name" },
+        { title: "Create Project", detail: "Register repository, branch, manifest hash, and governed project identity.", idea: "Create one clean project record before any agent work starts.", effect: "Preserves auditability and prevents orphan execution.", signal: "ready", kind: "warn", action: "start" },
+        { title: "Parallel Batch", detail: "Start all manifesto projects together and open the project switchboard.", idea: "Use batch launch when one manifesto describes a portfolio of related work.", effect: "Turns planning time into parallel workflow throughput.", signal: "parallel", kind: "ok", action: "batch" },
+        { title: "Mock Autonomy", detail: "Launch a safe demo portfolio that proves the factory can start producing from a manifesto-style operating loop.", idea: "Use this first when you want to see the enterprise wake up and begin real workflow activity.", effect: "Creates or reuses demo projects, formation packs, workflows, jobs, and telemetry links.", signal: "demo", kind: "ok", action: "mock" },
+        { title: "Open Execution", detail: "Move directly to live execution control after launch.", idea: "Inspect the project life immediately after creation.", effect: `${countSentence(state.projects.length, "project")} visible in Execution.`, signal: `${state.projects.length} projects`, kind: "info", action: "execution" }
+      ]);
+      renderSurfaceNodes("problemGraph", [
+        { title: "Queued Work", detail: "Work waiting for a worker lease.", idea: "If this grows, add capacity or inspect blocked workers.", effect: `${queued} job(s) waiting.`, signal: `${queued}`, kind: queued ? "warn" : "ok", action: "problems" },
+        { title: "Running Work", detail: "Active jobs connected to projects and crews.", idea: "Use this to confirm the factory is moving, not idle.", effect: `${running} job(s) currently active.`, signal: `${running}`, kind: running ? "info" : "ok", action: "problems" },
+        { title: "Followed Errors", detail: "Failed and dead-letter jobs are visible improvement inputs.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${online} worker(s) online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
+        { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting failed work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
+      ]);
+      renderSurfaceNodes("telemetryGraph", [
+        { title: "HTTP Flow", detail: "Request and route counters prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
+        { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${dashboardHits} dashboard hit(s).`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
+        { title: "Worker Health", detail: "Worker counts calibrate enterprise operating capacity.", idea: "Capacity should match project parallelism.", effect: `${online} worker(s) available.`, signal: `${online}`, kind: online ? "ok" : "warn", action: "problems" },
+        { title: "Problem Pressure", detail: "Failed work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${failed} followed issue(s).`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Calibration Feed", detail: "Telemetry supports phase completion, errors followed, and economic proof.", idea: "Use metrics to decide, not to decorate.", effect: "Improves estimate quality and future automation design.", signal: "active", kind: "ok", action: "projects" }
+      ]);
+      if (state.operatingPicture) {
+        const nodes = state.operatingPicture.graph.nodes || [];
+        const important = nodes.slice(0, 8).map(node => ({
+          title: node.label,
+          detail: node.human_summary,
+          idea: `This is a ${node.kind.replace(/-/g, " ")} signal from the read model.`,
+          effect: "Keeps dashboards connected to the same governed operating picture.",
+          signal: node.status,
+          kind: statusClass(node.status),
+          action: node.kind === "project" ? "projects" : "overview"
+        }));
+        renderSurfaceNodes("operatingPictureSignals", important);
+      } else if (byId("operatingPictureSignals")) {
+        byId("operatingPictureSignals").innerHTML = `<div class="mini muted">Operating picture is not loaded yet. Refresh to reconnect the governed read model.</div>`;
+      }
+      renderSurfaceNodes("blueprintGraph", [
+        { title: "Code Graph", detail: "Graphify architecture map for the repository.", idea: "Use it to understand what code areas a change touches.", effect: "Reduces blind edits and improves architecture navigation.", signal: "open", kind: "info", action: "graphify" },
+        { title: "Project Foundry Core", detail: "AEOS project factory specification, schemas, prompt contracts, gates, and repository template.", idea: "Use it as the standard operating contract for every governed project.", effect: "Turns the Corel manifest into reusable enterprise factory rules.", signal: "download", kind: "ok", action: "foundry" },
+        { title: "Ecosystem Graph", detail: "Shows enterprise relationships after governed records are linked.", idea: "Inspect enterprise relationships before broad changes.", effect: "Improves cross-object governance.", signal: "check map", kind: "info", action: "ecosystem" },
+        { title: "Evidence Graph", detail: "Shows project proof after requirements, decisions, and evidence are recorded.", idea: "Trace decisions back to requirements and proof.", effect: "Improves audit readiness.", signal: "check proof", kind: "info", action: "evidence" },
+        { title: "Project Blueprints", detail: "Workflow, specialist-crew, and economic-proof patterns produced by project intelligence.", idea: "Promote repeated successful structures into templates.", effect: "Increases reuse across future projects.", signal: "reuse", kind: "ok", action: "projects" },
+        { title: "Future Templates", detail: "Reusable patterns become stronger starting points for later manifestos.", idea: "Feed lessons back into the next project creation cycle.", effect: "Compounds delivery speed and quality over time.", signal: "evolve", kind: "ok", action: "factory" }
+      ]);
+    }
+
+    async function checkAuthenticatedGraph(kind) {
+      const organizationId = byId("graphOrganizationId").value.trim();
+      const projectId = byId("graphProjectId").value.trim();
+      if (!organizationId) {
+        byId("authenticatedGraphStatus").innerHTML = `<strong>Organization needed</strong><div class="muted">Refresh the dashboard or enter an organization ID before checking the ${esc(kind)} map.</div>`;
+        return;
+      }
+      if (kind === "evidence" && !projectId) {
+        byId("authenticatedGraphStatus").innerHTML = `<strong>Project needed</strong><div class="muted">Select a project or enter its project ID before checking project proof.</div>`;
+        return;
+      }
+      const url = kind === "ecosystem"
+        ? `/api/v1/ecosystem/graph?organization_id=${encodeURIComponent(organizationId)}`
+        : `/api/v1/specifications/evidence/graph?organization_id=${encodeURIComponent(organizationId)}&project_id=${encodeURIComponent(projectId)}`;
+      try {
+        const payload = await json(url, { headers: actorHeaders });
+        const graphNodes = payload.nodes || payload.entities || [];
+        const nodes = Array.isArray(graphNodes) ? graphNodes.length : 0;
+        const edges = Array.isArray(payload.edges) ? payload.edges.length : 0;
+        if (nodes === 0 && edges === 0) {
+          byId("authenticatedGraphStatus").innerHTML = `<strong class="warn">${esc(kind)} map is ready but empty</strong><div class="muted">The connection works. Link governed records during project execution, then refresh to see relationships here.</div>`;
+          return;
+        }
+        byId("authenticatedGraphStatus").innerHTML = `<strong class="ok">${esc(kind)} map available</strong><div class="muted">${esc(nodes)} node(s), ${esc(edges)} edge(s). The dashboard is reading linked records for this project or organization.</div>`;
+      } catch (error) {
+        byId("authenticatedGraphStatus").innerHTML = `<strong class="bad">${esc(kind)} map needs attention</strong><div class="muted">The dashboard could not read this map. Refresh context first; if it repeats, inspect API readiness and permissions.</div>`;
+      }
+    }
+
+    function renderCapabilities() {
+      byId("capabilityList").innerHTML = capabilities.map(([key, label], index) => `
+        <button class="list-item capability-item ${key === selectedCapability ? "selected" : ""}" data-capability="${esc(key)}">
+          <div><div class="list-title">${esc(index + 1)}. ${esc(label)}</div><div class="list-meta">Factory template</div></div>
+          <span class="pill info">${key === selectedCapability ? "selected" : "choose"}</span>
+        </button>
+      `).join("");
+      document.querySelectorAll(".capability-item").forEach(item => {
+        item.addEventListener("click", () => {
+          selectedCapability = item.dataset.capability;
+          renderCapabilities();
+        });
+      });
+    }
+
+    function normalizeManifest(document) {
+      const defaults = document.defaults || {};
+      const project = Array.isArray(document.projects) ? document.projects[0] : document;
+      return { ...defaults, ...project };
+    }
+
+    function fieldFromText(text, labels) {
+      const lines = text.split(/\r?\n/);
+      for (const label of labels) {
+        const pattern = new RegExp(`^\\\\s*(?:[-*]\\\\s*)?${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\\\s*:?\\\\s*(.+?)\\\\s*$`, "i");
+        for (const line of lines) {
+          const match = line.match(pattern);
+          if (match && match[1] && !match[1].startsWith("[") && !match[1].startsWith("<")) {
+            return match[1].trim();
+          }
+        }
+      }
+      return "";
+    }
+
+    function sectionFromText(text, heading) {
+      const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = text.match(new RegExp(`(?:^|\\n)#{0,3}\\\\s*${escaped}\\\\s*(?:\\n|$)([\\s\\S]*?)(?=\\n#{1,3}\\\\s|\\nChapter\\\\s+\\d+|$)`, "i"));
+      if (!match) return "";
+      return match[1]
+        .split(/\r?\n/)
+        .map(line => line.replace(/^\s*[-*]\s*/, "").trim())
+        .filter(line => line && !line.endsWith(":") && !line.startsWith("["))
+        .slice(0, 12)
+        .join("\n");
+    }
+
+    function parseClientManifestText(text) {
+      const projectName = fieldFromText(text, ["Project Name", "Project name"]);
+      const repositoryPath = fieldFromText(text, [
+        "Project Base Directory",
+        "Base Directory",
+        "Repository Path",
+        "Local Repository Path"
+      ]);
+      const githubUrl = fieldFromText(text, [
+        "GitHub Repository URL",
+        "Github Repository URL",
+        "Repository URL",
+        "Git Remote URL"
+      ]);
+      const defaultBranch = fieldFromText(text, ["Default Branch", "Branch"]) || "main";
+      const vision = sectionFromText(text, "Executive Vision");
+      const objectives = sectionFromText(text, "Project Objectives");
+      const success = sectionFromText(text, "Success Criteria");
+      const description = [vision, objectives, success].filter(Boolean).join("\n\n") ||
+        text.split(/\r?\n/).filter(line => line.trim()).slice(0, 12).join("\n");
+      return {
+        name: projectName,
+        description,
+        repository_path: repositoryPath,
+        repository_url: githubUrl,
+        default_branch: defaultBranch,
+        manifest: {
+          source_document_type: "client_project_manifest",
+          client_manifest_text: text,
+          project_identity: {
+            project_name: projectName,
+            repository_path: repositoryPath,
+            repository_url: githubUrl,
+            default_branch: defaultBranch
+          }
+        }
+      };
+    }
+
+    async function loadManifestFile(file) {
+      const rawText = await file.text();
+      const isJson = file.name.toLowerCase().endsWith(".json") || file.type === "application/json";
+      const document = isJson ? JSON.parse(rawText) : parseClientManifestText(rawText);
+      loadedManifestDocument = document;
+      const project = normalizeManifest(document);
+      byId("factoryName").value = project.name || "";
+      byId("factoryDescription").value = project.description || "";
+      byId("factoryRepo").value = project.repository_path || "";
+      byId("factoryGithub").value = project.repository_url || "";
+      byId("factoryBranch").value = project.default_branch || "main";
+      byId("manifestPreview").innerHTML = `
+        <strong>${esc(project.name || "Manifesto loaded")}</strong>
+        <div>${esc(project.description || "No description")}</div>
+        <div class="muted">${esc(project.repository_path || "No repository path")}</div>
+        <div class="muted">${esc(project.repository_url || "No GitHub repository URL yet")}</div>
+      `;
+      setOrientation(2, "Manifesto inserted. Check project type, repository path, and branch, then start one process or the batch.");
+      coach(
+        "Manifesto Loaded",
+        "The factory now has project intent. Verify project type, repository path, and branch, then start one process or the manifesto batch.",
+        ["Check Project Type", "factory"],
+        ["Open Projects", "projects"]
+      );
+      renderManagementGraphs();
+    }
+
+    async function createAndStartProject(projectInput) {
+      const validation = validateProjectInput(projectInput);
+      if (!validation.ok) {
+        throw new Error(validation.message);
+      }
+      const sourceManifest = projectInput.manifest || projectInput;
+      const manifest = {
+        ...sourceManifest,
+        project_type: selectedCapability,
+        factory_type: selectedCapability,
+        dashboard_created_at: new Date().toISOString()
+      };
+      const payload = {
+        name: projectInput.name,
+        description: `${projectInput.description}\n\nFactory type: ${selectedCapability}`,
+        repository_path: projectInput.repository_path,
+        repository_url: projectInput.repository_url || sourceManifest.repository_url || null,
+        default_branch: projectInput.default_branch || "main",
+        project_type: selectedCapability,
+        manifest
+      };
+      const project = await json("/api/v1/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      await json(`/api/v1/project-formation/projects/${project.id}/packs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...actorHeaders },
+        body: JSON.stringify({
+          project_id: project.id,
+          idea: projectInput.description,
+          expected_outcome: sourceManifest.expected_outcome || "Create visible governed project proof.",
+          target_users: sourceManifest.target_users || ["operator", "client owner"],
+          constraints: sourceManifest.constraints || ["human approval before execution"],
+          known_systems: sourceManifest.known_systems || [projectInput.repository_path],
+          deadline: sourceManifest.deadline || null,
+          budget_signal: sourceManifest.budget_signal || "reuse existing enterprise workflow assets"
+        })
+      });
+      await json(`/api/v1/projects/${project.id}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_id: "factory-dashboard" })
+      });
+      return project;
+    }
+
+    function validateProjectInput(projectInput) {
+      const missing = [];
+      if (!String(projectInput.name || "").trim()) missing.push("project name");
+      if (!String(projectInput.repository_path || "").trim()) missing.push("repository path");
+      if (!String(projectInput.default_branch || "").trim()) missing.push("default branch");
+      if (!String(projectInput.description || "").trim()) missing.push("project summary");
+      if (missing.length) {
+        return {
+          ok: false,
+          message: `Project name, repository path, default branch, and project summary are required before the factory can start. Missing: ${missing.join(", ")}.`
+        };
+      }
+      return { ok: true, message: "Ready" };
+    }
+
+    function friendlyLaunchError(error) {
+      const message = String(error?.message || "");
+      if (message.includes("required before the factory can start")) return message;
+      if (message.includes("JSON")) return "The manifesto format is not valid JSON. Check the file, then load it again.";
+      if (message.includes("409")) return "The factory found an existing record or workflow conflict. Open Projects and inspect the existing work before retrying.";
+      if (message.includes("422")) return "The factory could not start this project. Check project name, repository path, branch, and manifesto format.";
+      if (message.includes("500")) return "The factory service failed during launch. Refresh, check source freshness, and inspect API logs before retrying.";
+      return "The factory could not start this project. Check project details, manifesto format, and source freshness before retrying.";
+    }
+
+    async function startFactoryProject() {
+      const projectInput = {
+        name: byId("factoryName").value.trim(),
+        description: byId("factoryDescription").value.trim(),
+        repository_path: byId("factoryRepo").value.trim(),
+        repository_url: byId("factoryGithub").value.trim() || null,
+        default_branch: byId("factoryBranch").value.trim() || "main",
+        manifest: loadedManifestDocument ? normalizeManifest(loadedManifestDocument) : {}
+      };
+      const validation = validateProjectInput(projectInput);
+      if (!validation.ok) {
+        byId("factoryStatus").textContent = validation.message;
+        coach(
+          "Factory Needs Input",
+          validation.message,
+          ["Complete Details", "factory"],
+          ["Open Projects", "projects"]
+        );
+        return;
+      }
+      byId("factoryStatus").textContent = "Creating project...";
+      const project = await createAndStartProject(projectInput);
+      byId("factoryStatus").textContent = "Formation pack created. Opening execution graph...";
+      setOrientation(3, "Formation pack created and workflow started. Inspect the live project graph next.");
+      coach(
+        "Project Formed",
+        "The project now has a formation pack and workflow execution started. Watch the Execution graph for phase, tasks, crew, events, telemetry, and problems.",
+        ["Open Execution", "execution"],
+        ["Review Problems", "problems"]
+      );
+      await refresh();
+      selectedExecutionNode = `project:${project.id}`;
+      document.querySelector('[data-view="execution"]').click();
+      renderExecutionDashboard();
+    }
+
+    async function startManifestBatch() {
+      const document = loadedManifestDocument;
+      if (!document || !Array.isArray(document.projects) || !document.projects.length) {
+        await startFactoryProject();
+        return;
+      }
+      const defaults = document.defaults || {};
+      const invalid = document.projects
+        .map((project, index) => ({ index, validation: validateProjectInput({ ...defaults, ...project }) }))
+        .filter(item => !item.validation.ok);
+      if (invalid.length) {
+        byId("factoryStatus").textContent = `Manifesto batch needs correction before launch. Project ${invalid[0].index + 1}: ${invalid[0].validation.message}`;
+        coach(
+          "Batch Needs Input",
+          "One or more manifesto projects are missing required launch details. Correct the manifesto before starting parallel work.",
+          ["Fix Manifesto", "factory"],
+          ["Open Projects", "projects"]
+        );
+        return;
+      }
+      byId("factoryStatus").textContent = `Starting ${countSentence(document.projects.length, "project")} in parallel...`;
+      const results = await Promise.allSettled(document.projects.map(project =>
+        createAndStartProject({ ...defaults, ...project })
+      ));
+      const started = results.filter(result => result.status === "fulfilled").map(result => result.value);
+      const failed = results.length - started.length;
+      byId("factoryStatus").textContent = `Started ${started.length}; failed ${failed}. Opening execution control...`;
+      setOrientation(3, `Manifesto batch started: ${countSentence(started.length, "project")}, ${countSentence(failed, "launch issue")}. Inspect Execution first.`);
+      coach(
+        "Manifesto Batch Started",
+        `The factory started ${countSentence(started.length, "project")} and detected ${countSentence(failed, "launch failure")}. Inspect Execution first, then Problems if any launch failed.`,
+        ["Open Execution", "execution"],
+        ["Review Problems", "problems"]
+      );
+      await refresh();
+      if (started[0]) selectedExecutionNode = `project:${started[0].id}`;
+      document.querySelector('[data-view="execution"]').click();
+      renderExecutionDashboard();
+    }
+
+    async function startMockFactoryTest() {
+      byId("factoryStatus").textContent = "Starting controlled mock autonomy...";
+      const result = await json("/api/v1/project-formation/mock-factory/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...actorHeaders },
+        body: JSON.stringify({})
+      });
+      byId("factoryStatus").textContent = `${result.started_count} demo project(s) ready. ${result.next_action}`;
+      setOrientation(3, "Mock autonomy started. Open Execution and select a demo project to watch graph movement, tasks, crews, events, and telemetry.");
+      coach(
+        "Mock Factory Started",
+        result.human_summary,
+        ["Open Execution", "execution"],
+        ["Review Problems", "problems"]
+      );
+      await refresh();
+      if (result.projects && result.projects[0]) selectedExecutionNode = `project:${result.projects[0].project_id}`;
+      document.querySelector('[data-view="execution"]').click();
+      renderExecutionDashboard();
+    }
+
+    function parseMetrics(raw) {
+      const metrics = {};
+      for (const line of raw.split("\n")) {
+        if (!line || line.startsWith("#")) continue;
+        const [left, value] = line.trim().split(/\s+/);
+        if (!left || value === undefined) continue;
+        metrics[left.replace(/\{.*$/, "")] = Number(value);
+      }
+      return metrics;
+    }
+
+    function applyDashboardContext(context) {
+      if (!context) return;
+      state.context = context;
+      if (context.actor_headers) actorHeaders = context.actor_headers;
+      if (context.organization_id && !byId("graphOrganizationId").value) {
+        byId("graphOrganizationId").value = context.organization_id;
+      }
+      if (context.project_id && !byId("graphProjectId").value) {
+        byId("graphProjectId").value = context.project_id;
+      }
+    }
+
+    function statusClass(status) {
+      const value = String(status || "").toLowerCase();
+      if (["online", "ok", "succeeded", "completed", "active", "nominal"].includes(value)) return "ok";
+      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto"].includes(value)) return "warn";
+      if (["failed", "dead_letter", "abandoned", "offline", "attention_required"].includes(value)) return "bad";
+      return "info";
+    }
+
+    function humanStatus(status) {
+      const labels = {
+        created: "Ready to start",
+        project_created: "Ready to start",
+        work_package_approved: "Plan approved, execution not started",
+        waiting_work_package_approval: "Ready for work-package review",
+        manual_intervention: "Needs human review before work can continue",
+        attention_required: "Needs operator decision",
+        context_required: "Choose an organization to see governed metrics",
+        dead_letter: "Reviewed failure or recovery needed",
+        failed: "Needs recovery action",
+        abandoned: "Stopped and needs review",
+        queued: "Waiting for worker capacity",
+        running: "Work is running",
+        leased: "Worker has accepted the work",
+        retry_wait: "Waiting before retry",
+        succeeded: "Completed",
+        nominal: "Healthy",
+        viable: "Viable",
+        active: "Active",
+        standby: "Standby",
+        not_started: "Not started",
+        waiting_for_manifesto: "Waiting for manifesto",
+        online: "Online",
+        offline: "Offline",
+        degraded: "Degraded"
+      };
+      return labels[String(status || "").toLowerCase()] || String(status || "Not reported").replace(/_/g, " ");
+    }
+
+    function workerBusinessSummary(worker) {
+      if (worker.status === "online") return "Ready to accept enterprise work.";
+      if (worker.status === "degraded") return "Online with reduced capacity. Keep an eye on this profile before scaling parallel projects.";
+      if (worker.status === "offline") return "Historical worker instance. It is not part of current capacity.";
+      return "Worker signal is recorded by the factory.";
+    }
+
+    function workerGroup(worker) {
+      return ["online", "degraded"].includes(worker.status) ? "current" : "history";
+    }
+
+    function humanJobType(jobType) {
+      const text = String(jobType || "background work").replace(/_/g, " ");
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+    function jobBusinessSummary(job) {
+      if (isAcknowledgedJob(job)) return "Reviewed history. The evidence is preserved and no current action is required.";
+      if (isProblemJob(job)) return `${humanJobType(job.job_type)} needs recovery before this work should be retried.`;
+      if (["queued", "retry_wait"].includes(job.status)) return `${humanJobType(job.job_type)} is waiting for capacity or retry timing.`;
+      if (["running", "leased"].includes(job.status)) return `${humanJobType(job.job_type)} is currently moving.`;
+      if (job.status === "succeeded") return `${humanJobType(job.job_type)} completed successfully.`;
+      return `${humanJobType(job.job_type)} is tracked by the factory.`;
+    }
+
+    function jobGroup(job) {
+      if (isProblemJob(job) && !isAcknowledgedJob(job)) return "current";
+      if (["queued", "running", "leased", "retry_wait"].includes(job.status)) return "current";
+      if (isAcknowledgedJob(job) || job.status === "succeeded") return "history";
+      return "history";
+    }
+
+    function readableTime(value) {
+      if (!value) return "Not reported yet";
+      return new Date(value).toLocaleString();
+    }
+
+    function render() {
+      const online = state.workers.filter(worker => worker.status === "online").length;
+      const problemJobs = unresolvedProblemJobs().length;
+      byId("workersOnline").textContent = online;
+      byId("problemJobs").textContent = problemJobs;
+      byId("projectCount").textContent = state.projects.length;
+      const runningJobs = state.jobs.filter(job => job.status === "running").length;
+      const queuedJobs = state.jobs.filter(job => job.status === "queued").length;
+      const requestCount = state.metrics.ai_enterprise_http_requests_total || 0;
+      const pulseRows = [
+        ["Factory pulse", countSentence(state.projects.length, "project"), "registered"],
+        ["Work in motion", countSentence(runningJobs + queuedJobs, "job"), "queued or running"],
+        ["Crew capacity", countSentence(online, "worker"), "online"],
+        ["Telemetry", countSentence(requestCount, "request signal"), "captured"]
+      ];
+      byId("livingPulse").innerHTML = pulseRows.map(([label, value, detail]) => {
+        const width = Math.min(100, Math.max(8, Number.parseInt(value, 10) * 16 || 8));
+        return `
+          <div class="pulse-row">
+            <strong>${esc(label)}</strong>
+            <div class="pulse-track"><div class="pulse-fill" style="width: ${width}%"></div></div>
+            <span class="muted">${esc(value)} ${esc(detail)}</span>
+          </div>
+        `;
+      }).join("");
+      const failedJobs = unresolvedProblemJobs();
+      byId("problemSummary").innerHTML = failedJobs.slice(0, 4).map(job => `
+        <div class="mini">
+          <strong class="${statusClass(job.status)}">Action needed</strong>
+          <div>${esc(humanJobType(job.job_type))} did not finish.</div>
+          <div class="muted">Open Problems to see the cause, retry state, and next recovery step.</div>
+        </div>
+      `).join("") || `
+        <div class="mini">
+          <strong class="ok">No urgent action</strong>
+          <div>The factory has no failed work right now.</div>
+          <div class="muted">Continue from Factory to create work, or Projects to inspect delivery.</div>
+        </div>
+        <div class="mini">
+          <strong class="info">Measured state</strong>
+          <div>${esc(countSentence(state.projects.length, "project"))}, ${esc(countSentence(online, "online worker"))}, ${esc(countSentence(state.jobs.length, "tracked job"))}.</div>
+          <div class="muted">This overview updates automatically every 15 seconds.</div>
+        </div>
+      `;
+      byId("quickLinks").innerHTML = [
+        ["factory", "Create work", "Attach a manifesto and start one project or a batch."],
+        ["execution", "Watch execution", "See project advancement, task counts, crews, events, and telemetry."],
+        ["projects", "Inspect projects", "Open the execution graph for a selected project."],
+        ["problems", "Resolve issues", "Review failed or blocked work in human terms."],
+        ["metrics", "Check telemetry", "Confirm live signals and source freshness."]
+      ].map(([view, label, detail]) => `
+        <button class="list-item quick-open" data-view-target="${view}">
+          <div><div class="list-title">${label}</div><div class="list-meta">${detail}</div></div>
+          <span class="pill info">open</span>
+        </button>
+      `).join("");
+      document.querySelectorAll(".quick-open").forEach(item => {
+        item.addEventListener("click", () => switchView(item.dataset.viewTarget));
+      });
+      const filter = byId("jobFilter").value;
+      const filtered = state.jobs.filter(job => {
+        if (!filter) return true;
+        if (filter === "current" || filter === "history") return jobGroup(job) === filter;
+        return job.status === filter;
+      });
+      byId("jobsTable").innerHTML = listbox(filtered, job => `
+        <div class="list-item">
+          <div>
+            <div class="list-title">${esc(humanJobType(job.job_type))}</div>
+            <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
+            <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
+            <details><summary>Technical detail</summary><div class="list-meta">${esc(job.last_error || "No raw diagnostic reported.")}</div></details>
+          </div>
+          <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
+        </div>
+      `, filter === "history"
+        ? "No reviewed history is visible yet. Resolved jobs will appear here after completion or acknowledgment."
+        : "No current work needs action. The factory is clear to inspect projects or create new work.");
+      const workerFilter = byId("workerFilter").value;
+      const workerRows = state.workers.filter(worker => {
+        if (workerFilter === "all") return true;
+        return workerGroup(worker) === workerFilter;
+      });
+      byId("workersTable").innerHTML = listbox(workerRows, worker => `
+        <div class="list-item">
+          <div><div class="list-title">${esc(worker.profile || "Worker")}</div><div class="list-meta">${esc(workerBusinessSummary(worker))}</div><div class="list-meta">Last heartbeat ${esc(readableTime(worker.last_heartbeat_at))}</div></div>
+          <span class="pill ${statusClass(worker.status)}">${esc(humanStatus(worker.status))}</span>
+        </div>
+      `, workerFilter === "history"
+        ? "No offline worker history is visible. Current capacity is clean."
+        : "No current worker capacity is visible. Start worker services before launching parallel work.");
+      const telemetry = state.telemetrySummary;
+      const governed = telemetry ? telemetry.governed_performance : null;
+      const runtime = telemetry ? telemetry.runtime : null;
+      const summaryRows = telemetry ? [
+        { name: "Operator summary", value: telemetry.operator_summary, detail: "Human-readable telemetry guidance" },
+        { name: "Runtime signal", value: humanStatus(runtime.signal), detail: `${countSentence(runtime.project_count, "project")} and ${countSentence(runtime.problem_job_count, "current problem job")} are visible.` },
+        { name: "Governed performance", value: humanStatus(governed.status), detail: `${countSentence(governed.metric_count, "governed metric")} available.` }
+      ] : [];
+      if (state.operatingPicture) {
+        summaryRows.unshift({
+          name: "Operating picture",
+          value: humanStatus(state.operatingPicture.headline.state),
+          detail: state.operatingPicture.headline.business_meaning
+        });
+      }
+      byId("metricsTable").innerHTML = listbox(summaryRows, metric => `
+        <div class="list-item">
+          <div><div class="list-title">${esc(metric.name)}</div><div class="list-meta">${esc(metric.detail)}</div></div>
+          <span class="pill ${statusClass(metric.value)}">${esc(metric.value)}</span>
+        </div>
+      `, "Telemetry summary is not available yet. Refresh the dashboard or check API readiness.") + `
+        <details class="mini" style="margin-top: 10px;">
+          <summary>Advanced raw metrics</summary>
+          ${listbox(Object.entries(state.metrics).map(([name, value]) => ({ name, value })), metric => `
+            <div class="list-item">
+              <div><div class="list-title mono">${esc(metric.name)}</div><div class="list-meta">Raw runtime counter or gauge.</div></div>
+              <span class="pill info">${esc(metric.value)}</span>
+            </div>
+          `, "No raw metrics have been emitted yet. Open the dashboard or API routes, then refresh.")}
+        </details>
+      `;
+      byId("projectsTable").innerHTML = listbox(state.projects, project => `
+        <button class="list-item project-open" data-project-id="${esc(project.id)}">
+          <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">${esc(project.repository_path)}</div><div class="list-meta">Updated ${esc(project.updated_at)}</div></div>
+          <span class="pill ${statusClass(project.status)}">${esc(humanStatus(project.status))}</span>
+        </button>
+      `, "No projects are visible yet. Open Factory, attach a client manifest, and start a governed project.");
+      document.querySelectorAll(".project-open").forEach(item => {
+        item.addEventListener("click", () => {
+          byId("projectSelect").value = item.dataset.projectId;
+          loadProjectDashboard(item.dataset.projectId);
+        });
+      });
+      const currentProject = byId("projectSelect").value;
+      byId("projectSelect").innerHTML = state.projects.map(project =>
+        `<option value="${esc(project.id)}">${esc(project.name)}</option>`
+      ).join("");
+      if (currentProject && state.projects.some(project => project.id === currentProject)) {
+        byId("projectSelect").value = currentProject;
+      }
+      renderMovementGraph();
+      renderExecutionDashboard();
+      renderManagementGraphs();
+      byId("updated").textContent = `Last synchronized ${new Date().toLocaleTimeString()}`;
+    }
+
+    function renderProjectIntelligence(payload) {
+      const workflow = payload.workflow || {};
+      const selectedName = byId("phaseDetail").dataset.phase || "";
+      byId("projectGraph").innerHTML = `
+        <div class="cards">
+          <div class="mini"><strong>${esc(payload.project.name)}</strong><div class="${statusClass(payload.project.status)}">${esc(humanStatus(payload.project.status))}</div><div class="muted">${esc(payload.project.repository_path)}</div></div>
+          <div class="mini"><strong>${esc(humanStatus(workflow.state || "no workflow"))}</strong><div>${esc(workflow.current_step || "No active step")}</div><div class="muted">${esc(workflow.recommended_operator_action || "")}</div></div>
+          <div class="mini"><strong>${payload.operating_state.degraded ? "Needs workflow link" : "Workflow linked"}</strong><div>${esc(payload.operating_state.reason || "Project state and workflow tracking agree.")}</div><div class="muted">${esc(payload.operating_state.recommended_action || "Continue with the guided route.")}</div></div>
+          <div class="mini"><strong>${esc(payload.estimate.estimated_minutes_remaining)} min</strong><div>Estimated remaining</div><div class="muted">${esc(payload.estimate.basis)}</div></div>
+          <div class="mini"><strong>${esc(payload.reuse.work_package_count)} packages</strong><div>${esc(payload.reuse.artifact_count)} artifacts</div><div class="muted">${esc(payload.reuse.artifact_types.join(", ") || "No artifact types yet")}</div></div>
+          <div class="mini"><strong>${esc(humanStatus(payload.telemetry.signal))}</strong><div>Telemetry always active</div><div class="muted">${esc(payload.telemetry.phase_completion_percent)}% phase completion · ${esc(payload.telemetry.problem_count)} current problem(s)</div></div>
+          <div class="mini"><strong>${esc(payload.reuse.template.template_key)}</strong><div>Reusable template</div><div class="muted">${esc(payload.reuse.template.project_type)}</div></div>
+          <div class="mini"><strong>${esc(humanStatus(payload.economic_effects.viability))}</strong><div>Economic proof</div><div class="muted">${esc(payload.economic_effects.estimated_manual_hours_avoided)}h avoided · reuse x${esc(payload.economic_effects.reuse_multiplier)}</div></div>
+        </div>
+        <div class="phase-graph">
+          ${payload.phases.map(phase => `
+            <button class="phase-node ${esc(phase.status)} ${phase.name === selectedName ? "selected" : ""}" data-phase="${esc(phase.name)}">
+              <strong>${esc(phase.name.replace("_", " "))}</strong>
+              <span>${esc(phase.status)} · ${esc(phase.transition_count)} transition(s)</span>
+            </button>
+          `).join("")}
+        </div>
+      `;
+      document.querySelectorAll(".phase-node").forEach(node => {
+        node.addEventListener("click", () => {
+          const phase = payload.phases.find(item => item.name === node.dataset.phase);
+          byId("phaseDetail").dataset.phase = phase.name;
+          byId("phaseDetail").innerHTML = `
+            <div class="cards">
+              <div class="mini"><strong>${esc(phase.name.replace("_", " "))}</strong><div class="${statusClass(phase.status)}">${esc(phase.status)}</div><div class="muted">${esc(phase.states.join(", "))}</div></div>
+              <div class="mini"><strong>Executed</strong><div>${esc(payload.executed_steps.join(" → ") || "No transitions recorded")}</div></div>
+              <div class="mini"><strong>Remaining</strong><div>${esc(payload.remaining_steps.join(" → ") || "No remaining phases")}</div></div>
+              <div class="mini"><strong>Project Life</strong><div>${esc(payload.life.transition_count)} transitions · ${esc(payload.life.job_count)} jobs</div></div>
+            </div>
+            <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
+            <div class="grid" style="margin-top: 10px;">
+              <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "No crew runs are linked to this project phase yet.")}</div>
+              <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "No job history is linked to this project yet.")}</div>
+              <div class="mini span-6"><strong>Calibration</strong>${listbox(payload.calibration, item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No calibration checks are available yet.")}</div>
+              <div class="mini span-6"><strong>Improvements & Solutions</strong>${listbox(payload.improvements, item => `<div class="list-item"><div><div class="list-title">${esc(item.source)}</div><div class="list-meta">${esc(item.recommendation)}</div></div><span class="pill info">${esc(humanStatus(item.status))}</span></div>`, "No improvement proposals are needed right now.")}</div>
+              <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
+              <div class="mini span-6"><strong>Specialist Agents</strong>${listbox(payload.specialist_agents, item => `<div class="list-item"><div><div class="list-title">${esc(item.agent_key)}</div><div class="list-meta">${esc(item.specialty)} · ${esc(item.mission)}</div></div><span class="pill ok">${esc(humanStatus(item.status))}</span></div>`, "No specialist agents are suggested for this project type yet.")}</div>
+              <div class="mini span-6"><strong>Economic Effects</strong>${listbox(Object.entries(payload.economic_effects).map(([name, value]) => ({ name, value })), item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.value)}</div></div><span class="pill info">proof</span></div>`, "Economic proof will appear after project evidence is collected.")}</div>
+              <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => `<div class="list-item"><div><div class="list-title">${esc(item.blueprint_key)}</div><div class="list-meta">${esc(item.title)} · ${esc(item.kind)} · reusable for ${esc(item.reusable_for)}</div></div><span class="pill ok">reusable</span></div>`, "Reusable blueprints will appear when the project produces enough evidence.")}</div>
+            </div>
+          `;
+          renderProjectIntelligence(payload);
+        });
+      });
+      if (!byId("phaseDetail").innerHTML && payload.phases.length) {
+        byId("phaseDetail").dataset.phase = payload.phases[0].name;
+        document.querySelector(".phase-node").click();
+      }
+    }
+
+    async function loadProjectDashboard(projectId) {
+      const id = projectId || byId("projectSelect").value;
+      if (!id) return;
+      const payload = await json(`/api/v1/projects/${id}/intelligence`);
+      const url = new URL(window.location.href);
+      url.searchParams.set("project", id);
+      history.replaceState(null, "", url);
+      byId("phaseDetail").innerHTML = "";
+      byId("phaseDetail").dataset.phase = "";
+      setOrientation(4, "Project graph opened. Check phase, crew, telemetry, issues, proof, then open the demo story when ready.");
+      coach(
+        "Project Dashboard Open",
+        "Use the phase graph first. Click a phase to see steps, crew, calibration, errors, economic proof, and blueprints.",
+        ["Review Project", "projects"],
+        ["Open Metrics", "metrics"]
+      );
+      renderProjectIntelligence(payload);
+    }
+
+    async function refresh() {
+      byId("apiStatus").className = "status muted";
+      byId("apiStatus").innerHTML = `<span class="dot"></span>Checking`;
+      let dashboardContext = null;
+      try {
+        dashboardContext = await json("/dashboard/context");
+        applyDashboardContext(dashboardContext);
+      } catch (error) {
+        dashboardContext = null;
+      }
+      const telemetryUrl = dashboardContext && dashboardContext.organization_id
+        ? `/dashboard/telemetry-summary?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
+        : "/dashboard/telemetry-summary";
+      const operatingPictureUrl = dashboardContext && dashboardContext.organization_id
+        ? `/api/v1/query/operating-picture?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
+        : "/api/v1/query/operating-picture";
+      const dashboardManagerUrl = dashboardContext && dashboardContext.organization_id
+        ? `/api/v1/query/dashboard-manager?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
+        : "/api/v1/query/dashboard-manager";
+      const [ready, jobs, workers, projects, rawMetrics, operatingPicture, dashboardManager] = await Promise.allSettled([
+        json("/health/ready"),
+        json("/api/v1/operator/jobs", { headers: actorHeaders }),
+        json("/api/v1/operator/jobs/worker-instances", { headers: actorHeaders }),
+        json("/api/v1/projects"),
+        text("/metrics"),
+        json(operatingPictureUrl, { headers: actorHeaders }),
+        json(dashboardManagerUrl, { headers: actorHeaders })
+      ]);
+      const telemetrySummary = await Promise.allSettled([json(telemetryUrl)]);
+      if (ready.status === "fulfilled" && ready.value.status === "ok") {
+        byId("apiStatus").className = "status ok";
+        byId("apiStatus").innerHTML = `<span class="dot"></span>Ready`;
+      } else {
+        byId("apiStatus").className = "status bad";
+        byId("apiStatus").innerHTML = `<span class="dot"></span>Not ready`;
+      }
+      state.jobs = jobs.status === "fulfilled" ? jobs.value : [];
+      state.workers = workers.status === "fulfilled" ? workers.value : [];
+      state.projects = projects.status === "fulfilled" ? projects.value : [];
+      state.metrics = rawMetrics.status === "fulfilled" ? parseMetrics(rawMetrics.value) : {};
+      state.telemetrySummary = telemetrySummary[0].status === "fulfilled" ? telemetrySummary[0].value : null;
+      state.operatingPicture = operatingPicture.status === "fulfilled" ? operatingPicture.value : null;
+      state.dashboardManager = dashboardManager.status === "fulfilled" ? dashboardManager.value : null;
+      state.sources = {
+        ready: sourceStatus(ready, "API", "overview", ready.status === "fulfilled" && ready.value.status === "ok" ? "Service is ready" : "Service readiness is not confirmed"),
+        jobs: sourceStatus(jobs, "Work", "problems", `${state.jobs.length} tracked job(s)`),
+        workers: sourceStatus(workers, "Crew", "problems", `${state.workers.length} worker signal(s)`),
+        projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
+        metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} raw signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
+        query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Read model is unavailable"),
+        manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Project execution manager is unavailable")
+      };
+      render();
+      renderSourceStrip();
+      renderBusinessBoard();
+      renderEcosystemModules();
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        switchView(tab.dataset.view);
+        const guidance = {
+          overview: ["Enterprise Overview", "Read the business board first, then follow Guided Route. It shows the next clear action."],
+          execution: ["Execution Guide", "Click a project node to see phase, task counts, active crew signals, events, telemetry, and next action."],
+          factory: ["Factory Guide", "Add a client idea or manifesto. Choose direction, check repository details, then start work."],
+          problems: ["Problems Guide", "Use this when work is stuck. Resolve issues before scaling more parallel work."],
+          metrics: ["Telemetry Guide", "Use metrics as proof that the system is alive and work is measurable."],
+          projects: ["Projects Guide", "Open one project. The graph explains phase, crew, jobs, proof, and remaining work."],
+          graph: ["Blueprint Guide", "Use graph context and blueprints when proof must become reusable structure."]
+        };
+        const [title, message] = guidance[tab.dataset.view] || guidance.overview;
+        coach(title, message, ["Continue Here", tab.dataset.view], ["Open Projects", "projects"]);
+      });
+    });
+    byId("refresh").addEventListener("click", refresh);
+    byId("coachPrimary").addEventListener("click", event => goTarget(event.currentTarget.dataset.target));
+    byId("coachSecondary").addEventListener("click", event => goTarget(event.currentTarget.dataset.target));
+    byId("orientationAction").addEventListener("click", event => goTarget(event.currentTarget.dataset.target));
+    byId("jobFilter").addEventListener("change", render);
+    byId("workerFilter").addEventListener("change", render);
+    byId("loadProject").addEventListener("click", () => loadProjectDashboard());
+    byId("clarifyVision").addEventListener("click", clarifyVision);
+    byId("checkEcosystemGraph").addEventListener("click", () => checkAuthenticatedGraph("ecosystem"));
+    byId("checkEvidenceGraph").addEventListener("click", () => checkAuthenticatedGraph("evidence"));
+    byId("manifestFile").addEventListener("change", event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      loadManifestFile(file).catch(error => {
+        byId("factoryStatus").textContent = `Manifesto error: ${error.message}`;
+      });
+    });
+    byId("startFactory").addEventListener("click", () => {
+      startFactoryProject().catch(error => {
+        byId("factoryStatus").textContent = friendlyLaunchError(error);
+        coach(
+          "Factory Launch Stopped",
+          friendlyLaunchError(error),
+          ["Fix Details", "factory"],
+          ["Open Projects", "projects"]
+        );
+      });
+    });
+    byId("startManifestBatch").addEventListener("click", () => {
+      startManifestBatch().catch(error => {
+        byId("factoryStatus").textContent = friendlyLaunchError(error);
+        coach(
+          "Batch Launch Stopped",
+          friendlyLaunchError(error),
+          ["Fix Manifesto", "factory"],
+          ["Open Projects", "projects"]
+        );
+      });
+    });
+    byId("startMockFactory").addEventListener("click", () => {
+      startMockFactoryTest().catch(error => {
+        byId("factoryStatus").textContent = friendlyLaunchError(error);
+        coach(
+          "Mock Factory Stopped",
+          friendlyLaunchError(error),
+          ["Review Factory", "factory"],
+          ["Open Problems", "problems"]
+        );
+      });
+    });
+    byId("loadWorkflow").addEventListener("click", async () => {
+      const workflowId = byId("workflowId").value.trim();
+      if (!workflowId) return;
+      try {
+        const [workflow, history] = await Promise.all([
+          json(`/api/v1/workflows/${workflowId}`),
+          json(`/api/v1/workflows/${workflowId}/history`)
+        ]);
+        byId("workflowDetail").innerHTML = `<div class="cards"><div class="mini"><strong>${esc(workflow.state)}</strong><div>${esc(workflow.current_step || "No active step")}</div><div class="muted">${esc(workflow.recommended_operator_action || "")}</div></div></div>` +
+          table(history, [
+            { label: "From", value: row => row.previous_state },
+            { label: "To", value: row => row.current_state },
+            { label: "Actor", value: row => row.actor_id },
+            { label: "At", value: row => row.occurred_at }
+          ]);
+      } catch (error) {
+        byId("workflowDetail").innerHTML = `<div class="mini bad">${esc(error.message)}</div>`;
+      }
+    });
+
+    function animateField() {
+      const canvas = byId("field");
+      const ctx = canvas.getContext("2d");
+      function resize() {
+        canvas.width = window.innerWidth * devicePixelRatio;
+        canvas.height = window.innerHeight * devicePixelRatio;
+      }
+      window.addEventListener("resize", resize);
+      resize();
+      let tick = 0;
+      function frame() {
+        tick += 0.006;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "rgba(93, 184, 255, 0.22)";
+        ctx.lineWidth = devicePixelRatio;
+        const spacing = 44 * devicePixelRatio;
+        for (let x = -spacing; x < canvas.width + spacing; x += spacing) {
+          ctx.beginPath();
+          ctx.moveTo(x + Math.sin(tick + x * 0.002) * 18, 0);
+          ctx.lineTo(x - 120, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height + spacing; y += spacing) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + Math.cos(tick + y * 0.002) * 16);
+          ctx.lineTo(canvas.width, y - 100);
+          ctx.stroke();
+        }
+        requestAnimationFrame(frame);
+      }
+      frame();
+    }
+    animateField();
+    renderCapabilities();
+    setOrientation(0, "Start here: write a client idea or attach a manifesto in Factory.");
+    refresh().then(() => {
+      const projectId = new URL(window.location.href).searchParams.get("project");
+      if (projectId) {
+        byId("projectSelect").value = projectId;
+        loadProjectDashboard(projectId);
+      }
+    });
+    setInterval(refresh, 15000);
+  </script>
+</body>
+</html>
+"""
+
+
+DEMO_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Enterprise Demo Story</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: rgba(13, 18, 24, 0.9);
+      --border: rgba(143, 166, 190, 0.24);
+      --text: #edf4fb;
+      --muted: #a6b4c2;
+      --green: #56e39f;
+      --blue: #5db8ff;
+      --amber: #ffd166;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: radial-gradient(circle at 18% 18%, rgba(93, 184, 255, 0.22), transparent 30%),
+        radial-gradient(circle at 88% 12%, rgba(86, 227, 159, 0.16), transparent 26%),
+        linear-gradient(135deg, #07090d, #0c1117 52%, #06080b);
+    }
+    .shell { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 40px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.7rem, 4vw, 3rem); letter-spacing: 0; }
+    p { color: var(--muted); line-height: 1.45; }
+    a, button {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(15, 23, 31, 0.86);
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .hero, .panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+    }
+    .hero { min-height: 240px; display: grid; align-content: center; margin-bottom: 14px; }
+    .hero strong { color: var(--green); }
+    .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
+    .span-12 { grid-column: span 12; }
+    .story-map {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .node {
+      min-height: 142px;
+      border: 1px solid rgba(143, 166, 190, 0.22);
+      border-radius: 8px;
+      background: rgba(5, 10, 15, 0.76);
+      padding: 12px;
+      text-align: left;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+    .node[aria-pressed="true"] {
+      border-color: rgba(93, 184, 255, 0.9);
+      background: rgba(93, 184, 255, 0.15);
+    }
+    .node span { color: var(--muted); font-size: 0.86rem; line-height: 1.35; }
+    .pill { color: var(--green); font-weight: 800; font-size: 0.78rem; }
+    .output { min-height: 210px; }
+    .output h2 { margin-top: 0; }
+    .checklist { display: grid; gap: 8px; }
+    .check {
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(7, 12, 18, 0.7);
+    }
+    .check strong { display: block; margin-bottom: 4px; }
+    @media (max-width: 900px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .span-4, .span-6 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>AI Enterprise Demo Story</h1>
+        <p>Show how a rough idea becomes a supervised, tested, business-ready project.</p>
+      </div>
+      <a href="/dashboard">Open Command Center</a>
+    </header>
+
+    <section class="hero">
+      <h2>One sentence</h2>
+      <p><strong>AI Enterprise is a factory for ideas.</strong> It listens, creates options, lets the human choose, assigns specialist crews, verifies quality, and prepares the result for production and market presentation.</p>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-12">
+        <h2>Idea to Reality Map</h2>
+        <div id="storyMap" class="story-map"></div>
+      </article>
+      <article class="panel span-6 output">
+        <h2 id="storyTitle">Start with the idea</h2>
+        <p id="storyText">A person can explain badly or incompletely. The system still listens and turns the idea into clear options.</p>
+      </article>
+      <article class="panel span-6">
+        <h2>Supervision and Quality</h2>
+        <div class="checklist">
+          <div class="check"><strong>Human choice</strong><span>The client chooses practical, growth, or visionary direction.</span></div>
+          <div class="check"><strong>Agent crew</strong><span>Specialists work by phase: requirements, architecture, build, test, security, and delivery.</span></div>
+          <div class="check"><strong>Proof</strong><span>Every project shows telemetry, errors, economic value, and reusable blueprints.</span></div>
+          <div class="check"><strong>Marketing platform</strong><span>The same proof becomes a story clients can understand and trust.</span></div>
+        </div>
+      </article>
+      <article class="panel span-4"><h2>For Clients</h2><p>They see options, route, proof, and progress. That makes the idea easier to understand, trust, and buy.</p></article>
+      <article class="panel span-4"><h2>For the Enterprise</h2><p>Each finished project becomes reusable knowledge. The brand improves module by module.</p></article>
+      <article class="panel span-4"><h2>For Market Growth</h2><p>The platform turns delivery proof into a clear story for sales, consulting, and long-term partnerships.</p></article>
+    </section>
+  </main>
+
+  <script>
+    const steps = [
+      ["Rough Idea", "Listen first. Even poor input can contain a real business signal.", "listen"],
+      ["Three Options", "Show practical, growth, and visionary versions so the client can decide.", "choose"],
+      ["Project Factory", "Create a governed project from the chosen direction.", "create"],
+      ["AI Crew", "Specialist agents work under supervision and evidence.", "work"],
+      ["Quality Gate", "Verify, debug, measure risk, and prevent repeated mistakes.", "verify"],
+      ["Production Route", "Prepare the path from working result to release.", "release"],
+      ["Market Story", "Turn proof into a clear offer that clients understand.", "sell"],
+      ["Evolution", "Capture blueprints so the next project starts stronger.", "evolve"]
+    ];
+    const map = document.getElementById("storyMap");
+    const title = document.getElementById("storyTitle");
+    const text = document.getElementById("storyText");
+    function render(selected = 0) {
+      map.innerHTML = steps.map((step, index) => `
+        <button class="node" aria-pressed="${index === selected}" data-index="${index}">
+          <strong>${step[0]}</strong>
+          <span>${step[1]}</span>
+          <span class="pill">${step[2]}</span>
+        </button>
+      `).join("");
+      title.textContent = steps[selected][0];
+      text.textContent = steps[selected][1];
+      document.querySelectorAll(".node").forEach(node => {
+        node.addEventListener("click", () => render(Number(node.dataset.index)));
+      });
+    }
+    render();
+  </script>
+</body>
+</html>
+"""

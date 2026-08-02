@@ -1,0 +1,65 @@
+# Project Foundry Repository Template
+
+```text
+project-root/
+  AGENTS.md
+  README.md
+  PROJECT.yaml
+  governance/
+    authority-policy.yaml
+    approval-matrix.yaml
+    risk-policy.yaml
+    definition-of-done.md
+  intake/
+    project-intake.yaml
+    assumptions.md
+    constraints.md
+  requirements/
+    requirements.yaml
+    requirements.md
+    traceability.csv
+  architecture/
+    architecture.md
+    decisions/
+    diagrams/
+    api-contracts/
+    data-model/
+  planning/
+    execution-plan.yaml
+    dependency-graph.yaml
+    milestones.yaml
+    risk-register.yaml
+  agents/
+    orchestrator/
+    architect/
+    backend/
+    frontend/
+    security/
+    testing/
+    release/
+  prompts/
+    intake/
+    architecture/
+    implementation/
+    review/
+    release/
+  src/
+  tests/
+    unit/
+    integration/
+    contract/
+    security/
+    acceptance/
+  infrastructure/
+  deployment/
+  operations/
+    runbooks/
+    monitoring/
+    incident-response/
+  reports/
+    agent-runs/
+    reviews/
+    release/
+  artifacts/
+```
+

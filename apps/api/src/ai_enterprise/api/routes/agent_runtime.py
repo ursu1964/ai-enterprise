@@ -5,11 +5,16 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from ai_enterprise.api.agent_runtime_schemas import (
+    CompiledPromptResponse,
+    CreatePromptRequest,
+    CreatePromptVersionRequest,
     CreateRuntimeSessionRequest,
     CreateSkillRequest,
     CreateSkillVersionRequest,
     ModelDeploymentResponse,
     ModelHealthRequest,
+    PromptResponse,
+    PromptVersionResponse,
     RegisterModelDeploymentRequest,
     RegisterToolRequest,
     RuntimeSessionResponse,
@@ -28,6 +33,8 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     ContextManifestModel,
     ModelDeploymentModel,
     ModelInvocationModel,
+    PromptRegistryModel,
+    PromptVersionModel,
     SkillModel,
     SkillVersionModel,
     ToolDefinitionModel,
@@ -173,6 +180,117 @@ async def update_model_health(
     row.status = "active" if request.available else "unavailable"
     await session.commit()
     return ModelDeploymentResponse.model_validate(row)
+
+
+@router.post("/prompts", response_model=PromptResponse, status_code=201)
+async def create_prompt(
+    request: CreatePromptRequest,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> PromptResponse:
+    values = request.model_dump(exclude={"correlation_id", "idempotency_key"})
+    try:
+        row = await AgentRuntimePersistenceService(session).create_prompt(values, actor)
+    except AgentRuntimePersistenceError as exc:
+        raise _error(exc) from exc
+    return PromptResponse.model_validate(row)
+
+
+@router.get("/prompts", response_model=list[PromptResponse])
+async def list_prompts(session: SessionDependency) -> list[PromptResponse]:
+    rows = (
+        await session.scalars(
+            select(PromptRegistryModel).order_by(
+                PromptRegistryModel.organization_id, PromptRegistryModel.prompt_key
+            )
+        )
+    ).all()
+    return [PromptResponse.model_validate(row) for row in rows]
+
+
+@router.post("/prompts/{prompt_id}/versions", response_model=PromptVersionResponse, status_code=201)
+async def create_prompt_version(
+    prompt_id: uuid.UUID,
+    request: CreatePromptVersionRequest,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> PromptVersionResponse:
+    prompt = await session.get(PromptRegistryModel, prompt_id)
+    if prompt is None:
+        raise HTTPException(404, "Prompt not found")
+    values = request.model_dump(exclude={"correlation_id", "idempotency_key"})
+    try:
+        row = await AgentRuntimePersistenceService(session).create_prompt_version(
+            prompt, values, actor
+        )
+    except AgentRuntimePersistenceError as exc:
+        raise _error(exc) from exc
+    return PromptVersionResponse.model_validate(row)
+
+
+@router.post("/prompt-versions/{version_id}/approve", response_model=PromptVersionResponse)
+async def approve_prompt_version(
+    version_id: uuid.UUID,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> PromptVersionResponse:
+    version = await session.get(PromptVersionModel, version_id)
+    if version is None:
+        raise HTTPException(404, "Prompt version not found")
+    try:
+        row = await AgentRuntimePersistenceService(session).approve_prompt_version(
+            version, actor
+        )
+    except AgentRuntimePersistenceError as exc:
+        raise _error(exc) from exc
+    return PromptVersionResponse.model_validate(row)
+
+
+@router.post("/prompts/{prompt_id}/rollback/{version_id}", response_model=PromptResponse)
+async def rollback_prompt(
+    prompt_id: uuid.UUID,
+    version_id: uuid.UUID,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> PromptResponse:
+    prompt = await session.get(PromptRegistryModel, prompt_id)
+    version = await session.get(PromptVersionModel, version_id)
+    if prompt is None or version is None:
+        raise HTTPException(404, "Prompt or prompt version not found")
+    try:
+        row = await AgentRuntimePersistenceService(session).rollback_prompt(
+            prompt, version, actor
+        )
+    except AgentRuntimePersistenceError as exc:
+        raise _error(exc) from exc
+    return PromptResponse.model_validate(row)
+
+
+@router.get("/prompts/{prompt_id}/compiled", response_model=CompiledPromptResponse)
+async def get_compiled_prompt(
+    prompt_id: uuid.UUID,
+    session: SessionDependency,
+) -> CompiledPromptResponse:
+    prompt = await session.get(PromptRegistryModel, prompt_id)
+    if prompt is None or prompt.current_version_id is None:
+        raise HTTPException(404, "Active prompt version not found")
+    version = await session.get(PromptVersionModel, prompt.current_version_id)
+    if version is None:
+        raise HTTPException(404, "Active prompt version not found")
+    compiled_layers = [
+        {"name": key, "content": value} for key, value in version.prompt_layers.items()
+    ]
+    return CompiledPromptResponse(
+        prompt_id=prompt.id,
+        prompt_key=prompt.prompt_key,
+        version_id=version.id,
+        version_number=version.version_number,
+        prompt_hash=version.prompt_hash,
+        approval_status=version.approval_status,
+        compiled_layers=compiled_layers,
+        output_schema=version.output_schema,
+        policy_document=version.policy_document,
+    )
 
 
 @router.post("/agent-runtime-sessions", response_model=RuntimeSessionResponse, status_code=201)

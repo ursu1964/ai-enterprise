@@ -1,0 +1,4 @@
+Host *
+    BatchMode yes
+    StrictHostKeyChecking accept-new
+    IdentitiesOnly yes

@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from sqlalchemy import text
 
 from ai_enterprise.api.routes.agent_runtime import router as agent_runtime_router
@@ -16,6 +16,7 @@ from ai_enterprise.api.routes.change_management import (
     router as change_management_router,
 )
 from ai_enterprise.api.routes.cognitive import router as cognitive_router
+from ai_enterprise.api.routes.dashboard import router as dashboard_router
 from ai_enterprise.api.routes.decompositions import router as decompositions_router
 from ai_enterprise.api.routes.ecosystem import router as ecosystem_router
 from ai_enterprise.api.routes.enterprise_evolution import router as enterprise_evolution_router
@@ -31,8 +32,10 @@ from ai_enterprise.api.routes.patch_reviews import (
     router as patch_reviews_router,
 )
 from ai_enterprise.api.routes.performance import router as performance_router
+from ai_enterprise.api.routes.project_formation import router as project_formation_router
 from ai_enterprise.api.routes.projects import router as projects_router
 from ai_enterprise.api.routes.provider_readiness import router as provider_readiness_router
+from ai_enterprise.api.routes.query_platform import router as query_platform_router
 from ai_enterprise.api.routes.recovery import router as recovery_router
 from ai_enterprise.api.routes.requirements_provider import router as requirements_provider_router
 from ai_enterprise.api.routes.requirements_revisions import (
@@ -44,7 +47,11 @@ from ai_enterprise.api.routes.specifications import router as specifications_rou
 from ai_enterprise.api.routes.workflows import router as workflows_router
 from ai_enterprise.config import get_settings
 from ai_enterprise.infrastructure.database.session import SessionFactory
-from ai_enterprise.observability import configure_logging, metrics_snapshot
+from ai_enterprise.observability import (
+    configure_logging,
+    increment_metric,
+    prometheus_metrics_snapshot,
+)
 
 
 @asynccontextmanager
@@ -65,6 +72,7 @@ app = FastAPI(
 )
 
 app.include_router(projects_router, prefix="/api/v1")
+app.include_router(project_formation_router, prefix="/api/v1")
 app.include_router(architecture_governance_router, prefix="/api/v1")
 app.include_router(architecture_operations_router)
 app.include_router(executions_router, prefix="/api/v1")
@@ -92,6 +100,25 @@ app.include_router(agent_runtime_router, prefix="/api/v1")
 app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(performance_router, prefix="/api/v1")
 app.include_router(specifications_router, prefix="/api/v1")
+app.include_router(query_platform_router, prefix="/api/v1")
+app.include_router(dashboard_router)
+
+
+@app.middleware("http")
+async def record_http_metrics(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+    increment_metric("http_requests_total")
+    increment_metric(f"http_requests_{request.method.lower()}_total")
+    try:
+        response = await call_next(request)
+    except Exception:
+        increment_metric("http_responses_500_total")
+        raise
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", request.url.path)
+    route_key = route_path.strip("/").replace("/", "_").replace("{", "").replace("}", "") or "root"
+    increment_metric(f"http_route_{route_key}_total")
+    increment_metric(f"http_responses_{response.status_code}_total")
+    return response
 
 
 @app.get("/")
@@ -132,5 +159,12 @@ async def readiness() -> dict[str, str]:
 
 
 @app.get("/metrics")
-async def metrics() -> dict[str, int]:
-    return metrics_snapshot()
+async def metrics() -> Response:
+    payload = prometheus_metrics_snapshot(
+        {
+            "service": settings.app_name,
+            "version": settings.app_version,
+            "environment": settings.app_env,
+        }
+    )
+    return Response(content=payload, media_type="text/plain; version=0.0.4")

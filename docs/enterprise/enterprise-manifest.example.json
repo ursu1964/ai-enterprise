@@ -1,0 +1,42 @@
+{
+  "defaults": {
+    "default_branch": "main",
+    "start_workflow": true,
+    "actor_id": "enterprise-autostart",
+    "telemetry": {
+      "always_active": true,
+      "calibration_required": true,
+      "error_followup_required": true,
+      "improvements_required": true
+    },
+    "reuse": {
+      "capture_as_template": true,
+      "template_scope": "future_projects"
+    },
+    "specialist_agents": [
+      "requirements_agent",
+      "architecture_agent",
+      "implementation_agent",
+      "test_agent",
+      "review_agent",
+      "integration_agent",
+      "evolution_agent"
+    ]
+  },
+  "projects": [
+    {
+      "name": "Customer Portal",
+      "project_type": "web_mobile_app_development",
+      "description": "A governed local project for creating a customer-facing portal capability.",
+      "repository_path": "/home/user/projects/customer-portal",
+      "repository_url": null
+    },
+    {
+      "name": "Operations Dashboard",
+      "project_type": "dashboards_reporting",
+      "description": "A governed local project for creating an internal operations dashboard.",
+      "repository_path": "/home/user/projects/operations-dashboard",
+      "repository_url": null
+    }
+  ]
+}

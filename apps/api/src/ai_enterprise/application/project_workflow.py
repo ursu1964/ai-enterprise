@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,9 @@ from ai_enterprise.infrastructure.jobs.repository import JobRepository
 from ai_enterprise.infrastructure.repositories.git_repository import (
     GitRepositoryInspector,
 )
+from ai_enterprise.infrastructure.repositories.preparation import (
+    prepare_project_repository,
+)
 
 
 class ProjectNotFoundError(Exception):
@@ -77,23 +81,35 @@ class ProjectWorkflowService:
         repository_url: str | None,
         default_branch: str,
         actor_id: str,
+        manifest: dict[str, Any] | None = None,
+        project_type: str | None = None,
     ) -> ProjectModel:
         project_id = uuid.uuid4()
+        preparation = prepare_project_repository(
+            repository_path,
+            default_branch,
+            allowed_root=self._settings.repository_allowed_root,
+        )
 
-        manifest = {
-            "schema_version": "1.0",
-            "project_id": str(project_id),
-            "name": name,
-            "description": description,
-            "repository": {
-                "path": repository_path,
-                "url": repository_url,
-                "default_branch": default_branch,
-            },
-            "created_by": actor_id,
+        manifest_body = dict(manifest or {})
+        manifest_body.setdefault("schema_version", "1.0")
+        manifest_body["project_id"] = str(project_id)
+        manifest_body["name"] = name
+        manifest_body["description"] = description
+        manifest_body["repository_path"] = repository_path
+        manifest_body["repository_url"] = repository_url
+        manifest_body["default_branch"] = default_branch
+        manifest_body["repository"] = {
+            "path": repository_path,
+            "url": repository_url,
+            "default_branch": default_branch,
         }
+        if project_type:
+            manifest_body["project_type"] = project_type
+        manifest_body["created_by"] = actor_id
+        manifest_body["repository_preparation"] = preparation
 
-        manifest_hash = hash_json(manifest)
+        manifest_hash = hash_json(manifest_body)
 
         project = ProjectModel(
             id=project_id,
@@ -104,7 +120,7 @@ class ProjectWorkflowService:
             default_branch=default_branch,
             status=ProjectStatus.CREATED,
             manifest_hash=manifest_hash,
-            manifest=manifest,
+            manifest=manifest_body,
         )
 
         manifest_artifact = ArtifactModel(
@@ -112,7 +128,7 @@ class ProjectWorkflowService:
             project_id=project_id,
             artifact_type=ArtifactType.PROJECT_MANIFEST,
             media_type="application/json",
-            content=canonical_json(manifest),
+            content=canonical_json(manifest_body),
             content_hash=manifest_hash,
         )
 
@@ -304,11 +320,17 @@ class ProjectWorkflowService:
             }
 
             project.status = ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL
+            auto_approval = self._auto_approval(
+                project=project,
+                artifact=artifact,
+                event_type="requirements.auto_approved",
+            )
+            if auto_approval is not None:
+                project.status = ProjectStatus.REQUIREMENTS_APPROVED
 
-            self._session.add_all(
-                [
-                    artifact,
-                    AuditEventModel(
+            events: list[object] = [
+                artifact,
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type="requirements.run.succeeded",
@@ -319,8 +341,8 @@ class ProjectWorkflowService:
                             "artifact_id": str(artifact.id),
                             "content_hash": artifact.content_hash,
                         },
-                    ),
-                    AuditEventModel(
+                ),
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type="requirements.approval.requested",
@@ -330,9 +352,11 @@ class ProjectWorkflowService:
                             "run_id": str(run.id),
                             "artifact_id": str(artifact.id),
                         },
-                    ),
-                ]
-            )
+                ),
+            ]
+            if auto_approval is not None:
+                events.extend(auto_approval)
+            self._session.add_all(events)
 
             await self._session.commit()
 
@@ -650,12 +674,20 @@ class ProjectWorkflowService:
                 "source_requirements_hash": (requirements_artifact.content_hash),
             }
 
-            project.status = ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
+            self._session.add(architecture_artifact)
+            await self._session.flush()
 
-            self._session.add_all(
-                [
-                    architecture_artifact,
-                    AuditEventModel(
+            project.status = ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL
+            auto_approval = self._auto_approval(
+                project=project,
+                artifact=architecture_artifact,
+                event_type="architecture.auto_approved",
+            )
+            if auto_approval is not None:
+                project.status = ProjectStatus.ARCHITECTURE_APPROVED
+
+            events: list[object] = [
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type="architecture.run.succeeded",
@@ -668,8 +700,8 @@ class ProjectWorkflowService:
                             "requirements_artifact_id": str(requirements_artifact.id),
                             "requirements_artifact_hash": (requirements_artifact.content_hash),
                         },
-                    ),
-                    AuditEventModel(
+                ),
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type=("architecture.approval.requested"),
@@ -679,9 +711,11 @@ class ProjectWorkflowService:
                             "artifact_id": str(architecture_artifact_id),
                             "artifact_hash": (architecture_artifact.content_hash),
                         },
-                    ),
-                ]
-            )
+                ),
+            ]
+            if auto_approval is not None:
+                events.extend(auto_approval)
+            self._session.add_all(events)
 
             await self._session.commit()
 
@@ -1078,14 +1112,21 @@ class ProjectWorkflowService:
             }
 
             project.status = ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL
+            auto_approval = self._auto_approval(
+                project=project,
+                artifact=artifact,
+                event_type="work_package.auto_approved",
+            )
+            if auto_approval is not None:
+                work_package.status = WorkPackageStatus.APPROVED
+                project.status = ProjectStatus.WORK_PACKAGE_APPROVED
 
             self._session.add(artifact)
             await self._session.flush()
 
-            self._session.add_all(
-                [
-                    work_package,
-                    AuditEventModel(
+            events: list[object] = [
+                work_package,
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type="work_package.planning.succeeded",
@@ -1098,8 +1139,8 @@ class ProjectWorkflowService:
                             "contract_hash": contract_hash,
                             "base_commit_sha": (contract.base_commit_sha),
                         },
-                    ),
-                    AuditEventModel(
+                ),
+                AuditEventModel(
                         id=uuid.uuid4(),
                         project_id=project.id,
                         event_type="work_package.approval.requested",
@@ -1110,9 +1151,11 @@ class ProjectWorkflowService:
                             "artifact_id": str(artifact_id),
                             "contract_hash": contract_hash,
                         },
-                    ),
-                ]
-            )
+                ),
+            ]
+            if auto_approval is not None:
+                events.extend(auto_approval)
+            self._session.add_all(events)
 
             await self._session.commit()
 
@@ -1247,6 +1290,52 @@ class ProjectWorkflowService:
             raise ProjectNotFoundError(str(project_id))
 
         return project
+
+    def _auto_approval(
+        self,
+        *,
+        project: ProjectModel,
+        artifact: ArtifactModel,
+        event_type: str,
+    ) -> list[ApprovalModel | AuditEventModel] | None:
+        policy = project.manifest.get("autonomous_execution")
+        if not isinstance(policy, dict) or policy.get("enabled") is not True:
+            return None
+        if policy.get("authority") != "manifest_ingestion":
+            return None
+        phase_key = {
+            "requirements.auto_approved": "auto_approve_requirements",
+            "architecture.auto_approved": "auto_approve_architecture",
+            "work_package.auto_approved": "auto_approve_work_package",
+        }.get(event_type)
+        if phase_key is None or policy.get(phase_key) is not True:
+            return None
+        return [
+            ApprovalModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                artifact_id=artifact.id,
+                decision=ApprovalDecision.APPROVED,
+                reviewer="manifest-autonomy-policy",
+                comment=(
+                    "Approved automatically because the ingested manifesto enabled "
+                    "controlled autonomous execution."
+                ),
+            ),
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project.id,
+                event_type=event_type,
+                actor_type="system",
+                actor_id="manifest-autonomy-policy",
+                payload={
+                    "artifact_id": str(artifact.id),
+                    "artifact_hash": artifact.content_hash,
+                    "authority": "manifest_ingestion",
+                    "mode": policy.get("mode", "controlled_demo"),
+                },
+            ),
+        ]
 
     async def _get_latest_approved_artifact(
         self,

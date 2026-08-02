@@ -6,3 +6,6 @@ updates affected documentation in the same review. Examples are executable or te
 Runbooks name owners and verification dates. Documentation cannot be the sole enforcement mechanism
 for a safety invariant.
 
+Implementation slices must close with documentation after verification. The required order is:
+plan, execute, verify, then document. Dashboard changes must document the visible route, backing data
+source, operator meaning, and verification evidence.

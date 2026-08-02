@@ -46,7 +46,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "-c", "apps/api/alembic.ini", "upgrade", "head"]
     env_file:
       - .env
     environment:
@@ -63,12 +63,16 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: ai-enterprise-api
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     restart: unless-stopped
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -76,6 +80,9 @@ services:
     volumes:
       - ./apps/api/src:/app/src:ro
       - ./artifacts:/app/artifacts
+      - ./graphify-out:/app/graphify-out:ro
+      - ./runtime-data:/app/runtime-data
+      - /home/user/projects:/home/user/projects
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +107,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: ai-enterprise-worker
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     restart: unless-stopped
     command:
       [
@@ -113,11 +121,16 @@ services:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       WORKER_PROFILE: general
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./apps/api/src:/app/src
       - ./artifacts:/app/artifacts
+      - ./runtime-data:/app/runtime-data
+      - /home/user/projects:/home/user/projects
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +140,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: ai-enterprise-integration-worker
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     restart: unless-stopped
     command:
       [
@@ -143,12 +157,16 @@ services:
       INTEGRATION_ARTIFACTS_ROOT: /artifacts
       INTEGRATION_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
       GIT_TERMINAL_PROMPT: "0"
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
     secrets:
       - integration_ssh_config
     volumes:
       - integration-work:/integration-work
       - ./artifacts:/artifacts:ro
       - ./apps/api/src:/app/src:ro
+      - /home/user/projects:/home/user/projects
     read_only: true
     tmpfs:
       - /tmp:size=512m,mode=1777
@@ -168,6 +186,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: ai-enterprise-recovery-worker
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     restart: unless-stopped
     command:
       [
@@ -184,12 +203,16 @@ services:
       RECOVERY_ARTIFACTS_ROOT: /artifacts
       RECOVERY_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
       GIT_TERMINAL_PROMPT: "0"
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
     secrets:
       - integration_ssh_config
     volumes:
       - recovery-work:/recovery-work
       - ./artifacts:/artifacts:ro
       - ./apps/api/src:/app/src:ro
+      - /home/user/projects:/home/user/projects
     read_only: true
     tmpfs:
       - /tmp:size=512m,mode=1777
@@ -233,4 +256,4 @@ volumes:
 
 secrets:
   integration_ssh_config:
-    external: true
+    file: ./docker/dev-integration-ssh-config

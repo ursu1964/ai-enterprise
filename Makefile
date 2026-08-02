@@ -1,4 +1,6 @@
-.PHONY: build up down restart logs ps migrate migration test lint format typecheck check shell db-shell compose-check migration-check
+manifest ?= docs/enterprise/enterprise-manifest.example.json
+
+.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck check shell db-shell compose-check migration-check
 
 build:
 	docker compose build
@@ -18,10 +20,13 @@ ps:
 	docker compose ps
 
 migrate:
-	docker compose run --rm migrate alembic upgrade head
+	docker compose run --rm migrate alembic -c apps/api/alembic.ini upgrade head
 
 migration:
-	docker compose run --rm migrate alembic revision --autogenerate -m "$(name)"
+	docker compose run --rm migrate alembic -c apps/api/alembic.ini revision --autogenerate -m "$(name)"
+
+enterprise-start:
+	python scripts/enterprise_autostart.py --manifest "$(manifest)"
 
 test:
 	cd apps/api && .venv/bin/pytest -q

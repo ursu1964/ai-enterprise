@@ -1,0 +1,20 @@
+schema: aeos.approval_matrix.v1
+human_approval_required:
+  - production_deployment
+  - deletion_of_persistent_data
+  - production_credentials_access
+  - authentication_or_authorization_policy_change
+  - destructive_infrastructure_operation
+  - external_company_communication
+  - financial_transaction
+  - legal_or_contractual_commitment
+agent_approval_rules:
+  high_risk_work:
+    creator_may_approve: false
+    independent_review_required: true
+  interface_change:
+    architecture_decision_required: true
+  release:
+    release_manager_required: true
+    human_authorization_required: true
+

@@ -15,6 +15,11 @@ class CancelWorkflowRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=2000)
 
 
+class RelinkWorkflowRequest(BaseModel):
+    actor_id: str = Field(default="local-user", min_length=2, max_length=200)
+    reason: str = Field(min_length=5, max_length=2000)
+
+
 class WorkflowResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -37,7 +42,7 @@ class WorkflowTransitionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     sequence: int
-    previous_state: WorkflowState
+    previous_state: str
     current_state: WorkflowState
     step: str | None
     actor_type: str

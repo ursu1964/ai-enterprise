@@ -32,6 +32,97 @@ class WorkPackageCrewRunner:
         architecture_markdown: str,
         tracked_files: list[str],
     ) -> WorkPackageCrewResult:
+        if self._settings.architecture_provider.strip().lower() == "scripted":
+            allowed_file = (
+                ".ai-enterprise-initialized"
+                if ".ai-enterprise-initialized" in tracked_files
+                else "README.md"
+            )
+            contract = {
+                "schema_version": "1.0",
+                "project_id": project_id,
+                "title": "Document governed factory start",
+                "objective": (
+                    "Record the first governed factory increment so the operator can verify "
+                    "that manifesto intake produced auditable project work."
+                ),
+                "base_commit_sha": base_commit_sha,
+                "source_requirements_artifact_id": requirements_artifact_id,
+                "source_requirements_hash": requirements_hash,
+                "source_architecture_artifact_id": architecture_artifact_id,
+                "source_architecture_hash": architecture_hash,
+                "required_changes": [
+                    {
+                        "id": "CHG-001",
+                        "description": "Add visible local proof that the project was initialized.",
+                        "related_requirements": ["FR-001"],
+                        "target_paths": [allowed_file],
+                    }
+                ],
+                "file_scope": {
+                    "allowed_files": [allowed_file],
+                    "allowed_directories": [],
+                    "forbidden_files": [".env"],
+                    "forbidden_directories": [".git"],
+                    "maximum_changed_files": 1,
+                    "maximum_added_lines": 200,
+                    "maximum_deleted_lines": 50,
+                },
+                "command_policy": {
+                    "setup_commands": [],
+                    "implementation_commands": [],
+                    "test_commands": [["git", "status", "--short"]],
+                    "forbidden_executables": [
+                        "sudo",
+                        "su",
+                        "ssh",
+                        "scp",
+                        "mount",
+                        "umount",
+                        "systemctl",
+                        "service",
+                        "reboot",
+                        "shutdown",
+                        "docker",
+                        "podman",
+                        "kubectl",
+                    ],
+                },
+                "network": {"policy": "none", "allowed_hosts": []},
+                "resources": {
+                    "cpu_count": 1.0,
+                    "memory_mb": 1024,
+                    "disk_mb": 2048,
+                    "process_limit": 128,
+                    "execution_timeout_seconds": 300,
+                },
+                "acceptance_criteria": [
+                    {
+                        "id": "AC-001",
+                        "description": (
+                            "The initialized repository remains inside the approved path."
+                        ),
+                        "verification": "Run git status --short inside the project repository.",
+                    }
+                ],
+                "expected_artifacts": [
+                    "implementation.patch",
+                    "test-report.json",
+                    "execution-log.jsonl",
+                    "changed-files.json",
+                ],
+                "forbidden_actions": [
+                    "Modify files outside the approved repository checkout",
+                    "Access the Docker socket",
+                    "Use privileged container execution",
+                    "Mount host system directories",
+                    "Change host services",
+                    "Read host credentials",
+                    "Push commits or tags",
+                    "Contact unapproved network destinations",
+                ],
+            }
+            return WorkPackageCrewResult(raw_json=json.dumps(contract, sort_keys=True))
         llm = LLM(
             model=self._settings.ollama_model,
             base_url=self._settings.ollama_base_url,

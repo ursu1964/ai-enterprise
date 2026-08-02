@@ -57,6 +57,11 @@ class JobType(StrEnum):
 
 class ArtifactType(StrEnum):
     PROJECT_MANIFEST = "project_manifest"
+    PROJECT_BRIEF = "project_brief"
+    SOLUTION_PROPOSAL = "solution_proposal"
+    DELIVERY_PLAN = "delivery_plan"
+    FORMATION_QUALITY_REVIEW = "formation_quality_review"
+    FORMATION_APPROVAL_PACK = "formation_approval_pack"
     REQUIREMENTS_SPECIFICATION = "requirements_specification"
     ARCHITECTURE_SPECIFICATION = "architecture_specification"
     WORK_PACKAGE = "work_package"

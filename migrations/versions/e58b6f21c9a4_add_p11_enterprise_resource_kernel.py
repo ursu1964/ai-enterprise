@@ -9,7 +9,9 @@ from collections.abc import Sequence
 from alembic import op
 
 from ai_enterprise.infrastructure.database.models import Base
-from ai_enterprise.infrastructure.enterprise_kernel import models as enterprise_kernel_models  # noqa: F401
+from ai_enterprise.infrastructure.enterprise_kernel import (
+    models as enterprise_kernel_models,  # noqa: F401
+)
 
 revision: str = "e58b6f21c9a4"
 down_revision: str | None = "c62ad23ef401"

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from ai_enterprise.api.dependencies import SessionDependency
 from ai_enterprise.api.workflow_schemas import (
     CancelWorkflowRequest,
+    RelinkWorkflowRequest,
     StartWorkflowRequest,
     WorkflowResponse,
     WorkflowTransitionResponse,
@@ -26,6 +27,25 @@ async def start_workflow(
     try:
         workflow = await WorkflowService(session).start(
             project_id=project_id, actor_id=request.actor_id
+        )
+    except WorkflowNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return WorkflowResponse.model_validate(workflow)
+
+
+@router.post(
+    "/projects/{project_id}/workflow/relink",
+    response_model=WorkflowResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def relink_workflow(
+    project_id: uuid.UUID, request: RelinkWorkflowRequest, session: SessionDependency
+) -> WorkflowResponse:
+    try:
+        workflow = await WorkflowService(session).relink_project(
+            project_id=project_id,
+            actor_id=request.actor_id,
+            reason=request.reason,
         )
     except WorkflowNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

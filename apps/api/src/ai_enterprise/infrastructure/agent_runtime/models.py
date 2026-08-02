@@ -85,6 +85,38 @@ class ModelRoutingPolicyModel(Base):
     status: Mapped[str] = mapped_column(String(30))
 
 
+class PromptRegistryModel(Base):
+    __tablename__ = "prompt_registries"
+    __table_args__ = (UniqueConstraint("organization_id", "prompt_key"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
+    prompt_key: Mapped[str] = mapped_column(String(160))
+    name: Mapped[str] = mapped_column(String(240))
+    owner: Mapped[str] = mapped_column(String(200))
+    department: Mapped[str] = mapped_column(String(120))
+    applicable_crew: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(30))
+    current_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PromptVersionModel(Base):
+    __tablename__ = "prompt_versions"
+    __table_args__ = (
+        UniqueConstraint("prompt_id", "version_number"),
+        UniqueConstraint("prompt_id", "prompt_hash"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    prompt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("prompt_registries.id"))
+    version_number: Mapped[int] = mapped_column(Integer)
+    prompt_layers: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    output_schema: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    policy_document: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    prompt_hash: Mapped[str] = mapped_column(String(64))
+    approval_status: Mapped[str] = mapped_column(String(30))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AgentRuntimeSpecificationModel(Base):
     __tablename__ = "agent_runtime_specifications"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

@@ -2,10 +2,12 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, SettingsDependency
-from ai_enterprise.infrastructure.database.models import JobModel
+from ai_enterprise.application.operator_job_resolution import acknowledge_job, job_resolution
+from ai_enterprise.infrastructure.database.models import AuditEventModel, JobModel
 from ai_enterprise.infrastructure.jobs.crash_safety import RetryPolicy
 from ai_enterprise.infrastructure.jobs.models import JobExecutionAttemptModel, WorkerInstanceModel
 from ai_enterprise.infrastructure.jobs.recovery import JobRecoveryService
@@ -13,8 +15,19 @@ from ai_enterprise.infrastructure.jobs.recovery import JobRecoveryService
 router = APIRouter(prefix="/operator/jobs", tags=["operator-jobs"])
 
 
+class AcknowledgeJobRequest(BaseModel):
+    reason: str = Field(min_length=5, max_length=1_000)
+    action_taken: str = Field(min_length=5, max_length=1_000)
+
+
 def _require_operator(actor: ActorDependency) -> None:
-    if actor.actor_type != "human" or actor.role not in {"operator", "administrator", "admin"}:
+    if actor.actor_type != "human" or actor.role not in {
+        "operator",
+        "administrator",
+        "admin",
+        "platform-admin",
+        "platform_administrator",
+    }:
         raise HTTPException(status_code=403, detail="Human operator authority is required")
 
 
@@ -69,9 +82,52 @@ async def list_jobs(
             "lease_expires_at": job.lease_expires_at,
             "last_failure_class": job.last_failure_class,
             "last_error": job.last_error,
+            "operator_resolution": job_resolution(job),
         }
         for job in jobs
     ]
+
+
+@router.post("/by-id/{job_id}/acknowledge")
+async def acknowledge(
+    job_id: uuid.UUID,
+    request: AcknowledgeJobRequest,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> dict[str, object]:
+    _require_operator(actor)
+    job = await session.get(JobModel, job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    if job.status not in {"failed", "dead_letter", "abandoned"}:
+        raise HTTPException(409, "Only failed or dead-letter jobs can be acknowledged")
+    acknowledge_job(
+        job,
+        actor_id=actor.subject,
+        reason=request.reason,
+        action_taken=request.action_taken,
+    )
+    session.add(
+        AuditEventModel(
+            project_id=job.project_id,
+            event_type="operator.job_acknowledged",
+            actor_type=actor.actor_type,
+            actor_id=actor.subject,
+            payload={
+                "job_id": str(job.id),
+                "job_type": job.job_type,
+                "status": job.status,
+                "reason": request.reason,
+                "action_taken": request.action_taken,
+            },
+        )
+    )
+    await session.commit()
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "operator_resolution": job_resolution(job),
+    }
 
 
 @router.get("/by-id/{job_id}/attempts")

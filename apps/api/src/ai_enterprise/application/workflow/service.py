@@ -12,6 +12,7 @@ from ai_enterprise.application.workflow.repository import WorkflowNotFoundError,
 from ai_enterprise.config import Settings
 from ai_enterprise.domain.enums import ProjectStatus, WorkPackageStatus
 from ai_enterprise.domain.execution.enums import ExecutionStatus
+from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.review.enums import PatchReviewStatus
 from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.enums import TERMINAL_STATES, WorkflowState, WorkflowStepName
@@ -37,6 +38,82 @@ from ai_enterprise.infrastructure.jobs.repository import JobRepository
 
 class WorkflowConflictError(RuntimeError):
     pass
+
+
+def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, str | None, str]:
+    if hash_json(project.manifest) != project.manifest_hash:
+        return (
+            WorkflowState.MANUAL_INTERVENTION,
+            None,
+            (
+                "Project manifest hash does not match stored content. "
+                "Review legacy data before running."
+            ),
+        )
+    status = str(project.status)
+    if status in {
+        ProjectStatus.CREATED,
+        ProjectStatus.REQUIREMENTS_QUEUED,
+        ProjectStatus.REQUIREMENTS_RUNNING,
+    }:
+        return (
+            WorkflowState.PROJECT_CREATED,
+            None,
+            "Start the workflow when the operator is ready to generate requirements.",
+        )
+    if status in {
+        ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+        ProjectStatus.REQUIREMENTS_APPROVED,
+        ProjectStatus.REQUIREMENTS_REJECTED,
+    }:
+        return (
+            WorkflowState.WAITING_REQUIREMENTS_APPROVAL,
+            WorkflowStepName.REQUIREMENTS,
+            "Review requirements evidence and approve or request changes.",
+        )
+    if status in {
+        ProjectStatus.ARCHITECTURE_QUEUED,
+        ProjectStatus.ARCHITECTURE_RUNNING,
+    }:
+        return (
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowStepName.ARCHITECTURE,
+            "Wait for architecture generation or inspect the architecture job.",
+        )
+    if status in {
+        ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL,
+        ProjectStatus.ARCHITECTURE_APPROVED,
+        ProjectStatus.ARCHITECTURE_REJECTED,
+    }:
+        return (
+            WorkflowState.WAITING_ARCHITECTURE_APPROVAL,
+            WorkflowStepName.ARCHITECTURE,
+            "Review architecture evidence and approve or request changes.",
+        )
+    if status in {
+        ProjectStatus.WORK_PACKAGE_QUEUED,
+        ProjectStatus.WORK_PACKAGE_PLANNING,
+    }:
+        return (
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowStepName.PLANNING,
+            "Wait for work-package planning or inspect planning jobs.",
+        )
+    if status in {
+        ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL,
+        ProjectStatus.WORK_PACKAGE_APPROVED,
+        ProjectStatus.WORK_PACKAGE_REJECTED,
+    }:
+        return (
+            WorkflowState.WAITING_WORK_PACKAGE_APPROVAL,
+            WorkflowStepName.PLANNING,
+            "Review approved work packages and request execution only when ready.",
+        )
+    return (
+        WorkflowState.MANUAL_INTERVENTION,
+        None,
+        "Project status is not mapped to an automatic workflow step. Review before running.",
+    )
 
 
 class WorkflowService:
@@ -75,6 +152,7 @@ class WorkflowService:
             actor_id=actor_id,
         )
         self.session.add(workflow)
+        await self.session.flush()
         self.session.add(
             WorkflowContextModel(
                 id=uuid.uuid4(),
@@ -101,6 +179,83 @@ class WorkflowService:
             job_type="advance_workflow",
             payload={"workflow_id": str(workflow_id), "correlation_id": str(correlation_id)},
             max_attempts=3,
+        )
+        await self.session.commit()
+        await self.session.refresh(workflow)
+        return workflow
+
+    async def relink_project(
+        self, *, project_id: uuid.UUID, actor_id: str, reason: str
+    ) -> WorkflowInstanceModel:
+        existing = await self.session.scalar(
+            select(WorkflowInstanceModel).where(WorkflowInstanceModel.project_id == project_id)
+        )
+        if existing is not None:
+            return existing
+        project = await self.session.get(ProjectModel, project_id)
+        if project is None:
+            raise WorkflowNotFoundError(f"Project {project_id} does not exist")
+        state, step, action = workflow_state_for_project(project)
+        workflow_id, correlation_id = uuid.uuid4(), uuid.uuid4()
+        workflow = WorkflowInstanceModel(
+            id=workflow_id,
+            project_id=project_id,
+            definition_name="vertical_slice",
+            workflow_version=self.VERSION,
+            state=state,
+            current_step=step,
+            context_version=1,
+            correlation_id=correlation_id,
+            optimistic_version=1,
+            recommended_operator_action=action,
+        )
+        context = WorkflowContext(
+            workflow_id=workflow_id,
+            project_id=project_id,
+            current_state=state,
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+        )
+        self.session.add(workflow)
+        await self.session.flush()
+        self.session.add(
+            WorkflowContextModel(
+                id=uuid.uuid4(),
+                workflow_id=workflow_id,
+                version=1,
+                state=state,
+                context=context.model_dump(mode="json"),
+                context_hash=context.content_hash(),
+            )
+        )
+        self.session.add(
+            WorkflowTransitionModel(
+                id=uuid.uuid4(),
+                workflow_id=workflow_id,
+                sequence=1,
+                previous_state="unlinked",
+                current_state=state,
+                step=step,
+                actor_type="human",
+                actor_id=actor_id,
+                reason=reason,
+                workflow_version=self.VERSION,
+                correlation_id=correlation_id,
+            )
+        )
+        self.session.add(
+            AuditEventModel(
+                id=uuid.uuid4(),
+                project_id=project_id,
+                event_type="workflow.relinked",
+                actor_type="human",
+                actor_id=actor_id,
+                payload={
+                    "workflow_id": str(workflow_id),
+                    "state": state,
+                    "reason": reason,
+                },
+            )
         )
         await self.session.commit()
         await self.session.refresh(workflow)
@@ -170,6 +325,23 @@ class WorkflowService:
                     actor_id="workflow-engine",
                     reason="Requirements artifact awaits approval",
                 )
+            elif project is not None and project.status == ProjectStatus.REQUIREMENTS_APPROVED:
+                if self.settings is None:
+                    raise RuntimeError("Workflow advancement requires application settings")
+                run = await ProjectWorkflowService(
+                    session=self.session, settings=self.settings
+                ).queue_architecture_run(project_id=workflow.project_id, actor_id="workflow-engine")
+                context = context.evolved(run_ids={**context.run_ids, "architecture": run.id})
+                await self.repository.append_transition(
+                    workflow=workflow,
+                    context=context,
+                    next_state=WorkflowState.ARCHITECTURE_RUNNING,
+                    step=WorkflowStepName.ARCHITECTURE,
+                    actor_type="system",
+                    actor_id="workflow-engine",
+                    reason="Requirements approved by autonomy policy",
+                    checkpoint=False,
+                )
         elif state is WorkflowState.WAITING_REQUIREMENTS_APPROVAL:
             project = await self.session.get(ProjectModel, workflow.project_id)
             if project is not None and project.status == ProjectStatus.REQUIREMENTS_APPROVED:
@@ -203,6 +375,25 @@ class WorkflowService:
                     actor_type="system",
                     actor_id="workflow-engine",
                     reason="Architecture artifact awaits approval",
+                )
+            elif project is not None and project.status == ProjectStatus.ARCHITECTURE_APPROVED:
+                if self.settings is None:
+                    raise RuntimeError("Workflow advancement requires application settings")
+                run = await ProjectWorkflowService(
+                    session=self.session, settings=self.settings
+                ).queue_work_package_planning(
+                    project_id=workflow.project_id, actor_id="workflow-engine"
+                )
+                context = context.evolved(run_ids={**context.run_ids, "planning": run.id})
+                await self.repository.append_transition(
+                    workflow=workflow,
+                    context=context,
+                    next_state=WorkflowState.PLANNING_RUNNING,
+                    step=WorkflowStepName.PLANNING,
+                    actor_type="system",
+                    actor_id="workflow-engine",
+                    reason="Architecture approved by autonomy policy",
+                    checkpoint=False,
                 )
         elif state is WorkflowState.WAITING_ARCHITECTURE_APPROVAL:
             project = await self.session.get(ProjectModel, workflow.project_id)
@@ -240,6 +431,37 @@ class WorkflowService:
                     actor_id="workflow-engine",
                     reason="Work package awaits approval",
                 )
+            elif project is not None and project.status == ProjectStatus.WORK_PACKAGE_APPROVED:
+                package = await self.session.scalar(
+                    select(WorkPackageModel)
+                    .where(
+                        WorkPackageModel.project_id == workflow.project_id,
+                        WorkPackageModel.status == WorkPackageStatus.APPROVED,
+                    )
+                    .order_by(WorkPackageModel.created_at.desc())
+                )
+                if package is not None:
+                    if self.settings is None:
+                        raise RuntimeError("Workflow advancement requires application settings")
+                    execution = await ExecutionApplicationService(
+                        session=self.session, settings=self.settings
+                    ).request_execution(
+                        project_id=workflow.project_id,
+                        work_package_id=package.id,
+                        idempotency_key=f"workflow:{workflow.id}:execution",
+                        actor_id="workflow-engine",
+                    )
+                    context = context.evolved(execution_id=execution.id)
+                    await self.repository.append_transition(
+                        workflow=workflow,
+                        context=context,
+                        next_state=WorkflowState.EXECUTION_RUNNING,
+                        step=WorkflowStepName.EXECUTION,
+                        actor_type="system",
+                        actor_id="workflow-engine",
+                        reason="Work package approved by autonomy policy",
+                        checkpoint=False,
+                    )
         elif state is WorkflowState.WAITING_WORK_PACKAGE_APPROVAL:
             package = await self.session.scalar(
                 select(WorkPackageModel)

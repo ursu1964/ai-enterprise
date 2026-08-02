@@ -19,6 +19,8 @@ class CreateProjectRequest(BaseModel):
     repository_path: str = Field(min_length=1, max_length=2000)
     repository_url: str | None = Field(default=None, max_length=2000)
     default_branch: str = Field(default="main", min_length=1, max_length=200)
+    project_type: str | None = Field(default=None, min_length=1, max_length=120)
+    manifest: dict[str, Any] | None = None
 
 
 class ProjectResponse(BaseModel):

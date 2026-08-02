@@ -1,0 +1,29 @@
+schema: aeos.execution_plan.v1
+plan:
+  id: string
+  project_id: string
+  architecture_version: string
+  status: draft|approved|running|blocked|complete
+tasks:
+  - id: string
+    title: string
+    objective: string
+    owner_role: string
+    inputs: list[string]
+    outputs: list[string]
+    dependencies: list[string]
+    permitted_files: list[string]
+    acceptance_criteria: list[string]
+    required_tests: list[string]
+    risk_level: low|medium|high|critical
+    approval_required: boolean
+dependency_graph:
+  nodes: list[string]
+  edges:
+    - from: string
+      to: string
+      reason: string
+validation:
+  commands: list[string]
+  required_reports: list[string]
+

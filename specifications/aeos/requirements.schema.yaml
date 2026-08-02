@@ -1,0 +1,25 @@
+schema: aeos.requirements.v1
+requirements:
+  - id: string
+    title: string
+    description: string
+    type: functional|non_functional|constraint|security|compliance|operational
+    priority: critical|high|medium|low
+    source: string
+    acceptance_criteria: list[string]
+    dependencies: list[string]
+    conflicts: list[string]
+    test_strategy: string
+traceability:
+  requirement_id: string
+  project_objective: string
+  architecture_artifacts: list[string]
+  work_packages: list[string]
+  tests: list[string]
+  evidence: list[string]
+assumptions:
+  - id: string
+    statement: string
+    impact: string
+    validation_action: string
+

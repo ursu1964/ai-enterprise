@@ -58,7 +58,9 @@ def upgrade() -> None:
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["observation_id"], ["change_observations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["observation_id"], ["change_observations.id"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("proposal_id", "observation_id", name="uq_change_outcome_observation"),
         sa.UniqueConstraint("content_hash"),

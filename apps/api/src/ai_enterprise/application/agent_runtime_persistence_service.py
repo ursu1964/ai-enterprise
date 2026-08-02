@@ -11,6 +11,8 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentRuntimeSessionModel,
     AgentRuntimeSpecificationModel,
     ModelDeploymentModel,
+    PromptRegistryModel,
+    PromptVersionModel,
     SkillModel,
     SkillVersionModel,
     ToolDefinitionModel,
@@ -183,6 +185,119 @@ class AgentRuntimePersistenceService:
         )
         await self.session.commit()
         return row
+
+    async def create_prompt(
+        self,
+        values: dict[str, Any],
+        actor: Actor,
+    ) -> PromptRegistryModel:
+        if actor.role not in {"platform-admin", "platform_administrator"}:
+            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        if await self.session.scalar(
+            select(PromptRegistryModel).where(
+                PromptRegistryModel.organization_id == values["organization_id"],
+                PromptRegistryModel.prompt_key == values["prompt_key"],
+            )
+        ):
+            raise AgentRuntimePersistenceError("Prompt key already exists")
+        prompt = PromptRegistryModel(id=uuid.uuid4(), status="draft", **values)
+        self.session.add(prompt)
+        self._audit(
+            "PromptRegistryCreated",
+            actor,
+            None,
+            prompt_id=str(prompt.id),
+            prompt_key=prompt.prompt_key,
+        )
+        await self.session.commit()
+        return prompt
+
+    async def create_prompt_version(
+        self,
+        prompt: PromptRegistryModel,
+        values: dict[str, Any],
+        actor: Actor,
+    ) -> PromptVersionModel:
+        if actor.role not in {"platform-admin", "platform_administrator"}:
+            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        if not values["prompt_layers"]:
+            raise AgentRuntimePersistenceError("Prompt layers are required", 422)
+        number = (
+            await self.session.scalar(
+                select(func.max(PromptVersionModel.version_number)).where(
+                    PromptVersionModel.prompt_id == prompt.id
+                )
+            )
+            or 0
+        )
+        version = PromptVersionModel(
+            id=uuid.uuid4(),
+            prompt_id=prompt.id,
+            version_number=number + 1,
+            prompt_hash=canonical_hash(values),
+            approval_status="draft",
+            **values,
+        )
+        self.session.add(version)
+        self._audit(
+            "PromptVersionCreated",
+            actor,
+            None,
+            prompt_id=str(prompt.id),
+            version_id=str(version.id),
+            prompt_hash=version.prompt_hash,
+        )
+        await self.session.commit()
+        return version
+
+    async def approve_prompt_version(
+        self, version: PromptVersionModel, actor: Actor
+    ) -> PromptVersionModel:
+        if actor.role not in {"platform-admin", "platform_administrator"}:
+            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        if version.approval_status != "draft":
+            raise AgentRuntimePersistenceError("Only draft prompt versions may be approved")
+        prompt = await self.session.get(PromptRegistryModel, version.prompt_id)
+        if prompt is None:
+            raise AgentRuntimePersistenceError("Prompt not found", 404)
+        version.approval_status = "approved"
+        prompt.status = "active"
+        prompt.current_version_id = version.id
+        self._audit(
+            "PromptVersionApproved",
+            actor,
+            None,
+            prompt_id=str(prompt.id),
+            version_id=str(version.id),
+            prompt_hash=version.prompt_hash,
+        )
+        await self.session.commit()
+        return version
+
+    async def rollback_prompt(
+        self,
+        prompt: PromptRegistryModel,
+        version: PromptVersionModel,
+        actor: Actor,
+    ) -> PromptRegistryModel:
+        if actor.role not in {"platform-admin", "platform_administrator"}:
+            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        if version.prompt_id != prompt.id:
+            raise AgentRuntimePersistenceError("Prompt version does not belong to prompt", 400)
+        if version.approval_status != "approved":
+            raise AgentRuntimePersistenceError("Rollback target must be approved")
+        prompt.current_version_id = version.id
+        prompt.status = "active"
+        self._audit(
+            "PromptRollbackActivated",
+            actor,
+            None,
+            prompt_id=str(prompt.id),
+            version_id=str(version.id),
+            prompt_hash=version.prompt_hash,
+        )
+        await self.session.commit()
+        return prompt
 
     async def start_session(self, values: dict[str, Any], actor: Actor) -> AgentRuntimeSessionModel:
         specification = await self.session.get(

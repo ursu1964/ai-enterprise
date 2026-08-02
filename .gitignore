@@ -15,3 +15,6 @@ apps/api/runtime-data/
 graphify-out/
 apps/api/graphify-out/
 .codex/
+/corel_manifest.txt
+/manifest.txt
+/p*.txt

@@ -1,0 +1,22 @@
+schema: aeos.agent_task.v1
+task:
+  id: string
+  title: string
+  owner_role: string
+  risk_level: low|medium|high|critical
+objective: string
+inputs:
+  requirements: list[string]
+  dependencies: list[string]
+  files_allowed: list[string]
+deliverables: list[string]
+acceptance_criteria: list[string]
+validation:
+  commands: list[string]
+prohibited: list[string]
+completion_evidence:
+  changed_files: list[string]
+  test_output: list[string]
+  requirement_coverage: list[string]
+  known_limitations: list[string]
+

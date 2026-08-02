@@ -1,0 +1,24 @@
+schema: aeos.review_report.v1
+review:
+  id: string
+  task_id: string
+  reviewer_role: string
+  decision: PASS|PASS_WITH_CONDITIONS|FAIL
+checks:
+  requirement_coverage: PASS|FAIL
+  correctness: PASS|FAIL
+  security: PASS|FAIL
+  regression_risk: PASS|FAIL
+  test_quality: PASS|FAIL
+  architecture_compliance: PASS|FAIL
+  documentation: PASS|FAIL
+  operational_impact: PASS|FAIL
+findings:
+  - severity: critical|high|medium|low
+    description: string
+    required_action: string
+evidence:
+  commands: list[string]
+  artifacts: list[string]
+conditions: list[string]
+

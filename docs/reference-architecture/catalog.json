@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0",
+  "title": "AI Enterprise Reference Architecture Catalog",
+  "chapter_contract": "chapter-contract.md",
+  "required_viewpoints": [
+    "business",
+    "architecture",
+    "implementation",
+    "operational",
+    "evolution"
+  ],
+  "sections": [
+    {
+      "id": "00-overview",
+      "title": "Overview",
+      "path": "00-overview/README.md",
+      "status": "planned",
+      "owns": ["enterprise vision", "navigation", "system map"],
+      "references": ["../enterprise/README.md"]
+    },
+    {
+      "id": "01-enterprise",
+      "title": "Enterprise",
+      "path": "01-enterprise/README.md",
+      "status": "planned",
+      "owns": ["enterprise principles", "business operating model", "economic proof"],
+      "references": ["../enterprise/README.md"]
+    },
+    {
+      "id": "02-product",
+      "title": "Product Architecture",
+      "path": "02-product/README.md",
+      "status": "planned",
+      "owns": ["product surfaces", "dashboard manager", "project factory", "demo story"],
+      "references": ["../enterprise/operator-startup-guide.md"]
+    },
+    {
+      "id": "03-organization",
+      "title": "Organization Architecture",
+      "path": "03-organization/README.md",
+      "status": "planned",
+      "owns": ["organizations", "roles", "authority", "crew composition"],
+      "references": ["../runbooks/agent-runtime-operations.md"]
+    },
+    {
+      "id": "04-modules",
+      "title": "Module Architecture",
+      "path": "04-modules/README.md",
+      "status": "planned",
+      "owns": ["module lifecycle", "module SDK", "regeneration", "versioning"],
+      "references": ["../etra/extension-standard.md"]
+    },
+    {
+      "id": "05-agents",
+      "title": "Agent Architecture",
+      "path": "05-agents/README.md",
+      "status": "planned",
+      "owns": ["agent lifecycle", "capabilities", "skills", "tools", "memory", "evaluation"],
+      "references": ["../etra/agent-standard.md", "../etra/prompt-standard.md"]
+    },
+    {
+      "id": "06-crews",
+      "title": "Crew Architecture",
+      "path": "06-crews/README.md",
+      "status": "planned",
+      "owns": ["crew templates", "formation", "collaboration", "runtime", "evaluation"],
+      "references": ["../runbooks/agent-runtime-operations.md"]
+    },
+    {
+      "id": "07-workflows",
+      "title": "Workflow Architecture",
+      "path": "07-workflows/README.md",
+      "status": "planned",
+      "owns": ["workflow states", "task allocation", "parallel execution", "approval gates"],
+      "references": ["../etra/workflow-standard.md", "../enterprise/project-execution-walkthrough.md"]
+    },
+    {
+      "id": "08-platform",
+      "title": "Platform Architecture",
+      "path": "08-platform/README.md",
+      "status": "planned",
+      "owns": ["CQRS", "events", "query platform", "persistence", "metadata kernel"],
+      "references": ["../etra/service-standard.md", "../etra/database-standard.md"]
+    },
+    {
+      "id": "09-runtime",
+      "title": "Runtime Architecture",
+      "path": "09-runtime/README.md",
+      "status": "planned",
+      "owns": ["workers", "scheduler", "sandbox", "resource management", "provider readiness"],
+      "references": ["../local-bootstrap.md", "../runbooks/service-operations.md"]
+    },
+    {
+      "id": "10-security",
+      "title": "Security Architecture",
+      "path": "10-security/README.md",
+      "status": "planned",
+      "owns": ["authority", "isolation", "secrets", "audit", "compliance"],
+      "references": ["../etra/security-standard.md", "../etra/policy-standard.md"]
+    },
+    {
+      "id": "11-operations",
+      "title": "Operations Architecture",
+      "path": "11-operations/README.md",
+      "status": "planned",
+      "owns": ["observability", "recovery", "maintenance", "deployment", "calibration"],
+      "references": ["../runbooks/service-operations.md", "../etra/observability-standard.md"]
+    },
+    {
+      "id": "12-implementation",
+      "title": "Implementation Roadmap",
+      "path": "12-implementation/README.md",
+      "status": "planned",
+      "owns": ["implementation waves", "module plans", "work packages", "verification loops"],
+      "references": ["../engineering/p9-codex-prompt-chain.md"]
+    },
+    {
+      "id": "13-reference",
+      "title": "Reference Catalogs",
+      "path": "13-reference/README.md",
+      "status": "planned",
+      "owns": ["schemas", "templates", "agent catalog", "crew catalog", "workflow catalog"],
+      "references": ["../etra/documentation-standard.md"]
+    },
+    {
+      "id": "14-mvp-vertical-slice",
+      "title": "MVP Vertical Slice",
+      "path": "14-mvp-vertical-slice/README.md",
+      "status": "active",
+      "owns": ["FastAPI control plane", "project persistence", "artifact storage", "approval pause", "audit history"],
+      "references": ["../architecture/mvp-vertical-slice.md", "../enterprise/project-execution-walkthrough.md"]
+    },
+    {
+      "id": "15-application-kernel",
+      "title": "Application and Workflow Kernel",
+      "path": "15-application-kernel/README.md",
+      "status": "active",
+      "owns": ["commands", "command handlers", "workflow state machine", "idempotency", "outbox discipline"],
+      "references": ["../architecture/application-kernel.md", "../etra/workflow-standard.md"]
+    },
+    {
+      "id": "16-security-governance",
+      "title": "Identity and Security Governance",
+      "path": "16-security-governance/README.md",
+      "status": "active",
+      "owns": ["identity taxonomy", "authorization policy", "tenant isolation", "delegated authority", "compliance evidence"],
+      "references": ["../architecture/security-governance.md", "../etra/security-standard.md"]
+    },
+    {
+      "id": "17-project-formation-orchestration",
+      "title": "Project Formation Orchestration",
+      "path": "17-project-formation-orchestration/README.md",
+      "status": "active",
+      "owns": ["project orchestrator", "business analyst", "solution architect", "project planner", "formation validation", "manager approval"],
+      "references": ["../architecture/project-formation-orchestration.md", "../etra/agent-standard.md"]
+    },
+    {
+      "id": "31-enterprise-standards",
+      "title": "Enterprise Standards",
+      "path": "31-enterprise-standards/README.md",
+      "status": "linked",
+      "owns": ["coding standards", "API standards", "workflow standards", "testing standards"],
+      "references": ["standards-map.md", "../etra/README.md"]
+    },
+    {
+      "id": "99-appendix",
+      "title": "Appendix",
+      "path": "99-appendix/README.md",
+      "status": "planned",
+      "owns": ["glossary", "indexes", "external references", "historical notes"],
+      "references": ["../adrs/README.md"]
+    }
+  ]
+}

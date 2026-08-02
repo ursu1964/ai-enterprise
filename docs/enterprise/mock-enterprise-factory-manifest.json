@@ -1,0 +1,51 @@
+{
+  "defaults": {
+    "default_branch": "main",
+    "repository_url": null,
+    "telemetry": {
+      "always_active": true,
+      "freshness_required_seconds": 15,
+      "operator_guidance": "Show source freshness before every decision."
+    },
+    "reuse": {
+      "capture_blueprints": true,
+      "template_scope": "enterprise_factory"
+    },
+    "specialist_agents": [
+      "requirements_agent",
+      "architecture_agent",
+      "implementation_agent",
+      "verification_agent",
+      "security_agent",
+      "devops_agent",
+      "dashboard_agent",
+      "economic_proof_agent"
+    ]
+  },
+  "projects": [
+    {
+      "name": "AI Enterprise Product Factory",
+      "project_type": "ai_software_development",
+      "repository_path": "/home/user/projects/mock-enterprise/ai-enterprise-product-factory",
+      "description": "Create a governed software factory that turns manifestos into planned, implemented, verified, and reusable product modules."
+    },
+    {
+      "name": "ISO Certification Consulting Module",
+      "project_type": "security_compliance",
+      "repository_path": "/home/user/projects/mock-enterprise/iso-certification-consulting-module",
+      "description": "Create a consulting module for ISO-style readiness: evidence collection, gap analysis, control mapping, audit preparation, corrective actions, and management reporting."
+    },
+    {
+      "name": "Application Verification and Debug Module",
+      "project_type": "automated_testing",
+      "repository_path": "/home/user/projects/mock-enterprise/application-verification-debug-module",
+      "description": "Create an application verification module that inspects errors, runs tests, proposes fixes, tracks regressions, and converts repeated defects into reusable prevention patterns."
+    },
+    {
+      "name": "Enterprise Improvement and Blueprint Catalog",
+      "project_type": "dashboards_reporting",
+      "repository_path": "/home/user/projects/mock-enterprise/enterprise-improvement-blueprint-catalog",
+      "description": "Create a dashboard and catalog where finished work becomes reusable blueprints with measurable economic effects, quality evidence, and future template recommendations."
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from ai_enterprise.api.routes.operator_jobs import router
+from ai_enterprise.application.operator_job_resolution import acknowledge_job, job_is_acknowledged
+from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.jobs.crash_safety import (
     FailureClass,
     LeaseLostError,
@@ -49,5 +51,41 @@ def test_operator_recovery_and_visibility_routes_are_registered() -> None:
 
     assert "/operator/jobs/recover-expired" in paths
     assert "/operator/jobs" in paths
+    assert "/operator/jobs/by-id/{job_id}/acknowledge" in paths
     assert "/operator/jobs/by-id/{job_id}/attempts" in paths
     assert "/operator/jobs/worker-instances" in paths
+
+
+def test_acknowledged_dead_letter_keeps_evidence_but_marks_resolution() -> None:
+    job = JobModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        run_id=None,
+        job_type="plan_work_package",
+        status="dead_letter",
+        payload={"original": "evidence"},
+        priority=100,
+        attempt_count=3,
+        max_attempts=3,
+        retry_count=0,
+        available_at=datetime.now(UTC),
+        lease_owner=None,
+        lease_expires_at=None,
+        lease_token=None,
+        lease_version=0,
+        last_failure_class="validation",
+        last_leased_at=None,
+        last_error="historical failure",
+        completed_at=None,
+    )
+
+    acknowledge_job(
+        job,
+        actor_id="operator",
+        reason="Historical failed experiment already reviewed.",
+        action_taken="Preserved as evidence and excluded from current health.",
+    )
+
+    assert job.payload["original"] == "evidence"
+    assert job_is_acknowledged(job) is True
+    assert job.payload["operator_resolution"]["acknowledged_by"] == "operator"

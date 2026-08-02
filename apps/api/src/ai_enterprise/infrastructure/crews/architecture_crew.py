@@ -26,6 +26,36 @@ class ArchitectureCrewRunner:
         requirements_markdown: str,
         requirements_artifact_hash: str,
     ) -> ArchitectureCrewResult:
+        if self._settings.architecture_provider.strip().lower() == "scripted":
+            markdown = (
+                f"# Architecture - {project_name}\n\n"
+                f"Manifest: `{project_manifest_hash}`\n"
+                f"Requirements artifact: `{requirements_artifact_hash}`\n\n"
+                "## Architecture objectives\n"
+                f"{project_description}\n\n"
+                "## System context\n"
+                "The project runs inside the AI Enterprise governed delivery loop: "
+                "manifesto intake, formation pack, workflow, crew work, telemetry, "
+                "approval gates, and reusable blueprint capture.\n\n"
+                "## Components and responsibilities\n"
+                "- Dashboard manager: presents project state, guidance, telemetry, and proof.\n"
+                "- Workflow engine: advances approved phases and records transitions.\n"
+                "- Specialist crews: produce requirements, architecture, planning, validation, "
+                "and recovery evidence.\n"
+                "- Repository boundary: limits generated work to the approved project path.\n\n"
+                "## Trust boundaries\n"
+                "- Human approval is required before architecture, work-package execution, and "
+                "integration continue.\n"
+                "- Artifacts are immutable and hash-bound to their source inputs.\n"
+                "- Worker jobs are leased, retried, and visible to the operator dashboard.\n\n"
+                "## Requirement traceability matrix\n"
+                "- FR-001 -> workflow evidence, dashboard visibility, artifact hashes, and "
+                "approval gates.\n\n"
+                "## Risks and unresolved questions\n"
+                "- Confirm production integration credentials before any deployment or "
+                "remote push.\n"
+            )
+            return ArchitectureCrewResult(markdown=markdown, raw_output=markdown)
         llm = LLM(
             model=self._settings.ollama_model,
             base_url=self._settings.ollama_base_url,

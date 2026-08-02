@@ -428,34 +428,34 @@ class SqlAlchemyGovernedChangeRepository:
                     "content_hash": assessment.content_hash,
                 }
             )
-        for plan in await self.list_validation_plans(proposal_id):
+        for validation_plan in await self.list_validation_plans(proposal_id):
             records.append(
                 {
                     "type": "validation_plan",
-                    "id": str(plan.id),
-                    "at": plan.created_at,
-                    "version": plan.version,
-                    "content_hash": plan.content_hash,
+                    "id": str(validation_plan.id),
+                    "at": validation_plan.created_at,
+                    "version": validation_plan.version,
+                    "content_hash": validation_plan.content_hash,
                 }
             )
-        for plan in await self.list_rollout_plans(proposal_id):
+        for rollout_plan in await self.list_rollout_plans(proposal_id):
             records.append(
                 {
                     "type": "rollout_plan",
-                    "id": str(plan.id),
-                    "at": plan.created_at,
-                    "version": plan.version,
-                    "content_hash": plan.content_hash,
+                    "id": str(rollout_plan.id),
+                    "at": rollout_plan.created_at,
+                    "version": rollout_plan.version,
+                    "content_hash": rollout_plan.content_hash,
                 }
             )
-        for plan in await self.list_rollback_plans(proposal_id):
+        for rollback_plan in await self.list_rollback_plans(proposal_id):
             records.append(
                 {
                     "type": "rollback_plan",
-                    "id": str(plan.id),
-                    "at": plan.created_at,
-                    "version": plan.version,
-                    "content_hash": plan.content_hash,
+                    "id": str(rollback_plan.id),
+                    "at": rollback_plan.created_at,
+                    "version": rollback_plan.version,
+                    "content_hash": rollback_plan.content_hash,
                 }
             )
         for decision in await self.list_decisions(proposal_id):

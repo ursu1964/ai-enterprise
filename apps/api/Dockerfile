@@ -18,7 +18,7 @@ COPY apps/api/pyproject.toml /app/pyproject.toml
 COPY apps/api/uv.lock /app/uv.lock
 COPY apps/api/src /app/src
 COPY migrations /app/migrations
-COPY apps/api/alembic.ini /app/alembic.ini
+COPY apps/api/alembic.ini /app/apps/api/alembic.ini
 
 RUN uv sync --frozen --no-dev
 

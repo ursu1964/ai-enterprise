@@ -1,0 +1,54 @@
+schema: aeos.project_intake.v1
+required:
+  - project
+  - scope
+  - functional_requirements
+  - non_functional_requirements
+  - technical_constraints
+  - delivery
+  - authority
+project:
+  name: string
+  description: string
+  business_objective: string
+  target_users: list[string]
+  project_type: string
+  expected_outcomes: list[string]
+scope:
+  included: list[string]
+  excluded: list[string]
+  assumptions: list[string]
+  dependencies: list[string]
+functional_requirements:
+  - id: string
+    description: string
+    priority: critical|high|medium|low
+    acceptance_criteria: list[string]
+non_functional_requirements:
+  performance: string
+  scalability: string
+  availability: string
+  security: string
+  privacy: string
+  accessibility: string
+  maintainability: string
+technical_constraints:
+  languages: list[string]
+  frameworks: list[string]
+  operating_systems: list[string]
+  cloud_or_local: string
+  existing_systems: list[string]
+  prohibited_technologies: list[string]
+delivery:
+  target_environment: string
+  milestones: list[string]
+  deployment_method: string
+  documentation_required: list[string]
+  support_model: string
+authority:
+  allowed_actions: list[string]
+  approval_required: list[string]
+  prohibited_actions: list[string]
+  secret_access_policy: string
+  production_access_policy: string
+

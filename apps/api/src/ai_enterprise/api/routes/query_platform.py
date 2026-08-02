@@ -1,0 +1,1067 @@
+from __future__ import annotations
+
+import uuid
+from collections import Counter
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import select
+
+from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.application.operator_job_resolution import (
+    job_is_acknowledged,
+    job_resolution,
+    unresolved_problem_jobs,
+)
+from ai_enterprise.infrastructure.database.models import (
+    ArtifactModel,
+    AuditEventModel,
+    CrewRunModel,
+    JobModel,
+    ProjectModel,
+    WorkPackageModel,
+)
+from ai_enterprise.infrastructure.database.workflow_models import WorkflowInstanceModel
+from ai_enterprise.infrastructure.enterprise_kernel.models import (
+    EnterpriseModuleModel,
+    EnterpriseResourceModel,
+    EnterpriseScheduleModel,
+    OperatingMaturitySnapshotModel,
+    OrganizationalThreadModel,
+)
+from ai_enterprise.infrastructure.jobs.models import WorkerInstanceModel
+from ai_enterprise.infrastructure.knowledge.models import KnowledgeItemModel
+from ai_enterprise.infrastructure.performance.models import (
+    LearningProposalModel,
+    PerformanceMetricModel,
+)
+
+router = APIRouter(prefix="/query", tags=["query-platform"])
+
+READ_ROLES = {
+    "admin",
+    "administrator",
+    "operator",
+    "platform-admin",
+    "platform_administrator",
+    "performance-auditor",
+    "organizational-governor",
+}
+
+
+def _require_query_actor(actor: ActorDependency) -> None:
+    if actor.actor_type != "human" or actor.role not in READ_ROLES:
+        raise HTTPException(403, "Human query authority is required")
+
+
+def _status_counts(rows: list[Any], field: str = "status") -> dict[str, int]:
+    return dict(Counter(str(getattr(row, field, "unknown")) for row in rows))
+
+
+def _latest_time(rows: list[Any], field: str) -> datetime | None:
+    values = [getattr(row, field, None) for row in rows]
+    timestamps = [value for value in values if isinstance(value, datetime)]
+    return max(timestamps) if timestamps else None
+
+
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    return f"{count} {singular if count == 1 else plural or singular + 's'}"
+
+
+def _resolution_counts(jobs: list[JobModel]) -> dict[str, int]:
+    states = [
+        resolution["state"]
+        for job in jobs
+        if (resolution := job_resolution(job)) is not None and "state" in resolution
+    ]
+    return dict(Counter(str(state) for state in states))
+
+
+def _recommendations(
+    *,
+    projects: list[ProjectModel],
+    jobs: list[JobModel],
+    workers: list[WorkerInstanceModel],
+    workflows: list[WorkflowInstanceModel],
+    schedules: list[EnterpriseScheduleModel],
+) -> list[dict[str, str]]:
+    failed_jobs = unresolved_problem_jobs(jobs)
+    blocked_schedules = [item for item in schedules if item.state == "blocked"]
+    online_workers = [worker for worker in workers if worker.status == "online"]
+    missing_workflow_projects = {
+        project.id for project in projects
+    } - {workflow.project_id for workflow in workflows}
+
+    items: list[dict[str, str]] = []
+    if failed_jobs:
+        items.append(
+            {
+                "priority": "urgent",
+                "title": "Resolve blocked work",
+                "message": (
+                    f"{len(failed_jobs)} work item(s) did not finish. Open Problems, "
+                    "review the human explanation, then retry only after the cause is clear."
+                ),
+                "next_action": "Open the Problems dashboard.",
+            }
+        )
+    if blocked_schedules:
+        items.append(
+            {
+                "priority": "high",
+                "title": "Unblock enterprise schedules",
+                "message": (
+                    f"{len(blocked_schedules)} governed schedule(s) cannot dispatch. "
+                    "Check dependencies, approval gates, and resource claims."
+                ),
+                "next_action": "Open Enterprise Kernel schedules.",
+            }
+        )
+    if missing_workflow_projects:
+        items.append(
+            {
+                "priority": "medium",
+                "title": "Link projects to workflows",
+                "message": (
+                    f"{len(missing_workflow_projects)} project(s) exist without a durable "
+                    "workflow. Start or relink the workflow before presenting execution proof."
+                ),
+                "next_action": "Open Projects and start the governed workflow.",
+            }
+        )
+    if projects and not online_workers:
+        items.append(
+            {
+                "priority": "high",
+                "title": "Start worker capacity",
+                "message": "Projects exist, but no online worker instance is visible.",
+                "next_action": "Start the worker service and check worker heartbeat.",
+            }
+        )
+    if not items:
+        items.append(
+            {
+                "priority": "normal",
+                "title": "Continue controlled delivery",
+                "message": "The operating picture has no urgent blockers.",
+                "next_action": "Create the next manifesto or inspect project proof.",
+            }
+        )
+    return items
+
+
+def _graph(
+    *,
+    projects: list[ProjectModel],
+    jobs: list[JobModel],
+    workers: list[WorkerInstanceModel],
+    workflows: list[WorkflowInstanceModel],
+    resource_count: int,
+    module_count: int,
+    knowledge_count: int,
+) -> dict[str, list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "enterprise",
+            "label": "Enterprise Factory",
+            "kind": "enterprise",
+            "status": "active",
+            "human_summary": (
+                "The central operating system coordinating projects, crews, proof, "
+                "and reusable knowledge."
+            ),
+        },
+        {
+            "id": "resources",
+            "label": "Managed Resources",
+            "kind": "resource-group",
+            "status": "active" if resource_count else "empty",
+            "human_summary": f"{resource_count} enterprise resource(s) are registered.",
+        },
+        {
+            "id": "modules",
+            "label": "Enterprise Modules",
+            "kind": "module-group",
+            "status": "active" if module_count else "empty",
+            "human_summary": f"{module_count} governed module(s) are registered.",
+        },
+        {
+            "id": "knowledge",
+            "label": "Reusable Knowledge",
+            "kind": "knowledge-group",
+            "status": "active" if knowledge_count else "empty",
+            "human_summary": (
+                f"{knowledge_count} approved knowledge item(s) can inform future projects."
+            ),
+        },
+    ]
+    edges: list[dict[str, Any]] = [
+        {"from": "enterprise", "to": "resources", "label": "governs"},
+        {"from": "enterprise", "to": "modules", "label": "operates"},
+        {"from": "enterprise", "to": "knowledge", "label": "learns"},
+    ]
+    for project in projects:
+        project_node = f"project:{project.id}"
+        nodes.append(
+            {
+                "id": project_node,
+                "label": project.name,
+                "kind": "project",
+                "status": project.status,
+                "human_summary": (
+                    f"{project.name} is {project.status}. "
+                    "Open it to inspect workflow, work, proof, and reusable blueprints."
+                ),
+            }
+        )
+        edges.append({"from": "enterprise", "to": project_node, "label": "creates"})
+    workflow_by_project = {workflow.project_id: workflow for workflow in workflows}
+    for project in projects:
+        workflow = workflow_by_project.get(project.id)
+        if workflow is None:
+            continue
+        workflow_node = f"workflow:{workflow.id}"
+        nodes.append(
+            {
+                "id": workflow_node,
+                "label": workflow.current_step or workflow.state,
+                "kind": "workflow",
+                "status": workflow.state,
+                "human_summary": (
+                    f"The workflow is at {workflow.current_step or workflow.state}. "
+                    "Recommended action: "
+                    f"{workflow.recommended_operator_action or 'continue monitoring'}."
+                ),
+            }
+        )
+        edges.append(
+            {"from": f"project:{project.id}", "to": workflow_node, "label": "executes"}
+        )
+    for job in jobs[:25]:
+        job_node = f"job:{job.id}"
+        nodes.append(
+            {
+                "id": job_node,
+                "label": job.job_type.replace("_", " ").title(),
+                "kind": "job",
+                "status": job.status,
+                "human_summary": (
+                    f"{job.job_type.replace('_', ' ')} is {job.status}. "
+                    f"Attempt {job.attempt_count} of {job.max_attempts}."
+                ),
+            }
+        )
+        edges.append({"from": f"project:{job.project_id}", "to": job_node, "label": "has work"})
+    for worker in workers[:12]:
+        worker_node = f"worker:{worker.worker_id}"
+        nodes.append(
+            {
+                "id": worker_node,
+                "label": worker.profile,
+                "kind": "worker",
+                "status": worker.status,
+                "human_summary": f"{worker.profile} worker is {worker.status}.",
+            }
+        )
+        edges.append({"from": "enterprise", "to": worker_node, "label": "capacity"})
+    return {"nodes": nodes, "edges": edges}
+
+
+def _task_summary(
+    jobs: list[JobModel], work_packages: list[WorkPackageModel]
+) -> dict[str, int]:
+    done = sum(1 for job in jobs if job.status == "succeeded")
+    active = sum(1 for job in jobs if job.status in {"queued", "running", "leased", "retry_wait"})
+    problems = len(unresolved_problem_jobs(jobs))
+    standby = sum(
+        1
+        for package in work_packages
+        if str(getattr(package.status, "value", package.status))
+        in {"awaiting_approval", "approved", "planned"}
+    )
+    return {
+        "done": done,
+        "active": active,
+        "standby": standby,
+        "problems": problems,
+        "total": done + active + standby + problems,
+    }
+
+
+def _project_phase_from_workflow(workflow: WorkflowInstanceModel | None) -> str:
+    if workflow is None:
+        return "intake"
+    state = workflow.state
+    if "requirements" in state:
+        return "requirements"
+    if "architecture" in state:
+        return "architecture"
+    if "work_package" in state or "planning" in state:
+        return "planning"
+    if "execution" in state:
+        return "execution"
+    if "integration" in state:
+        return "integration"
+    if "completed" in state:
+        return "completed"
+    return state.replace("_", " ")
+
+
+def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[str, object]]:
+    completed: list[dict[str, object]] = [
+        {
+            "name": run.crew_name,
+            "status": run.status,
+            "assignment": (
+                "Completed project crew run."
+                if run.status == "succeeded"
+                else "Crew run ended with a recorded status and remains part of project evidence."
+            ),
+            "last_signal_at": run.completed_at or run.started_at or run.created_at,
+        }
+        for run in runs
+    ]
+    active_jobs = [
+        job for job in jobs if job.status in {"queued", "running", "leased", "retry_wait"}
+    ]
+    active: list[dict[str, object]] = [
+        {
+            "name": job.job_type.replace("_", " "),
+            "status": job.status,
+            "assignment": "Work item controlled by the enterprise worker system.",
+            "last_signal_at": job.last_leased_at or job.available_at or job.created_at,
+        }
+        for job in active_jobs
+    ]
+    return (active + completed)[:8]
+
+
+def _manager_graph(
+    projects: list[ProjectModel],
+    workflows_by_project: dict[uuid.UUID, WorkflowInstanceModel],
+    jobs_by_project: dict[uuid.UUID, list[JobModel]],
+    crew_by_project: dict[uuid.UUID, list[CrewRunModel]],
+) -> dict[str, list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "factory",
+            "label": "Manifesto Factory",
+            "kind": "factory",
+            "status": "active" if projects else "waiting_for_manifesto",
+            "human_summary": (
+                "Manifestos become governed projects, workflows, tasks, crews, proof, "
+                "and reusable templates."
+            ),
+        }
+    ]
+    edges: list[dict[str, Any]] = []
+    for project in projects:
+        workflow = workflows_by_project.get(project.id)
+        jobs = jobs_by_project.get(project.id, [])
+        crews = crew_by_project.get(project.id, [])
+        summary = _task_summary(jobs, [])
+        project_node = f"project:{project.id}"
+        workflow_node = f"workflow:{workflow.id}" if workflow else f"workflow:missing:{project.id}"
+        crew_node = f"crew:{project.id}"
+        telemetry_node = f"telemetry:{project.id}"
+        project_status = (
+            "attention_required"
+            if summary["problems"]
+            else "active"
+            if workflow or jobs
+            else "intake"
+        )
+        nodes.extend(
+            [
+                {
+                    "id": project_node,
+                    "label": project.name,
+                    "kind": "project",
+                    "status": project_status,
+                    "human_summary": (
+                        f"{project.name}: {summary['done']} done, {summary['active']} active, "
+                        f"{summary['standby']} standby, {summary['problems']} problem tasks."
+                    ),
+                },
+                {
+                    "id": workflow_node,
+                    "label": _project_phase_from_workflow(workflow),
+                    "kind": "workflow",
+                    "status": "not_started" if workflow is None else workflow.state,
+                    "human_summary": (
+                        "Workflow is not started yet. Start it after manifesto intake."
+                        if workflow is None
+                        else workflow.recommended_operator_action
+                        or "Workflow is linked and moving through controlled phases."
+                    ),
+                },
+                {
+                    "id": crew_node,
+                    "label": "Crew Activity",
+                    "kind": "crew",
+                    "status": "active" if crews or summary["active"] else "standby",
+                    "human_summary": (
+                        f"{len(crews)} completed crew signal(s), "
+                        f"{summary['active']} active work signal(s)."
+                    ),
+                },
+                {
+                    "id": telemetry_node,
+                    "label": "Telemetry",
+                    "kind": "telemetry",
+                    "status": "attention_required" if summary["problems"] else "nominal",
+                    "human_summary": (
+                        "Task, crew, workflow, and event signals are collected for this "
+                        "project."
+                    ),
+                },
+            ]
+        )
+        edges.extend(
+            [
+                {"from": "factory", "to": project_node, "label": "creates"},
+                {"from": project_node, "to": workflow_node, "label": "executes"},
+                {"from": workflow_node, "to": crew_node, "label": "assigns"},
+                {"from": crew_node, "to": telemetry_node, "label": "reports"},
+                {"from": telemetry_node, "to": project_node, "label": "calibrates"},
+            ]
+        )
+    return {"nodes": nodes, "edges": edges}
+
+
+@router.get("/dashboard-manager")
+async def dashboard_manager(
+    session: SessionDependency,
+    actor: ActorDependency,
+    organization_id: uuid.UUID | None = None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    _require_query_actor(actor)
+    if limit < 1 or limit > 100:
+        raise HTTPException(422, "limit must be between 1 and 100")
+
+    projects = list(
+        (
+            await session.scalars(
+                select(ProjectModel).order_by(ProjectModel.updated_at.desc()).limit(limit)
+            )
+        ).all()
+    )
+    project_ids = [project.id for project in projects]
+    workflows = list(
+        (
+            await session.scalars(
+                select(WorkflowInstanceModel)
+                .where(WorkflowInstanceModel.project_id.in_(project_ids))
+                .order_by(WorkflowInstanceModel.updated_at.desc())
+            )
+        ).all()
+        if project_ids
+        else []
+    )
+    jobs = list(
+        (
+            await session.scalars(
+                select(JobModel)
+                .where(JobModel.project_id.in_(project_ids))
+                .order_by(JobModel.created_at.desc())
+            )
+        ).all()
+        if project_ids
+        else []
+    )
+    crew_runs = list(
+        (
+            await session.scalars(
+                select(CrewRunModel)
+                .where(CrewRunModel.project_id.in_(project_ids))
+                .order_by(CrewRunModel.created_at.desc())
+            )
+        ).all()
+        if project_ids
+        else []
+    )
+    work_packages = list(
+        (
+            await session.scalars(
+                select(WorkPackageModel)
+                .where(WorkPackageModel.project_id.in_(project_ids))
+                .order_by(WorkPackageModel.created_at.desc())
+            )
+        ).all()
+        if project_ids
+        else []
+    )
+    workers = list(
+        (
+            await session.scalars(
+                select(WorkerInstanceModel)
+                .order_by(WorkerInstanceModel.last_heartbeat_at.desc())
+                .limit(100)
+            )
+        ).all()
+    )
+    audits = list(
+        (
+            await session.scalars(
+                select(AuditEventModel)
+                .where(AuditEventModel.project_id.in_(project_ids))
+                .order_by(AuditEventModel.created_at.desc())
+                .limit(50)
+            )
+        ).all()
+        if project_ids
+        else []
+    )
+    metrics_query = select(PerformanceMetricModel)
+    if organization_id is not None:
+        metrics_query = metrics_query.where(
+            PerformanceMetricModel.organization_id == organization_id
+        )
+    metrics = list(
+        (
+            await session.scalars(
+                metrics_query.order_by(PerformanceMetricModel.calculated_at.desc()).limit(limit)
+            )
+        ).all()
+    )
+
+    workflows_by_project: dict[uuid.UUID, WorkflowInstanceModel] = {}
+    for workflow in workflows:
+        workflows_by_project.setdefault(workflow.project_id, workflow)
+    jobs_by_project: dict[uuid.UUID, list[JobModel]] = {project.id: [] for project in projects}
+    for job in jobs:
+        jobs_by_project.setdefault(job.project_id, []).append(job)
+    crew_by_project: dict[uuid.UUID, list[CrewRunModel]] = {
+        project.id: [] for project in projects
+    }
+    for run in crew_runs:
+        crew_by_project.setdefault(run.project_id, []).append(run)
+    packages_by_project: dict[uuid.UUID, list[WorkPackageModel]] = {
+        project.id: [] for project in projects
+    }
+    for package in work_packages:
+        packages_by_project.setdefault(package.project_id, []).append(package)
+    audits_by_project: dict[uuid.UUID, list[AuditEventModel]] = {
+        project.id: [] for project in projects
+    }
+    for audit in audits:
+        if audit.project_id is not None:
+            audits_by_project.setdefault(audit.project_id, []).append(audit)
+
+    summaries = []
+    total_done = total_active = total_standby = total_problems = 0
+    for project in projects:
+        project_workflow = workflows_by_project.get(project.id)
+        project_jobs = jobs_by_project.get(project.id, [])
+        project_packages = packages_by_project.get(project.id, [])
+        tasks = _task_summary(project_jobs, project_packages)
+        total_done += tasks["done"]
+        total_active += tasks["active"]
+        total_standby += tasks["standby"]
+        total_problems += tasks["problems"]
+        crews = _crew_summary(crew_by_project.get(project.id, []), project_jobs)
+        recent_events = [
+            {
+                "event_type": audit.event_type,
+                "actor": audit.actor_id,
+                "created_at": audit.created_at,
+                "summary": f"{audit.actor_id} recorded {audit.event_type}.",
+            }
+            for audit in audits_by_project.get(project.id, [])[:5]
+        ]
+        phase = _project_phase_from_workflow(project_workflow)
+        state = (
+            "attention_required"
+            if tasks["problems"]
+            else "active"
+            if project_workflow or project_jobs
+            else "intake"
+        )
+        summaries.append(
+            {
+                "id": project.id,
+                "name": project.name,
+                "status": project.status,
+                "phase": phase,
+                "state": state,
+                "repository_path": project.repository_path,
+                "project_type": project.manifest.get("project_type", "enterprise_project")
+                if isinstance(project.manifest, dict)
+                else "enterprise_project",
+                "workflow": None
+                if project_workflow is None
+                else {
+                    "id": project_workflow.id,
+                    "state": project_workflow.state,
+                    "current_step": project_workflow.current_step,
+                    "recommended_operator_action": (
+                        project_workflow.recommended_operator_action
+                    ),
+                    "updated_at": project_workflow.updated_at,
+                },
+                "tasks": tasks,
+                "crews": crews,
+                "recent_events": recent_events,
+                "telemetry": {
+                    "signal": "attention_required" if tasks["problems"] else "nominal",
+                    "event_count": len(audits_by_project.get(project.id, [])),
+                    "crew_signal_count": len(crew_by_project.get(project.id, [])),
+                    "job_signal_count": len(project_jobs),
+                    "work_package_count": len(project_packages),
+                },
+                "human_summary": (
+                    f"{project.name} is in {phase}. "
+                    f"{tasks['done']} done, {tasks['active']} active, "
+                    f"{tasks['standby']} standby, {tasks['problems']} problem tasks."
+                ),
+                "next_action": (
+                    "Open Problems and resolve failed work before scaling this project."
+                    if tasks["problems"]
+                    else project_workflow.recommended_operator_action
+                    if project_workflow and project_workflow.recommended_operator_action
+                    else "Start or relink the workflow after manifesto intake."
+                    if project_workflow is None
+                    else "Continue monitoring this project execution graph."
+                ),
+            }
+        )
+
+    online_workers = [worker for worker in workers if worker.status == "online"]
+    manager_state = (
+        "attention_required"
+        if total_problems
+        else "active"
+        if total_active or summaries
+        else "waiting_for_manifesto"
+    )
+    return {
+        "generated_at": datetime.now(UTC),
+        "query_policy": {
+            "mode": "dashboard_manager_projection",
+            "human_language": True,
+            "mutation_allowed": False,
+            "actor": actor.subject,
+        },
+        "headline": {
+            "state": manager_state,
+            "summary": (
+                f"{_count_phrase(len(summaries), 'project')}, "
+                f"{_count_phrase(total_done, 'done task')}, "
+                f"{_count_phrase(total_active, 'active task')}, "
+                f"{_count_phrase(total_standby, 'standby task')}, "
+                f"{_count_phrase(total_problems, 'problem task')}."
+            ),
+            "business_meaning": (
+                "Some project work needs recovery before the factory should scale further."
+                if manager_state == "attention_required"
+                else "The factory is coordinating project execution and can be inspected live."
+                if manager_state == "active"
+                else "Attach a manifesto to create the first governed project."
+            ),
+        },
+        "totals": {
+            "projects": len(summaries),
+            "tasks_done": total_done,
+            "tasks_active": total_active,
+            "tasks_standby": total_standby,
+            "tasks_problem": total_problems,
+            "online_workers": len(online_workers),
+            "worker_signals": len(workers),
+            "events": len(audits),
+            "governed_metrics": len(metrics),
+        },
+        "projects": summaries,
+        "telemetry": {
+            "always_active": True,
+            "latest_event_at": _latest_time(audits, "created_at"),
+            "latest_worker_heartbeat_at": _latest_time(workers, "last_heartbeat_at"),
+            "latest_metric_at": _latest_time(metrics, "calculated_at"),
+            "status_counts": {
+                "projects": _status_counts(projects),
+                "jobs": _status_counts(jobs),
+                "crews": _status_counts(crew_runs),
+                "workers": _status_counts(workers),
+            },
+        },
+        "graph": _manager_graph(
+            projects,
+            workflows_by_project,
+            jobs_by_project,
+            crew_by_project,
+        ),
+        "guidance": [
+            {
+                "title": "Start from manifesto",
+                "message": (
+                    "Ingest the client document, confirm repository details, then launch "
+                    "the governed workflow."
+                ),
+            },
+            {
+                "title": "Inspect live execution",
+                "message": (
+                    "Click a project node to see phase, tasks, crew, events, telemetry, "
+                    "and next action."
+                ),
+            },
+            {
+                "title": "Convert proof into reuse",
+                "message": (
+                    "When a project stabilizes, promote its successful workflow and crew "
+                    "pattern into a template."
+                ),
+            },
+        ],
+    }
+
+
+@router.get("/operating-picture")
+async def operating_picture(
+    session: SessionDependency,
+    actor: ActorDependency,
+    organization_id: uuid.UUID | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    _require_query_actor(actor)
+    if limit < 1 or limit > 200:
+        raise HTTPException(422, "limit must be between 1 and 200")
+
+    projects = list(
+        (
+            await session.scalars(
+                select(ProjectModel).order_by(ProjectModel.updated_at.desc()).limit(limit)
+            )
+        ).all()
+    )
+    workflows = list(
+        (
+            await session.scalars(
+                select(WorkflowInstanceModel)
+                .order_by(WorkflowInstanceModel.updated_at.desc())
+                .limit(limit)
+            )
+        ).all()
+    )
+    jobs = list(
+        (
+            await session.scalars(
+                select(JobModel).order_by(JobModel.created_at.desc()).limit(limit)
+            )
+        ).all()
+    )
+    workers = list(
+        (
+            await session.scalars(
+                select(WorkerInstanceModel)
+                .order_by(WorkerInstanceModel.last_heartbeat_at.desc())
+                .limit(100)
+            )
+        ).all()
+    )
+    resources_query = select(EnterpriseResourceModel)
+    modules_query = select(EnterpriseModuleModel)
+    schedules_query = select(EnterpriseScheduleModel)
+    threads_query = select(OrganizationalThreadModel)
+    maturity_query = select(OperatingMaturitySnapshotModel)
+    metrics_query = select(PerformanceMetricModel)
+    learning_query = select(LearningProposalModel)
+    knowledge_query = select(KnowledgeItemModel)
+    if organization_id is not None:
+        resources_query = resources_query.where(
+            EnterpriseResourceModel.organization_id == organization_id
+        )
+        modules_query = modules_query.where(
+            EnterpriseModuleModel.organization_id == organization_id
+        )
+        schedules_query = schedules_query.where(
+            EnterpriseScheduleModel.organization_id == organization_id
+        )
+        threads_query = threads_query.where(
+            OrganizationalThreadModel.organization_id == organization_id
+        )
+        maturity_query = maturity_query.where(
+            OperatingMaturitySnapshotModel.organization_id == organization_id
+        )
+        metrics_query = metrics_query.where(
+            PerformanceMetricModel.organization_id == organization_id
+        )
+        learning_query = learning_query.where(
+            LearningProposalModel.organization_id == organization_id
+        )
+        knowledge_query = knowledge_query.where(
+            KnowledgeItemModel.scope_type == "organization",
+            KnowledgeItemModel.scope_id == organization_id,
+        )
+    resources = list((await session.scalars(resources_query.limit(limit))).all())
+    modules = list((await session.scalars(modules_query.limit(limit))).all())
+    schedules = list((await session.scalars(schedules_query.limit(limit))).all())
+    threads = list((await session.scalars(threads_query.limit(limit))).all())
+    maturity = list(
+        (
+            await session.scalars(
+                maturity_query.order_by(OperatingMaturitySnapshotModel.recorded_at.desc()).limit(1)
+            )
+        ).all()
+    )
+    metrics = list(
+        (
+            await session.scalars(
+                metrics_query.order_by(PerformanceMetricModel.calculated_at.desc()).limit(limit)
+            )
+        ).all()
+    )
+    learning = list((await session.scalars(learning_query.limit(limit))).all())
+    knowledge = list((await session.scalars(knowledge_query.limit(limit))).all())
+
+    problem_jobs = unresolved_problem_jobs(jobs)
+    acknowledged_jobs = [
+        job
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
+    online_workers = [worker for worker in workers if worker.status == "online"]
+    moving_jobs = [job for job in jobs if job.status in {"queued", "running", "leased"}]
+    state = (
+        "attention_required"
+        if problem_jobs
+        else "active"
+        if moving_jobs or online_workers
+        else "waiting_for_work"
+    )
+
+    return {
+        "generated_at": datetime.now(UTC),
+        "query_policy": {
+            "mode": "read_only_projection",
+            "human_language": True,
+            "mutation_allowed": False,
+            "actor": actor.subject,
+        },
+        "headline": {
+            "state": state,
+            "summary": (
+                f"{len(projects)} project(s), {len(moving_jobs)} moving work item(s), "
+                f"{len(problem_jobs)} problem(s), {len(online_workers)} online worker(s)."
+            ),
+            "business_meaning": (
+                "The enterprise is ready to create and coordinate work."
+                if state == "waiting_for_work"
+                else "The enterprise has live delivery signals to inspect."
+                if state == "active"
+                else (
+                    "The enterprise has issues that should become recovery actions "
+                    "and reusable lessons."
+                )
+            ),
+        },
+        "counts": {
+            "projects": len(projects),
+            "workflows": len(workflows),
+            "jobs": len(jobs),
+            "unresolved_problem_jobs": len(problem_jobs),
+            "acknowledged_problem_jobs": len(acknowledged_jobs),
+            "workers": len(workers),
+            "enterprise_resources": len(resources),
+            "enterprise_modules": len(modules),
+            "enterprise_schedules": len(schedules),
+            "organizational_threads": len(threads),
+            "performance_metrics": len(metrics),
+            "learning_proposals": len(learning),
+            "knowledge_items": len(knowledge),
+        },
+        "status_counts": {
+            "projects": _status_counts(projects),
+            "workflows": _status_counts(workflows, "state"),
+            "jobs": _status_counts(jobs),
+            "job_resolution": _resolution_counts(acknowledged_jobs),
+            "workers": _status_counts(workers),
+            "resources": _status_counts(resources, "state"),
+            "modules": _status_counts(modules, "state"),
+            "schedules": _status_counts(schedules, "state"),
+            "threads": _status_counts(threads, "current_state"),
+        },
+        "freshness": {
+            "projects": _latest_time(projects, "updated_at"),
+            "jobs": _latest_time(jobs, "created_at"),
+            "workers": _latest_time(workers, "last_heartbeat_at"),
+            "performance_metrics": _latest_time(metrics, "calculated_at"),
+        },
+        "maturity": None
+        if not maturity
+        else {
+            "level": maturity[0].maturity_level,
+            "covered_resource_types": maturity[0].covered_resource_types,
+            "module_count": maturity[0].module_count,
+            "active_thread_count": maturity[0].active_thread_count,
+            "human_summary": (
+                f"Maturity level {maturity[0].maturity_level} covers "
+                f"{len(maturity[0].covered_resource_types)} resource type(s)."
+            ),
+        },
+        "recommendations": _recommendations(
+            projects=projects,
+            jobs=jobs,
+            workers=workers,
+            workflows=workflows,
+            schedules=schedules,
+        ),
+        "graph": _graph(
+            projects=projects,
+            jobs=jobs,
+            workers=workers,
+            workflows=workflows,
+            resource_count=len(resources),
+            module_count=len(modules),
+            knowledge_count=len(knowledge),
+        ),
+    }
+
+
+@router.get("/projects/{project_id}/operating-picture")
+async def project_operating_picture(
+    project_id: uuid.UUID,
+    session: SessionDependency,
+    actor: ActorDependency,
+) -> dict[str, Any]:
+    _require_query_actor(actor)
+    project = await session.get(ProjectModel, project_id)
+    if project is None:
+        raise HTTPException(404, "Project not found")
+    workflows = list(
+        (
+            await session.scalars(
+                select(WorkflowInstanceModel)
+                .where(WorkflowInstanceModel.project_id == project_id)
+                .order_by(WorkflowInstanceModel.updated_at.desc())
+            )
+        ).all()
+    )
+    jobs = list(
+        (
+            await session.scalars(
+                select(JobModel)
+                .where(JobModel.project_id == project_id)
+                .order_by(JobModel.created_at)
+            )
+        ).all()
+    )
+    artifacts = list(
+        (
+            await session.scalars(
+                select(ArtifactModel)
+                .where(ArtifactModel.project_id == project_id)
+                .order_by(ArtifactModel.created_at)
+            )
+        ).all()
+    )
+    crew_runs = list(
+        (
+            await session.scalars(
+                select(CrewRunModel)
+                .where(CrewRunModel.project_id == project_id)
+                .order_by(CrewRunModel.created_at)
+            )
+        ).all()
+    )
+    audits = list(
+        (
+            await session.scalars(
+                select(AuditEventModel)
+                .where(AuditEventModel.project_id == project_id)
+                .order_by(AuditEventModel.created_at.desc())
+                .limit(20)
+            )
+        ).all()
+    )
+    problem_jobs = unresolved_problem_jobs(jobs)
+    acknowledged_jobs = [
+        job
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
+    state = "attention_required" if problem_jobs else "active" if jobs or workflows else "intake"
+    nodes = [
+        {
+            "id": f"project:{project.id}",
+            "label": project.name,
+            "kind": "project",
+            "status": project.status,
+            "human_summary": "The project identity, manifesto, and repository are registered.",
+        }
+    ]
+    edges: list[dict[str, str]] = []
+    for workflow in workflows:
+        node_id = f"workflow:{workflow.id}"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": workflow.current_step or workflow.state,
+                "kind": "workflow",
+                "status": workflow.state,
+                "human_summary": (
+                    workflow.recommended_operator_action or "Monitor workflow progress."
+                ),
+            }
+        )
+        edges.append({"from": f"project:{project.id}", "to": node_id, "label": "controls"})
+    for job in jobs:
+        node_id = f"job:{job.id}"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": job.job_type.replace("_", " ").title(),
+                "kind": "job",
+                "status": job.status,
+                "human_summary": f"Attempt {job.attempt_count} of {job.max_attempts}.",
+            }
+        )
+        edges.append({"from": f"project:{project.id}", "to": node_id, "label": "executes"})
+    return {
+        "generated_at": datetime.now(UTC),
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status,
+            "project_type": project.manifest.get("project_type", "enterprise_project"),
+        },
+        "headline": {
+            "state": state,
+            "summary": (
+                f"{len(workflows)} workflow(s), {len(jobs)} job(s), "
+                f"{len(artifacts)} artifact(s), {len(crew_runs)} crew run(s)."
+            ),
+            "business_meaning": (
+                "Resolve the visible failed work before presenting project proof."
+                if state == "attention_required"
+                else "The project has enough operating data to inspect live proof."
+                if state == "active"
+                else "The project is registered and ready for workflow launch."
+            ),
+        },
+        "status_counts": {
+            "workflows": _status_counts(workflows, "state"),
+            "jobs": _status_counts(jobs),
+            "job_resolution": _resolution_counts(acknowledged_jobs),
+            "crew_runs": _status_counts(crew_runs),
+            "artifacts": _status_counts(artifacts, "artifact_type"),
+        },
+        "latest_audit_events": [
+            {
+                "event_type": audit.event_type,
+                "actor": audit.actor_id,
+                "created_at": audit.created_at,
+                "human_summary": f"{audit.actor_id} recorded {audit.event_type}.",
+            }
+            for audit in audits
+        ],
+        "recommendations": _recommendations(
+            projects=[project],
+            jobs=jobs,
+            workers=[],
+            workflows=workflows,
+            schedules=[],
+        ),
+        "graph": {"nodes": nodes, "edges": edges},
+    }

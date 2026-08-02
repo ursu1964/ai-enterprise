@@ -13,6 +13,7 @@ from ai_enterprise.api.schemas import (
     WorkPackageApprovalRequest,
     WorkPackageResponse,
 )
+from ai_enterprise.application.operator_job_resolution import unresolved_problem_jobs
 from ai_enterprise.application.project_workflow import (
     ArtifactNotFoundError,
     InvalidProjectStateError,
@@ -22,10 +23,643 @@ from ai_enterprise.application.project_workflow import (
 from ai_enterprise.application.workflow.service import WorkflowService
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
+    CrewRunModel,
+    JobModel,
+    ProjectModel,
     WorkPackageModel,
+)
+from ai_enterprise.infrastructure.database.workflow_models import (
+    WorkflowInstanceModel,
+    WorkflowTransitionModel,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.get("", response_model=list[ProjectResponse])
+async def list_projects(session: SessionDependency) -> list[ProjectResponse]:
+    projects = (
+        await session.scalars(select(ProjectModel).order_by(ProjectModel.updated_at.desc()))
+    ).all()
+    return [ProjectResponse.model_validate(project) for project in projects]
+
+
+@router.get("/{project_id}", response_model=ProjectResponse)
+async def get_project(project_id: uuid.UUID, session: SessionDependency) -> ProjectResponse:
+    project = await session.get(ProjectModel, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectResponse.model_validate(project)
+
+
+@router.get("/{project_id}/intelligence")
+async def project_intelligence(
+    project_id: uuid.UUID, session: SessionDependency
+) -> dict[str, object]:
+    project = await session.get(ProjectModel, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    workflow = await session.scalar(
+        select(WorkflowInstanceModel)
+        .where(WorkflowInstanceModel.project_id == project_id)
+        .order_by(WorkflowInstanceModel.updated_at.desc())
+    )
+    transitions = (
+        list(
+            (
+                await session.scalars(
+                    select(WorkflowTransitionModel)
+                    .where(WorkflowTransitionModel.workflow_id == workflow.id)
+                    .order_by(WorkflowTransitionModel.sequence)
+                )
+            ).all()
+        )
+        if workflow is not None
+        else []
+    )
+    jobs = list(
+        (
+            await session.scalars(
+                select(JobModel)
+                .where(JobModel.project_id == project_id)
+                .order_by(JobModel.created_at)
+            )
+        ).all()
+    )
+    runs = list(
+        (
+            await session.scalars(
+                select(CrewRunModel)
+                .where(CrewRunModel.project_id == project_id)
+                .order_by(CrewRunModel.created_at)
+            )
+        ).all()
+    )
+    artifacts = list(
+        (
+            await session.scalars(
+                select(ArtifactModel)
+                .where(ArtifactModel.project_id == project_id)
+                .order_by(ArtifactModel.created_at)
+            )
+        ).all()
+    )
+    work_packages = list(
+        (
+            await session.scalars(
+                select(WorkPackageModel)
+                .where(WorkPackageModel.project_id == project_id)
+                .order_by(WorkPackageModel.created_at)
+            )
+        ).all()
+    )
+    phase_states = [
+        ("intake", {"created", "draft", "intake"}),
+        ("requirements", {"requirements_running", "waiting_requirements_approval"}),
+        ("architecture", {"architecture_running", "waiting_architecture_approval"}),
+        ("planning", {"planning_running", "waiting_work_package_approval"}),
+        ("execution", {"execution_running"}),
+        ("patch_review", {"patch_review_running", "waiting_integration_approval"}),
+        ("integration", {"integrating"}),
+        ("completed", {"completed"}),
+    ]
+    seen_states = {transition.current_state for transition in transitions}
+    fallback_current_phase = _phase_from_project_status(project.status)
+    current_state = fallback_current_phase if workflow is None else workflow.state
+    current_phase = _phase_from_workflow_state(current_state) or fallback_current_phase
+    current_index = next(
+        (
+            index
+            for index, (_, states) in enumerate(phase_states)
+            if current_phase == phase_states[index][0]
+            or current_state in states
+            or current_state == phase_states[index][0]
+        ),
+        0,
+    )
+    phases = []
+    for index, (name, states) in enumerate(phase_states):
+        phase_transitions = [
+            transition for transition in transitions if transition.current_state in states
+        ]
+        artifact_proves_phase = _artifact_proves_phase(name, artifacts)
+        job_proves_phase = _job_proves_phase(name, jobs)
+        if current_state in states or current_state == name:
+            status_value = "current"
+        elif (
+            phase_transitions
+            or artifact_proves_phase
+            or job_proves_phase
+            or index < current_index
+        ):
+            status_value = "executed"
+        else:
+            status_value = "remaining"
+        phases.append(
+            {
+                "name": name,
+                "status": status_value,
+                "states": sorted(states),
+                "transition_count": len(phase_transitions),
+                "last_transition_at": (
+                    None if not phase_transitions else phase_transitions[-1].occurred_at
+                ),
+                "details": [transition.reason for transition in phase_transitions[-3:]],
+            }
+        )
+    remaining_count = sum(1 for phase in phases if phase["status"] == "remaining")
+    problem_jobs = unresolved_problem_jobs(jobs)
+    project_type = _project_type(project)
+    specialist_agents = _specialist_agents(project_type)
+    economic_effects = _economic_effects(jobs, runs, artifacts, work_packages, phases)
+    return {
+        "project": ProjectResponse.model_validate(project).model_dump(mode="json"),
+        "workflow": None
+        if workflow is None
+        else {
+            "id": workflow.id,
+            "state": workflow.state,
+            "current_step": workflow.current_step,
+            "recommended_operator_action": workflow.recommended_operator_action,
+            "started_at": workflow.started_at,
+            "completed_at": workflow.completed_at,
+        },
+        "project_phase": current_phase,
+        "project_status_phase": fallback_current_phase,
+        "phases": phases,
+        "executed_steps": [transition.current_state for transition in transitions],
+        "remaining_steps": [
+            phase["name"] for phase in phases if phase["status"] == "remaining"
+        ],
+        "estimate": {
+            "remaining_phase_count": remaining_count,
+            "estimated_minutes_remaining": remaining_count * 30,
+            "basis": "Local heuristic until historical duration telemetry is available.",
+        },
+        "operating_state": {
+            "degraded": workflow is None,
+            "reason": None
+            if workflow is not None
+            else "Workflow tracking is not linked to this project.",
+            "recommended_action": None
+            if workflow is not None
+            else "Start or relink the workflow before treating inferred phases as live execution.",
+        },
+        "telemetry": _telemetry(workflow, jobs, runs, artifacts, work_packages, phases),
+        "calibration": _calibration(project, workflow, jobs, artifacts, phases),
+        "errors": [
+            _classified_error(job)
+            for job in problem_jobs
+        ],
+        "improvements": _improvements(problem_jobs, workflow, phases),
+        "economic_effects": economic_effects,
+        "reuse": {
+            "repository_path": project.repository_path,
+            "artifact_count": len(artifacts),
+            "work_package_count": len(work_packages),
+            "artifact_types": sorted({artifact.artifact_type for artifact in artifacts}),
+            "template": _reusable_template(project, project_type),
+        },
+        "specialist_agents": specialist_agents,
+        "blueprints": _blueprints(
+            project, project_type, phases, specialist_agents, economic_effects
+        ),
+        "crew": [
+            {
+                "crew_name": run.crew_name,
+                "status": run.status,
+                "created_at": run.created_at,
+                "error_message": run.error_message,
+            }
+            for run in runs
+        ],
+        "jobs": [
+            {
+                "id": job.id,
+                "job_type": job.job_type,
+                "status": job.status,
+                "attempt_count": job.attempt_count,
+                "last_error": job.last_error,
+            }
+            for job in jobs
+        ],
+        "life": {
+            "known_states": sorted(seen_states),
+            "transition_count": len(transitions),
+            "job_count": len(jobs),
+        },
+    }
+
+
+def _project_type(project: ProjectModel) -> str:
+    manifest = project.manifest if isinstance(project.manifest, dict) else {}
+    manifest_type = manifest.get("project_type") or manifest.get("factory_type")
+    if isinstance(manifest_type, str) and manifest_type:
+        return manifest_type
+    description = project.description.lower()
+    if "dashboard" in description or "report" in description:
+        return "dashboards_reporting"
+    if "portal" in description or "web" in description or "mobile" in description:
+        return "web_mobile_app_development"
+    if "api" in description or "integration" in description:
+        return "api_integration_development"
+    return "ai_software_development"
+
+
+def _telemetry(
+    workflow: WorkflowInstanceModel | None,
+    jobs: list[JobModel],
+    runs: list[CrewRunModel],
+    artifacts: list[ArtifactModel],
+    work_packages: list[WorkPackageModel],
+    phases: list[dict[str, object]],
+) -> dict[str, object]:
+    problem_count = len(unresolved_problem_jobs(jobs))
+    completed_phases = sum(1 for phase in phases if phase["status"] == "executed")
+    total_phases = len(phases)
+    return {
+        "always_active": True,
+        "workflow_state": None if workflow is None else workflow.state,
+        "phase_completion_percent": 0
+        if total_phases == 0
+        else round((completed_phases / total_phases) * 100, 1),
+        "job_count": len(jobs),
+        "problem_count": problem_count,
+        "crew_run_count": len(runs),
+        "artifact_count": len(artifacts),
+        "work_package_count": len(work_packages),
+        "signal": "attention_required" if problem_count else "nominal",
+    }
+
+
+def _economic_effects(
+    jobs: list[JobModel],
+    runs: list[CrewRunModel],
+    artifacts: list[ArtifactModel],
+    work_packages: list[WorkPackageModel],
+    phases: list[dict[str, object]],
+) -> dict[str, object]:
+    completed_phase_count = sum(1 for phase in phases if phase["status"] == "executed")
+    current_phase_count = sum(1 for phase in phases if phase["status"] == "current")
+    problem_count = len(unresolved_problem_jobs(jobs))
+    reusable_asset_count = len(artifacts) + len(work_packages)
+    automation_units = len(runs) + sum(1 for job in jobs if job.status == "succeeded")
+    return {
+        "viability": "attention_required" if problem_count else "viable",
+        "automation_units_completed": automation_units,
+        "estimated_manual_hours_avoided": round(
+            (completed_phase_count + current_phase_count) * 4.0, 1
+        ),
+        "reusable_asset_count": reusable_asset_count,
+        "reuse_multiplier": round(1.0 + reusable_asset_count * 0.08, 2),
+        "risk_items_prevented_or_exposed": problem_count
+        + sum(1 for phase in phases if phase["status"] == "current"),
+        "economic_basis": (
+            "Heuristic proof signal from phases, jobs, crew runs, artifacts, and reusable work "
+            "packages until calibrated business metrics are collected."
+        ),
+    }
+
+
+def _calibration(
+    project: ProjectModel,
+    workflow: WorkflowInstanceModel | None,
+    jobs: list[JobModel],
+    artifacts: list[ArtifactModel],
+    phases: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "name": "manifest_integrity",
+            "status": "passed" if project.manifest_hash else "attention",
+            "detail": "Project manifest hash is available.",
+        },
+        {
+            "name": "workflow_tracking",
+            "status": "passed" if workflow is not None else "attention",
+            "detail": "Workflow instance is linked to the project.",
+        },
+        {
+            "name": "error_followup",
+            "status": "attention"
+            if unresolved_problem_jobs(jobs)
+            else "passed",
+            "detail": (
+                "Unresolved failed work is visible in project intelligence. Reviewed historical "
+                "failures remain evidence, not active risk."
+            ),
+        },
+        {
+            "name": "reuse_capture",
+            "status": "passed" if artifacts else "attention",
+            "detail": "Artifacts and work packages become reusable project template material.",
+        },
+        {
+            "name": "phase_alignment",
+            "status": "passed"
+            if any(phase["status"] == "current" for phase in phases)
+            else "attention",
+            "detail": "The graph can identify a current execution phase.",
+        },
+    ]
+
+
+def _improvements(
+    problem_jobs: list[JobModel],
+    workflow: WorkflowInstanceModel | None,
+    phases: list[dict[str, object]],
+) -> list[dict[str, str]]:
+    improvements = []
+    for job in problem_jobs[:5]:
+        improvements.append(
+            {
+                "source": job.job_type,
+                "recommendation": _job_recommendation(job),
+                "status": "proposed",
+            }
+        )
+    if workflow is None:
+        improvements.append(
+            {
+                "source": "workflow_tracking",
+                "recommendation": (
+                    "Start or relink the workflow so every phase has live transition history."
+                ),
+                "status": "proposed",
+            }
+        )
+    if not any(phase["status"] == "current" for phase in phases):
+        improvements.append(
+            {
+                "source": "phase_alignment",
+                "recommendation": (
+                    "Calibrate project status and artifacts so the execution graph has a current "
+                    "phase."
+                ),
+                "status": "proposed",
+            }
+        )
+    if not improvements:
+        improvements.append(
+            {
+                "source": "telemetry",
+                "recommendation": (
+                    "Continue collecting telemetry and promote completed artifacts into templates."
+                ),
+                "status": "active",
+            }
+        )
+    return improvements
+
+
+def _classified_error(job: JobModel) -> dict[str, object]:
+    error = (job.last_error or "").lower()
+    if "invalid json" in error:
+        explanation = "A generated response did not match the required JSON contract."
+        likely_cause = "Model output formatting or schema repair failed."
+    elif "result.json" in error:
+        explanation = "The execution container did not return the expected result artifact."
+        likely_cause = "Artifact capture or execution-result contract failed."
+    elif "head" in error or "not a git repository" in error:
+        explanation = "The repository is not prepared for workflow execution."
+        likely_cause = "The project path may be missing a valid Git branch or initial commit."
+    elif job.status == "dead_letter":
+        explanation = "The job exhausted retry handling and needs recovery attention."
+        likely_cause = "Repeated failure exceeded the configured retry policy."
+    else:
+        explanation = "A worker job failed and needs operator review."
+        likely_cause = "The exact cause needs diagnostic inspection."
+    return {
+        "job_id": job.id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "failure_class": job.last_failure_class,
+        "explanation": explanation,
+        "likely_cause": likely_cause,
+        "next_action": _job_recommendation(job),
+        "raw_diagnostic": job.last_error,
+    }
+
+
+def _job_recommendation(job: JobModel) -> str:
+    error = (job.last_error or "").lower()
+    if "invalid json" in error:
+        return (
+            "Tighten model output schema repair and add a deterministic fallback for this crew "
+            "step."
+        )
+    if "result.json" in error:
+        return (
+            "Inspect execution container artifact capture and enforce result contract before retry."
+        )
+    if job.status == "dead_letter":
+        return (
+            "Create a recovery work package from the dead-letter job and preserve the failure as "
+            "training evidence."
+        )
+    return "Review job attempts, capture root cause, and convert the fix into a reusable checklist."
+
+
+def _reusable_template(project: ProjectModel, project_type: str) -> dict[str, object]:
+    return {
+        "template_key": f"{project_type}.{project.name.lower().replace(' ', '_')}",
+        "project_type": project_type,
+        "default_branch": project.default_branch,
+        "repository_root": project.repository_path,
+        "manifest_hash": project.manifest_hash,
+        "future_use": (
+            "Can seed future manifesto projects with the same type, agents, phases, and checks."
+        ),
+    }
+
+
+def _blueprints(
+    project: ProjectModel,
+    project_type: str,
+    phases: list[dict[str, object]],
+    specialist_agents: list[dict[str, str]],
+    economic_effects: dict[str, object],
+) -> list[dict[str, object]]:
+    phase_names = [str(phase["name"]) for phase in phases]
+    agent_keys = [agent["agent_key"] for agent in specialist_agents]
+    return [
+        {
+            "blueprint_key": f"{project_type}.delivery_workflow",
+            "title": "Reusable delivery workflow",
+            "kind": "workflow_pattern",
+            "reusable_for": project_type,
+            "pattern": {
+                "phases": phase_names,
+                "approval_gates": ["requirements", "architecture", "work_package"],
+                "telemetry_required": True,
+                "calibration_required": True,
+            },
+            "proof": {
+                "source_project_id": str(project.id),
+                "economic_viability": economic_effects["viability"],
+            },
+        },
+        {
+            "blueprint_key": f"{project_type}.specialist_crew",
+            "title": "Specialist crew pattern",
+            "kind": "agent_team_pattern",
+            "reusable_for": project_type,
+            "pattern": {
+                "agents": agent_keys,
+                "coordination": "manifesto_to_workflow_to_verified_artifacts",
+                "mistake_prevention": ["availability", "calibration", "review", "telemetry"],
+            },
+            "proof": {
+                "source_project_id": str(project.id),
+                "agent_count": len(agent_keys),
+            },
+        },
+        {
+            "blueprint_key": f"{project_type}.economic_proof",
+            "title": "Economic proof pattern",
+            "kind": "business_effect_pattern",
+            "reusable_for": project_type,
+            "pattern": {
+                "signals": [
+                    "manual_hours_avoided",
+                    "reuse_multiplier",
+                    "risk_items_prevented_or_exposed",
+                    "automation_units_completed",
+                ],
+                "proof_method": "telemetry_plus_artifacts_plus_jobs",
+            },
+            "proof": economic_effects,
+        },
+    ]
+
+
+def _specialist_agents(project_type: str) -> list[dict[str, str]]:
+    base_agents = [
+        (
+            "requirements_agent",
+            "requirements",
+            "Extracts objectives, constraints, and acceptance criteria.",
+        ),
+        (
+            "architecture_agent",
+            "architecture",
+            "Creates structure, interfaces, risks, and technical plan.",
+        ),
+        ("implementation_agent", "implementation", "Builds scoped work packages and code changes."),
+        ("test_agent", "verification", "Runs tests, evidence checks, and regression verification."),
+        (
+            "review_agent",
+            "review",
+            "Reviews patches, security, correctness, and integration readiness.",
+        ),
+        (
+            "integration_agent",
+            "integration",
+            "Integrates approved changes and watches recovery signals.",
+        ),
+        (
+            "evolution_agent",
+            "evolution",
+            "Turns telemetry and errors into improvements and templates.",
+        ),
+    ]
+    specialists = {
+        "dashboards_reporting": (
+            "dashboard_agent",
+            "analytics",
+            "Designs operational dashboards, indicators, and reporting views.",
+        ),
+        "devops_infrastructure": (
+            "infrastructure_agent",
+            "infrastructure",
+            "Plans deployment, runtime, observability, and cloud automation.",
+        ),
+        "api_integration_development": (
+            "integration_design_agent",
+            "api",
+            "Designs API contracts, integrations, idempotency, and compatibility checks.",
+        ),
+        "web_mobile_app_development": (
+            "experience_agent",
+            "frontend",
+            "Designs user journeys, screens, and interaction quality.",
+        ),
+    }
+    agents = list(base_agents)
+    if project_type in specialists:
+        agents.insert(2, specialists[project_type])
+    return [
+        {"agent_key": key, "specialty": specialty, "mission": mission, "status": "ready"}
+        for key, specialty, mission in agents
+    ]
+
+
+def _phase_from_project_status(status: str) -> str:
+    status_value = str(status)
+    if status_value in {"created", "draft"}:
+        return "intake"
+    if status_value.startswith("requirements") or "requirements" in status_value:
+        return "requirements"
+    if status_value.startswith("architecture") or "architecture" in status_value:
+        return "architecture"
+    if status_value.startswith("work_package") or "work_package" in status_value:
+        if status_value == "work_package_approved":
+            return "execution"
+        return "planning"
+    return "requirements"
+
+
+def _phase_from_workflow_state(state: str | None) -> str | None:
+    if state is None:
+        return None
+    state_value = str(state)
+    if state_value in {"created", "draft", "intake"}:
+        return "intake"
+    if "requirements" in state_value:
+        return "requirements"
+    if "architecture" in state_value:
+        return "architecture"
+    if "work_package" in state_value or "planning" in state_value:
+        return "planning"
+    if "execution" in state_value:
+        return "execution"
+    if "patch_review" in state_value or "review" in state_value:
+        return "patch_review"
+    if "integration" in state_value or "integrating" in state_value:
+        return "integration"
+    if state_value == "completed":
+        return "completed"
+    return None
+
+
+def _artifact_proves_phase(name: str, artifacts: list[ArtifactModel]) -> bool:
+    artifact_types = {artifact.artifact_type for artifact in artifacts}
+    return (
+        name == "requirements"
+        and "requirements_specification" in artifact_types
+        or name == "architecture"
+        and "architecture_specification" in artifact_types
+        or name == "planning"
+        and "work_package" in artifact_types
+        or name == "execution"
+        and "execution-log" in artifact_types
+        or name == "patch_review"
+        and "patch-review-report" in artifact_types
+    )
+
+
+def _job_proves_phase(name: str, jobs: list[JobModel]) -> bool:
+    succeeded_types = {job.job_type for job in jobs if job.status == "succeeded"}
+    return (
+        name == "planning"
+        and "plan_work_package" in succeeded_types
+        or name == "execution"
+        and "execute_work_package" in succeeded_types
+        or name == "patch_review"
+        and "review_candidate_patch" in succeeded_types
+        or name == "integration"
+        and "integrate_approved_patch" in succeeded_types
+    )
 
 
 @router.post(
@@ -50,6 +684,8 @@ async def create_project(
         repository_url=request.repository_url,
         default_branch=request.default_branch,
         actor_id="local-user",
+        manifest=request.manifest,
+        project_type=request.project_type,
     )
 
     return ProjectResponse.model_validate(project)

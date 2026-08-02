@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -15,11 +16,38 @@ REQUIRED_PATHS = (
     "apps",
     "apps/api/src",
     "apps/api/tests",
+    "docs/architecture",
     "migrations/versions",
+    "docs",
     "docs/etra",
     "docs/adrs",
+    "docs/reference-architecture",
     "docs/runbooks",
     "tools",
+)
+ARCHITECTURE_FILES = (
+    "README.md",
+    "views.md",
+    "domain-model.md",
+    "context-map.md",
+    "agent-catalog.md",
+    "crew-catalog.md",
+    "workflow-catalog.md",
+    "module-catalog.md",
+    "mvp-vertical-slice.md",
+    "application-kernel.md",
+    "security-governance.md",
+    "project-formation-orchestration.md",
+    "query-platform.md",
+    "model-prompt-governance.md",
+)
+DOCS_INDEX_LINKS = (
+    "enterprise/README.md",
+    "architecture/README.md",
+    "reference-architecture/README.md",
+    "etra/README.md",
+    "adrs/README.md",
+    "runbooks/service-operations.md",
 )
 STANDARD_FILES = (
     "README.md",
@@ -57,6 +85,45 @@ ADR_SECTIONS = (
     "Observability and operational implications",
     "Verification and rollback",
     "References",
+)
+CONTRACT_SECTIONS = (
+    "Purpose",
+    "Responsibilities",
+    "Scope",
+    "Non-Scope",
+    "Viewpoints",
+    "Data Model",
+    "Interfaces",
+    "Dependencies",
+    "Internal Components",
+    "Workflow",
+    "Implementation Plan",
+    "Testing",
+    "Security",
+    "Observability",
+    "Future Evolution",
+    "References",
+)
+FULL_CONTRACT_STATUSES = ("active", "accepted")
+REFERENCE_CATALOG_REQUIRED_KEYS = (
+    "schema_version",
+    "title",
+    "chapter_contract",
+    "required_viewpoints",
+    "sections",
+)
+DOC_STUB_MARKERS = (
+    "will own",
+    "will explain",
+    "will describe",
+    "TODO",
+    "TBD",
+)
+DOC_LINK_ROOTS = (
+    "docs/README.md",
+    "docs/architecture",
+    "docs/reference-architecture",
+    "docs/adrs",
 )
 FORBIDDEN_DOMAIN_IMPORTS = (
     "fastapi",
@@ -204,6 +271,43 @@ def _has_exact_env_ignore(lines: list[str]) -> bool:
     return bool({".env", "/.env"} & rules)
 
 
+def _markdown_has_section(text: str, section: str) -> bool:
+    return f"## {section}" in text or f"## {section.capitalize()}" in text
+
+
+def _is_adr_file(path: Path) -> bool:
+    return path.name[:4].isdigit() and path.name[4] == "-" and path.suffix == ".md"
+
+
+def _adr_number(path: Path) -> int:
+    return int(path.name[:4])
+
+
+def _documentation_link_paths(root: Path) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for relative in DOC_LINK_ROOTS:
+        path = root / relative
+        if path.is_file():
+            paths.append(path)
+        elif path.is_dir():
+            paths.extend(sorted(path.rglob("*.md")))
+    return tuple(dict.fromkeys(paths))
+
+
+def _local_markdown_links(text: str) -> tuple[str, ...]:
+    links: list[str] = []
+    for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+        if (
+            not target
+            or target.startswith("#")
+            or "://" in target
+            or target.startswith("mailto:")
+        ):
+            continue
+        links.append(target.split("#", 1)[0])
+    return tuple(links)
+
+
 def validate(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -217,6 +321,149 @@ def validate(root: Path) -> Report:
             )
 
     standards = root / "docs" / "etra"
+    docs_index = root / "docs" / "README.md"
+    docs_index_text = (
+        docs_index.read_text(encoding="utf-8") if docs_index.is_file() else ""
+    )
+    checks += 1
+    if len(docs_index_text.strip()) < 300:
+        findings.append(
+            Finding(
+                "documentation-index",
+                "docs/README.md",
+                "main documentation index is absent or too small",
+            )
+        )
+    for link in DOCS_INDEX_LINKS:
+        checks += 1
+        if link not in docs_index_text:
+            findings.append(
+                Finding(
+                    "documentation-index",
+                    "docs/README.md",
+                    f"missing required link: {link}",
+                )
+            )
+
+    architecture_root = root / "docs" / "architecture"
+    for name in ARCHITECTURE_FILES:
+        checks += 1
+        path = architecture_root / name
+        if not path.is_file() or len(path.read_text(encoding="utf-8").strip()) < 300:
+            findings.append(
+                Finding(
+                    "architecture-knowledge-base",
+                    str(path.relative_to(root)),
+                    "architecture document is absent or too small",
+                )
+            )
+
+    reference_catalog = root / "docs" / "reference-architecture" / "catalog.json"
+    checks += 1
+    try:
+        catalog = json.loads(reference_catalog.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        catalog = {}
+        findings.append(
+            Finding(
+                "reference-catalog",
+                "docs/reference-architecture/catalog.json",
+                f"catalog is absent or invalid: {exc}",
+            )
+        )
+    for key in REFERENCE_CATALOG_REQUIRED_KEYS:
+        checks += 1
+        if key not in catalog:
+            findings.append(
+                Finding(
+                    "reference-catalog",
+                    "docs/reference-architecture/catalog.json",
+                    f"missing key: {key}",
+                )
+            )
+    for section in catalog.get("sections", []) if isinstance(catalog, dict) else []:
+        checks += 1
+        section_path = section.get("path") if isinstance(section, dict) else None
+        if not isinstance(section_path, str) or not section_path:
+            findings.append(
+                Finding(
+                    "reference-catalog",
+                    "docs/reference-architecture/catalog.json",
+                    "section missing path",
+                )
+            )
+            continue
+        resolved = root / "docs" / "reference-architecture" / section_path
+        if not resolved.is_file():
+            findings.append(
+                Finding(
+                    "reference-catalog",
+                    str(resolved.relative_to(root)),
+                    "catalog path does not exist",
+                )
+            )
+            continue
+        text = resolved.read_text(encoding="utf-8")
+        checks += 1
+        if len(text.strip()) < 600:
+            findings.append(
+                Finding(
+                    "reference-chapter",
+                    str(resolved.relative_to(root)),
+                    "reference chapter is too small for professional use",
+                )
+            )
+        lowered = text.lower()
+        for marker in DOC_STUB_MARKERS:
+            checks += 1
+            if marker.lower() in lowered:
+                findings.append(
+                    Finding(
+                        "reference-chapter",
+                        str(resolved.relative_to(root)),
+                        f"placeholder marker remains: {marker}",
+                    )
+                )
+        status = section.get("status") if isinstance(section, dict) else None
+        if status in FULL_CONTRACT_STATUSES:
+            for heading in CONTRACT_SECTIONS:
+                checks += 1
+                if f"## {heading}" not in text:
+                    findings.append(
+                        Finding(
+                            "reference-chapter-contract",
+                            str(resolved.relative_to(root)),
+                            f"active chapter missing section: {heading}",
+                        )
+                    )
+
+    for path in _documentation_link_paths(root):
+        text = path.read_text(encoding="utf-8")
+        for target in _local_markdown_links(text):
+            checks += 1
+            if not target:
+                continue
+            resolved = (path.parent / target).resolve()
+            try:
+                resolved.relative_to(root)
+            except ValueError:
+                findings.append(
+                    Finding(
+                        "documentation-link",
+                        str(path.relative_to(root)),
+                        f"link escapes repository: {target}",
+                    )
+                )
+                continue
+            if not resolved.exists():
+                findings.append(
+                    Finding(
+                        "documentation-link",
+                        str(path.relative_to(root)),
+                        f"missing target: {target}",
+                    )
+                )
+
     for name in STANDARD_FILES:
         checks += 1
         path = standards / name
@@ -239,6 +486,55 @@ def validate(root: Path) -> Report:
                     Finding(
                         "adr-template",
                         str(adr_template.relative_to(root)),
+                        f"missing section: {section}",
+                    )
+                )
+
+    adr_paths = sorted((root / "docs" / "adrs").glob("*.md"))
+    numbered_adr_paths = [path for path in adr_paths if _is_adr_file(path)]
+    numbers = [_adr_number(path) for path in numbered_adr_paths]
+    checks += 1
+    if numbers and numbers != list(range(min(numbers), max(numbers) + 1)):
+        findings.append(
+            Finding(
+                "adr-sequence",
+                "docs/adrs",
+                "ADR numbers must be contiguous with no gaps",
+            )
+        )
+    adr_index = root / "docs" / "adrs" / "README.md"
+    adr_index_text = adr_index.read_text(encoding="utf-8") if adr_index.is_file() else ""
+    for path in numbered_adr_paths:
+        checks += 1
+        if path.name not in adr_index_text:
+            findings.append(
+                Finding(
+                    "adr-index",
+                    "docs/adrs/README.md",
+                    f"ADR is not listed: {path.name}",
+                )
+            )
+    for path in numbered_adr_paths:
+        if not _is_adr_file(path):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for metadata in ("- Status:", "- Date:", "- Owners:"):
+            checks += 1
+            if metadata not in text:
+                findings.append(
+                    Finding(
+                        "adr-record",
+                        str(path.relative_to(root)),
+                        f"missing metadata: {metadata}",
+                    )
+                )
+        for section in ADR_SECTIONS:
+            checks += 1
+            if not _markdown_has_section(text, section):
+                findings.append(
+                    Finding(
+                        "adr-record",
+                        str(path.relative_to(root)),
                         f"missing section: {section}",
                     )
                 )

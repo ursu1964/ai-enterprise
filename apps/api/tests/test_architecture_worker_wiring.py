@@ -9,6 +9,8 @@ from ai_enterprise.infrastructure.architecture.provider_factory import (
     ArchitectureProviderConfig,
     architecture_provider_ready,
 )
+from ai_enterprise.infrastructure.crews.architecture_crew import ArchitectureCrewRunner
+from ai_enterprise.infrastructure.crews.work_package_crew import WorkPackageCrewRunner
 from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.jobs.dispatcher import JobDispatcher
 
@@ -43,3 +45,35 @@ async def test_scripted_provider_is_ready_without_network() -> None:
     assert not await architecture_provider_ready(
         ArchitectureProviderConfig(provider="unsupported")
     )
+
+
+def test_scripted_architecture_runner_produces_offline_evidence() -> None:
+    result = ArchitectureCrewRunner(Settings(architecture_provider="scripted")).run(
+        project_name="Factory Demo",
+        project_description="Create governed project proof.",
+        project_manifest_hash="m" * 64,
+        requirements_markdown="# Requirements\n\n- FR-001: Preserve evidence.",
+        requirements_artifact_hash="r" * 64,
+    )
+
+    assert "Architecture - Factory Demo" in result.markdown
+    assert "FR-001" in result.markdown
+
+
+def test_scripted_work_package_runner_produces_valid_contract_json() -> None:
+    result = WorkPackageCrewRunner(Settings(architecture_provider="scripted")).run(
+        project_id=str(uuid.uuid4()),
+        project_name="Factory Demo",
+        project_description="Create governed project proof.",
+        base_commit_sha="a" * 40,
+        requirements_artifact_id=str(uuid.uuid4()),
+        requirements_hash="r" * 64,
+        requirements_markdown="# Requirements",
+        architecture_artifact_id=str(uuid.uuid4()),
+        architecture_hash="c" * 64,
+        architecture_markdown="# Architecture",
+        tracked_files=[".ai-enterprise-initialized"],
+    )
+
+    assert "Document governed factory start" in result.raw_json
+    assert ".ai-enterprise-initialized" in result.raw_json
