@@ -200,10 +200,12 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["totals"]["online_workers"] == 1
     assert response["projects"][0]["phase"] == "requirements"
     assert response["projects"][0]["state_meaning"]["label"] == "Active"
+    assert response["projects"][0]["status_label"] == "Ready to start"
     assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
     assert response["projects"][0]["tasks"]["done"] == 1
     assert response["projects"][0]["tasks"]["active"] == 1
     assert response["projects"][0]["crews"][0]["name"] == "run requirements crew"
+    assert response["projects"][0]["crews"][0]["status_label"] == "Waiting for worker capacity"
     assert response["projects"][0]["recent_events"][0]["event_type"] == "ManifestoIngested"
     assert response["sections"]["projects"]["available"] is True
     assert response["sections"]["projects"]["record_count"] == 1
@@ -213,6 +215,7 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     )
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "assigns" for edge in response["graph"]["edges"])
+    assert all("status_label" in node for node in response["graph"]["nodes"])
 
 
 @pytest.mark.asyncio
@@ -267,6 +270,34 @@ async def test_operating_picture_excludes_acknowledged_dead_letters_from_current
     assert response["counts"]["unresolved_problem_jobs"] == 0
     assert response["counts"]["acknowledged_problem_jobs"] == 1
     assert response["status_counts"]["job_resolution"] == {"acknowledged": 1}
+
+
+@pytest.mark.asyncio
+async def test_operating_picture_graph_exposes_friendly_status_labels() -> None:
+    now = datetime.now(UTC)
+    row = project(now)
+    rows = [
+        [row],
+        [workflow(now, row.id)],
+        [job(now, row.id, "dead_letter")],
+        [worker(now)],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    ]
+
+    response = await operating_picture(QuerySession(rows), actor())  # type: ignore[arg-type]
+
+    job_node = next(node for node in response["graph"]["nodes"] if node["kind"] == "job")
+    assert job_node["status"] == "dead_letter"
+    assert job_node["status_label"] == "Reviewed failure or recovery needed"
+    assert "dead_letter" not in job_node["human_summary"]
+    assert job_node["status_meaning"]["operator_action"]
 
 
 @pytest.mark.asyncio
