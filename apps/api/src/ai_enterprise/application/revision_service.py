@@ -3,13 +3,13 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.enums import JobType
 from ai_enterprise.domain.execution.enums import ExecutionStatus
 from ai_enterprise.domain.execution.lineage import RevisionLineagePolicy
 from ai_enterprise.domain.integration.enums import PatchStatus
 from ai_enterprise.domain.integration.exceptions import RevisionLineageError
 from ai_enterprise.infrastructure.database.models import (
-    AuditEventModel,
     ExecutionRunModel,
     ExecutionRunRevisionFindingModel,
     PatchReviewFindingModel,
@@ -104,21 +104,18 @@ class RevisionAttemptService:
             priority=100,
             max_attempts=1,
         )
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=run.project_id,
-                event_type="execution.revision_attempt_created",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "execution_run_id": str(run.id),
-                    "parent_execution_run_id": str(parent.id),
-                    "root_execution_run_id": str(lineage.root_attempt_id),
-                    "review_id": str(review.id),
-                    "finding_ids": [str(item.id) for item in findings],
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=run.project_id,
+            event_type="execution.revision_attempt_created",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "execution_run_id": str(run.id),
+                "parent_execution_run_id": str(parent.id),
+                "root_execution_run_id": str(lineage.root_attempt_id),
+                "review_id": str(review.id),
+                "finding_ids": [str(item.id) for item in findings],
+            },
         )
         await self._session.commit()
         await self._session.refresh(run)

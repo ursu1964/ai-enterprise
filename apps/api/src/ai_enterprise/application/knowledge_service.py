@@ -6,12 +6,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentRuntimeSessionModel,
     SkillVersionModel,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.knowledge.models import (
     KnowledgeCandidateEvidenceModel,
     KnowledgeCandidateModel,
@@ -54,15 +54,16 @@ class KnowledgeService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(self, event: str, project_id: uuid.UUID | None, payload: dict[str, Any]) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=project_id,
-                event_type=event,
-                actor_type="knowledge-system",
-                actor_id="governed-knowledge",
-                payload=payload,
-            )
+    async def _audit(
+        self, event: str, project_id: uuid.UUID | None, payload: dict[str, Any]
+    ) -> None:
+        await AuditWriter(self.session).append_event(
+            stream_id=f"project:{project_id}" if project_id else "knowledge:platform",
+            project_id=project_id,
+            event_type=event,
+            actor_type="knowledge-system",
+            actor_id="governed-knowledge",
+            payload=payload,
         )
 
     async def register_source(
@@ -98,7 +99,7 @@ class KnowledgeService:
             occurred_at=occurred_at,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "KnowledgeSourceRegistered",
             project_id,
             {"source_id": str(row.id), "source_hash": source_hash},
@@ -169,7 +170,7 @@ class KnowledgeService:
                     )
                 )
             rows.append(row)
-        self._audit(
+        await self._audit(
             "KnowledgeCandidatesExtracted",
             source.project_id,
             {
@@ -293,7 +294,7 @@ class KnowledgeService:
             )
         )
         candidate.status = "promoted"
-        self._audit(
+        await self._audit(
             "KnowledgeCandidatePromoted",
             candidate.scope_id if candidate.scope_type == "project" else None,
             {

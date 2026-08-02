@@ -29,8 +29,26 @@ class AuditWriter:
         actor_id: str,
         payload: dict[str, Any],
     ) -> AuditWriteResult:
+        return await self.append_event(
+            stream_id=f"project:{project_id}",
+            project_id=project_id,
+            event_type=event_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
+        )
+
+    async def append_event(
+        self,
+        *,
+        stream_id: str,
+        project_id: uuid.UUID | None,
+        event_type: str,
+        actor_type: str,
+        actor_id: str,
+        payload: dict[str, Any],
+    ) -> AuditWriteResult:
         event_id = uuid.uuid4()
-        stream_id = f"project:{project_id}"
         previous = await self._session.scalar(
             select(AuditChainRecordModel)
             .where(AuditChainRecordModel.stream_id == stream_id)
@@ -43,7 +61,7 @@ class AuditWriter:
         event_payload = dict(payload)
         chain_payload = {
             "audit_event_id": str(event_id),
-            "project_id": str(project_id),
+            "project_id": str(project_id) if project_id is not None else None,
             "event_type": event_type,
             "actor_type": actor_type,
             "actor_id": actor_id,
@@ -82,6 +100,11 @@ class AuditWriter:
             signature_key_id=None,
             payload=chain_payload,
         )
-        self._session.add_all([event, chain_record])
-        await self._session.flush()
+        if hasattr(self._session, "add_all"):
+            self._session.add_all([event, chain_record])
+        else:
+            self._session.add(event)
+            self._session.add(chain_record)
+        if hasattr(self._session, "flush"):
+            await self._session.flush()
         return AuditWriteResult(event=event, chain_record=chain_record)

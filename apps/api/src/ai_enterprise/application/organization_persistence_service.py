@@ -8,7 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.infrastructure.database.models import AuditEventModel
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.infrastructure.organization.models import (
     AgentAssignmentModel,
     AgentProfileModel,
@@ -74,18 +74,24 @@ class OrganizationPersistenceService:
                 evidence=evidence,
             )
         )
-        self.session.add(
-            AuditEventModel(
-                project_id=evidence.get("project_id"),
-                event_type=event_type,
-                actor_type=actor.actor_type,
-                actor_id=actor.subject,
-                payload={
-                    "organization_id": str(organization_id) if organization_id else None,
-                    "correlation_id": str(correlation_id),
-                    "decision": decision,
-                },
-            )
+        project_id = evidence.get("project_id")
+        await AuditWriter(self.session).append_event(
+            stream_id=(
+                f"project:{project_id}"
+                if isinstance(project_id, uuid.UUID)
+                else f"organization:{organization_id}"
+                if organization_id is not None
+                else "organization:platform"
+            ),
+            project_id=project_id if isinstance(project_id, uuid.UUID) else None,
+            event_type=event_type,
+            actor_type=actor.actor_type,
+            actor_id=actor.subject,
+            payload={
+                "organization_id": str(organization_id) if organization_id else None,
+                "correlation_id": str(correlation_id),
+                "decision": decision,
+            },
         )
 
     async def create_organization(

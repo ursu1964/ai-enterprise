@@ -130,16 +130,67 @@ async def test_audit_writer_appends_read_event_and_chain_record() -> None:
     assert first.event.payload["audit_chain"]["sequence"] == 1
     assert second.event.payload["audit_chain"]["sequence"] == 2
     assert second.chain_record.previous_hash == first.chain_record.record_hash
-    assert verify_chain_records([
-        {
-            "stream_id": item.stream_id,
-            "sequence": item.sequence,
-            "previous_hash": item.previous_hash,
-            "record_hash": item.record_hash,
-            "payload": item.payload,
-        }
-        for item in session.records
-    ]) == []
+    assert (
+        verify_chain_records(
+            [
+                {
+                    "stream_id": item.stream_id,
+                    "sequence": item.sequence,
+                    "previous_hash": item.previous_hash,
+                    "record_hash": item.record_hash,
+                    "payload": item.payload,
+                }
+                for item in session.records
+            ]
+        )
+        == []
+    )
+
+
+@pytest.mark.asyncio
+async def test_audit_writer_appends_non_project_stream_event() -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.records = []
+            self.added = []
+
+        async def scalar(self, _statement: object) -> object | None:
+            return self.records[-1] if self.records else None
+
+        def add_all(self, values: list[object]) -> None:
+            self.added.extend(values)
+            self.records.append(values[1])
+
+        async def flush(self) -> None:
+            return None
+
+    session = FakeSession()
+    result = await AuditWriter(session).append_event(
+        stream_id="organization:alpha",
+        project_id=None,
+        event_type="OrganizationCreated",
+        actor_type="human",
+        actor_id="alice",
+        payload={"organization_id": "alpha"},
+    )
+
+    assert result.event.project_id is None
+    assert result.event.payload["audit_chain"]["stream_id"] == "organization:alpha"
+    assert result.chain_record.payload["project_id"] is None
+    assert (
+        verify_chain_records(
+            [
+                {
+                    "stream_id": result.chain_record.stream_id,
+                    "sequence": result.chain_record.sequence,
+                    "previous_hash": result.chain_record.previous_hash,
+                    "record_hash": result.chain_record.record_hash,
+                    "payload": result.chain_record.payload,
+                }
+            ]
+        )
+        == []
+    )
 
 
 def test_export_contains_checksums_and_root_hash() -> None:

@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.performance.models import (
@@ -45,21 +46,20 @@ class PerformanceIntegrationService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(
+    async def _audit(
         self,
         event_type: str,
         actor_id: str,
         project_id: uuid.UUID | None,
         payload: dict[str, Any],
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=project_id,
-                event_type=event_type,
-                actor_type="performance-governance",
-                actor_id=actor_id,
-                payload=payload,
-            )
+        await AuditWriter(self.session).append_event(
+            stream_id=f"project:{project_id}" if project_id else "performance:platform",
+            project_id=project_id,
+            event_type=event_type,
+            actor_type="performance-governance",
+            actor_id=actor_id,
+            payload=payload,
         )
 
     async def collect_evidence(
@@ -134,7 +134,7 @@ class PerformanceIntegrationService:
             source_audit_event_id=source_audit_event_id,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "PerformanceEvidenceCollected",
             "evidence-collector",
             project_id,
@@ -198,7 +198,7 @@ class PerformanceIntegrationService:
             calculated_at=now,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "PerformanceMetricDerived",
             actor_id,
             None,
@@ -258,7 +258,7 @@ class PerformanceIntegrationService:
             created_at=now,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "CapabilityCertificationRecommended",
             actor_id,
             None,
@@ -329,7 +329,7 @@ class PerformanceIntegrationService:
                 supersedes_id=previous.id if previous else None,
             )
             self.session.add(certificate)
-        self._audit(
+        await self._audit(
             "CapabilityCertificationBoardDecision",
             decided_by,
             None,
@@ -393,7 +393,7 @@ class PerformanceIntegrationService:
             created_at=now,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "OrganizationalLearningProposed",
             proposed_by,
             project_id,
@@ -421,7 +421,7 @@ class PerformanceIntegrationService:
         proposal.reviewed_by = reviewer
         proposal.review_rationale = rationale
         proposal.reviewed_at = now
-        self._audit(
+        await self._audit(
             "OrganizationalLearningReviewed",
             reviewer,
             proposal.project_id,
