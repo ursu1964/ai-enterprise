@@ -8,8 +8,11 @@ from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.contracts import RequirementsContract
 from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
 from ai_enterprise.domain.workflow.state_machine import (
+    AUTO_APPROVAL_TRANSITIONS,
     LEGAL_TRANSITIONS,
     IllegalWorkflowTransition,
+    WorkflowPhasePolicy,
+    WorkflowTransitionKind,
     require_transition,
 )
 from ai_enterprise.domain.workflow.step import StepResult, WorkflowStep
@@ -32,6 +35,32 @@ def test_state_machine_accepts_documented_graph_and_rejects_shortcuts() -> None:
 
     with pytest.raises(IllegalWorkflowTransition):
         require_transition(WorkflowState.PROJECT_CREATED, WorkflowState.INTEGRATING)
+
+
+def test_auto_approval_skips_are_explicit_policy_decisions() -> None:
+    policy = WorkflowPhasePolicy()
+    expected = {
+        (WorkflowState.REQUIREMENTS_RUNNING, WorkflowState.ARCHITECTURE_RUNNING),
+        (WorkflowState.ARCHITECTURE_RUNNING, WorkflowState.PLANNING_RUNNING),
+        (WorkflowState.PLANNING_RUNNING, WorkflowState.EXECUTION_RUNNING),
+    }
+
+    assert AUTO_APPROVAL_TRANSITIONS == expected
+    for previous, current in AUTO_APPROVAL_TRANSITIONS:
+        decision = policy.classify(previous, current)
+        assert decision.kind is WorkflowTransitionKind.VERSIONED_AUTO_APPROVAL
+        assert decision.requires_policy_evidence is True
+
+
+def test_terminal_and_failure_transitions_are_classified_fail_closed() -> None:
+    policy = WorkflowPhasePolicy()
+
+    failure = policy.classify(WorkflowState.EXECUTION_RUNNING, WorkflowState.FAILED)
+    cancellation = policy.classify(WorkflowState.EXECUTION_RUNNING, WorkflowState.CANCELLING)
+    assert failure.kind is WorkflowTransitionKind.FAILURE
+    assert cancellation.kind is WorkflowTransitionKind.CANCELLATION
+    with pytest.raises(IllegalWorkflowTransition):
+        policy.classify(WorkflowState.COMPLETED, WorkflowState.CANCELLING)
 
 
 def test_context_updates_are_immutable_and_hash_bound() -> None:

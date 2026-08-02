@@ -1,8 +1,35 @@
+from dataclasses import dataclass
+from enum import StrEnum
+
 from ai_enterprise.domain.workflow.enums import WorkflowState
 
 
 class IllegalWorkflowTransition(ValueError):
     pass
+
+
+class WorkflowTransitionKind(StrEnum):
+    STANDARD = "standard"
+    VERSIONED_AUTO_APPROVAL = "versioned_auto_approval"
+    FAILURE = "failure"
+    CANCELLATION = "cancellation"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowTransitionDecision:
+    previous: WorkflowState
+    current: WorkflowState
+    kind: WorkflowTransitionKind
+    requires_policy_evidence: bool = False
+
+
+AUTO_APPROVAL_TRANSITIONS: frozenset[tuple[WorkflowState, WorkflowState]] = frozenset(
+    {
+        (WorkflowState.REQUIREMENTS_RUNNING, WorkflowState.ARCHITECTURE_RUNNING),
+        (WorkflowState.ARCHITECTURE_RUNNING, WorkflowState.PLANNING_RUNNING),
+        (WorkflowState.PLANNING_RUNNING, WorkflowState.EXECUTION_RUNNING),
+    }
+)
 
 
 LEGAL_TRANSITIONS: dict[WorkflowState, frozenset[WorkflowState]] = {
@@ -53,14 +80,43 @@ LEGAL_TRANSITIONS: dict[WorkflowState, frozenset[WorkflowState]] = {
 }
 
 
-def require_transition(previous: WorkflowState, current: WorkflowState) -> None:
-    if current in {WorkflowState.CANCELLING, WorkflowState.FAILED} and previous not in {
-        WorkflowState.COMPLETED,
-        WorkflowState.CANCELLED,
-        WorkflowState.FAILED,
-    }:
-        return
-    if previous is WorkflowState.CANCELLING and current is WorkflowState.CANCELLED:
-        return
-    if current not in LEGAL_TRANSITIONS.get(previous, frozenset()):
+class WorkflowPhasePolicy:
+    def classify(
+        self, previous: WorkflowState, current: WorkflowState
+    ) -> WorkflowTransitionDecision:
+        if current is WorkflowState.CANCELLING and previous not in {
+            WorkflowState.COMPLETED,
+            WorkflowState.CANCELLED,
+            WorkflowState.FAILED,
+        }:
+            return WorkflowTransitionDecision(
+                previous,
+                current,
+                WorkflowTransitionKind.CANCELLATION,
+            )
+        if previous is WorkflowState.CANCELLING and current is WorkflowState.CANCELLED:
+            return WorkflowTransitionDecision(
+                previous,
+                current,
+                WorkflowTransitionKind.CANCELLATION,
+            )
+        if current is WorkflowState.FAILED and previous not in {
+            WorkflowState.COMPLETED,
+            WorkflowState.CANCELLED,
+            WorkflowState.FAILED,
+        }:
+            return WorkflowTransitionDecision(previous, current, WorkflowTransitionKind.FAILURE)
+        if (previous, current) in AUTO_APPROVAL_TRANSITIONS:
+            return WorkflowTransitionDecision(
+                previous,
+                current,
+                WorkflowTransitionKind.VERSIONED_AUTO_APPROVAL,
+                requires_policy_evidence=True,
+            )
+        if current in LEGAL_TRANSITIONS.get(previous, frozenset()):
+            return WorkflowTransitionDecision(previous, current, WorkflowTransitionKind.STANDARD)
         raise IllegalWorkflowTransition(f"Illegal workflow transition: {previous} -> {current}")
+
+
+def require_transition(previous: WorkflowState, current: WorkflowState) -> None:
+    WorkflowPhasePolicy().classify(previous, current)
