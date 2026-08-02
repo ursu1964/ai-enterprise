@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from ai_enterprise.api.project_formation_schemas import FormationRequest
+from ai_enterprise.application.mock_factory_autonomy import MockEnterpriseAutonomyService
 from ai_enterprise.application.project_formation_service import ProjectFormationService
 from ai_enterprise.domain.enums import ArtifactType, ProjectStatus
 from ai_enterprise.infrastructure.database.models import (
@@ -25,6 +26,18 @@ class FormationSession:
 
     def add_all(self, values: list[object]) -> None:
         self.added.extend(values)
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
+class PreviewSession:
+    def __init__(self, scalar_rows: list[object | None]) -> None:
+        self.scalar_rows = scalar_rows
+        self.committed = False
+
+    async def scalar(self, statement: object) -> object | None:
+        return self.scalar_rows.pop(0) if self.scalar_rows else None
 
     async def commit(self) -> None:
         self.committed = True
@@ -53,6 +66,30 @@ def test_project_formation_exposes_mock_factory_autonomy_route() -> None:
     assert "/api/v1/project-formation/mock-factory/start" in paths
     operation = paths["/api/v1/project-formation/mock-factory/start"]["post"]
     assert operation["responses"]["202"]["description"] == "Successful Response"
+    assert "/api/v1/project-formation/mock-factory/preview" in paths
+    preview = paths["/api/v1/project-formation/mock-factory/preview"]["get"]
+    assert preview["responses"]["200"]["description"] == "Successful Response"
+
+
+@pytest.mark.asyncio
+async def test_mock_factory_preview_reports_ready_reuse_without_writes() -> None:
+    existing = project(uuid.uuid4())
+    existing.name = "AI Enterprise Product Factory Demo"
+    existing.repository_path = "/home/user/projects/mock-enterprise/ai-enterprise-product-factory"
+    session = PreviewSession([existing, None, None, None])
+
+    response = await MockEnterpriseAutonomyService(  # type: ignore[arg-type]
+        session, object()
+    ).preview_mock_factory()
+
+    assert response.status == "ready"
+    assert response.ready_count == 4
+    assert response.reused_count == 1
+    assert response.blocked_count == 0
+    assert response.projects[0].action == "reuse"
+    assert response.projects[0].dashboard_url == f"/dashboard?project={existing.id}"
+    assert response.recommended_first_project == response.projects[0]
+    assert session.committed is False
 
 
 @pytest.mark.asyncio

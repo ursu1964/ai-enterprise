@@ -49,6 +49,38 @@ class MockFactoryProjectResponse(BaseModel):
     dashboard_url: str
 
 
+class MockFactoryPreviewProjectResponse(BaseModel):
+    name: str
+    project_type: str
+    repository_path: str
+    default_branch: str
+    action: str
+    ready: bool
+    missing_information: list[str]
+    operator_action: str
+    existing_project_id: uuid.UUID | None = None
+    dashboard_url: str | None = None
+
+
+class MockFactoryLaunchIssueResponse(BaseModel):
+    name: str
+    project_type: str
+    repository_path: str
+    status: str
+    issues: list[str]
+    operator_action: str
+
+
+class MockFactoryPreviewResponse(BaseModel):
+    status: str
+    human_summary: str
+    ready_count: int
+    reused_count: int
+    blocked_count: int
+    recommended_first_project: MockFactoryPreviewProjectResponse | None
+    projects: list[MockFactoryPreviewProjectResponse]
+
+
 class MockFactoryStartResponse(BaseModel):
     status: str
     human_summary: str
@@ -56,5 +88,15 @@ class MockFactoryStartResponse(BaseModel):
     reused_count: int
     formation_pack_count: int
     workflow_count: int
+    created_count: int = 0
+    blocked_count: int = 0
+    failed_count: int = 0
+    workflows_started: list[uuid.UUID] = Field(default_factory=list)
+    workflows_waiting: list[uuid.UUID] = Field(default_factory=list)
+    created: list[MockFactoryProjectResponse] = Field(default_factory=list)
+    reused: list[MockFactoryProjectResponse] = Field(default_factory=list)
+    blocked: list[MockFactoryLaunchIssueResponse] = Field(default_factory=list)
+    failed: list[MockFactoryLaunchIssueResponse] = Field(default_factory=list)
+    recommended_first_project: MockFactoryProjectResponse | None = None
     next_action: str
     projects: list[MockFactoryProjectResponse]

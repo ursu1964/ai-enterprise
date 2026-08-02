@@ -6,6 +6,7 @@ from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, S
 from ai_enterprise.api.project_formation_schemas import (
     FormationRequest,
     FormationResponse,
+    MockFactoryPreviewResponse,
     MockFactoryStartResponse,
 )
 from ai_enterprise.application.mock_factory_autonomy import MockEnterpriseAutonomyService
@@ -47,6 +48,16 @@ async def start_mock_factory(
     return await MockEnterpriseAutonomyService(session, settings).start_mock_factory(
         actor_id=actor.subject
     )
+
+
+@router.get("/mock-factory/preview", response_model=MockFactoryPreviewResponse)
+async def preview_mock_factory(
+    session: SessionDependency,
+    settings: SettingsDependency,
+    actor: ActorDependency,
+) -> MockFactoryPreviewResponse:
+    _require_human(actor)
+    return await MockEnterpriseAutonomyService(session, settings).preview_mock_factory()
 
 
 @router.post("/projects/{project_id}/packs", response_model=FormationResponse, status_code=201)

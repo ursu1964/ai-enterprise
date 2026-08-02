@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.api.project_formation_schemas import (
     FormationRequest,
+    MockFactoryLaunchIssueResponse,
+    MockFactoryPreviewProjectResponse,
+    MockFactoryPreviewResponse,
     MockFactoryProjectResponse,
     MockFactoryStartResponse,
 )
@@ -88,8 +91,7 @@ MOCK_FACTORY_SPECS: tuple[MockFactorySpec, ...] = (
         ),
         project_type="automated_testing",
         expected_outcome=(
-            "A live quality workflow that turns errors into fixes, tests, and reusable "
-            "guardrails."
+            "A live quality workflow that turns errors into fixes, tests, and reusable guardrails."
         ),
         target_users=["developer", "QA lead", "technical operator"],
         constraints=[
@@ -128,45 +130,116 @@ class MockEnterpriseAutonomyService:
         self._session = session
         self._settings = settings
 
+    async def preview_mock_factory(self) -> MockFactoryPreviewResponse:
+        projects: list[MockFactoryPreviewProjectResponse] = []
+        reused_count = 0
+        blocked_count = 0
+
+        for spec in MOCK_FACTORY_SPECS:
+            existing_project = await self._existing_project(spec)
+            missing_information = self._validation_issues(spec)
+            ready = not missing_information
+            if existing_project is not None:
+                reused_count += 1
+            if not ready:
+                blocked_count += 1
+            projects.append(
+                MockFactoryPreviewProjectResponse(
+                    name=spec.name,
+                    project_type=spec.project_type,
+                    repository_path=spec.repository_path,
+                    default_branch="main",
+                    action="reuse" if existing_project is not None else "create",
+                    ready=ready,
+                    missing_information=missing_information,
+                    operator_action=(
+                        "Start mock factory to reuse this project and nudge its workflow."
+                        if existing_project is not None and ready
+                        else (
+                            "Start mock factory to create the project, formation pack, "
+                            "and workflow."
+                        )
+                        if ready
+                        else "Fix the missing launch information before starting this project."
+                    ),
+                    existing_project_id=(
+                        existing_project.id if existing_project is not None else None
+                    ),
+                    dashboard_url=(
+                        f"/dashboard?project={existing_project.id}"
+                        if existing_project is not None
+                        else None
+                    ),
+                )
+            )
+
+        recommended = next((item for item in projects if item.ready), None)
+        return MockFactoryPreviewResponse(
+            status="ready" if blocked_count == 0 else "blocked",
+            human_summary=(
+                "Mock factory preview is ready: every portfolio project has the "
+                "minimum launch information."
+                if blocked_count == 0
+                else "Mock factory preview found projects that need launch information."
+            ),
+            ready_count=len(projects) - blocked_count,
+            reused_count=reused_count,
+            blocked_count=blocked_count,
+            recommended_first_project=recommended,
+            projects=projects,
+        )
+
     async def start_mock_factory(self, *, actor_id: str) -> MockFactoryStartResponse:
         results: list[MockFactoryProjectResponse] = []
+        created: list[MockFactoryProjectResponse] = []
+        reused: list[MockFactoryProjectResponse] = []
+        blocked: list[MockFactoryLaunchIssueResponse] = []
+        failed: list[MockFactoryLaunchIssueResponse] = []
+        workflows_started: list[uuid.UUID] = []
+        workflows_waiting: list[uuid.UUID] = []
         reused_count = 0
         formation_pack_count = 0
         workflow_count = 0
 
         for spec in MOCK_FACTORY_SPECS:
-            project = await self._existing_project(spec)
-            project_record = "created"
-            if project is None:
-                project = await self._create_project(spec, actor_id=actor_id)
-            else:
-                project_record = "reused"
-                reused_count += 1
-                await self._ensure_autonomy_policy(project)
+            validation_issues = self._validation_issues(spec)
+            if validation_issues:
+                blocked.append(self._launch_issue(spec, "blocked", validation_issues))
+                continue
+            try:
+                project = await self._existing_project(spec)
+                project_record = "created"
+                if project is None:
+                    project = await self._create_project(spec, actor_id=actor_id)
+                else:
+                    project_record = "reused"
+                    reused_count += 1
+                    await self._ensure_autonomy_policy(project)
 
-            formation_pack = "already prepared"
-            if not await self._has_formation_pack(project):
-                await self._create_formation_pack(project, spec, actor_id=actor_id)
-                formation_pack = "created"
-                formation_pack_count += 1
+                formation_pack = "already prepared"
+                if not await self._has_formation_pack(project):
+                    await self._create_formation_pack(project, spec, actor_id=actor_id)
+                    formation_pack = "created"
+                    formation_pack_count += 1
 
-            existing_workflow = await self._workflow_for_project(project)
-            if existing_workflow is not None:
-                await self._recover_demo_workflow(project, existing_workflow, actor_id=actor_id)
-            workflow = await WorkflowService(self._session).start(
-                project_id=project.id,
-                actor_id=actor_id,
-            )
-            workflow_state = "started"
-            if existing_workflow is None:
-                workflow_count += 1
-            else:
-                workflow_state = "reused and nudged"
-                await WorkflowService(self._session).notify(project.id)
-            await self._continue_autonomy(project, actor_id=actor_id)
+                existing_workflow = await self._workflow_for_project(project)
+                if existing_workflow is not None:
+                    await self._recover_demo_workflow(project, existing_workflow, actor_id=actor_id)
+                workflow = await WorkflowService(self._session).start(
+                    project_id=project.id,
+                    actor_id=actor_id,
+                )
+                workflow_state = "started"
+                if existing_workflow is None:
+                    workflow_count += 1
+                    workflows_started.append(workflow.id)
+                else:
+                    workflow_state = "reused and nudged"
+                    workflows_waiting.append(workflow.id)
+                    await WorkflowService(self._session).notify(project.id)
+                await self._continue_autonomy(project, actor_id=actor_id)
 
-            results.append(
-                MockFactoryProjectResponse(
+                project_response = MockFactoryProjectResponse(
                     project_id=project.id,
                     workflow_id=workflow.id,
                     name=project.name,
@@ -176,28 +249,77 @@ class MockEnterpriseAutonomyService:
                     formation_pack=formation_pack,
                     workflow=workflow_state,
                     next_action=(
-                        "Open Execution and watch phase, task, crew, event, "
-                        "and telemetry movement."
+                        "Open Execution and watch phase, task, crew, event, and telemetry movement."
                     ),
                     dashboard_url=f"/dashboard?project={project.id}",
                 )
-            )
+                results.append(project_response)
+                if project_record == "created":
+                    created.append(project_response)
+                else:
+                    reused.append(project_response)
+            except Exception as exc:
+                if hasattr(self._session, "rollback"):
+                    await self._session.rollback()
+                failed.append(self._launch_issue(spec, "failed", [str(exc)]))
 
         return MockFactoryStartResponse(
-            status="started",
+            status="started" if results and not failed and not blocked else "partial",
             human_summary=(
-                "Mock autonomy started: the factory created or reused the demo portfolio, "
-                "prepared missing formation packs, started workflows, and queued live "
-                "worker activity."
+                "Mock autonomy started every ready portfolio project."
+                if not failed and not blocked
+                else "Mock autonomy started ready projects and reported blocked or failed work."
             ),
             started_count=len(results),
             reused_count=reused_count,
             formation_pack_count=formation_pack_count,
             workflow_count=workflow_count,
+            created_count=len(created),
+            blocked_count=len(blocked),
+            failed_count=len(failed),
+            workflows_started=workflows_started,
+            workflows_waiting=workflows_waiting,
+            created=created,
+            reused=reused,
+            blocked=blocked,
+            failed=failed,
+            recommended_first_project=results[0] if results else None,
             next_action=(
-                "Open Execution, select a mock project, and verify the graph begins to move."
+                "Open the recommended project dashboard and verify the graph begins to move."
+                if results
+                else "Fix blocked or failed launch items, then start the mock factory again."
             ),
             projects=results,
+        )
+
+    def _validation_issues(self, spec: MockFactorySpec) -> list[str]:
+        issues: list[str] = []
+        if len(spec.name.strip()) < 3:
+            issues.append("project name is required")
+        if not spec.repository_path.startswith("/"):
+            issues.append("repository path must be absolute")
+        if len(spec.description.strip()) < 20:
+            issues.append("project manifesto summary is required")
+        if not spec.project_type.strip():
+            issues.append("project type is required")
+        if len(spec.expected_outcome.strip()) < 20:
+            issues.append("expected outcome is required")
+        return issues
+
+    def _launch_issue(
+        self, spec: MockFactorySpec, status: str, issues: list[str]
+    ) -> MockFactoryLaunchIssueResponse:
+        return MockFactoryLaunchIssueResponse(
+            name=spec.name,
+            project_type=spec.project_type,
+            repository_path=spec.repository_path,
+            status=status,
+            issues=issues,
+            operator_action=(
+                "Fix the launch information and run preview again."
+                if status == "blocked"
+                else "Review the failure, correct the underlying record or service, and retry."
+            ),
         )
 
     async def _existing_project(self, spec: MockFactorySpec) -> ProjectModel | None:

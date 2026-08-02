@@ -1353,6 +1353,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="toolbar" style="margin-top: 10px;">
           <button id="startFactory">Start Process</button>
           <button id="startManifestBatch">Start Manifesto Batch</button>
+          <button id="previewMockFactory">Preview Mock Factory</button>
           <button id="startMockFactory">Launch Mock Factory Test</button>
           <span id="factoryStatus" class="muted">Attach a manifesto or fill the fields manually.</span>
         </div>
@@ -1980,6 +1981,9 @@ DASHBOARD_HTML = r"""<!doctype html>
           if (action === "name") byId("factoryName").focus();
           if (action === "start") byId("startFactory").focus();
           if (action === "batch") byId("startManifestBatch").focus();
+          if (action === "previewMock") previewMockFactoryTest().catch(error => {
+            byId("factoryStatus").textContent = friendlyLaunchError(error);
+          });
           if (action === "mock") startMockFactoryTest().catch(error => {
             byId("factoryStatus").textContent = friendlyLaunchError(error);
           });
@@ -2097,7 +2101,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Select Factory Type", detail: `Current template: ${selectedCapability.replace(/_/g, " ")}. This controls which specialist path the project follows.`, idea: "Match the project type to the economic outcome you want to prove.", effect: "Improves crew routing and reusable blueprint quality.", signal: "template", kind: "info", action: "name" },
         { title: "Create Project", detail: "Register repository, branch, manifest hash, and governed project identity.", idea: "Create one clean project record before any agent work starts.", effect: "Preserves auditability and prevents orphan execution.", signal: "ready", kind: "warn", action: "start" },
         { title: "Parallel Batch", detail: "Start all manifesto projects together and open the project switchboard.", idea: "Use batch launch when one manifesto describes a portfolio of related work.", effect: "Turns planning time into parallel workflow throughput.", signal: "parallel", kind: "ok", action: "batch" },
-        { title: "Mock Autonomy", detail: "Launch a safe demo portfolio that proves the factory can start producing from a manifesto-style operating loop.", idea: "Use this first when you want to see the enterprise wake up and begin real workflow activity.", effect: "Creates or reuses demo projects, formation packs, workflows, jobs, and telemetry links.", signal: "demo", kind: "ok", action: "mock" },
+        { title: "Preview Mock Factory", detail: "Check which demo projects will be created, reused, blocked, or inspected first.", idea: "Preview before creating records so the launch is supervised.", effect: "Shows readiness, reuse, and the recommended first dashboard.", signal: "preview", kind: "info", action: "previewMock" },
+        { title: "Mock Autonomy", detail: "Launch a safe demo portfolio that proves the factory can start producing from a manifesto-style operating loop.", idea: "Use this after preview when you want to see the enterprise wake up and begin real workflow activity.", effect: "Creates or reuses demo projects, formation packs, workflows, jobs, and telemetry links.", signal: "demo", kind: "ok", action: "mock" },
         { title: "Open Execution", detail: "Move directly to live execution control after launch.", idea: "Inspect the project life immediately after creation.", effect: `${countSentence(state.projects.length, "project")} visible in Execution.`, signal: `${state.projects.length} projects`, kind: "info", action: "execution" }
       ]);
       renderSurfaceNodes("problemGraph", [
@@ -2430,6 +2435,69 @@ DASHBOARD_HTML = r"""<!doctype html>
       renderExecutionDashboard();
     }
 
+    function renderMockFactoryProjects(payload, mode) {
+      const projects = payload.projects || [];
+      const blocked = payload.blocked || [];
+      const failed = payload.failed || [];
+      const recommended = payload.recommended_first_project;
+      const projectNodes = projects.map(project => ({
+        title: project.name,
+        detail: project.dashboard_url || project.repository_path,
+        idea: mode === "preview"
+          ? `Action: ${project.action || project.project_record || "create"}`
+          : `Workflow: ${project.workflow || "not started"}`,
+        effect: mode === "preview"
+          ? project.operator_action || "Ready for supervised launch."
+          : project.next_action || "Open this project dashboard for inspection.",
+        signal: mode === "preview"
+          ? (project.ready ? project.action || "ready" : "blocked")
+          : project.project_record || "ready",
+        kind: project.ready === false ? "bad" : project.project_record === "reused" || project.action === "reuse" ? "info" : "ok",
+        action: "execution"
+      }));
+      const issueNodes = blocked.concat(failed).map(item => ({
+        title: item.name,
+        detail: item.issues.join("; ") || "Launch issue needs review.",
+        idea: item.operator_action,
+        effect: item.repository_path,
+        signal: item.status,
+        kind: item.status === "blocked" ? "warn" : "bad",
+        action: "factory"
+      }));
+      const summary = [
+        {
+          title: mode === "preview" ? "Launch Preview" : "Launch Result",
+          detail: payload.human_summary,
+          idea: `Ready: ${payload.ready_count ?? payload.started_count ?? 0}; reused: ${payload.reused_count ?? 0}; blocked: ${payload.blocked_count ?? 0}; failed: ${payload.failed_count ?? 0}`,
+          effect: recommended
+            ? `Inspect first: ${recommended.name}`
+            : "No recommended project is available yet.",
+          signal: payload.status,
+          kind: payload.status === "ready" || payload.status === "started" ? "ok" : "warn",
+          action: recommended && recommended.dashboard_url ? "execution" : "factory"
+        }
+      ];
+      byId("factoryGraphStatus").textContent = mode === "preview"
+        ? "Preview complete: review readiness before launch."
+        : "Launch complete: inspect created, reused, blocked, and failed work.";
+      renderSurfaceNodes("factoryGraph", summary.concat(projectNodes, issueNodes));
+    }
+
+    async function previewMockFactoryTest() {
+      byId("factoryStatus").textContent = "Previewing controlled mock autonomy...";
+      const result = await json("/api/v1/project-formation/mock-factory/preview", {
+        headers: actorHeaders
+      });
+      byId("factoryStatus").textContent = `${result.ready_count} ready; ${result.reused_count} reused; ${result.blocked_count} blocked.`;
+      renderMockFactoryProjects(result, "preview");
+      coach(
+        "Mock Factory Preview Ready",
+        result.human_summary,
+        ["Launch Mock Factory", "factory"],
+        ["Open Projects", "projects"]
+      );
+    }
+
     async function startMockFactoryTest() {
       byId("factoryStatus").textContent = "Starting controlled mock autonomy...";
       const result = await json("/api/v1/project-formation/mock-factory/start", {
@@ -2437,7 +2505,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         headers: { "Content-Type": "application/json", ...actorHeaders },
         body: JSON.stringify({})
       });
-      byId("factoryStatus").textContent = `${result.started_count} demo project(s) ready. ${result.next_action}`;
+      byId("factoryStatus").textContent = `${result.started_count} demo project(s) ready; ${result.blocked_count || 0} blocked; ${result.failed_count || 0} failed. ${result.next_action}`;
+      renderMockFactoryProjects(result, "launch");
       setOrientation(3, "Mock autonomy started. Open Execution and select a demo project to watch graph movement, tasks, crews, events, and telemetry.");
       coach(
         "Mock Factory Started",
@@ -2937,6 +3006,17 @@ DASHBOARD_HTML = r"""<!doctype html>
           friendlyLaunchError(error),
           ["Fix Manifesto", "factory"],
           ["Open Projects", "projects"]
+        );
+      });
+    });
+    byId("previewMockFactory").addEventListener("click", () => {
+      previewMockFactoryTest().catch(error => {
+        byId("factoryStatus").textContent = friendlyLaunchError(error);
+        coach(
+          "Mock Factory Preview Failed",
+          friendlyLaunchError(error),
+          ["Review Factory", "factory"],
+          ["Open Problems", "problems"]
         );
       });
     });
