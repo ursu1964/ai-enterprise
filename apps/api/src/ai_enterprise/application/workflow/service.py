@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.execution_workflow import ExecutionApplicationService
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.application.review.service import ReviewCandidatePatchService
@@ -163,15 +164,12 @@ class WorkflowService:
                 context_hash=context.content_hash(),
             )
         )
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type="workflow.started",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={"workflow_id": str(workflow_id), "correlation_id": str(correlation_id)},
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=project_id,
+            event_type="workflow.started",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={"workflow_id": str(workflow_id), "correlation_id": str(correlation_id)},
         )
         await JobRepository(self.session).enqueue(
             project_id=project_id,
@@ -243,19 +241,16 @@ class WorkflowService:
                 correlation_id=correlation_id,
             )
         )
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type="workflow.relinked",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "workflow_id": str(workflow_id),
-                    "state": state,
-                    "reason": reason,
-                },
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=project_id,
+            event_type="workflow.relinked",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "workflow_id": str(workflow_id),
+                "state": state,
+                "reason": reason,
+            },
         )
         await self.session.commit()
         await self.session.refresh(workflow)
