@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check migration-check engineering-static evolution-check federation-check intelligence-check etra-check engineering-full
+.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check engineering-static evolution-check federation-check intelligence-check etra-check engineering-full
 
 build:
 	docker compose build
@@ -46,6 +46,10 @@ secret-scan:
 compose-check:
 	docker compose config --quiet
 
+docker-smoke:
+	docker compose up --build -d api worker
+	python tools/docker_smoke.py --require-worker
+
 migration-check:
 	cd apps/api && .venv/bin/alembic heads
 	cd apps/api && .venv/bin/alembic upgrade head --sql >/dev/null
@@ -72,7 +76,7 @@ check-fast: lint typecheck test
 
 check-ci: engineering-static evolution-check federation-check intelligence-check engineering-full etra-check
 
-check-release: compose-check migration-check secret-scan check-ci
+check-release: compose-check migration-check secret-scan docker-smoke check-ci
 
 check: compose-check migration-check lint typecheck test
 
