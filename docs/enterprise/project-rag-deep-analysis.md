@@ -651,6 +651,7 @@ bd7331b feat(aios): add release readiness gates
 2d7ccdf feat(aios): add connected proof preflight
 176fdb9 fix(security): baseline historical secret scan findings
 c20ae59 feat(aios): make connected preflight runtime aware
+e7c8bf8 feat(aios): report github credential source
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -717,6 +718,14 @@ fail: GitHub token missing
 ready: false
 ```
 
+Credential readiness update:
+
+```text
+Preflight now reports the active GitHub credential source without printing the token.
+Supported sources are environment variables, `gh auth login`, and the Git credential helper.
+Current machine state: `gh` is installed, but `gh auth status` reports no logged-in GitHub host.
+```
+
 Runtime-state handling update:
 
 ```text
@@ -742,6 +751,7 @@ python -m ruff check packages/aios_execution/connected_preflight.py packages/aio
 python -m pytest -q tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_github_provider.py
 AIOS_USE_FAKE_MODELS=false python -m apps.cli.main ax-connected-preflight --repo /home/user/projects/project-rag --github-repo ursu1964/project-rag --format json --strict
 OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_capability_synthesis.py tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py
+OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_pull_request.py tests/unit/test_aios_execution_github_provider.py tests/unit/test_aios_execution_connected_preflight.py
 make secret-scan-release
 python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
 python -m pytest -q tests/unit/test_scan_secrets.py
@@ -754,6 +764,7 @@ ruff: all checks passed
 pytest: 19 passed
 live preflight: source clean, Ollama pass, GitHub token missing
 deterministic AIOS tests: 21 passed, 1 skipped
+credential-source tests: 25 passed, 1 skipped
 secret-scan-release: gitleaks-ok; 29 baseline findings suppressed; secret-scan-ok
 scanner tests: 7 passed
 ```
