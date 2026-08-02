@@ -2,7 +2,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.resilience_extended import _require_governance_capability
 from ai_enterprise.application.resilience.extended_service import InstitutionalGovernanceValidator
 from ai_enterprise.domain.resilience.enums import Capability
 from ai_enterprise.domain.resilience.extended import (
@@ -149,3 +152,68 @@ def test_extended_tables_and_api_are_registered() -> None:
     assert "region_ownership_leases" in Base.metadata.tables
     assert "institutional_governance_records" in Base.metadata.tables
     assert "/api/v1/resilience/governance/{record_type}" in app.openapi()["paths"]
+
+
+def test_extended_resilience_governance_requires_scoped_capability() -> None:
+    with pytest.raises(HTTPException, match="Human governance authority"):
+        _require_governance_capability(
+            Actor(
+                "service",
+                "service",
+                "region_authority",
+                frozenset({"resilience.governance.region_ownership_lease.write"}),
+                scopes=frozenset({"global"}),
+            ),
+            "write",
+            "region_ownership_lease",
+        )
+
+    with pytest.raises(HTTPException, match="Unknown governance record type"):
+        _require_governance_capability(
+            Actor(
+                "authority",
+                "human",
+                "region_authority",
+                frozenset({"resilience.governance.write"}),
+                scopes=frozenset({"global"}),
+            ),
+            "write",
+            "unknown",
+        )
+
+    with pytest.raises(HTTPException, match="Governance capability"):
+        _require_governance_capability(
+            Actor(
+                "authority",
+                "human",
+                "region_authority",
+                frozenset({"resilience.governance.region_ownership_lease.write"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "write",
+            "region_ownership_lease",
+        )
+
+    _require_governance_capability(
+        Actor(
+            "authority",
+            "human",
+            "region_authority",
+            frozenset({"resilience.governance.region_ownership_lease.write"}),
+            scopes=frozenset({"global"}),
+        ),
+        "write",
+        "region_ownership_lease",
+    )
+
+    _require_governance_capability(
+        Actor(
+            "auditor",
+            "human",
+            "resilience_auditor",
+            frozenset({"resilience.governance.read"}),
+            scopes=frozenset({"global"}),
+        ),
+        "read",
+        "region_ownership_lease",
+    )

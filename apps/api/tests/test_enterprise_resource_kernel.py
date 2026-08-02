@@ -51,6 +51,31 @@ from ai_enterprise.infrastructure.enterprise_kernel.repository import (
 )
 from ai_enterprise.main import app
 
+_ALL_KERNEL_CAPABILITIES = frozenset(
+    {
+        "x",
+        "enterprise_resource.register",
+        "enterprise_resource.read",
+        "enterprise_schedule.create",
+        "enterprise_schedule.read",
+        "enterprise_module.register",
+        "enterprise_module.read",
+        "organizational_thread.open",
+        "organizational_thread.read",
+        "operating_maturity.record",
+        "operating_maturity.read",
+    }
+)
+
+
+def _kernel_admin(*capabilities: str) -> Actor:
+    return Actor(
+        "alice",
+        "human",
+        "enterprise_kernel_admin",
+        frozenset(capabilities) if capabilities else _ALL_KERNEL_CAPABILITIES,
+    )
+
 
 class MemoryRepository:
     def __init__(self) -> None:
@@ -296,7 +321,7 @@ async def test_resource_registration_requires_managed_kernel_metadata() -> None:
     with pytest.raises(InvalidEnterpriseResource, match="owner"):
         await service.register_resource(
             request(owner_id=" "),
-            enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x"),
+            enterprise_kernel_actor(_kernel_admin("x"), "x"),
         )
 
 
@@ -309,7 +334,7 @@ async def test_resource_registration_hashes_persists_and_audits_initial_version(
     value = await service.register_resource(
         request(),
         enterprise_kernel_actor(
-            Actor("alice", "human", "enterprise_kernel_admin"),
+            _kernel_admin("enterprise_resource.register"),
             "enterprise_resource.register",
         ),
     )
@@ -327,7 +352,7 @@ async def test_schedule_requires_registered_dependency_resources() -> None:
     repository = MemoryRepository()
     audit = MemoryAudit()
     service = EnterpriseKernelService(repository, audit)
-    actor = enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x")
+    actor = enterprise_kernel_actor(_kernel_admin(), "x")
     target = await service.register_resource(request(), actor)
 
     with pytest.raises(InvalidEnterpriseSchedule, match="dependencies"):
@@ -343,7 +368,7 @@ async def test_schedule_hashes_persists_and_audits_queued_work() -> None:
     audit = MemoryAudit()
     service = EnterpriseKernelService(repository, audit)
     actor = enterprise_kernel_actor(
-        Actor("alice", "human", "enterprise_kernel_admin"),
+        _kernel_admin(),
         "enterprise_schedule.create",
     )
     target = await service.register_resource(request(), actor)
@@ -363,7 +388,7 @@ async def test_module_registration_requires_managed_owned_resources() -> None:
     repository = MemoryRepository()
     service = EnterpriseKernelService(repository, MemoryAudit())
     actor = enterprise_kernel_actor(
-        Actor("alice", "human", "enterprise_kernel_admin"),
+        _kernel_admin(),
         "enterprise_module.register",
     )
     resource = await service.register_resource(request(), actor)
@@ -380,7 +405,7 @@ async def test_module_thread_and_maturity_records_close_p11_kernel_coverage() ->
     audit = MemoryAudit()
     service = EnterpriseKernelService(repository, audit)
     actor = enterprise_kernel_actor(
-        Actor("alice", "human", "enterprise_kernel_admin"),
+        _kernel_admin(),
         "enterprise_module.register",
     )
     organization_id = uuid4()
@@ -432,7 +457,7 @@ async def test_module_thread_and_maturity_records_close_p11_kernel_coverage() ->
 async def test_thread_requires_registered_schedules_and_complete_lineage() -> None:
     repository = MemoryRepository()
     service = EnterpriseKernelService(repository, MemoryAudit())
-    actor = enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x")
+    actor = enterprise_kernel_actor(_kernel_admin(), "x")
     organization_id = uuid4()
     project = await service.register_resource(request(organization_id=organization_id), actor)
     requirement = await service.register_resource(
@@ -476,7 +501,7 @@ async def test_thread_requires_registered_schedules_and_complete_lineage() -> No
 async def test_maturity_requires_full_resource_coverage_and_evidence_bound_level() -> None:
     repository = MemoryRepository()
     service = EnterpriseKernelService(repository, MemoryAudit())
-    actor = enterprise_kernel_actor(Actor("alice", "human", "enterprise_kernel_admin"), "x")
+    actor = enterprise_kernel_actor(_kernel_admin(), "x")
 
     with pytest.raises(InvalidOperatingMaturity, match="proven"):
         await service.record_maturity(
@@ -634,8 +659,29 @@ def test_enterprise_kernel_authority_is_human_and_capability_bound() -> None:
     assert enterprise_kernel_actor(actor, "enterprise_resource.register").subject == "alice"
     with pytest.raises(HTTPException, match="human"):
         enterprise_kernel_actor(
-            Actor("agent", "agent", "enterprise_kernel_admin"),
+            Actor(
+                "agent",
+                "agent",
+                "enterprise_kernel_admin",
+                frozenset({"enterprise_resource.register"}),
+            ),
             "enterprise_resource.register",
         )
     with pytest.raises(HTTPException, match="Missing capability"):
         enterprise_kernel_actor(Actor("bob", "human", "engineer"), "enterprise_resource.register")
+    with pytest.raises(HTTPException, match="Missing capability"):
+        enterprise_kernel_actor(
+            Actor("alice", "human", "enterprise_kernel_admin"),
+            "enterprise_resource.register",
+        )
+    with pytest.raises(HTTPException, match="Missing capability"):
+        enterprise_kernel_actor(
+            Actor(
+                "alice",
+                "human",
+                "enterprise_kernel_admin",
+                frozenset({"enterprise_resource.register"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "enterprise_resource.register",
+        )

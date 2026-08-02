@@ -151,28 +151,56 @@ def test_repository_preserves_unknown_impact() -> None:
 
 
 def test_actor_header_adapter_enforces_capability_and_human_decision() -> None:
-    value = governed_change_actor(Actor("alice", "human", "change_approver"), "change.decide")
+    value = governed_change_actor(
+        Actor("alice", "human", "change_approver", frozenset({"change.decide"})),
+        "change.decide",
+    )
     assert value.subject == "alice"
-    with pytest.raises(HTTPException) as wrong_role:
-        governed_change_actor(Actor("alice", "human", "change_proposer"), "change.decide")
-    assert wrong_role.value.status_code == 403
+    with pytest.raises(HTTPException, match="Missing capability"):
+        governed_change_actor(Actor("alice", "human", "change_approver"), "change.decide")
+    with pytest.raises(HTTPException, match="Missing capability"):
+        governed_change_actor(
+            Actor(
+                "alice",
+                "human",
+                "change_approver",
+                frozenset({"change.decide"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "change.decide",
+        )
     with pytest.raises(HTTPException, match="human"):
-        governed_change_actor(Actor("agent", "agent", "change_approver"), "change.decide")
+        governed_change_actor(
+            Actor("agent", "agent", "change_approver", frozenset({"change.decide"})),
+            "change.decide",
+        )
     assert (
-        governed_change_actor(Actor("observer", "human", "change_observer"), "change.observe")
+        governed_change_actor(
+            Actor("observer", "human", "change_observer", frozenset({"change.observe"})),
+            "change.observe",
+        )
         .subject
         == "observer"
     )
     assert (
-        governed_change_actor(Actor("planner", "agent", "change_planner"), "change.plan").subject
+        governed_change_actor(
+            Actor("planner", "agent", "change_planner", frozenset({"change.plan"})),
+            "change.plan",
+        ).subject
         == "planner"
     )
     assert (
-        governed_change_actor(Actor("planner", "human", "change_planner"), "change.read").subject
+        governed_change_actor(
+            Actor("planner", "human", "change_planner", frozenset({"change.read"})),
+            "change.read",
+        ).subject
         == "planner"
     )
     with pytest.raises(HTTPException, match="human"):
-        governed_change_actor(Actor("agent", "agent", "change_approver"), "change.outcome")
+        governed_change_actor(
+            Actor("agent", "agent", "change_approver", frozenset({"change.outcome"})),
+            "change.outcome",
+        )
 
 
 def test_api_surface_has_planning_but_no_activation_or_rollout_execution_route() -> None:
