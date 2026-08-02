@@ -6,8 +6,6 @@ Revises: c60f3e1a9b72
 
 from collections.abc import Sequence
 
-from alembic import op
-
 from ai_enterprise.infrastructure.organization.models import (
     AgentAssignmentModel,
     AgentProfileModel,
@@ -20,6 +18,7 @@ from ai_enterprise.infrastructure.organization.models import (
     RoleModel,
     RoleVersionModel,
 )
+from alembic import op
 
 revision: str = "d71e4a8c5f20"
 down_revision: str | None = "c60f3e1a9b72"

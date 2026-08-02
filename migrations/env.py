@@ -1,22 +1,29 @@
 from logging.config import fileConfig
 
-from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from ai_enterprise.config import get_settings
-from ai_enterprise.infrastructure.agent_runtime import models as agent_runtime_models  # noqa: F401
-from ai_enterprise.infrastructure.architecture import models as architecture_models  # noqa: F401
+from ai_enterprise.infrastructure.agent_runtime import (
+    models as agent_runtime_models,  # noqa: F401
+)
+from ai_enterprise.infrastructure.architecture import (
+    models as architecture_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.change_management import (
     models as change_models,  # noqa: F401
 )
-from ai_enterprise.infrastructure.cognitive import models as cognitive_models  # noqa: F401
+from ai_enterprise.infrastructure.cognitive import (
+    models as cognitive_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.database import (
     foundation_models,  # noqa: F401
     workflow_models,  # noqa: F401
 )
 from ai_enterprise.infrastructure.database.models import Base
-from ai_enterprise.infrastructure.decomposition import models as decomposition_models  # noqa: F401
-from ai_enterprise.infrastructure.ecosystem import models as ecosystem_models  # noqa: F401
+from ai_enterprise.infrastructure.decomposition import (
+    models as decomposition_models,  # noqa: F401
+)
+from ai_enterprise.infrastructure.ecosystem import (
+    models as ecosystem_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.enterprise_evolution import (  # noqa: F401
     models as enterprise_evolution_models,
 )
@@ -24,8 +31,12 @@ from ai_enterprise.infrastructure.evolution import (
     models as evolution_models,  # noqa: F401
 )
 from ai_enterprise.infrastructure.jobs import models as job_models  # noqa: F401
-from ai_enterprise.infrastructure.knowledge import models as knowledge_models  # noqa: F401
-from ai_enterprise.infrastructure.performance import models as performance_models  # noqa: F401
+from ai_enterprise.infrastructure.knowledge import (
+    models as knowledge_models,  # noqa: F401
+)
+from ai_enterprise.infrastructure.performance import (
+    models as performance_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.requirements_revision import (  # noqa: F401
     models as requirements_revision_models,
 )
@@ -35,7 +46,11 @@ from ai_enterprise.infrastructure.resilience import (
 from ai_enterprise.infrastructure.resilience import (
     models as resilience_models,  # noqa: F401
 )
-from ai_enterprise.infrastructure.specification import models as specification_models  # noqa: F401
+from ai_enterprise.infrastructure.specification import (
+    models as specification_models,  # noqa: F401
+)
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

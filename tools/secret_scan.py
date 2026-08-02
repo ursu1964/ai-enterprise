@@ -9,7 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "api" / "src"))
 
-from ai_enterprise.infrastructure.review.secret_scanner import SecretScanner  # noqa: E402
+from ai_enterprise.infrastructure.review.secret_scanner import (
+    SecretScanner,
+)
 
 
 def main() -> int:

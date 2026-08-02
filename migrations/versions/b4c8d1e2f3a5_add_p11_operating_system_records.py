@@ -6,12 +6,11 @@ Revises: a3b7c9d0e2f4
 
 from collections.abc import Sequence
 
-from alembic import op
-
 from ai_enterprise.infrastructure.database.models import Base
 from ai_enterprise.infrastructure.enterprise_kernel import (
     models as enterprise_kernel_models,  # noqa: F401
 )
+from alembic import op
 
 revision: str = "b4c8d1e2f3a5"
 down_revision: str | None = "a3b7c9d0e2f4"

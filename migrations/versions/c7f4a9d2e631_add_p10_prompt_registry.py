@@ -6,10 +6,11 @@ Revises: b4c8d1e2f3a5
 
 from collections.abc import Sequence
 
-from alembic import op
-
-from ai_enterprise.infrastructure.agent_runtime import models as agent_runtime_models  # noqa: F401
+from ai_enterprise.infrastructure.agent_runtime import (
+    models as agent_runtime_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.database.models import Base
+from alembic import op
 
 revision: str = "c7f4a9d2e631"
 down_revision: str | None = "b4c8d1e2f3a5"

@@ -6,8 +6,6 @@ Revises: d71e4a8c5f20
 
 from collections.abc import Sequence
 
-from alembic import op
-
 from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentEscalationModel,
     AgentOutputValidationModel,
@@ -23,6 +21,7 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     ToolDefinitionModel,
     ToolInvocationModel,
 )
+from alembic import op
 
 revision: str = "a92d41c70be3"
 down_revision: str | None = "d71e4a8c5f20"

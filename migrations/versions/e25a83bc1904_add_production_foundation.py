@@ -6,10 +6,9 @@ Revises: d14f62a90c71
 
 from collections.abc import Sequence
 
-from alembic import op
-
 from ai_enterprise.infrastructure.database import foundation_models  # noqa: F401
 from ai_enterprise.infrastructure.database.models import Base
+from alembic import op
 
 revision: str = "e25a83bc1904"
 down_revision: str | None = "d14f62a90c71"

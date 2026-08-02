@@ -297,12 +297,7 @@ def _documentation_link_paths(root: Path) -> tuple[Path, ...]:
 def _local_markdown_links(text: str) -> tuple[str, ...]:
     links: list[str] = []
     for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
-        if (
-            not target
-            or target.startswith("#")
-            or "://" in target
-            or target.startswith("mailto:")
-        ):
+        if not target or target.startswith(("#", "mailto:")) or "://" in target:
             continue
         links.append(target.split("#", 1)[0])
     return tuple(links)

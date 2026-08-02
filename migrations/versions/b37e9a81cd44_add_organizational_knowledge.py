@@ -6,8 +6,6 @@ Revises: a92d41c70be3
 
 from collections.abc import Sequence
 
-from alembic import op
-
 from ai_enterprise.infrastructure.knowledge.models import (
     KnowledgeCandidateEvidenceModel,
     KnowledgeCandidateModel,
@@ -22,6 +20,7 @@ from ai_enterprise.infrastructure.knowledge.models import (
     KnowledgeSourceModel,
     KnowledgeSupersessionModel,
 )
+from alembic import op
 
 revision: str = "b37e9a81cd44"
 down_revision: str | None = "a92d41c70be3"

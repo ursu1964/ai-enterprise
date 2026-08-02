@@ -7,10 +7,11 @@ Revises: e63a1d90b7f4
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
-
-from ai_enterprise.infrastructure.architecture import models as architecture_models  # noqa: F401
+from ai_enterprise.infrastructure.architecture import (
+    models as architecture_models,  # noqa: F401
+)
 from ai_enterprise.infrastructure.database.models import Base
+from alembic import op
 
 revision: str = "f74b2c619ea0"
 down_revision: str | None = "e63a1d90b7f4"

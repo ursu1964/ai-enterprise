@@ -616,7 +616,7 @@ def _run_full_gates(root: Path) -> int:
             "migrations",
             "tools",
         ),
-        ("apps/api/.venv/bin/mypy", "apps/api/src"),
+        ("bash", "-lc", "cd apps/api && .venv/bin/mypy src"),
         (
             sys.executable,
             "-m",
