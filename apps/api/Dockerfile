@@ -18,9 +18,30 @@ COPY apps/api/pyproject.toml /app/pyproject.toml
 COPY apps/api/uv.lock /app/uv.lock
 COPY apps/api/src /app/src
 COPY migrations /app/migrations
+COPY tools/migration_verify.py /app/tools/migration_verify.py
+COPY tools/backup_verify.py /app/tools/backup_verify.py
+COPY tools/generate_server_secrets.py /app/tools/generate_server_secrets.py
+COPY tools/sign_proxy_assertion.py /app/tools/sign_proxy_assertion.py
+COPY tools/model_endpoint_verify.py /app/tools/model_endpoint_verify.py
+COPY tools/deployment_blueprint.py /app/tools/deployment_blueprint.py
+COPY tools/infrastructure_choices.py /app/tools/infrastructure_choices.py
 COPY apps/api/alembic.ini /app/apps/api/alembic.ini
+COPY docker-compose.server.example.yml /app/docker-compose.server.example.yml
+COPY docker-compose.observability.yml /app/docker-compose.observability.yml
+COPY .env.server.example /app/.env.server.example
+COPY docker/observability /app/docker/observability
+COPY docker/reverse-proxy /app/docker/reverse-proxy
+COPY deploy/systemd /app/deploy/systemd
+COPY deploy/kubernetes /app/deploy/kubernetes
+COPY docs/enterprise/deployment-blueprint-module.md /app/docs/enterprise/deployment-blueprint-module.md
+COPY docs/enterprise/real-world-infrastructure-decisions.template.json /app/docs/enterprise/real-world-infrastructure-decisions.template.json
+COPY docs/enterprise/operator-startup-guide.md /app/docs/enterprise/operator-startup-guide.md
+COPY docs/enterprise/project-execution-walkthrough.md /app/docs/enterprise/project-execution-walkthrough.md
+COPY docs/enterprise/working-method.md /app/docs/enterprise/working-method.md
+COPY docs/enterprise/real-world-infrastructure-choices.md /app/docs/enterprise/real-world-infrastructure-choices.md
 
-RUN uv sync --frozen --no-dev
+ARG UV_SYNC_ARGS="--no-dev"
+RUN uv sync --frozen ${UV_SYNC_ARGS}
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"

@@ -1,0 +1,42 @@
+groups:
+  - name: ai-enterprise-production-readiness
+    rules:
+      - alert: AIEnterpriseApiUnavailable
+        expr: up{job="ai-enterprise-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "AI Enterprise API is not reachable"
+          description: "The dashboard and factory API are not responding to Prometheus. Check container health, reverse proxy routing, and database readiness."
+
+      - alert: AIEnterpriseHttpServerErrors
+        expr: increase(ai_enterprise_http_responses_500_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "AI Enterprise is returning server errors"
+          description: "A user or worker request failed. Open the dashboard source freshness panel and inspect API logs for the matching time window."
+
+      - alert: AIEnterpriseWorkerHeartbeatMissing
+        expr: absent(ai_enterprise_worker_heartbeat_timestamp_seconds)
+        for: 10m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "No worker heartbeat metric is visible"
+          description: "Parallel project execution may be stopped. Verify worker services, leases, and /api/v1/operator/jobs/worker-instances."
+
+      - alert: AIEnterpriseModelServiceUnproven
+        expr: absent(ai_enterprise_model_request_total)
+        for: 30m
+        labels:
+          severity: info
+          component: model-service
+        annotations:
+          summary: "Model service activity has no recent proof"
+          description: "Run the model endpoint verifier and execute a small manifesto analysis before trusting production autonomy."

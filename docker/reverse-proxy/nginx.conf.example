@@ -1,0 +1,38 @@
+events {}
+
+http {
+  upstream ai_enterprise_api {
+    server 127.0.0.1:8000;
+  }
+
+  server {
+    listen 80;
+    server_name ai-enterprise.example.com;
+    return 301 https://$host$request_uri;
+  }
+
+  server {
+    listen 443 ssl http2;
+    server_name ai-enterprise.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/ai-enterprise.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ai-enterprise.example.com/privkey.pem;
+
+    # Production identity must come from a trusted auth layer. This template keeps
+    # the API private and shows the required headers; generate X-Proxy-Signature
+    # in the trusted identity service using TRUSTED_PROXY_HMAC_SECRET.
+    proxy_set_header X-Actor-ID $remote_user;
+    proxy_set_header X-Actor-Type human;
+    proxy_set_header X-Actor-Role platform-admin;
+    proxy_set_header X-Proxy-Timestamp "";
+    proxy_set_header X-Proxy-Signature "";
+
+    location / {
+      proxy_pass http://ai_enterprise_api;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto https;
+    }
+  }
+}

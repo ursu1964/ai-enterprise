@@ -439,6 +439,7 @@ def _manager_graph(
 
 
 @router.get("/dashboard-manager")
+@router.get("/dashboard-read-model")
 async def dashboard_manager(
     session: SessionDependency,
     actor: ActorDependency,

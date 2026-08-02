@@ -7,8 +7,14 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.dashboard import dashboard_context, dashboard_telemetry_summary
+from ai_enterprise.api.dependencies import Actor, get_actor
+from ai_enterprise.api.routes.dashboard import (
+    dashboard_context,
+    dashboard_deployment_blueprint,
+    dashboard_infrastructure_choices,
+    dashboard_server_readiness,
+    dashboard_telemetry_summary,
+)
 from ai_enterprise.api.routes.projects import list_projects, project_intelligence
 from ai_enterprise.config import get_settings
 from ai_enterprise.domain.enums import ProjectStatus
@@ -107,6 +113,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "/api/v1/query/dashboard-manager" in response.text
     assert "Watch the Execution graph" in response.text
     assert "Start with a client idea or manifesto" in response.text
+    assert "window.location.hash" in response.text
+    assert "hashchange" in response.text
     assert "Open Demo" in response.text
     assert "Business State" in response.text
     assert "Recommended Next Move" in response.text
@@ -138,8 +146,15 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Operating Picture Signals" in response.text
     assert "Factory Creation Graph" in response.text
     assert "Preview Mock Factory" in response.text
+
     assert "Launch Mock Factory Test" in response.text
     assert "Mock Autonomy" in response.text
+    assert "Launch Result" in response.text
+    assert "Open Recommended View" in response.text
+    assert "Open Proof Path" in response.text
+    assert "Partly started, needs review" in response.text
+    assert "Started and ready to inspect" in response.text
+    assert "Blocked until missing details are fixed" in response.text
     assert "/api/v1/project-formation/mock-factory/preview" in response.text
     assert "/api/v1/project-formation/mock-factory/start" in response.text
     assert "created, reused, blocked, and failed work" in response.text
@@ -157,6 +172,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Current action" in response.text
     assert "Reviewed history" in response.text
     assert "Business Telemetry" in response.text
+    assert "Server Readiness" in response.text
+    assert "/dashboard/server-readiness" in response.text
+    assert "Real Infrastructure Choices" in response.text
+    assert "/dashboard/infrastructure-choices" in response.text
+    assert "infrastructureChoicesTable" in response.text
     assert "Advanced raw metrics" in response.text
     assert "Blueprint Graph Hub" in response.text
     assert "Project Foundry Core" in response.text
@@ -202,6 +222,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Completed Evidence" in response.text
     assert "Remaining Work" in response.text
     assert "Current Issues" in response.text
+    assert "Used to show active blockers for the selected phase" in response.text
+    assert "This phase has no active blockers" in response.text
+    assert "Used to preserve old problems after they are resolved or acknowledged" in response.text
+    assert "Past problems will appear here after review" in response.text
+    assert "Nothing to show yet" in response.text
     assert "Historical samples" in response.text
     assert "Average phase" in response.text
     assert "lifecycle" in response.text
@@ -211,6 +236,68 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "/metrics" in response.text
     assert "/dashboard/graphify" in response.text
     assert "/dashboard/demo" in response.text
+
+
+@pytest.mark.asyncio
+async def test_local_dashboard_context_actor_can_read_query_model() -> None:
+    actor = await get_actor(
+        session=DashboardSession(scalar_rows=[None], scalars_rows=[]),  # type: ignore[arg-type]
+        actor_id="local-dashboard-admin",
+        actor_type="human",
+        actor_role="platform-admin",
+    )
+
+    assert actor.capabilities == frozenset({"operator.jobs.manage", "query.read"})
+    assert actor.scopes == frozenset({"global"})
+
+
+@pytest.mark.asyncio
+async def test_dashboard_server_readiness_reports_human_actions() -> None:
+    payload = await dashboard_server_readiness()
+
+    assert payload["status"] in {"ready", "needs_setup"}
+    assert payload["commands"][0] == "make server-readiness-template"
+    assert any(item["name"] == "Trusted proxy" for item in payload["checks"])
+    assert any(item["name"] == "Backup verification" for item in payload["checks"])
+    assert any(item["name"] == "Migration gate" for item in payload["checks"])
+    assert any(item["name"] == "Server secret generator" for item in payload["checks"])
+    assert any(item["name"] == "Proxy signature helper" for item in payload["checks"])
+    assert any(item["name"] == "Model endpoint verifier" for item in payload["checks"])
+    assert any(item["name"] == "GitHub access hooks" for item in payload["checks"])
+    assert any(item["name"] == "Scheduled backup templates" for item in payload["checks"])
+    assert any(item["name"] == "Managed storage hooks" for item in payload["checks"])
+    assert any(item["name"] == "Kubernetes rollout templates" for item in payload["checks"])
+    assert any(item["name"] == "Prometheus and Grafana" for item in payload["checks"])
+    assert any(item["name"] == "Production alert rules" for item in payload["checks"])
+    assert any(item["name"] == "Reverse proxy and TLS" for item in payload["checks"])
+    assert any(item["name"] == "Deployment blueprint" for item in payload["checks"])
+    assert any(item["name"] == "Infrastructure choices gate" for item in payload["checks"])
+    assert "make server-secrets" in payload["commands"]
+    assert "make deployment-blueprint" in payload["commands"]
+    assert "make infrastructure-choices-template" in payload["commands"]
+    assert "make infrastructure-choices-verify" in payload["commands"]
+    assert any("make model-verify" in command for command in payload["commands"])
+    assert all("action" in item for item in payload["checks"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_deployment_blueprint_reports_reusable_phases() -> None:
+    payload = await dashboard_deployment_blueprint()
+
+    assert payload["status"] in {"ready", "needs_setup"}
+    assert payload["name"] == "AI Enterprise Deployment Blueprint"
+    assert [phase["phase"] for phase in payload["phases"]] == [1, 2, 3, 4, 5, 6]
+    assert "next_action" in payload
+
+
+@pytest.mark.asyncio
+async def test_dashboard_infrastructure_choices_reports_decision_gate() -> None:
+    payload = await dashboard_infrastructure_choices()
+
+    assert payload["status"] == "needs_setup"
+    assert payload["conformant"] is False
+    assert "domain_tls" in payload["sections"]
+    assert "next_action" in payload
 
 
 def test_documentation_hub_explains_working_method_and_project_assets() -> None:
@@ -225,6 +312,14 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Verify" in response.text
     assert "Document" in response.text
     assert "Operator Documents" in response.text
+    assert "Document Preview" in response.text
+    assert "docPreview" in response.text
+    assert "doc-open" in response.text
+    assert "/dashboard/documentation/operator-startup-guide?download=true" in response.text
+    assert (
+        "/dashboard/documentation/real-world-infrastructure-choices?download=true"
+        in response.text
+    )
     assert "Graphs and Images" in response.text
     assert "Commands" in response.text
     assert "docs/enterprise/working-method.md" in response.text
@@ -262,6 +357,30 @@ def test_client_manifest_template_downloads_project_intake_document() -> None:
     assert "Success Criteria" in response.text
 
 
+def test_documentation_endpoint_previews_and_downloads_registered_documents() -> None:
+    client = TestClient(app)
+
+    preview = client.get("/dashboard/documentation/working-method")
+    download = client.get("/dashboard/documentation/operator-startup-guide?download=true")
+
+    assert preview.status_code == 200
+    assert "Working Method" in preview.text
+    assert "attachment" not in preview.headers.get("content-disposition", "")
+    assert download.status_code == 200
+    assert download.headers["content-disposition"] == (
+        'attachment; filename="operator-startup-guide.md"'
+    )
+    assert "Operator Startup Guide" in download.text
+
+
+def test_documentation_endpoint_rejects_unregistered_documents() -> None:
+    client = TestClient(app)
+
+    response = client.get("/dashboard/documentation/../../.env")
+
+    assert response.status_code == 404
+
+
 def test_demo_story_page_explains_idea_to_reality() -> None:
     client = TestClient(app)
 
@@ -275,6 +394,12 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert "For Your Son" not in response.text
     assert "Marketing platform" in response.text
     assert "Production Route" in response.text
+    assert "Step-by-Step Live Demo" in response.text
+    assert "/dashboard#factory" in response.text
+    assert "/dashboard#execution" in response.text
+    assert "/dashboard#projects" in response.text
+    assert "/dashboard#metrics" in response.text
+    assert "Open Docs" in response.text
 
 
 @pytest.mark.asyncio

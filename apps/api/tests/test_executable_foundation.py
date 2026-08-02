@@ -7,6 +7,15 @@ from ai_enterprise.config import Settings
 from ai_enterprise.main import health, readiness, root
 
 
+def repo_root() -> Path:
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "apps/api/Dockerfile").exists() and (
+            candidate / "docker-compose.yml"
+        ).exists():
+            return candidate
+    raise AssertionError("Repository root was not found")
+
+
 @pytest.mark.asyncio
 async def test_root_and_liveness_contracts() -> None:
     root_payload = await root()
@@ -34,7 +43,7 @@ def test_settings_validate_api_and_pool_bounds() -> None:
 
 
 def test_container_foundation_is_non_root_and_read_only() -> None:
-    root = Path(__file__).parents[3]
+    root = repo_root()
     dockerfile = (root / "apps/api/Dockerfile").read_text(encoding="utf-8")
     compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
     assert "USER appuser" in dockerfile
@@ -43,10 +52,111 @@ def test_container_foundation_is_non_root_and_read_only() -> None:
     assert "condition: service_completed_successfully" in compose
     assert "127.0.0.1:8000:8000" in compose
     assert "127.0.0.1:5432:5432" in compose
+    assert 'ARG UV_SYNC_ARGS="--no-dev"' in dockerfile
+    assert "uv sync --frozen ${UV_SYNC_ARGS}" in dockerfile
+    assert (
+        "COPY docker-compose.server.example.yml /app/docker-compose.server.example.yml"
+        in dockerfile
+    )
+    assert (
+        "COPY docker-compose.observability.yml /app/docker-compose.observability.yml"
+        in dockerfile
+    )
+    assert "COPY .env.server.example /app/.env.server.example" in dockerfile
+    assert "COPY tools/backup_verify.py /app/tools/backup_verify.py" in dockerfile
+    assert (
+        "COPY tools/generate_server_secrets.py /app/tools/generate_server_secrets.py"
+        in dockerfile
+    )
+    assert "COPY tools/sign_proxy_assertion.py /app/tools/sign_proxy_assertion.py" in dockerfile
+    assert "COPY tools/model_endpoint_verify.py /app/tools/model_endpoint_verify.py" in dockerfile
+    assert "COPY tools/deployment_blueprint.py /app/tools/deployment_blueprint.py" in dockerfile
+    assert "COPY tools/infrastructure_choices.py /app/tools/infrastructure_choices.py" in dockerfile
+    assert "COPY deploy/systemd /app/deploy/systemd" in dockerfile
+    assert "COPY deploy/kubernetes /app/deploy/kubernetes" in dockerfile
+    assert (
+        "COPY docs/enterprise/deployment-blueprint-module.md "
+        "/app/docs/enterprise/deployment-blueprint-module.md"
+    ) in dockerfile
+    assert (
+        "COPY docs/enterprise/real-world-infrastructure-decisions.template.json "
+        "/app/docs/enterprise/real-world-infrastructure-decisions.template.json"
+    ) in dockerfile
+
+
+def test_server_compose_profile_removes_laptop_only_runtime_assumptions() -> None:
+    root = repo_root()
+    server_compose = (root / "docker-compose.server.example.yml").read_text(
+        encoding="utf-8"
+    )
+    server_env = (root / ".env.server.example").read_text(encoding="utf-8")
+
+    assert "DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}" in server_compose
+    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}" in server_compose
+    assert "host.docker.internal" not in server_compose
+    assert "/home/user/projects" not in server_compose
+    assert "127.0.0.1:5432:5432" not in server_compose
+    assert (
+        "${AI_ENTERPRISE_WORKSPACE_ROOT:?set AI_ENTERPRISE_WORKSPACE_ROOT}:/workspaces"
+        in server_compose
+    )
+    assert "TRUSTED_PROXY_HMAC_SECRET=change-me-with-a-long-random-secret" in server_env
+    assert "REPOSITORY_ALLOWED_ROOT=/srv/ai-enterprise/workspaces" in server_env
+
+
+def test_test_compose_profile_installs_dev_dependencies() -> None:
+    root = repo_root()
+    test_compose = (root / "docker-compose.test.yml").read_text(encoding="utf-8")
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+
+    assert "api-test:" in test_compose
+    assert 'UV_SYNC_ARGS: ""' in test_compose
+    assert 'command: ["pytest", "-q"]' in test_compose
+    assert "docker-test:" in makefile
+
+
+def test_server_operations_artifacts_cover_later_phase_gaps() -> None:
+    root = repo_root()
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+    observability = (root / "docker-compose.observability.yml").read_text(
+        encoding="utf-8"
+    )
+    prometheus = (root / "docker/observability/prometheus.yml").read_text(
+        encoding="utf-8"
+    )
+    nginx = (root / "docker/reverse-proxy/nginx.conf.example").read_text(
+        encoding="utf-8"
+    )
+
+    assert "backup-verify:" in makefile
+    assert "server-secrets:" in makefile
+    assert "model-verify:" in makefile
+    assert "deployment-blueprint:" in makefile
+    assert "infrastructure-choices-template:" in makefile
+    assert "infrastructure-choices-verify:" in makefile
+    assert "observability-check:" in makefile
+    assert "prom/prometheus" in observability
+    assert "grafana/grafana" in observability
+    assert "alert_rules.yml" in observability
+    assert "metrics_path: /metrics" in prometheus
+    assert "rule_files:" in prometheus
+    assert "listen 443 ssl" in nginx
+    assert "X-Proxy-Signature" in nginx
+    assert (root / "docker/observability/alert_rules.yml").exists()
+    assert (root / "tools/deployment_blueprint.py").exists()
+    assert (root / "tools/infrastructure_choices.py").exists()
+    assert (root / "docs/enterprise/deployment-blueprint-module.md").exists()
+    assert (
+        root / "docs/enterprise/real-world-infrastructure-decisions.template.json"
+    ).exists()
+    assert (root / "deploy/systemd/ai-enterprise-backup.timer").exists()
+    assert (root / "deploy/systemd/ai-enterprise-backup.service").exists()
+    assert (root / "deploy/kubernetes/api-deployment.yaml").exists()
+    assert (root / "deploy/kubernetes/worker-deployment.yaml").exists()
 
 
 def test_platform_metadata_migration_is_reversible_and_linear() -> None:
-    root = Path(__file__).parents[3]
+    root = repo_root()
     migration = (
         root / "migrations/versions/b94e10d3f721_add_platform_metadata_foundation.py"
     ).read_text(encoding="utf-8")

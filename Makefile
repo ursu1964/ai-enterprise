@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-artifact
+.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-artifact
 
 build:
 	docker compose build
@@ -31,6 +31,9 @@ enterprise-start:
 test:
 	cd apps/api && .venv/bin/pytest -q
 
+docker-test:
+	docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test run --rm api-test
+
 lint:
 	cd apps/api && .venv/bin/ruff check src tests ../../migrations
 
@@ -57,6 +60,39 @@ migration-check:
 
 migration-verify:
 	python tools/migration_verify.py --json
+
+server-secrets:
+	python tools/generate_server_secrets.py --output .env.server.generated
+
+model-verify:
+	python tools/model_endpoint_verify.py --base-url "$${OLLAMA_BASE_URL}" --model "$${OLLAMA_MODEL}" --json
+
+server-readiness-template:
+	python tools/migration_verify.py --server-readiness --env-file .env.server.example --allow-placeholders --json
+
+server-readiness:
+	python tools/migration_verify.py --server-readiness --env-file .env.server --json
+
+infrastructure-choices-template:
+	python tools/infrastructure_choices.py --choices docs/enterprise/real-world-infrastructure-decisions.template.json --allow-placeholders --json
+
+infrastructure-choices-verify:
+	python tools/infrastructure_choices.py --choices docs/enterprise/real-world-infrastructure-decisions.json --json
+
+backup-verify:
+	python tools/backup_verify.py --json
+
+deployment-blueprint:
+	python tools/deployment_blueprint.py --json
+
+observability-check:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml config --quiet
+
+observability-up:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d prometheus grafana
+
+observability-down:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml stop prometheus grafana
 
 engineering-static:
 	python tools/engineering_verify.py --static --json

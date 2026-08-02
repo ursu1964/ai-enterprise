@@ -1,0 +1,137 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?set POSTGRES_USER} -d ${POSTGRES_DB:?set POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["alembic", "-c", "apps/api/alembic.ini", "upgrade", "head"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      TRUSTED_PROXY_HMAC_SECRET: ${TRUSTED_PROXY_HMAC_SECRET:?set TRUSTED_PROXY_HMAC_SECRET}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?set OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-ollama/gemma3:12b}
+      MODEL_PROVIDER_DEFAULT: ${MODEL_PROVIDER_DEFAULT:-ollama}
+      ARCHITECTURE_PROVIDER: ${ARCHITECTURE_PROVIDER:-crewai-ollama}
+      ARCHITECTURE_MODEL_BASE_URL: ${ARCHITECTURE_MODEL_BASE_URL:?set ARCHITECTURE_MODEL_BASE_URL}
+      REQUIREMENTS_LLM_BASE_URL: ${REQUIREMENTS_LLM_BASE_URL:?set REQUIREMENTS_LLM_BASE_URL}
+      DECOMPOSITION_MODEL_BASE_URL: ${DECOMPOSITION_MODEL_BASE_URL:?set DECOMPOSITION_MODEL_BASE_URL}
+      ARTIFACT_ROOT: /app/artifacts
+      REPOSITORY_ALLOWED_ROOT: /workspaces
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
+    ports:
+      - "${AI_ENTERPRISE_BIND_ADDRESS:-127.0.0.1}:${AI_ENTERPRISE_API_PORT:-8000}:8000"
+    volumes:
+      - ${AI_ENTERPRISE_ARTIFACT_ROOT:?set AI_ENTERPRISE_ARTIFACT_ROOT}:/app/artifacts
+      - ${AI_ENTERPRISE_RUNTIME_ROOT:?set AI_ENTERPRISE_RUNTIME_ROOT}:/app/runtime-data
+      - ${AI_ENTERPRISE_WORKSPACE_ROOT:?set AI_ENTERPRISE_WORKSPACE_ROOT}:/workspaces
+      - ./graphify-out:/app/graphify-out:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "ai_enterprise.worker"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?set OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-ollama/gemma3:12b}
+      MODEL_PROVIDER_DEFAULT: ${MODEL_PROVIDER_DEFAULT:-ollama}
+      WORKER_PROFILE: general
+      ARTIFACT_ROOT: /app/artifacts
+      REPOSITORY_ALLOWED_ROOT: /workspaces
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
+    volumes:
+      - ${AI_ENTERPRISE_ARTIFACT_ROOT:?set AI_ENTERPRISE_ARTIFACT_ROOT}:/app/artifacts
+      - ${AI_ENTERPRISE_RUNTIME_ROOT:?set AI_ENTERPRISE_RUNTIME_ROOT}:/app/runtime-data
+      - ${AI_ENTERPRISE_WORKSPACE_ROOT:?set AI_ENTERPRISE_WORKSPACE_ROOT}:/workspaces
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-data:
+  ollama-data:

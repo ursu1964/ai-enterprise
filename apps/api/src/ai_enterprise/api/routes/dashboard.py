@@ -2,9 +2,10 @@
 
 # ruff: noqa: E501
 
+import importlib.util
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
@@ -25,6 +26,67 @@ router = APIRouter(tags=["dashboard"])
 GRAPHIFY_HTML = Path("/app/graphify-out/graph.html")
 
 
+class OperatorDocument(TypedDict):
+    path: Path
+    filename: str
+
+
+def _repo_root() -> Path:
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "docs/enterprise").exists() and (candidate / "tools").exists():
+            return candidate
+    return Path.cwd()
+
+
+def _repo_path(path: str) -> Path:
+    return _repo_root() / path
+
+
+def _load_tool_function(module_name: str, function_name: str) -> Any:
+    module_path = _repo_path(f"tools/{module_name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise HTTPException(status_code=503, detail=f"{module_name} tool is not available")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return getattr(module, function_name)
+
+
+OPERATOR_DOCUMENT_FILES: dict[str, OperatorDocument] = {
+    "operator-startup-guide": {
+        "path": _repo_path("docs/enterprise/operator-startup-guide.md"),
+        "filename": "operator-startup-guide.md",
+    },
+    "project-execution-walkthrough": {
+        "path": _repo_path("docs/enterprise/project-execution-walkthrough.md"),
+        "filename": "project-execution-walkthrough.md",
+    },
+    "working-method": {
+        "path": _repo_path("docs/enterprise/working-method.md"),
+        "filename": "working-method.md",
+    },
+    "real-world-infrastructure-choices": {
+        "path": _repo_path("docs/enterprise/real-world-infrastructure-choices.md"),
+        "filename": "real-world-infrastructure-choices.md",
+    },
+}
+
+
+def _markdown_response(
+    content: str, *, filename: str, download: bool = False
+) -> PlainTextResponse:
+    headers = (
+        {"Content-Disposition": f'attachment; filename="{filename}"'}
+        if download
+        else None
+    )
+    return PlainTextResponse(
+        content,
+        media_type="text/markdown; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def enterprise_dashboard() -> HTMLResponse:
     return HTMLResponse(DASHBOARD_HTML)
@@ -42,25 +104,48 @@ async def documentation_hub() -> HTMLResponse:
 
 @router.get("/dashboard/client-manifest-template", response_class=PlainTextResponse)
 async def client_manifest_template() -> PlainTextResponse:
-    return PlainTextResponse(
+    return _markdown_response(
         CLIENT_MANIFEST_TEMPLATE,
-        media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": (
-                'attachment; filename="ai-enterprise-client-project-manifest.md"'
-            )
-        },
+        filename="ai-enterprise-client-project-manifest.md",
+        download=True,
     )
 
 
 @router.get("/dashboard/project-foundry-core", response_class=PlainTextResponse)
 async def project_foundry_core() -> PlainTextResponse:
-    return PlainTextResponse(
+    return _markdown_response(
         PROJECT_FOUNDRY_CORE_DOWNLOAD,
-        media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="project-foundry-core-v0.1.md"'
-        },
+        filename="project-foundry-core-v0.1.md",
+        download=True,
+    )
+
+
+@router.get("/dashboard/documentation/{document_id}", response_class=PlainTextResponse)
+async def dashboard_documentation_document(
+    document_id: str, download: bool = False
+) -> PlainTextResponse:
+    if document_id == "client-manifest-template":
+        return _markdown_response(
+            CLIENT_MANIFEST_TEMPLATE,
+            filename="ai-enterprise-client-project-manifest.md",
+            download=download,
+        )
+    if document_id == "project-foundry-core":
+        return _markdown_response(
+            PROJECT_FOUNDRY_CORE_DOWNLOAD,
+            filename="project-foundry-core-v0.1.md",
+            download=download,
+        )
+    document = OPERATOR_DOCUMENT_FILES.get(document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Operator document is not registered")
+    path = document["path"]
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Operator document is not available")
+    return _markdown_response(
+        path.read_text(encoding="utf-8"),
+        filename=document["filename"],
+        download=download,
     )
 
 
@@ -159,6 +244,336 @@ async def dashboard_telemetry_summary(
             if not problem_jobs
             else "Telemetry shows failed or dead-letter work that needs operator attention."
         ),
+    }
+
+
+def _readiness_item(name: str, ok: bool, detail: str, action: str) -> dict[str, str]:
+    return {
+        "name": name,
+        "status": "ready" if ok else "needs_setup",
+        "detail": detail,
+        "action": action,
+    }
+
+
+@router.get("/dashboard/server-readiness")
+async def dashboard_server_readiness() -> dict[str, Any]:
+    settings = get_settings()
+    app_env = settings.app_env.lower()
+    root = _repo_root()
+    repository_root = settings.repository_allowed_root
+    artifact_root = settings.artifact_root
+    runtime_root = root / "runtime-data"
+    server_compose = root / "docker-compose.server.example.yml"
+    server_env = root / ".env.server.example"
+    observability_compose = root / "docker-compose.observability.yml"
+    prometheus_config = root / "docker/observability/prometheus.yml"
+    prometheus_alerts = root / "docker/observability/alert_rules.yml"
+    grafana_dashboard = Path(
+        root / "docker/observability/grafana/dashboards/ai-enterprise-overview.json"
+    )
+    reverse_proxy_config = root / "docker/reverse-proxy/nginx.conf.example"
+    backup_verify = root / "tools/backup_verify.py"
+    secret_generator = root / "tools/generate_server_secrets.py"
+    proxy_signer = root / "tools/sign_proxy_assertion.py"
+    model_verifier = root / "tools/model_endpoint_verify.py"
+    deployment_blueprint = root / "tools/deployment_blueprint.py"
+    deployment_blueprint_doc = root / "docs/enterprise/deployment-blueprint-module.md"
+    infrastructure_choices = root / "tools/infrastructure_choices.py"
+    infrastructure_choices_template = Path(
+        root / "docs/enterprise/real-world-infrastructure-decisions.template.json"
+    )
+    backup_timer = root / "deploy/systemd/ai-enterprise-backup.timer"
+    backup_service = root / "deploy/systemd/ai-enterprise-backup.service"
+    k8s_api = root / "deploy/kubernetes/api-deployment.yaml"
+    k8s_worker = root / "deploy/kubernetes/worker-deployment.yaml"
+    alembic_ini = root / "apps/api/alembic.ini"
+    migrations_dir = root / "migrations/versions"
+    server_env_text = server_env.read_text(encoding="utf-8") if server_env.exists() else ""
+    checks = [
+        _readiness_item(
+            "API runtime",
+            True,
+            f"Application environment is {settings.app_env}.",
+            "Use production only behind trusted proxy authentication.",
+        ),
+        _readiness_item(
+            "Trusted proxy",
+            bool(settings.trusted_proxy_hmac_secret) or app_env == "development",
+            (
+                "Local development can use dashboard context."
+                if app_env == "development"
+                else "Trusted proxy secret is configured."
+            ),
+            "Set TRUSTED_PROXY_HMAC_SECRET and sign identity headers on the server.",
+        ),
+        _readiness_item(
+            "Project workspace",
+            repository_root.exists(),
+            f"Allowed repository root is {repository_root}.",
+            "Create the server workspace root and mount it as /workspaces.",
+        ),
+        _readiness_item(
+            "Artifact storage",
+            artifact_root.exists(),
+            f"Artifact root is {artifact_root}.",
+            "Mount durable artifact storage on the server.",
+        ),
+        _readiness_item(
+            "Runtime storage",
+            runtime_root.exists(),
+            f"Runtime root is {runtime_root}.",
+            "Mount durable runtime storage for snapshots, recovery, and execution evidence.",
+        ),
+        _readiness_item(
+            "Model service",
+            bool(settings.ollama_base_url),
+            f"Model endpoint is {settings.ollama_base_url}.",
+            "Use an internal Ollama/GPU service or managed model bridge on the server.",
+        ),
+        _readiness_item(
+            "Server compose profile",
+            server_compose.exists() and server_env.exists(),
+            "Server compose and environment templates are present.",
+            "Create .env.server from .env.server.example and run server-readiness.",
+        ),
+        _readiness_item(
+            "Backup verification",
+            backup_verify.exists(),
+            "Backup readiness command is available.",
+            "Run make backup-verify before scheduling production backups.",
+        ),
+        _readiness_item(
+            "Migration gate",
+            alembic_ini.exists() and migrations_dir.exists(),
+            "Database migration verification path is available.",
+            "Run migration checks before starting the API on a server.",
+        ),
+        _readiness_item(
+            "Server secret generator",
+            secret_generator.exists(),
+            "Secret generation helper is available.",
+            "Run make server-secrets, review .env.server.generated, then install real server values.",
+        ),
+        _readiness_item(
+            "Proxy signature helper",
+            proxy_signer.exists(),
+            "Trusted proxy signature helper is available.",
+            "Use tools/sign_proxy_assertion.py to validate the identity service headers before exposing the dashboard.",
+        ),
+        _readiness_item(
+            "Model endpoint verifier",
+            model_verifier.exists(),
+            "Production model endpoint checker is available.",
+            "Set OLLAMA_BASE_URL and OLLAMA_MODEL, then run make model-verify.",
+        ),
+        _readiness_item(
+            "GitHub access hooks",
+            all(
+                token in server_env_text
+                for token in (
+                    "LOCAL_GIT_REMOTE_URL=",
+                    "GITHUB_INTEGRATION_MODE=",
+                    "GITHUB_APP_ID=",
+                    "GITHUB_APP_INSTALLATION_ID=",
+                    "GITHUB_PRIVATE_KEY_PATH=",
+                    "GITHUB_TOKEN_FILE=",
+                )
+            ),
+            "GitHub and Git remote variables are documented.",
+            "Choose SSH, token-file, or GitHub App integration before production project creation.",
+        ),
+        _readiness_item(
+            "Scheduled backup templates",
+            backup_timer.exists() and backup_service.exists(),
+            "Systemd backup verification schedule templates are available.",
+            "Install the timer on the server and run a restore drill before production use.",
+        ),
+        _readiness_item(
+            "Managed storage hooks",
+            all(
+                token in server_env_text
+                for token in (
+                    "MANAGED_POSTGRES_URL=",
+                    "OBJECT_STORAGE_PROVIDER=",
+                    "OBJECT_STORAGE_BUCKET=",
+                    "OBJECT_STORAGE_REGION=",
+                )
+            ),
+            "Managed Postgres and object-storage variables are documented.",
+            "Choose managed Postgres or object storage provider before multi-server rollout.",
+        ),
+        _readiness_item(
+            "Kubernetes rollout templates",
+            k8s_api.exists() and k8s_worker.exists(),
+            "API and worker deployment templates are available.",
+            "Replace image, secret, ingress, and storage values for the target cluster.",
+        ),
+        _readiness_item(
+            "Prometheus and Grafana",
+            observability_compose.exists()
+            and prometheus_config.exists()
+            and grafana_dashboard.exists(),
+            "Observability compose and dashboard templates are present.",
+            "Run make observability-check, then make observability-up when ready.",
+        ),
+        _readiness_item(
+            "Production alert rules",
+            prometheus_alerts.exists(),
+            "Prometheus alert rules are present.",
+            "Connect these alerts to the production notification channel before external use.",
+        ),
+        _readiness_item(
+            "Reverse proxy and TLS",
+            reverse_proxy_config.exists(),
+            "Reverse proxy TLS template is present.",
+            "Adapt docker/reverse-proxy/nginx.conf.example for the server domain and identity service.",
+        ),
+        _readiness_item(
+            "Code graph",
+            GRAPHIFY_HTML.exists(),
+            "Graphify dashboard is mounted.",
+            "Run graphify update . after code changes.",
+        ),
+        _readiness_item(
+            "Deployment blueprint",
+            deployment_blueprint.exists() and deployment_blueprint_doc.exists(),
+            "Reusable deployment blueprint module is present.",
+            "Run make deployment-blueprint before repeating this migration for another enterprise.",
+        ),
+        _readiness_item(
+            "Infrastructure choices gate",
+            infrastructure_choices.exists() and infrastructure_choices_template.exists(),
+            "Real provider decision template and verifier are present.",
+            "Create docs/enterprise/real-world-infrastructure-decisions.json and run make infrastructure-choices-verify.",
+        ),
+    ]
+    failed = [item for item in checks if item["status"] != "ready"]
+    return {
+        "status": "ready" if not failed else "needs_setup",
+        "summary": (
+            "Server migration checks are ready to run."
+            if not failed
+            else f"{len(failed)} server readiness item(s) need setup."
+        ),
+        "checks": checks,
+        "commands": [
+            "make server-readiness-template",
+            "make server-secrets",
+            "cp .env.server.example .env.server",
+            "make server-readiness",
+            "OLLAMA_BASE_URL=http://model-service:11434 OLLAMA_MODEL=llama3.1:8b make model-verify",
+            "make backup-verify",
+            "make deployment-blueprint",
+            "make infrastructure-choices-template",
+            "make infrastructure-choices-verify",
+            "make observability-check",
+            "make observability-up",
+            "docker compose --env-file .env.server -f docker-compose.server.example.yml config --quiet",
+        ],
+    }
+
+
+def _deployment_blueprint_payload() -> dict[str, Any]:
+    root = _repo_root()
+    artifacts = {
+        "server_env_template": root / ".env.server.example",
+        "server_compose_profile": root / "docker-compose.server.example.yml",
+        "reverse_proxy_tls": root / "docker/reverse-proxy/nginx.conf.example",
+        "prometheus_config": root / "docker/observability/prometheus.yml",
+        "prometheus_alerts": root / "docker/observability/alert_rules.yml",
+        "grafana_dashboard": root
+        / "docker/observability/grafana/dashboards/ai-enterprise-overview.json",
+        "backup_timer": root / "deploy/systemd/ai-enterprise-backup.timer",
+        "backup_service": root / "deploy/systemd/ai-enterprise-backup.service",
+        "kubernetes_api": root / "deploy/kubernetes/api-deployment.yaml",
+        "kubernetes_worker": root / "deploy/kubernetes/worker-deployment.yaml",
+    }
+    missing = [name for name, path in artifacts.items() if not path.exists()]
+    return {
+        "name": "AI Enterprise Deployment Blueprint",
+        "status": "ready" if not missing else "needs_setup",
+        "business_meaning": (
+            "The migration path is reusable as an enterprise installation pattern."
+            if not missing
+            else "The migration pattern is not complete because some deployment artifacts are missing."
+        ),
+        "next_action": (
+            "Choose real provider values, generate .env.server, and run the server-readiness gate."
+            if not missing
+            else f"Create missing artifacts: {', '.join(missing)}."
+        ),
+        "phases": [
+            {
+                "phase": 1,
+                "name": "Stabilize local truth",
+                "gate": "Dashboard reads the official manager read model and problem jobs are resolved or acknowledged.",
+                "proof": ["/api/v1/query/dashboard-manager", "/dashboard/server-readiness"],
+            },
+            {
+                "phase": 2,
+                "name": "Create server profile",
+                "gate": "Server compose and .env.server template remove laptop paths and placeholder runtime assumptions.",
+                "proof": ["make server-readiness-template", "docker-compose.server.example.yml"],
+            },
+            {
+                "phase": 3,
+                "name": "Single server deployment",
+                "gate": "API, worker, Postgres, volumes, reverse proxy, TLS, and trusted identity headers are configured.",
+                "proof": ["make server-readiness", "tools/sign_proxy_assertion.py"],
+            },
+            {
+                "phase": 4,
+                "name": "Production observability",
+                "gate": "Prometheus, Grafana, alerts, backups, and model endpoint verification are operational.",
+                "proof": ["make observability-check", "make backup-verify", "make model-verify"],
+            },
+            {
+                "phase": 5,
+                "name": "Scalable factory",
+                "gate": "Managed database, object storage, durable workspaces, and horizontally scalable workers are chosen.",
+                "proof": ["MANAGED_POSTGRES_URL", "OBJECT_STORAGE_BUCKET", "deploy/kubernetes"],
+            },
+            {
+                "phase": 6,
+                "name": "Production multiserver deployment",
+                "gate": "Kubernetes or separate worker nodes run API and worker pools with shared observability and backup controls.",
+                "proof": [
+                    "deploy/kubernetes/api-deployment.yaml",
+                    "deploy/kubernetes/worker-deployment.yaml",
+                ],
+            },
+        ],
+        "artifacts": {name: {"path": str(path), "exists": path.exists()} for name, path in artifacts.items()},
+        "missing": missing,
+    }
+
+
+@router.get("/dashboard/deployment-blueprint")
+async def dashboard_deployment_blueprint() -> dict[str, Any]:
+    return _deployment_blueprint_payload()
+
+
+@router.get("/dashboard/infrastructure-choices")
+async def dashboard_infrastructure_choices() -> dict[str, Any]:
+    choices_path = _repo_path("docs/enterprise/real-world-infrastructure-decisions.json")
+    template_path = _repo_path(
+        "docs/enterprise/real-world-infrastructure-decisions.template.json"
+    )
+    verify = _load_tool_function("infrastructure_choices", "verify")
+
+    if choices_path.exists():
+        return verify(choices_path)
+    report = verify(template_path, allow_placeholders=True)
+    return {
+        **report,
+        "status": "needs_setup",
+        "conformant": False,
+        "summary": "The infrastructure decision template is ready, but real production choices have not been recorded yet.",
+        "findings": [
+            "Create docs/enterprise/real-world-infrastructure-decisions.json with real domain, identity, model, GitHub, database, storage, Kubernetes, backup, and alert values."
+        ],
+        "next_action": "Copy the template, replace placeholders with real provider choices, then run make infrastructure-choices-verify.",
     }
 
 
@@ -492,6 +907,28 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
       gap: 4px;
       text-decoration: none;
     }
+    button.item {
+      width: 100%;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+    }
+    .doc-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .doc-preview {
+      min-height: 560px;
+      max-height: 72vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(7, 12, 18, 0.78);
+      color: var(--text);
+      padding: 12px;
+      line-height: 1.45;
+    }
+    .doc-status { margin-bottom: 10px; color: var(--muted); }
     .item strong { color: var(--text); }
     .item span, code { color: var(--muted); }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -518,17 +955,18 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
           <div class="item"><strong>4. Document</strong><span>If verification passes, update affected documentation in the same change.</span></div>
         </div>
       </article>
-      <article class="panel span-4">
+      <article class="panel span-6">
         <h2>Operator Documents</h2>
         <div class="listbox">
-          <a class="item" href="/dashboard/client-manifest-template"><strong>Client Manifest Template</strong><span>Download and send to a client or requesting service.</span></a>
-          <a class="item" href="/dashboard/project-foundry-core"><strong>Project Foundry Core</strong><span>AEOS project factory contracts, gates, and prompt rules.</span></a>
-          <div class="item"><strong>Operator Startup Guide</strong><span><code>docs/enterprise/operator-startup-guide.md</code></span></div>
-          <div class="item"><strong>Project Execution Walkthrough</strong><span><code>docs/enterprise/project-execution-walkthrough.md</code></span></div>
-          <div class="item"><strong>Working Method</strong><span><code>docs/enterprise/working-method.md</code></span></div>
+          <button class="item doc-open" data-doc="client-manifest-template" data-download="/dashboard/client-manifest-template"><strong>Client Manifest Template</strong><span>Download and send to a client or requesting service.</span></button>
+          <button class="item doc-open" data-doc="project-foundry-core" data-download="/dashboard/project-foundry-core"><strong>Project Foundry Core</strong><span>AEOS project factory contracts, gates, and prompt rules.</span></button>
+          <button class="item doc-open" data-doc="operator-startup-guide" data-download="/dashboard/documentation/operator-startup-guide?download=true"><strong>Operator Startup Guide</strong><span><code>docs/enterprise/operator-startup-guide.md</code></span></button>
+          <button class="item doc-open" data-doc="project-execution-walkthrough" data-download="/dashboard/documentation/project-execution-walkthrough?download=true"><strong>Project Execution Walkthrough</strong><span><code>docs/enterprise/project-execution-walkthrough.md</code></span></button>
+          <button class="item doc-open" data-doc="working-method" data-download="/dashboard/documentation/working-method?download=true"><strong>Working Method</strong><span><code>docs/enterprise/working-method.md</code></span></button>
+          <button class="item doc-open" data-doc="real-world-infrastructure-choices" data-download="/dashboard/documentation/real-world-infrastructure-choices?download=true"><strong>Infrastructure Choices</strong><span><code>docs/enterprise/real-world-infrastructure-choices.md</code></span></button>
         </div>
       </article>
-      <article class="panel span-4">
+      <article class="panel span-6">
         <h2>Graphs and Images</h2>
         <div class="listbox">
           <a class="item" href="/dashboard"><strong>Execution Graph</strong><span>Open the Execution tab for live project advancement.</span></a>
@@ -537,7 +975,16 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
           <div class="item"><strong>Future Visual Library</strong><span>Store reference images, project diagrams, and proof screenshots beside project docs.</span></div>
         </div>
       </article>
-      <article class="panel span-4">
+      <article class="panel span-12">
+        <h2>Document Preview</h2>
+        <p id="docStatus" class="doc-status">Select a document. It will appear here in a large reading box with a vertical scrollbar and a download action.</p>
+        <pre id="docPreview" class="doc-preview">No document selected.</pre>
+        <div class="doc-actions">
+          <a id="docDownload" class="button" href="/dashboard/client-manifest-template">Download Selected Document</a>
+          <a id="docOpenRaw" class="button" href="/dashboard/documentation/client-manifest-template" target="_blank" rel="noreferrer">Open Raw Text</a>
+        </div>
+      </article>
+      <article class="panel span-12">
         <h2>Commands</h2>
         <div class="listbox">
           <div class="item"><strong>Start stack</strong><span><code>docker compose up --build -d</code></span></div>
@@ -549,6 +996,35 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
       </article>
     </section>
   </main>
+  <script>
+    const preview = document.getElementById("docPreview");
+    const status = document.getElementById("docStatus");
+    const download = document.getElementById("docDownload");
+    const raw = document.getElementById("docOpenRaw");
+    async function openDocument(button) {
+      const id = button.dataset.doc;
+      const title = button.querySelector("strong").textContent;
+      const url = `/dashboard/documentation/${encodeURIComponent(id)}`;
+      status.textContent = `Loading ${title}...`;
+      preview.textContent = "";
+      download.href = button.dataset.download || `${url}?download=true`;
+      raw.href = url;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        preview.textContent = await response.text();
+        status.textContent = `${title} loaded. Use the scrollbar to read, or download the document.`;
+      } catch (error) {
+        preview.textContent = "The document could not be loaded. Check API readiness and the document path.";
+        status.textContent = `${title} is unavailable.`;
+      }
+    }
+    document.querySelectorAll(".doc-open").forEach(button => {
+      button.addEventListener("click", () => openDocument(button));
+    });
+    const firstDocument = document.querySelector(".doc-open");
+    if (firstDocument) openDocument(firstDocument);
+  </script>
 </body>
 </html>
 """
@@ -903,6 +1379,42 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     .mini strong { display: block; margin-bottom: 6px; }
+    .launch-contract {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+      border-color: rgba(93, 184, 255, 0.32);
+    }
+    .launch-contract-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .launch-contract-cell {
+      border: 1px solid rgba(143, 166, 190, 0.16);
+      border-radius: 8px;
+      background: rgba(3, 7, 11, 0.64);
+      padding: 10px;
+    }
+    .launch-contract-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+    .launch-contract-cell strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.98rem;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }
+    .launch-contract-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
     .info-card {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1358,6 +1870,10 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span id="factoryStatus" class="muted">Attach a manifesto or fill the fields manually.</span>
         </div>
         <div id="manifestPreview" class="mini muted">Download the client manifest, send it to the client or requesting service, then upload the completed document here.</div>
+        <div id="launchContract" class="mini launch-contract">
+          <strong>Launch Result</strong>
+          <div class="muted">No launch has started yet. Preview or start a project to see what was created, what needs attention, and where to inspect first.</div>
+        </div>
       </article>
     </section>
 
@@ -1395,6 +1911,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div id="telemetryGraph" class="surface-graph"></div>
       </article>
       <article class="panel span-12"><h2>Business Telemetry</h2><div id="metricsTable"></div></article>
+      <article class="panel span-12"><h2>Server Readiness</h2><div id="serverReadinessTable"></div></article>
+      <article class="panel span-12"><h2>Real Infrastructure Choices</h2><div id="infrastructureChoicesTable"></div></article>
     </section>
 
     <section id="projects" class="view grid hidden">
@@ -1447,7 +1965,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       "X-Actor-Type": "human",
       "X-Actor-Role": "admin"
     };
-    const state = { jobs: [], workers: [], projects: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, context: null, sources: {} };
+    const state = { jobs: [], workers: [], projects: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, serverReadiness: null, infrastructureChoices: null, context: null, sources: {} };
     let loadedManifestDocument = null;
     let selectedMovementNode = "manifesto";
     let selectedExecutionNode = "factory";
@@ -1509,7 +2027,17 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     function listbox(rows, renderItem, emptyMessage = "No live records are available for this section yet.") {
-      if (!rows.length) return `<div class="mini muted">${esc(emptyMessage)}</div>`;
+      if (!rows.length) return `
+        <div class="listbox">
+          <div class="list-item">
+            <div>
+              <div class="list-title">Nothing to show yet</div>
+              <div class="list-meta">${esc(emptyMessage)}</div>
+            </div>
+            <span class="pill info">waiting</span>
+          </div>
+        </div>
+      `;
       return `<div class="listbox">${rows.map(renderItem).join("")}</div>`;
     }
 
@@ -1674,6 +2202,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       document.querySelectorAll(".view").forEach(view => view.classList.add("hidden"));
       tab.setAttribute("aria-selected", "true");
       byId(viewName).classList.remove("hidden");
+      const nextHash = `#${viewName}`;
+      if (window.location.hash !== nextHash) {
+        history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+      }
     }
 
     function movementModel() {
@@ -2382,6 +2914,19 @@ DASHBOARD_HTML = r"""<!doctype html>
       byId("factoryStatus").textContent = "Creating project...";
       const project = await createAndStartProject(projectInput);
       byId("factoryStatus").textContent = "Formation pack created. Opening execution graph...";
+      renderLaunchContract({
+        status: "started",
+        summary: "One governed project was created, a formation pack was prepared, and workflow execution was started.",
+        started: 1,
+        created: 1,
+        reused: 0,
+        blocked: 0,
+        failed: 0,
+        recommendedName: project.name,
+        recommendedUrl: `/dashboard?project=${project.id}`,
+        nextAction: "Open Execution and watch the project graph for phase, task, crew, event, and telemetry movement.",
+        proof: "Project record, formation pack, workflow start, and dashboard graph."
+      });
       setOrientation(3, "Formation pack created and workflow started. Inspect the live project graph next.");
       coach(
         "Project Formed",
@@ -2422,6 +2967,23 @@ DASHBOARD_HTML = r"""<!doctype html>
       const started = results.filter(result => result.status === "fulfilled").map(result => result.value);
       const failed = results.length - started.length;
       byId("factoryStatus").textContent = `Started ${started.length}; failed ${failed}. Opening execution control...`;
+      renderLaunchContract({
+        status: failed ? "partial" : "started",
+        summary: failed
+          ? "The batch started every valid project and reported launch issues for the rest."
+          : "The batch started every manifesto project successfully.",
+        started: started.length,
+        created: started.length,
+        reused: 0,
+        blocked: 0,
+        failed,
+        recommendedName: started[0]?.name || "No project ready yet",
+        recommendedUrl: started[0] ? `/dashboard?project=${started[0].id}` : "/dashboard#factory",
+        nextAction: failed
+          ? "Open Execution for started work, then inspect Problems or correct the manifesto before retrying failed launches."
+          : "Open Execution and inspect the first project while the portfolio continues in parallel.",
+        proof: "Manifesto batch, project records, formation packs, workflow starts, and execution graph."
+      });
       setOrientation(3, `Manifesto batch started: ${countSentence(started.length, "project")}, ${countSentence(failed, "launch issue")}. Inspect Execution first.`);
       coach(
         "Manifesto Batch Started",
@@ -2433,6 +2995,37 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (started[0]) selectedExecutionNode = `project:${started[0].id}`;
       document.querySelector('[data-view="execution"]').click();
       renderExecutionDashboard();
+    }
+
+    function renderLaunchContract(contract) {
+      const status = contract.status || "waiting";
+      const recommendedUrl = contract.recommendedUrl || "/dashboard#execution";
+      const recommendedTarget = recommendedUrl.includes("#")
+        ? recommendedUrl.split("#").pop()
+        : "";
+      byId("launchContract").innerHTML = `
+        <strong>Launch Result</strong>
+        <div>${esc(contract.summary || "The factory is waiting for a preview or launch action.")}</div>
+        <div class="launch-contract-grid">
+          <div class="launch-contract-cell"><span>Status</span><strong class="${statusClass(status)}">${esc(humanStatus(status))}</strong></div>
+          <div class="launch-contract-cell"><span>Started</span><strong>${esc(contract.started ?? 0)}</strong></div>
+          <div class="launch-contract-cell"><span>Created</span><strong>${esc(contract.created ?? 0)}</strong></div>
+          <div class="launch-contract-cell"><span>Reused</span><strong>${esc(contract.reused ?? 0)}</strong></div>
+          <div class="launch-contract-cell"><span>Needs Action</span><strong>${esc((contract.blocked ?? 0) + (contract.failed ?? 0))}</strong></div>
+          <div class="launch-contract-cell"><span>Inspect First</span><strong>${esc(contract.recommendedName || "Execution graph")}</strong></div>
+        </div>
+        <div class="human-copy">
+          <span><b>Next:</b> ${esc(contract.nextAction || "Open Execution and inspect the current graph state.")}</span>
+          <span><b>Proof:</b> ${esc(contract.proof || "Dashboard source freshness, project records, workflow state, and telemetry.")}</span>
+        </div>
+        <div class="launch-contract-actions">
+          <button class="launch-open" data-target="${esc(recommendedTarget || "execution")}">Open Recommended View</button>
+          <a class="link-button" href="${esc(recommendedUrl)}">Open Proof Path</a>
+        </div>
+      `;
+      document.querySelectorAll(".launch-open").forEach(button => {
+        button.addEventListener("click", () => goTarget(button.dataset.target || "execution"));
+      });
     }
 
     function renderMockFactoryProjects(payload, mode) {
@@ -2489,6 +3082,21 @@ DASHBOARD_HTML = r"""<!doctype html>
         headers: actorHeaders
       });
       byId("factoryStatus").textContent = `${result.ready_count} ready; ${result.reused_count} reused; ${result.blocked_count} blocked.`;
+      renderLaunchContract({
+        status: result.status,
+        summary: result.human_summary,
+        started: 0,
+        created: result.ready_count - result.reused_count,
+        reused: result.reused_count,
+        blocked: result.blocked_count,
+        failed: 0,
+        recommendedName: result.recommended_first_project?.name || "No ready project yet",
+        recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
+        nextAction: result.blocked_count
+          ? "Correct blocked launch information before starting the mock factory."
+          : "Launch the mock factory when you are ready to create or reuse the portfolio projects.",
+        proof: "Preview contract, readiness count, reused projects, blocked projects, and recommended first inspection target."
+      });
       renderMockFactoryProjects(result, "preview");
       coach(
         "Mock Factory Preview Ready",
@@ -2506,6 +3114,19 @@ DASHBOARD_HTML = r"""<!doctype html>
         body: JSON.stringify({})
       });
       byId("factoryStatus").textContent = `${result.started_count} demo project(s) ready; ${result.blocked_count || 0} blocked; ${result.failed_count || 0} failed. ${result.next_action}`;
+      renderLaunchContract({
+        status: result.status,
+        summary: result.human_summary,
+        started: result.started_count,
+        created: result.created_count,
+        reused: result.reused_count,
+        blocked: result.blocked_count,
+        failed: result.failed_count,
+        recommendedName: result.recommended_first_project?.name || "No project ready yet",
+        recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
+        nextAction: result.next_action,
+        proof: "Created or reused projects, formation packs, workflows, jobs, telemetry links, and recommended dashboard path."
+      });
       renderMockFactoryProjects(result, "launch");
       setOrientation(3, "Mock autonomy started. Open Execution and select a demo project to watch graph movement, tasks, crews, events, and telemetry.");
       coach(
@@ -2545,8 +3166,8 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function statusClass(status) {
       const value = String(status || "").toLowerCase();
-      if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated"].includes(value)) return "ok";
-      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "observed"].includes(value)) return "warn";
+      if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated", "ready", "started"].includes(value)) return "ok";
+      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "observed", "needs_setup", "partial", "blocked"].includes(value)) return "warn";
       if (["failed", "dead_letter", "abandoned", "offline", "attention_required"].includes(value)) return "bad";
       return "info";
     }
@@ -2569,6 +3190,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         retry_wait: "Waiting before retry",
         succeeded: "Completed",
         nominal: "Healthy",
+        ready: "Ready",
+        started: "Started and ready to inspect",
+        partial: "Partly started, needs review",
+        blocked: "Blocked until missing details are fixed",
+        needs_setup: "Needs setup",
         viable: "Viable",
         active: "Active",
         standby: "Standby",
@@ -2765,6 +3391,42 @@ DASHBOARD_HTML = r"""<!doctype html>
           `, "No raw metrics have been emitted yet. Open the dashboard or API routes, then refresh.")}
         </details>
       `;
+      const readiness = state.serverReadiness;
+      const readinessRows = readiness ? readiness.checks || [] : [];
+      byId("serverReadinessTable").innerHTML = readiness ? `
+        <div class="mini">
+          <strong class="${readiness.status === "ready" ? "ok" : "warn"}">${esc(humanStatus(readiness.status))}</strong>
+          <div>${esc(readiness.summary)}</div>
+        </div>
+        ${listbox(readinessRows, item => `
+          <div class="list-item">
+            <div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div><div class="list-meta">Next: ${esc(item.action)}</div></div>
+            <span class="pill ${item.status === "ready" ? "ok" : "warn"}">${esc(humanStatus(item.status))}</span>
+          </div>
+        `, "No server readiness checks are registered.")}
+        <details class="mini" style="margin-top: 10px;">
+          <summary>Deployment commands</summary>
+          ${listbox(readiness.commands || [], command => `<div class="list-item"><div class="list-title mono">${esc(command)}</div><span class="pill info">run</span></div>`, "No deployment commands are registered.")}
+        </details>
+      ` : listbox([], item => item, "Server readiness is not available yet. Refresh the dashboard or check API readiness.");
+      const choices = state.infrastructureChoices;
+      byId("infrastructureChoicesTable").innerHTML = choices ? `
+        <div class="mini">
+          <strong class="${choices.status === "ready" ? "ok" : "warn"}">${esc(humanStatus(choices.status))}</strong>
+          <div>${esc(choices.summary)}</div>
+          <div class="muted">Next: ${esc(choices.next_action)}</div>
+        </div>
+        ${listbox((choices.sections || []).map(section => ({ section })), item => `
+          <div class="list-item">
+            <div><div class="list-title">${esc(String(item.section).replace(/_/g, " "))}</div><div class="list-meta">This production decision must have a real owner, provider, and proof path.</div></div>
+            <span class="pill ${choices.status === "ready" ? "ok" : "warn"}">${esc(choices.status === "ready" ? "recorded" : "needs value")}</span>
+          </div>
+        `, "No infrastructure decision sections are registered.")}
+        <details class="mini" style="margin-top: 10px;">
+          <summary>Current findings</summary>
+          ${listbox(choices.findings || [], finding => `<div class="list-item"><div class="list-title">${esc(finding)}</div><span class="pill warn">action</span></div>`, "No findings. Real infrastructure choices are recorded.")}
+        </details>
+      ` : listbox([], item => item, "Infrastructure choices are not available yet. Refresh the dashboard or check API readiness.");
       byId("projectsTable").innerHTML = listbox(state.projects, project => `
         <button class="list-item project-open" data-project-id="${esc(project.id)}">
           <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">${esc(project.repository_path)}</div><div class="list-meta">Updated ${esc(project.updated_at)}</div></div>
@@ -2882,10 +3544,10 @@ DASHBOARD_HTML = r"""<!doctype html>
             </div>
             <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
             <div class="grid" style="margin-top: 10px;">
-              <div class="mini span-6"><strong>Current Issues</strong>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No current issues are attached to this phase.")}</div>
-              <div class="mini span-6"><strong>Reviewed History</strong>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No reviewed historical issues are attached to this phase.")}</div>
-              <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "No crew runs are linked to this project phase yet.")}</div>
-              <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "No job history is linked to this project yet.")}</div>
+              <div class="mini span-6"><strong>Current Issues</strong><div class="list-meta">Used to show active blockers for the selected phase, with cause and next recovery action.</div>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "This phase has no active blockers. If work fails, the cause and next recovery action will appear here.")}</div>
+              <div class="mini span-6"><strong>Reviewed History</strong><div class="list-meta">Used to preserve old problems after they are resolved or acknowledged, so proof is not lost.</div>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No resolved or acknowledged issues are attached to this phase yet. Past problems will appear here after review.")}</div>
+              <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "This table shows which specialist crew worked on the project. No crew run is linked to this phase yet.")}</div>
+              <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "This table shows worker jobs, attempts, and errors. No job history is linked to this project yet.")}</div>
               <div class="mini span-6"><strong>Calibration</strong>${listbox(payload.calibration, item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No calibration checks are available yet.")}</div>
               <div class="mini span-6"><strong>Improvements & Solutions</strong>${listbox(payload.improvements, item => `<div class="list-item"><div><div class="list-title">${esc(item.source)}</div><div class="list-meta">${esc(item.recommendation)}</div></div><span class="pill info">${esc(humanStatus(item.status))}</span></div>`, "No improvement proposals are needed right now.")}</div>
               <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
@@ -2941,14 +3603,16 @@ DASHBOARD_HTML = r"""<!doctype html>
       const dashboardManagerUrl = dashboardContext && dashboardContext.organization_id
         ? `/api/v1/query/dashboard-manager?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
         : "/api/v1/query/dashboard-manager";
-      const [ready, jobs, workers, projects, rawMetrics, operatingPicture, dashboardManager] = await Promise.allSettled([
+      const [ready, jobs, workers, projects, rawMetrics, operatingPicture, dashboardManager, serverReadiness, infrastructureChoices] = await Promise.allSettled([
         json("/health/ready"),
         json("/api/v1/operator/jobs", { headers: actorHeaders }),
         json("/api/v1/operator/jobs/worker-instances", { headers: actorHeaders }),
         json("/api/v1/projects"),
         text("/metrics"),
         json(operatingPictureUrl, { headers: actorHeaders }),
-        json(dashboardManagerUrl, { headers: actorHeaders })
+        json(dashboardManagerUrl, { headers: actorHeaders }),
+        json("/dashboard/server-readiness"),
+        json("/dashboard/infrastructure-choices")
       ]);
       const telemetrySummary = await Promise.allSettled([json(telemetryUrl)]);
       if (ready.status === "fulfilled" && ready.value.status === "ok") {
@@ -2965,6 +3629,8 @@ DASHBOARD_HTML = r"""<!doctype html>
       state.telemetrySummary = telemetrySummary[0].status === "fulfilled" ? telemetrySummary[0].value : null;
       state.operatingPicture = operatingPicture.status === "fulfilled" ? operatingPicture.value : null;
       state.dashboardManager = dashboardManager.status === "fulfilled" ? dashboardManager.value : null;
+      state.serverReadiness = serverReadiness.status === "fulfilled" ? serverReadiness.value : null;
+      state.infrastructureChoices = infrastructureChoices.status === "fulfilled" ? infrastructureChoices.value : null;
       state.sources = {
         ready: sourceStatus(ready, "API", "overview", ready.status === "fulfilled" && ready.value.status === "ok" ? "Service is ready" : "Service readiness is not confirmed"),
         jobs: sourceStatus(jobs, "Work", "problems", `${state.jobs.length} tracked job(s)`),
@@ -2972,7 +3638,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
         metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} raw signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
         query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Read model is unavailable"),
-        manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Project execution manager is unavailable")
+        manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Project execution manager is unavailable"),
+        server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness is unavailable"),
+        infrastructure: sourceStatus(infrastructureChoices, "Infrastructure Choices", "metrics", state.infrastructureChoices ? state.infrastructureChoices.summary : "Infrastructure choices are unavailable")
       };
       render();
       renderSourceStrip();
@@ -3118,6 +3786,13 @@ DASHBOARD_HTML = r"""<!doctype html>
         switchView("projects");
         byId("projectSelect").value = projectId;
         loadProjectDashboard(projectId);
+      } else if (window.location.hash) {
+        switchView(window.location.hash.slice(1));
+      }
+    });
+    window.addEventListener("hashchange", () => {
+      if (window.location.hash) {
+        switchView(window.location.hash.slice(1));
       }
     });
     setInterval(refresh, 15000);
@@ -3218,9 +3893,50 @@ DEMO_HTML = r"""<!doctype html>
       background: rgba(7, 12, 18, 0.7);
     }
     .check strong { display: block; margin-bottom: 4px; }
+    .walkthrough {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .step-card {
+      min-height: 186px;
+      border: 1px solid rgba(143, 166, 190, 0.22);
+      border-radius: 8px;
+      background: rgba(5, 10, 15, 0.78);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 10px;
+      align-content: start;
+    }
+    .step-number {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #031018;
+      background: linear-gradient(135deg, var(--gold), var(--cyan));
+      font-weight: 900;
+    }
+    .step-card strong { display: block; margin-bottom: 6px; }
+    .step-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+    .step-card a {
+      width: fit-content;
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+    }
     @media (max-width: 900px) {
       header { flex-direction: column; align-items: flex-start; }
       .span-4, .span-6 { grid-column: span 12; }
+      .step-card { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -3243,6 +3959,19 @@ DEMO_HTML = r"""<!doctype html>
       <article class="panel span-12">
         <h2>Idea to Reality Map</h2>
         <div id="storyMap" class="story-map"></div>
+      </article>
+      <article class="panel span-12">
+        <h2>Step-by-Step Live Demo</h2>
+        <div class="walkthrough">
+          <div class="step-card"><div class="step-number">1</div><div><strong>Understand the story</strong><span>Start here. Touch each phase in the map and explain how an idea becomes governed work.</span><a href="/dashboard/demo">Stay Here</a></div></div>
+          <div class="step-card"><div class="step-number">2</div><div><strong>Open the factory</strong><span>Go to the Manifesto Launcher. This is where a client document becomes a project.</span><a href="/dashboard#factory">Open Factory</a></div></div>
+          <div class="step-card"><div class="step-number">3</div><div><strong>Preview a mock project</strong><span>Use Preview Mock Factory Test to see the prepared manifesto, project type, and launch path.</span><a href="/dashboard#factory">Preview Mock Factory</a></div></div>
+          <div class="step-card"><div class="step-number">4</div><div><strong>Start the process</strong><span>Use Start Manifesto Batch when you want the factory to create and start governed work.</span><a href="/dashboard#factory">Start Process</a></div></div>
+          <div class="step-card"><div class="step-number">5</div><div><strong>Watch execution</strong><span>Open the live graph to see projects, tasks, crews, events, and current movement.</span><a href="/dashboard#execution">Open Execution</a></div></div>
+          <div class="step-card"><div class="step-number">6</div><div><strong>Inspect a project</strong><span>Open Projects to see phase status, artifacts, remaining work, proof, and risks.</span><a href="/dashboard#projects">Open Projects</a></div></div>
+          <div class="step-card"><div class="step-number">7</div><div><strong>Check telemetry</strong><span>Open Metrics to verify health, runtime signals, queue pressure, and evidence.</span><a href="/dashboard#metrics">Open Metrics</a></div></div>
+          <div class="step-card"><div class="step-number">8</div><div><strong>Save the proof</strong><span>Open the Documentation Hub to read, preview, and download the operating documents.</span><a href="/dashboard/documentation-hub">Open Docs</a></div></div>
+        </div>
       </article>
       <article class="panel span-6 output">
         <h2 id="storyTitle">Start with the idea</h2>

@@ -1,0 +1,76 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": "AI Enterprise Prometheus",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ai_enterprise_http_requests_total",
+          "legendFormat": "HTTP requests"
+        }
+      ],
+      "title": "API Request Movement",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "AI Enterprise Prometheus",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "ai_enterprise_http_responses_200_total",
+          "legendFormat": "Successful responses"
+        },
+        {
+          "expr": "ai_enterprise_http_responses_500_total",
+          "legendFormat": "Server errors"
+        }
+      ],
+      "title": "Response Health",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 40,
+  "tags": [
+    "ai-enterprise"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "AI Enterprise Overview",
+  "uid": "ai-enterprise-overview",
+  "version": 1
+}

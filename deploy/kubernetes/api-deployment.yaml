@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-enterprise-api
+  namespace: ai-enterprise
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-enterprise-api
+  template:
+    metadata:
+      labels:
+        app: ai-enterprise-api
+    spec:
+      containers:
+        - name: api
+          image: ai-enterprise-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: ai-enterprise-env
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30

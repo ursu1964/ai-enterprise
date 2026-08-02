@@ -9,6 +9,7 @@ from ai_enterprise.api.routes.query_platform import (
     dashboard_manager,
     operating_picture,
     project_operating_picture,
+    router,
 )
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.infrastructure.database.models import (
@@ -60,6 +61,12 @@ def actor(
 
 def project_query_actor(project_id: uuid.UUID) -> Actor:
     return actor(scopes=frozenset({f"project:{project_id}"}))
+
+
+def test_dashboard_read_model_compatibility_route_is_mounted() -> None:
+    paths = {route.path for route in router.routes}
+    assert "/query/dashboard-manager" in paths
+    assert "/query/dashboard-read-model" in paths
 
 
 def project(now: datetime, project_id: uuid.UUID | None = None) -> ProjectModel:

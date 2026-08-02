@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-enterprise-worker
+  namespace: ai-enterprise
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-enterprise-worker
+  template:
+    metadata:
+      labels:
+        app: ai-enterprise-worker
+    spec:
+      containers:
+        - name: worker
+          image: ai-enterprise-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "ai_enterprise.worker"]
+          envFrom:
+            - secretRef:
+                name: ai-enterprise-env

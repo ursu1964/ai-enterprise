@@ -1,0 +1,65 @@
+{
+  "domain_tls": {
+    "domain": "ai-enterprise.example.com",
+    "tls_provider": "letsencrypt|cloudflare|managed-load-balancer",
+    "certificate_owner": "platform-team",
+    "renewal_proof": "link-or-command-that-proves-renewal-is-automated"
+  },
+  "identity_proxy": {
+    "provider": "oauth2-proxy|authentik|cloudflare-access|custom",
+    "signature_owner": "identity-team",
+    "hmac_secret_source": "server-secret-manager-path",
+    "signed_headers": [
+      "X-Actor-ID",
+      "X-Actor-Type",
+      "X-Actor-Role",
+      "X-Proxy-Timestamp",
+      "X-Proxy-Signature"
+    ]
+  },
+  "model_service": {
+    "provider": "ollama|vllm|openai-compatible-gateway|managed-provider",
+    "base_url": "http://model-service:11434",
+    "model": "llama3.1:8b",
+    "capacity_owner": "ai-platform-team",
+    "verification_command": "OLLAMA_BASE_URL=http://model-service:11434 OLLAMA_MODEL=llama3.1:8b make model-verify"
+  },
+  "github_access": {
+    "mode": "github-app|ssh-deploy-key|token-file",
+    "organization": "example-org",
+    "repository_policy": "per-project-repository",
+    "secret_source": "server-secret-manager-path"
+  },
+  "database": {
+    "mode": "managed-postgres|dedicated-postgres-server|single-server-volume",
+    "connection_secret": "server-secret-manager-path",
+    "backup_policy": "daily-backup-with-restore-drill",
+    "restore_drill_frequency": "monthly"
+  },
+  "object_storage": {
+    "provider": "s3|gcs|azure-blob|minio|single-server-volume",
+    "bucket": "ai-enterprise-artifacts",
+    "region": "eu-central-1",
+    "encryption": "kms-or-provider-managed",
+    "retention_policy": "90-days"
+  },
+  "kubernetes": {
+    "enabled": false,
+    "registry": "registry.example.com/ai-enterprise/api",
+    "namespace": "ai-enterprise",
+    "ingress_class": "nginx|traefik|cloud-load-balancer",
+    "storage_class": "fast-ssd",
+    "worker_replicas": 3
+  },
+  "backup_restore": {
+    "schedule_owner": "platform-team",
+    "backup_timer": "ai-enterprise-backup.timer",
+    "last_restore_drill": "YYYY-MM-DD",
+    "restore_drill_evidence": "link-to-runbook-output-or-ticket"
+  },
+  "notification": {
+    "alert_channel": "pagerduty|opsgenie|slack|email",
+    "oncall_owner": "platform-team",
+    "escalation_policy": "link-to-policy"
+  }
+}

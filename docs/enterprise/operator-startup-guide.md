@@ -202,6 +202,22 @@ The central visual manager is:
 - Enterprise command center: `http://localhost:8000/dashboard`
 - Demo story: `http://localhost:8000/dashboard/demo`
 
+Use the Demo Story when you need to explain the system before running a real project. The
+Step-by-Step Live Demo starts with the story map, then opens the exact working panels for Factory,
+Execution, Projects, Metrics, and Documentation.
+
+Direct dashboard panel links:
+
+- Factory and Manifesto Launcher: `http://localhost:8000/dashboard#factory`
+- Live Execution graph: `http://localhost:8000/dashboard#execution`
+- Project inspection: `http://localhost:8000/dashboard#projects`
+- Telemetry and metrics: `http://localhost:8000/dashboard#metrics`
+- Documentation Hub: `http://localhost:8000/dashboard/documentation-hub`
+
+In Factory, use Launch Result as the operating checkpoint after preview or start. It explains
+status, created work, reused work, blocked work, the recommended first project, the next action, and
+the proof path.
+
 It connects the local health check, operator jobs, worker instances, project list, runtime metrics,
 workflow lookup, project intelligence graph, and graph links into one browser interface.
 

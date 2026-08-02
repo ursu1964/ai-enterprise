@@ -1,0 +1,8 @@
+[Unit]
+Description=AI Enterprise backup verification
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/ai-enterprise/app
+ExecStart=/usr/bin/make backup-verify

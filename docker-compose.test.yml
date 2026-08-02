@@ -1,0 +1,47 @@
+services:
+  api-test:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        UV_SYNC_ARGS: ""
+    command: ["pytest", "-q"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_DATA_HOME: /tmp/.local/share
+      PYTEST_ADDOPTS: "-p no:cacheprovider"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./apps/api/tests:/app/tests:ro
+      - ./tools:/app/tools:ro
+      - ./migrations:/app/migrations:ro
+      - ./apps/api/Dockerfile:/app/apps/api/Dockerfile:ro
+      - ./Makefile:/app/Makefile:ro
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./docker-compose.test.yml:/app/docker-compose.test.yml:ro
+      - ./docker-compose.server.example.yml:/app/docker-compose.server.example.yml:ro
+      - ./docker-compose.observability.yml:/app/docker-compose.observability.yml:ro
+      - ./.env.server.example:/app/.env.server.example:ro
+      - ./docker/observability:/app/docker/observability:ro
+      - ./docker/reverse-proxy:/app/docker/reverse-proxy:ro
+      - ./deploy:/app/deploy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - test
