@@ -53,17 +53,45 @@ SECRET_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     ),
 )
 
+DEFAULT_EXCLUDED_PARTS = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "artifacts",
+        "graphify-out",
+        "node_modules",
+        "runtime-data",
+    }
+)
+ALLOWLIST_MARKER = "allow-secret-test-fixture"
+ROOT_TRANSCRIPT = re.compile(r"[Pp][0-9]+\.txt")
+
 
 class SecretScanner:
     def scan(self, repository: Path) -> tuple[ReviewFinding, ...]:
+        return self.scan_paths(repository, self._changed_files(repository))
+
+    def scan_all(self, repository: Path) -> tuple[ReviewFinding, ...]:
+        paths = [
+            str(path.relative_to(repository))
+            for path in sorted(repository.rglob("*"))
+            if self._is_scannable_path(repository, path)
+        ]
+        return self.scan_paths(repository, paths)
+
+    def scan_paths(
+        self, repository: Path, relative_paths: list[str]
+    ) -> tuple[ReviewFinding, ...]:
         findings: list[ReviewFinding] = []
 
-        changed_files = self._changed_files(repository)
-
-        for relative_path in changed_files:
+        for relative_path in relative_paths:
             file_path = repository / relative_path
 
-            if file_path.is_symlink() or not file_path.is_file():
+            if not self._is_scannable_path(repository, file_path):
                 continue
 
             try:
@@ -81,6 +109,9 @@ class SecretScanner:
                         0,
                         match.start(),
                     ) + 1
+                    line_text = content.splitlines()[line_start - 1]
+                    if ALLOWLIST_MARKER in line_text:
+                        continue
                     line_end = content.count(
                         "\n",
                         0,
@@ -120,6 +151,22 @@ class SecretScanner:
                     )
 
         return tuple(findings)
+
+    @staticmethod
+    def _is_scannable_path(repository: Path, path: Path) -> bool:
+        if path.is_symlink() or not path.is_file():
+            return False
+        try:
+            relative = path.relative_to(repository)
+        except ValueError:
+            return False
+        if any(part in DEFAULT_EXCLUDED_PARTS for part in relative.parts):
+            return False
+        if len(relative.parts) == 1 and ROOT_TRANSCRIPT.fullmatch(relative.name):
+            return False
+        if relative.name.startswith(".env") and relative.name != ".env.example":
+            return False
+        return True
 
     @staticmethod
     def _changed_files(repository: Path) -> list[str]:

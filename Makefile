@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck check shell db-shell compose-check migration-check
+.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check shell db-shell compose-check migration-check
 
 build:
 	docker compose build
@@ -39,6 +39,9 @@ format:
 
 typecheck:
 	cd apps/api && .venv/bin/mypy src
+
+secret-scan:
+	python tools/secret_scan.py --all
 
 compose-check:
 	docker compose config --quiet
