@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.enterprise_evolution import _human, router
+from ai_enterprise.api.routes.enterprise_evolution import _authority, _human, router
 from ai_enterprise.application.enterprise_evolution_service import (
     ARTIFACT_TYPES,
     EnterpriseEvolutionError,
@@ -52,6 +52,33 @@ class Session:
 
     async def scalars(self, statement: object) -> Rows:
         return Rows(self.scalars_values.pop(0) if self.scalars_values else [])
+
+    async def commit(self) -> None:
+        return None
+
+
+def test_enterprise_evolution_authority_requires_scoped_capability() -> None:
+    organization_id = uuid.uuid4()
+    with pytest.raises(HTTPException, match="evolution authority"):
+        _authority(Actor("admin", "human", "platform-admin"), organization_id, "read")
+    scoped = Actor(
+        "governor",
+        "human",
+        "governor",
+        frozenset({"enterprise_evolution.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+    _authority(scoped, organization_id, "read")
+    global_scoped = Actor(
+        "governor",
+        "human",
+        "governor",
+        frozenset({"enterprise_evolution.read"}),
+        scopes=frozenset({"global"}),
+    )
+    _authority(global_scoped, organization_id, "read")
+    with pytest.raises(HTTPException, match="evolution authority"):
+        _authority(scoped, uuid.uuid4(), "read")
 
     async def commit(self) -> None:
         return None

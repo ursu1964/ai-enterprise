@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.ecosystem import _human, router
+from ai_enterprise.api.routes.ecosystem import _authority, _human, router
 from ai_enterprise.application.ecosystem_service import (
     ASSET_TYPES,
     EcosystemError,
@@ -52,6 +52,30 @@ class Session:
 
     async def commit(self) -> None:
         return None
+
+
+def test_ecosystem_authority_requires_scoped_capability() -> None:
+    organization_id = uuid.uuid4()
+    with pytest.raises(HTTPException, match="ecosystem authority"):
+        _authority(Actor("admin", "human", "platform-admin"), organization_id, "read")
+    scoped = Actor(
+        "operator",
+        "human",
+        "operator",
+        frozenset({"ecosystem.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+    _authority(scoped, organization_id, "read")
+    global_scoped = Actor(
+        "operator",
+        "human",
+        "operator",
+        frozenset({"ecosystem.read"}),
+        scopes=frozenset({"global"}),
+    )
+    _authority(global_scoped, organization_id, "read")
+    with pytest.raises(HTTPException, match="ecosystem authority"):
+        _authority(scoped, uuid.uuid4(), "read")
 
 
 def entity(organization_id: uuid.UUID, entity_type: str = "partner") -> EcosystemEntityModel:

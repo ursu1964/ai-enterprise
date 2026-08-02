@@ -5,7 +5,12 @@ import uuid
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.enterprise_evolution_schemas import (
     ArtifactRequest,
     EvolutionDecisionRequest,
@@ -25,14 +30,17 @@ from ai_enterprise.infrastructure.enterprise_evolution.models import (
 )
 
 router = APIRouter(prefix="/enterprise-evolution", tags=["enterprise-evolution"])
-ADMINS = {"platform-admin", "platform_administrator"}
 
 
 def _authority(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
-    if actor.role in ADMINS:
-        return
-    if f"enterprise_evolution.{action}:{organization_id}" not in actor.capabilities:
-        raise HTTPException(403, "Organization-scoped evolution authority required")
+    try:
+        require_capability(
+            actor, f"enterprise_evolution.{action}", f"organization:{organization_id}"
+        )
+    except HTTPException as exc:
+        raise HTTPException(
+            403, "Organization-scoped evolution authority required"
+        ) from exc
 
 
 def _human(actor: Actor) -> None:

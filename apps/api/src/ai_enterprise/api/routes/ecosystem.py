@@ -5,7 +5,12 @@ import uuid
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.ecosystem_schemas import (
     ApprovalRequest,
     AssetRequest,
@@ -26,15 +31,15 @@ from ai_enterprise.infrastructure.ecosystem.models import (
 )
 
 router = APIRouter(prefix="/ecosystem", tags=["governed-ecosystem"])
-ADMINS = {"platform-admin", "platform_administrator"}
 
 
 def _authority(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
-    if (
-        actor.role not in ADMINS
-        and f"ecosystem.{action}:{organization_id}" not in actor.capabilities
-    ):
-        raise HTTPException(403, "Organization-scoped ecosystem authority required")
+    try:
+        require_capability(actor, f"ecosystem.{action}", f"organization:{organization_id}")
+    except HTTPException as exc:
+        raise HTTPException(
+            403, "Organization-scoped ecosystem authority required"
+        ) from exc
 
 
 def _human(actor: Actor) -> None:

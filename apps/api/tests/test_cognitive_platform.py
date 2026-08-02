@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.cognitive import decide, router
+from ai_enterprise.api.routes.cognitive import _authority, decide, router
 from ai_enterprise.application.cognitive_service import (
     RECORD_TYPES,
     CognitiveError,
@@ -63,6 +63,30 @@ def record(organization_id: uuid.UUID, kind: str = "recommendation") -> Cognitiv
         created_by="reasoner",
         created_at=datetime.now(UTC),
     )
+
+
+def test_cognitive_authority_requires_scoped_capability() -> None:
+    organization_id = uuid.uuid4()
+    with pytest.raises(HTTPException, match="cognitive authority"):
+        _authority(Actor("admin", "human", "platform-admin"), organization_id, "read")
+    scoped = Actor(
+        "analyst",
+        "human",
+        "analyst",
+        frozenset({"cognitive.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+    _authority(scoped, organization_id, "read")
+    global_scoped = Actor(
+        "analyst",
+        "human",
+        "analyst",
+        frozenset({"cognitive.read"}),
+        scopes=frozenset({"global"}),
+    )
+    _authority(global_scoped, organization_id, "read")
+    with pytest.raises(HTTPException, match="cognitive authority"):
+        _authority(scoped, uuid.uuid4(), "read")
 
 
 def test_p16_m1_m16_routes_types_and_append_only_migration() -> None:

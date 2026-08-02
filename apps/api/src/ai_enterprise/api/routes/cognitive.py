@@ -10,7 +10,12 @@ from ai_enterprise.api.cognitive_schemas import (
     CognitiveLinkRequest,
     CognitiveRecordRequest,
 )
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.cognitive_service import (
     RECORD_TYPES,
@@ -20,15 +25,15 @@ from ai_enterprise.application.cognitive_service import (
 from ai_enterprise.infrastructure.cognitive.models import CognitiveRecordModel
 
 router = APIRouter(prefix="/cognitive", tags=["strategic-intelligence"])
-ADMINS = {"platform-admin", "platform_administrator"}
 
 
 def _authority(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
-    if (
-        actor.role not in ADMINS
-        and f"cognitive.{action}:{organization_id}" not in actor.capabilities
-    ):
-        raise HTTPException(403, "Organization-scoped cognitive authority required")
+    try:
+        require_capability(actor, f"cognitive.{action}", f"organization:{organization_id}")
+    except HTTPException as exc:
+        raise HTTPException(
+            403, "Organization-scoped cognitive authority required"
+        ) from exc
 
 
 def _error(exc: CognitiveError) -> HTTPException:
@@ -106,9 +111,11 @@ async def records(
     query = select(CognitiveRecordModel).where(
         CognitiveRecordModel.organization_id == organization_id
     )
-    classified = actor.role in ADMINS or (
-        f"cognitive.classified.read:{organization_id}" in actor.capabilities
-    )
+    try:
+        require_capability(actor, "cognitive.classified.read", f"organization:{organization_id}")
+        classified = True
+    except HTTPException:
+        classified = False
     if not classified:
         query = query.where(CognitiveRecordModel.classification.in_(("public", "internal")))
     if record_type:
