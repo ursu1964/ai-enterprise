@@ -572,6 +572,11 @@ class WorkflowService:
                     for item in artifacts
                     if item.artifact_type in type_names
                 }
+                artifact_hashes = {
+                    type_names[item.artifact_type]: item.content_hash
+                    for item in artifacts
+                    if item.artifact_type in type_names
+                }
                 approvals = list(
                     (
                         await self.session.scalars(
@@ -592,11 +597,85 @@ class WorkflowService:
                 completed_attempt = await self.session.get(
                     IntegrationAttemptModel, context.integration_attempt_id
                 )
+                completed_execution = (
+                    await self.session.get(ExecutionRunModel, context.execution_id)
+                    if context.execution_id is not None
+                    else None
+                )
+                completed_review = (
+                    await self.session.get(PatchReviewRunModel, context.review_id)
+                    if context.review_id is not None
+                    else None
+                )
                 if completed_attempt is not None:
                     approval_ids["integration"] = completed_attempt.integration_approval_id
+                evidence_links = dict(context.evidence_links)
+                if completed_execution is not None:
+                    evidence_links.update(
+                        {
+                            "execution:approval_id": str(completed_execution.approval_id),
+                            "execution:work_package_id": str(completed_execution.work_package_id),
+                        }
+                    )
+                if completed_review is not None:
+                    evidence_links.update(
+                        {
+                            "review:execution_id": str(completed_review.execution_run_id),
+                            "review:patch_artifact_id": str(completed_review.patch_artifact_id),
+                            "review:expected_patch_sha256": completed_review.expected_patch_sha256,
+                        }
+                    )
+                    if completed_review.actual_patch_sha256 is not None:
+                        evidence_links["review:actual_patch_sha256"] = (
+                            completed_review.actual_patch_sha256
+                        )
+                    if completed_review.review_report_artifact_id is not None:
+                        evidence_links["review:report_artifact_id"] = str(
+                            completed_review.review_report_artifact_id
+                        )
+                if completed_attempt is not None:
+                    evidence_links.update(
+                        {
+                            "integration:execution_id": str(completed_attempt.execution_run_id),
+                            "integration:approval_id": str(
+                                completed_attempt.integration_approval_id
+                            ),
+                            "integration:expected_patch_sha256": (
+                                completed_attempt.expected_patch_sha256
+                            ),
+                            "integration:expected_base_commit_sha": (
+                                completed_attempt.expected_base_commit_sha
+                            ),
+                            "integration:expected_base_tree_sha": (
+                                completed_attempt.expected_base_tree_sha
+                            ),
+                        }
+                    )
+                    if completed_attempt.actual_base_commit_sha is not None:
+                        evidence_links["integration:actual_base_commit_sha"] = (
+                            completed_attempt.actual_base_commit_sha
+                        )
+                    if completed_attempt.actual_base_tree_sha is not None:
+                        evidence_links["integration:actual_base_tree_sha"] = (
+                            completed_attempt.actual_base_tree_sha
+                        )
+                    if completed_attempt.resulting_tree_sha is not None:
+                        evidence_links["integration:resulting_tree_sha"] = (
+                            completed_attempt.resulting_tree_sha
+                        )
+                evidence_links.update(
+                    {
+                        "commit:integration_attempt_id": str(commit.integration_attempt_id),
+                        "commit:tree_sha": commit.tree_sha,
+                        "commit:parent_commit_sha": commit.parent_commit_sha,
+                        "commit:remote_verified": str(commit.remote_verified).lower(),
+                    }
+                )
                 completed_context = context.evolved(
                     artifact_ids=artifact_ids,
+                    artifact_hashes=artifact_hashes,
                     approval_ids=approval_ids,
+                    evidence_links=evidence_links,
                     commit_id=commit.commit_sha,
                 )
                 result = verify_completeness(completed_context)

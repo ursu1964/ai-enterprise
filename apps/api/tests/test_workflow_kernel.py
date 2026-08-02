@@ -55,6 +55,60 @@ def context() -> WorkflowContext:
     )
 
 
+def complete_context() -> WorkflowContext:
+    execution_id = uuid.uuid4()
+    review_id = uuid.uuid4()
+    integration_attempt_id = uuid.uuid4()
+    ids = {
+        "manifest": uuid.uuid4(),
+        "requirements": uuid.uuid4(),
+        "architecture": uuid.uuid4(),
+        "work_package": uuid.uuid4(),
+        "patch": uuid.uuid4(),
+        "review": uuid.uuid4(),
+    }
+    approval_ids = {
+        "requirements": uuid.uuid4(),
+        "architecture": uuid.uuid4(),
+        "work_package": uuid.uuid4(),
+        "integration": uuid.uuid4(),
+    }
+    patch_sha = "a" * 64
+    base_commit = "b" * 64
+    base_tree = "c" * 64
+    result_tree = "d" * 64
+    return context().evolved(
+        artifact_ids=ids,
+        artifact_hashes={name: str(index) * 64 for index, name in enumerate(ids, start=1)},
+        approval_ids=approval_ids,
+        execution_id=execution_id,
+        review_id=review_id,
+        integration_attempt_id=integration_attempt_id,
+        commit_id="e" * 64,
+        evidence_links={
+            "execution:approval_id": str(uuid.uuid4()),
+            "execution:work_package_id": str(uuid.uuid4()),
+            "review:execution_id": str(execution_id),
+            "review:patch_artifact_id": str(ids["patch"]),
+            "review:report_artifact_id": str(ids["review"]),
+            "review:expected_patch_sha256": patch_sha,
+            "review:actual_patch_sha256": patch_sha,
+            "integration:execution_id": str(execution_id),
+            "integration:approval_id": str(approval_ids["integration"]),
+            "integration:expected_patch_sha256": patch_sha,
+            "integration:expected_base_commit_sha": base_commit,
+            "integration:expected_base_tree_sha": base_tree,
+            "integration:actual_base_commit_sha": base_commit,
+            "integration:actual_base_tree_sha": base_tree,
+            "integration:resulting_tree_sha": result_tree,
+            "commit:integration_attempt_id": str(integration_attempt_id),
+            "commit:tree_sha": result_tree,
+            "commit:parent_commit_sha": base_commit,
+            "commit:remote_verified": "true",
+        },
+    )
+
+
 def workflow_instance(state: WorkflowState):
     from ai_enterprise.infrastructure.database.workflow_models import WorkflowInstanceModel
 
@@ -153,8 +207,51 @@ def test_completeness_fails_closed_with_actionable_missing_evidence() -> None:
 
     assert not result.complete
     assert "artifact:manifest" in result.missing
+    assert "artifact_hash:manifest" in result.missing
     assert "approval:integration" in result.missing
+    assert "evidence_link:review:actual_patch_sha256" in result.missing
     assert "commit" in result.missing
+
+
+def test_completeness_accepts_hash_and_lineage_bound_evidence() -> None:
+    result = verify_completeness(complete_context())
+
+    assert result.complete
+    assert result.missing == ()
+
+
+@pytest.mark.parametrize(
+    ("update", "expected"),
+    [
+        (
+            {"artifact_hashes": {"manifest": "short"}},
+            "artifact_hash:manifest:invalid",
+        ),
+        (
+            {"evidence_links": {"review:actual_patch_sha256": "f" * 64}},
+            "evidence_link:review:expected_patch_sha256:mismatch:review:actual_patch_sha256",
+        ),
+        (
+            {"evidence_links": {"commit:tree_sha": "f" * 64}},
+            "evidence_link:integration:resulting_tree_sha:mismatch:commit:tree_sha",
+        ),
+        (
+            {"evidence_links": {"commit:remote_verified": "false"}},
+            "evidence_link:commit:remote_verified:mismatch",
+        ),
+    ],
+)
+def test_completeness_rejects_tampered_or_untrusted_evidence(
+    update: dict[str, dict[str, str]], expected: str
+) -> None:
+    current = complete_context()
+    field, values = next(iter(update.items()))
+    current = current.evolved(**{field: {**getattr(current, field), **values}})
+
+    result = verify_completeness(current)
+
+    assert not result.complete
+    assert expected in result.missing
 
 
 def test_cancel_transition_is_available_from_non_terminal_states() -> None:

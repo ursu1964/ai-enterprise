@@ -18,8 +18,10 @@ class WorkflowContext(BaseModel):
     actor_id: str
     permissions: tuple[str, ...] = ()
     artifact_ids: dict[str, uuid.UUID] = Field(default_factory=dict)
+    artifact_hashes: dict[str, str] = Field(default_factory=dict)
     approval_ids: dict[str, uuid.UUID] = Field(default_factory=dict)
     run_ids: dict[str, uuid.UUID] = Field(default_factory=dict)
+    evidence_links: dict[str, str] = Field(default_factory=dict)
     execution_id: uuid.UUID | None = None
     review_id: uuid.UUID | None = None
     integration_attempt_id: uuid.UUID | None = None
