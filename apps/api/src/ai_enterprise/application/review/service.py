@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.execution_workflow import (
     ExecutionNotFoundError,
     InvalidExecutionStateError,
@@ -45,7 +46,6 @@ from ai_enterprise.domain.review.policies import (
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     ExecutionRunModel,
     PatchReviewCheckModel,
     PatchReviewEventModel,
@@ -127,14 +127,10 @@ class ReviewCandidatePatchService:
         execution = await self._get_execution(project_id, execution_id)
 
         if execution.status != ExecutionStatus.SUCCEEDED:
-            raise InvalidExecutionStateError(
-                f"Cannot review execution in state {execution.status}"
-            )
+            raise InvalidExecutionStateError(f"Cannot review execution in state {execution.status}")
 
         if execution.patch_artifact_id is None:
-            raise PatchArtifactMissingError(
-                "Execution has no candidate patch artifact"
-            )
+            raise PatchArtifactMissingError("Execution has no candidate patch artifact")
 
         work_package = await self._get_approved_work_package(
             project_id=project.id,
@@ -178,23 +174,18 @@ class ReviewCandidatePatchService:
             max_attempts=1,
         )
 
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="patch_review.requested",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "review_id": str(review_id),
-                    "execution_run_id": str(execution.id),
-                    "work_package_id": str(work_package.id),
-                    "patch_artifact_id": str(
-                        execution.patch_artifact_id
-                    ),
-                    "job_id": str(job.id),
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="patch_review.requested",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "review_id": str(review_id),
+                "execution_run_id": str(execution.id),
+                "work_package_id": str(work_package.id),
+                "patch_artifact_id": str(execution.patch_artifact_id),
+                "job_id": str(job.id),
+            },
         )
 
         await self._session.commit()
@@ -219,9 +210,7 @@ class ReviewCandidatePatchService:
             PatchReviewStatus.PENDING,
             PatchReviewStatus.FAILED,
         }:
-            raise InvalidExecutionStateError(
-                f"Review cannot run from {review.status}"
-            )
+            raise InvalidExecutionStateError(f"Review cannot run from {review.status}")
 
         execution = await self._get_execution(
             review.project_id,
@@ -263,14 +252,10 @@ class ReviewCandidatePatchService:
 
             await self._session.commit()
 
-            fingerprint_before = await inspector.fingerprint(
-                repository_path
-            )
+            fingerprint_before = await inspector.fingerprint(repository_path)
 
             if fingerprint_before.head_sha != execution.base_commit:
-                raise PatchReviewError(
-                    f"Base commit {execution.base_commit} is not host HEAD"
-                )
+                raise PatchReviewError(f"Base commit {execution.base_commit} is not host HEAD")
 
             snapshot = await asyncio.to_thread(
                 snapshot_service.create,
@@ -291,9 +276,7 @@ class ReviewCandidatePatchService:
 
             await self._session.commit()
 
-            patch_artifact = await self._get_artifact(
-                review.patch_artifact_id
-            )
+            patch_artifact = await self._get_artifact(review.patch_artifact_id)
 
             patch_path = self._materialize_patch(
                 review_id=review_id,
@@ -309,9 +292,7 @@ class ReviewCandidatePatchService:
                 repository=snapshot.path,
                 patch_path=patch_path,
                 expected_sha256=review.expected_patch_sha256,
-                maximum_patch_bytes=(
-                    self._settings.review_maximum_patch_bytes
-                ),
+                maximum_patch_bytes=(self._settings.review_maximum_patch_bytes),
             )
 
             review.actual_patch_sha256 = applied_patch.patch_sha256
@@ -336,9 +317,7 @@ class ReviewCandidatePatchService:
             review.resulting_tree_hash = repository_state.tree_hash
 
             scope = self._build_scope(work_package.contract)
-            maximum_changed_files = work_package.contract["file_scope"][
-                "maximum_changed_files"
-            ]
+            maximum_changed_files = work_package.contract["file_scope"]["maximum_changed_files"]
 
             validator = ScopeValidator()
 
@@ -366,9 +345,7 @@ class ReviewCandidatePatchService:
 
             execution_files = tuple(sorted(execution.changed_files or []))
 
-            patch_reproducible = (
-                execution_files == statistics.files
-            )
+            patch_reproducible = execution_files == statistics.files
 
             if not patch_reproducible:
                 findings.append(
@@ -422,9 +399,7 @@ class ReviewCandidatePatchService:
                 "patch_review.container_started",
                 {
                     "image": review.review_image,
-                    "review_check_count": len(
-                        review_configuration["review_checks"]
-                    ),
+                    "review_check_count": len(review_configuration["review_checks"]),
                 },
             )
 
@@ -452,12 +427,8 @@ class ReviewCandidatePatchService:
                 "patch_review.check_finished",
                 {
                     "container_id": runtime_result.container_id,
-                    "approved_test_count": len(
-                        runtime_result.approved_tests
-                    ),
-                    "review_check_count": len(
-                        runtime_result.review_checks
-                    ),
+                    "approved_test_count": len(runtime_result.approved_tests),
+                    "review_check_count": len(runtime_result.review_checks),
                     "success": runtime_result.success,
                 },
             )
@@ -469,13 +440,10 @@ class ReviewCandidatePatchService:
                 runtime_result=runtime_result,
             )
 
-            approved_tests_passed = (
-                runtime_result.success
-                and all(
-                    not check.timed_out and check.exit_code == 0
-                    for check in runtime_result.approved_tests
-                    if check.required
-                )
+            approved_tests_passed = runtime_result.success and all(
+                not check.timed_out and check.exit_code == 0
+                for check in runtime_result.approved_tests
+                if check.required
             )
 
             reviewer = ReviewerAgent(self._settings)
@@ -490,16 +458,12 @@ class ReviewCandidatePatchService:
                     repository=snapshot.path,
                     changed_files=statistics.files,
                     deterministic_findings=tuple(findings),
-                    check_results=runtime_result.approved_tests
-                    + runtime_result.review_checks,
+                    check_results=runtime_result.approved_tests + runtime_result.review_checks,
                 )
 
                 findings.extend(
                     normalizer.from_review_container(
-                        findings=[
-                            item.model_dump()
-                            for item in agent_result.findings
-                        ]
+                        findings=[item.model_dump() for item in agent_result.findings]
                     )
                 )
             except PatchReviewError as exc:
@@ -511,9 +475,7 @@ class ReviewCandidatePatchService:
                 await self._session.commit()
 
             decision_policy = ReviewDecisionPolicy()
-            policy = ReviewPolicy(
-                **review.review_policy["decision"]
-            )
+            policy = ReviewPolicy(**review.review_policy["decision"])
 
             decision = decision_policy.decide(
                 findings=tuple(findings),
@@ -525,10 +487,7 @@ class ReviewCandidatePatchService:
             summary = (
                 agent_result.summary
                 if agent_result is not None
-                else (
-                    "Independent review completed. "
-                    "Reviewer agent analysis was unavailable."
-                )
+                else ("Independent review completed. Reviewer agent analysis was unavailable.")
             )
 
             report = self._build_report(
@@ -554,9 +513,7 @@ class ReviewCandidatePatchService:
                     indent=2,
                     sort_keys=True,
                 ),
-                content_hash=hash_text(
-                    json.dumps(report, sort_keys=True)
-                ),
+                content_hash=hash_text(json.dumps(report, sort_keys=True)),
             )
 
             self._session.add(report_artifact)
@@ -598,30 +555,23 @@ class ReviewCandidatePatchService:
                 },
             )
 
-            fingerprint_after = await inspector.fingerprint(
-                repository_path
-            )
+            fingerprint_after = await inspector.fingerprint(repository_path)
 
             if fingerprint_after != fingerprint_before:
-                raise PatchReviewError(
-                    "Host repository fingerprint changed during review"
-                )
+                raise PatchReviewError("Host repository fingerprint changed during review")
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type=f"patch_review.{decision.value}",
-                    actor_type="system",
-                    actor_id="review-worker",
-                    payload={
-                        "review_id": str(review.id),
-                        "execution_run_id": str(execution.id),
-                        "patch_sha256": applied_patch.patch_sha256,
-                        "resulting_tree_hash": repository_state.tree_hash,
-                        "finding_count": len(findings),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type=f"patch_review.{decision.value}",
+                actor_type="system",
+                actor_id="review-worker",
+                payload={
+                    "review_id": str(review.id),
+                    "execution_run_id": str(execution.id),
+                    "patch_sha256": applied_patch.patch_sha256,
+                    "resulting_tree_hash": repository_state.tree_hash,
+                    "finding_count": len(findings),
+                },
             )
 
             await self._session.commit()
@@ -664,19 +614,16 @@ class ReviewCandidatePatchService:
                 )
 
                 if failed_project is not None:
-                    self._session.add(
-                        AuditEventModel(
-                            id=uuid.uuid4(),
-                            project_id=failed_project.id,
-                            event_type="patch_review.failed",
-                            actor_type="system",
-                            actor_id="review-worker",
-                            payload={
-                                "review_id": str(review.id),
-                                "failure_code": review.failure_code,
-                                "error": str(exc),
-                            },
-                        )
+                    await self._append_audit_event(
+                        project_id=failed_project.id,
+                        event_type="patch_review.failed",
+                        actor_type="system",
+                        actor_id="review-worker",
+                        payload={
+                            "review_id": str(review.id),
+                            "failure_code": review.failure_code,
+                            "error": str(exc),
+                        },
                     )
 
                 await self._session.commit()
@@ -725,9 +672,7 @@ class ReviewCandidatePatchService:
                 check_status = "failed"
 
             check_type = (
-                "approved_test"
-                if sequence < len(runtime_result.approved_tests)
-                else "review_check"
+                "approved_test" if sequence < len(runtime_result.approved_tests) else "review_check"
             )
 
             self._session.add(
@@ -761,6 +706,23 @@ class ReviewCandidatePatchService:
                 event_type=event_type,
                 payload=payload,
             )
+        )
+
+    async def _append_audit_event(
+        self,
+        *,
+        project_id: uuid.UUID,
+        event_type: str,
+        actor_type: str,
+        actor_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type=event_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
         )
 
     def _materialize_patch(
@@ -855,9 +817,7 @@ class ReviewCandidatePatchService:
         allowed_paths.extend(file_scope.get("allowed_directories", []))
 
         forbidden_paths = list(file_scope.get("forbidden_files", []))
-        forbidden_paths.extend(
-            file_scope.get("forbidden_directories", [])
-        )
+        forbidden_paths.extend(file_scope.get("forbidden_directories", []))
         forbidden_paths.extend(DEFAULT_FORBIDDEN_PATHS)
 
         return ExecutionScope(
@@ -878,9 +838,7 @@ class ReviewCandidatePatchService:
             implementation_timeout_seconds=(
                 self._settings.execution_implementation_timeout_seconds
             ),
-            test_timeout_seconds=(
-                self._settings.review_default_check_timeout_seconds
-            ),
+            test_timeout_seconds=(self._settings.review_default_check_timeout_seconds),
             nano_cpus=int(float(resources["cpu_count"]) * 1_000_000_000),
             memory_bytes=memory_bytes,
             memory_swap_bytes=memory_bytes,
@@ -894,9 +852,7 @@ class ReviewCandidatePatchService:
         project = await self._session.get(ProjectModel, project_id)
 
         if project is None:
-            raise ReviewNotFoundError(
-                f"Project {project_id} does not exist"
-            )
+            raise ReviewNotFoundError(f"Project {project_id} does not exist")
 
         return project
 
@@ -911,9 +867,7 @@ class ReviewCandidatePatchService:
         )
 
         if execution is None or execution.project_id != project_id:
-            raise ExecutionNotFoundError(
-                f"Execution {execution_id} does not exist"
-            )
+            raise ExecutionNotFoundError(f"Execution {execution_id} does not exist")
 
         return execution
 
@@ -924,9 +878,7 @@ class ReviewCandidatePatchService:
         artifact = await self._session.get(ArtifactModel, artifact_id)
 
         if artifact is None:
-            raise PatchArtifactMissingError(
-                f"Artifact {artifact_id} does not exist"
-            )
+            raise PatchArtifactMissingError(f"Artifact {artifact_id} does not exist")
 
         return artifact
 
@@ -942,9 +894,7 @@ class ReviewCandidatePatchService:
         )
 
         if work_package is None or work_package.project_id != project_id:
-            raise ReviewNotFoundError(
-                f"Work package {work_package_id} does not exist"
-            )
+            raise ReviewNotFoundError(f"Work package {work_package_id} does not exist")
 
         return work_package
 
@@ -960,9 +910,7 @@ class ReviewCandidatePatchService:
         )
 
         if work_package.status != WorkPackageStatus.APPROVED:
-            raise PatchReviewError(
-                f"Work package {work_package_id} is not approved"
-            )
+            raise PatchReviewError(f"Work package {work_package_id} is not approved")
 
         return work_package
 
@@ -971,9 +919,7 @@ class ReviewCandidatePatchService:
         work_package: WorkPackageModel,
     ) -> ApprovalModel:
         if work_package.artifact_id is None:
-            raise PatchReviewError(
-                "Work package has no immutable artifact"
-            )
+            raise PatchReviewError("Work package has no immutable artifact")
 
         result = await self._session.execute(
             select(ApprovalModel).where(
@@ -986,9 +932,7 @@ class ReviewCandidatePatchService:
         approval = result.scalar_one_or_none()
 
         if approval is None:
-            raise PatchReviewError(
-                f"Work package {work_package.id} has no valid approval"
-            )
+            raise PatchReviewError(f"Work package {work_package.id} has no valid approval")
 
         return approval
 
@@ -1010,9 +954,7 @@ class ReviewCandidatePatchService:
         )
 
         if result.scalars().first() is not None:
-            raise PatchReviewError(
-                f"Execution {execution_id} already has a final review"
-            )
+            raise PatchReviewError(f"Execution {execution_id} already has a final review")
 
     async def _find_by_idempotency(
         self,
