@@ -181,6 +181,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Completed Evidence" in response.text
     assert "Remaining Work" in response.text
     assert "Current Issues" in response.text
+    assert "lifecycle" in response.text
+    assert "Source phase:" in response.text
+    assert "Improvement proposals" in response.text
     assert "/api/v1/operator/jobs" in response.text
     assert "/metrics" in response.text
     assert "/dashboard/graphify" in response.text
@@ -392,6 +395,11 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["economic_effects"]["reusable_asset_count"] == 0
     assert response["economic_effects"]["viability"] == "viable"
     assert response["blueprints"][0]["kind"] == "workflow_pattern"
+    assert response["blueprints"][0]["lifecycle"] == "reviewed"
+    assert response["blueprints"][0]["source_phase"] == "workflow"
+    assert response["blueprints"][0]["reuse_proof"]["economic_viability"] == "viable"
+    assert response["blueprints"][0]["reuse_proof"]["reuse_multiplier"] == 1.0
+    assert response["blueprints"][0]["improvement_proposals"] == []
     assert response["blueprints"][1]["kind"] == "agent_team_pattern"
     assert response["blueprints"][2]["kind"] == "business_effect_pattern"
 
@@ -480,6 +488,9 @@ async def test_project_intelligence_classifies_worker_errors_for_humans() -> Non
     )
     assert response["errors"][0]["likely_cause"].startswith("The project path may be missing")
     assert response["errors"][0]["raw_diagnostic"] == "fatal: ambiguous argument HEAD"
+    assert response["blueprints"][0]["lifecycle"] == "improved"
+    assert response["blueprints"][0]["improvement_proposals"][0]["phase"] == "intake"
+    assert response["blueprints"][0]["improvement_proposals"][0]["failure_class"] == "git"
 
 
 @pytest.mark.asyncio

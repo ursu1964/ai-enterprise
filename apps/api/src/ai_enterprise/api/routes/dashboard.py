@@ -2546,7 +2546,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     function statusClass(status) {
       const value = String(status || "").toLowerCase();
       if (["online", "ok", "succeeded", "completed", "active", "nominal"].includes(value)) return "ok";
-      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto"].includes(value)) return "warn";
+      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed"].includes(value)) return "warn";
       if (["failed", "dead_letter", "abandoned", "offline", "attention_required"].includes(value)) return "bad";
       return "info";
     }
@@ -2574,6 +2574,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         standby: "Standby",
         not_started: "Not started",
         waiting_for_manifesto: "Waiting for manifesto",
+        candidate: "Candidate",
+        reviewed: "Reviewed",
+        reusable: "Reusable",
+        deprecated: "Deprecated",
+        improved: "Improved",
         online: "Online",
         offline: "Offline",
         degraded: "Degraded"
@@ -2879,7 +2884,7 @@ DASHBOARD_HTML = r"""<!doctype html>
               <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
               <div class="mini span-6"><strong>Specialist Agents</strong>${listbox(payload.specialist_agents, item => `<div class="list-item"><div><div class="list-title">${esc(item.agent_key)}</div><div class="list-meta">${esc(item.specialty)} · ${esc(item.mission)}</div></div><span class="pill ok">${esc(humanStatus(item.status))}</span></div>`, "No specialist agents are suggested for this project type yet.")}</div>
               <div class="mini span-6"><strong>Economic Effects</strong>${listbox(Object.entries(payload.economic_effects).map(([name, value]) => ({ name, value })), item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.value)}</div></div><span class="pill info">proof</span></div>`, "Economic proof will appear after project evidence is collected.")}</div>
-              <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => `<div class="list-item"><div><div class="list-title">${esc(item.blueprint_key)}</div><div class="list-meta">${esc(item.title)} · ${esc(item.kind)} · reusable for ${esc(item.reusable_for)}</div></div><span class="pill ok">reusable</span></div>`, "Reusable blueprints will appear when the project produces enough evidence.")}</div>
+              <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => `<div class="list-item"><div><div class="list-title">${esc(item.blueprint_key)}</div><div class="list-meta">${esc(item.title)} · ${esc(item.kind)} · lifecycle ${esc(humanStatus(item.lifecycle))}</div><div class="list-meta">Source phase: ${esc(item.source_phase || "project")} · reuse x${esc(item.reuse_proof?.reuse_multiplier || "1")} · assets ${esc(item.reuse_proof?.reusable_asset_count || 0)}</div><details><summary>Improvement proposals</summary><div class="list-meta">${esc((item.improvement_proposals || []).map(proposal => `${proposal.phase}: ${proposal.proposal}`).join(" | ") || "No guardrail or template improvements proposed yet.")}</div></details></div><span class="pill ${statusClass(item.lifecycle)}">${esc(humanStatus(item.lifecycle))}</span></div>`, "Reusable blueprints will appear when the project produces enough evidence.")}</div>
             </div>
           `;
           renderProjectIntelligence(payload);

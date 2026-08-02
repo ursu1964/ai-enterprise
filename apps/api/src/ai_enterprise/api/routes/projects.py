@@ -537,12 +537,46 @@ def _blueprints(
 ) -> list[dict[str, object]]:
     phase_names = [str(phase["name"]) for phase in phases]
     agent_keys = [agent["agent_key"] for agent in specialist_agents]
+    completed_phase_count = sum(1 for phase in phases if phase["status"] == "executed")
+    evidence_count = 0
+    problem_count = 0
+    for phase in phases:
+        completed_evidence = phase.get("completed_evidence")
+        if isinstance(completed_evidence, list):
+            evidence_count += len(completed_evidence)
+        current_issues = phase.get("current_issues")
+        if isinstance(current_issues, list):
+            problem_count += len(current_issues)
+    lifecycle = _blueprint_lifecycle(
+        completed_phase_count=completed_phase_count,
+        evidence_count=evidence_count,
+        problem_count=problem_count,
+        viability=str(economic_effects["viability"]),
+    )
+    improvement_proposals = _blueprint_improvement_proposals(phases)
+    base = {
+        "lifecycle": lifecycle,
+        "source_project_id": str(project.id),
+        "source_project_name": project.name,
+        "source_project_type": project_type,
+        "evidence_count": evidence_count,
+        "completed_phase_count": completed_phase_count,
+        "reuse_proof": {
+            "economic_viability": economic_effects["viability"],
+            "reuse_multiplier": economic_effects["reuse_multiplier"],
+            "reusable_asset_count": economic_effects["reusable_asset_count"],
+            "manual_hours_avoided": economic_effects["estimated_manual_hours_avoided"],
+        },
+        "improvement_proposals": improvement_proposals,
+    }
     return [
         {
+            **base,
             "blueprint_key": f"{project_type}.delivery_workflow",
             "title": "Reusable delivery workflow",
             "kind": "workflow_pattern",
             "reusable_for": project_type,
+            "source_phase": "workflow",
             "pattern": {
                 "phases": phase_names,
                 "approval_gates": ["requirements", "architecture", "work_package"],
@@ -555,10 +589,12 @@ def _blueprints(
             },
         },
         {
+            **base,
             "blueprint_key": f"{project_type}.specialist_crew",
             "title": "Specialist crew pattern",
             "kind": "agent_team_pattern",
             "reusable_for": project_type,
+            "source_phase": "crew",
             "pattern": {
                 "agents": agent_keys,
                 "coordination": "manifesto_to_workflow_to_verified_artifacts",
@@ -570,10 +606,12 @@ def _blueprints(
             },
         },
         {
+            **base,
             "blueprint_key": f"{project_type}.economic_proof",
             "title": "Economic proof pattern",
             "kind": "business_effect_pattern",
             "reusable_for": project_type,
+            "source_phase": "economic_proof",
             "pattern": {
                 "signals": [
                     "manual_hours_avoided",
@@ -586,6 +624,44 @@ def _blueprints(
             "proof": economic_effects,
         },
     ]
+
+
+def _blueprint_lifecycle(
+    *,
+    completed_phase_count: int,
+    evidence_count: int,
+    problem_count: int,
+    viability: str,
+) -> str:
+    if problem_count:
+        return "improved"
+    if viability == "viable" and completed_phase_count >= 7 and evidence_count >= 4:
+        return "reusable"
+    if evidence_count:
+        return "reviewed"
+    return "candidate"
+
+
+def _blueprint_improvement_proposals(phases: list[dict[str, object]]) -> list[dict[str, str]]:
+    proposals: list[dict[str, str]] = []
+    for phase in phases:
+        issues = phase.get("current_issues")
+        if not isinstance(issues, list):
+            continue
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            proposals.append(
+                {
+                    "phase": str(phase["name"]),
+                    "failure_class": str(issue.get("failure_class") or "unknown"),
+                    "proposal": str(
+                        issue.get("next_action")
+                        or "Convert this repeated failure into a guardrail or template."
+                    ),
+                }
+            )
+    return proposals[:5]
 
 
 def _specialist_agents(project_type: str) -> list[dict[str, str]]:
