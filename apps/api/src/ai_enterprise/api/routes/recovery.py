@@ -45,6 +45,15 @@ def _require_recovery_read(actor: Actor, project_id: uuid.UUID) -> None:
     require_capability(actor, "recovery.read", f"project:{project_id}")
 
 
+def _require_recovery_action(actor: Actor, action: str) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human recovery authority is required")
+    try:
+        require_capability(actor, f"recovery.{action}", "global")
+    except HTTPException as exc:
+        raise HTTPException(status_code=403, detail="Recovery authority is required") from exc
+
+
 @router.post(
     "/integration-attempts/{attempt_id}/recovery-incidents",
     response_model=RecoveryIncidentResponse,
@@ -56,6 +65,7 @@ async def create_incident(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> RecoveryIncidentResponse:
+    _require_recovery_action(actor, "incident.create")
     try:
         value = await RecoveryControlPlaneService(session).create_incident(
             integration_attempt_id=attempt_id,
@@ -81,6 +91,7 @@ async def assess_recovery(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> RecoveryAssessmentResponse:
+    _require_recovery_action(actor, "assessment.create")
     try:
         value = await RecoveryControlPlaneService(session).assess_from_trusted_checkout(
             incident_id=incident_id,
@@ -106,6 +117,7 @@ async def approve_rollback(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> RollbackApprovalResponse:
+    _require_recovery_action(actor, "approval.create")
     try:
         value = await RecoveryControlPlaneService(session).approve(
             assessment_id=assessment_id,
@@ -133,6 +145,7 @@ async def create_recovery_attempt(
     actor: ActorDependency,
 ) -> RecoveryAttemptResponse:
     del request
+    _require_recovery_action(actor, "attempt.create")
     try:
         value = await RecoveryControlPlaneService(session).create_attempt(
             approval_id=approval_id,

@@ -12,7 +12,12 @@ from ai_enterprise.api.recovery_schemas import (
     RecoveryIncidentRequest,
     RollbackApprovalRequest,
 )
-from ai_enterprise.api.routes.recovery import get_assessment, get_attempt, get_incident
+from ai_enterprise.api.routes.recovery import (
+    _require_recovery_action,
+    get_assessment,
+    get_attempt,
+    get_incident,
+)
 from ai_enterprise.application.recovery.service import RecoveryControlPlaneService
 from ai_enterprise.domain.recovery.exceptions import RollbackApprovalHumanRequired
 from ai_enterprise.infrastructure.database.models import (
@@ -111,6 +116,43 @@ def _recovery_reader(project_id) -> Actor:
 
 def _wrong_recovery_reader() -> Actor:
     return _recovery_reader(uuid4())
+
+
+def test_recovery_action_requires_human_global_capability() -> None:
+    with pytest.raises(HTTPException, match="Recovery authority"):
+        _require_recovery_action(Actor("operator", "human", "incident_reporter"), "incident.create")
+    with pytest.raises(HTTPException, match="Recovery authority"):
+        _require_recovery_action(
+            Actor(
+                "operator",
+                "human",
+                "incident_reporter",
+                frozenset({"recovery.incident.create"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "incident.create",
+        )
+    with pytest.raises(HTTPException, match="Human recovery authority"):
+        _require_recovery_action(
+            Actor(
+                "service",
+                "service",
+                "incident_reporter",
+                frozenset({"recovery.incident.create"}),
+                scopes=frozenset({"global"}),
+            ),
+            "incident.create",
+        )
+    _require_recovery_action(
+        Actor(
+            "operator",
+            "human",
+            "incident_reporter",
+            frozenset({"recovery.incident.create"}),
+            scopes=frozenset({"global"}),
+        ),
+        "incident.create",
+    )
 
 
 def _incident(project_id) -> RecoveryIncidentModel:
