@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.domain.specification.kernel import (
     Provenance,
@@ -15,7 +16,6 @@ from ai_enterprise.domain.specification.kernel import (
     SpecificationIdentity,
     semantic_version,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.specification.models import (
     DriftDecisionModel,
     DriftDetectionRunModel,
@@ -59,17 +59,15 @@ class SpecificationPlatformService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(
+    async def _audit(
         self, event: str, actor: str, project_id: uuid.UUID, payload: dict[str, Any]
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=project_id,
-                event_type=event,
-                actor_type="specification-platform",
-                actor_id=actor,
-                payload=payload,
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=project_id,
+            event_type=event,
+            actor_type="specification-platform",
+            actor_id=actor,
+            payload=payload,
         )
 
     async def create_specification(
@@ -137,7 +135,7 @@ class SpecificationPlatformService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringSpecificationCreated",
             created_by,
             project_id,
@@ -181,7 +179,7 @@ class SpecificationPlatformService:
             decided_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringSpecificationDecision",
             decided_by,
             specification.project_id,
@@ -222,7 +220,7 @@ class SpecificationPlatformService:
             validated_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringSpecificationValidated",
             actor,
             specification.project_id,
@@ -290,7 +288,7 @@ class SpecificationPlatformService:
             completed_at=None,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "SpecificationGenerationRequested",
             actor,
             specification.project_id,
@@ -338,7 +336,7 @@ class SpecificationPlatformService:
             recorded_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringEvidenceNodeRecorded",
             actor,
             project_id,
@@ -418,7 +416,7 @@ class SpecificationPlatformService:
             recorded_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringEvidenceEdgeRecorded",
             actor,
             source.project_id,
@@ -496,18 +494,16 @@ class SpecificationPlatformService:
         run.output_manifest_hash = canonical_hash(manifest)
         run.status = "completed"
         run.completed_at = datetime.now(UTC)
-        self.session.add(
-            AuditEventModel(
-                project_id=specification.project_id,
-                event_type="SpecificationGenerationCompleted",
-                actor_type="specification-worker",
-                actor_id=run.generator_key,
-                payload={
-                    "generation_run_id": str(run.id),
-                    "output_manifest_hash": run.output_manifest_hash,
-                    "specification_hash": run.specification_hash,
-                },
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=specification.project_id,
+            event_type="SpecificationGenerationCompleted",
+            actor_type="specification-worker",
+            actor_id=run.generator_key,
+            payload={
+                "generation_run_id": str(run.id),
+                "output_manifest_hash": run.output_manifest_hash,
+                "specification_hash": run.specification_hash,
+            },
         )
         increment_metric(f"specification.generation.{run.generator_key}.completed")
         await self.session.commit()
@@ -597,7 +593,7 @@ class SpecificationPlatformService:
             )
             self.session.add(row)
             findings.append(row)
-        self._audit(
+        await self._audit(
             "EngineeringDriftDetected",
             actor,
             specification.project_id,
@@ -657,7 +653,7 @@ class SpecificationPlatformService:
             decided_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EngineeringDriftDecision",
             decided_by,
             run.project_id,
