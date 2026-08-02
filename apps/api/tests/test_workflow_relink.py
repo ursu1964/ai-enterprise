@@ -8,12 +8,14 @@ from ai_enterprise.api.workflow_schemas import WorkflowTransitionResponse
 from ai_enterprise.application.workflow.service import WorkflowService, workflow_state_for_project
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.domain.hashing import hash_json
+from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
 from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records
 from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import AuditEventModel, JobModel, ProjectModel
 from ai_enterprise.infrastructure.database.workflow_models import (
     WorkflowContextModel,
+    WorkflowInstanceModel,
     WorkflowTransitionModel,
 )
 
@@ -51,6 +53,40 @@ class WorkflowWriteSession:
         return None
 
 
+class CancelRepository:
+    def __init__(self, workflow: WorkflowInstanceModel) -> None:
+        self.workflow = workflow
+        self.transitions: list[WorkflowState] = []
+
+    async def get(self, workflow_id: uuid.UUID, lock: bool = False) -> WorkflowInstanceModel:
+        return self.workflow
+
+    async def context(self, workflow: WorkflowInstanceModel) -> WorkflowContext:
+        return WorkflowContext(
+            workflow_id=workflow.id,
+            project_id=workflow.project_id,
+            current_state=WorkflowState.PROJECT_CREATED,
+            correlation_id=workflow.correlation_id,
+            actor_id="operator",
+        )
+
+    async def append_transition(
+        self,
+        *,
+        workflow: WorkflowInstanceModel,
+        context: WorkflowContext,
+        next_state: WorkflowState,
+        step: object,
+        actor_type: str,
+        actor_id: str,
+        reason: str,
+        checkpoint: bool,
+    ) -> WorkflowContext:
+        workflow.state = next_state
+        self.transitions.append(next_state)
+        return context.evolved(current_state=next_state)
+
+
 def project(status: str, manifest_hash: str | None = None) -> ProjectModel:
     now = datetime.now(UTC)
     manifest = {"schema_version": "1.0", "name": "Relinked Project"}
@@ -67,6 +103,23 @@ def project(status: str, manifest_hash: str | None = None) -> ProjectModel:
         created_at=now,
         updated_at=now,
     )
+
+
+def assert_single_valid_chain(
+    session: WorkflowWriteSession, event_type: str
+) -> AuditChainRecordModel:
+    chain = next(item for item in session.added if isinstance(item, AuditChainRecordModel))
+    assert chain.payload["event_type"] == event_type
+    assert verify_chain_records([
+        {
+            "stream_id": chain.stream_id,
+            "sequence": chain.sequence,
+            "previous_hash": chain.previous_hash,
+            "record_hash": chain.record_hash,
+            "payload": chain.payload,
+        }
+    ]) == []
+    return chain
 
 
 def test_workflow_relink_maps_created_project_to_startable_state() -> None:
@@ -140,15 +193,7 @@ async def test_workflow_start_writes_tamper_evident_audit_chain() -> None:
     assert chain.payload["event_type"] == "workflow.started"
     assert chain.payload["payload"]["workflow_id"] == str(workflow.id)
     assert job.job_type == "advance_workflow"
-    assert verify_chain_records([
-        {
-            "stream_id": chain.stream_id,
-            "sequence": chain.sequence,
-            "previous_hash": chain.previous_hash,
-            "record_hash": chain.record_hash,
-            "payload": chain.payload,
-        }
-    ]) == []
+    assert_single_valid_chain(session, "workflow.started")
 
 
 @pytest.mark.asyncio
@@ -173,12 +218,39 @@ async def test_workflow_relink_writes_tamper_evident_audit_chain() -> None:
     assert audit.event_type == "workflow.relinked"
     assert chain.payload["event_type"] == "workflow.relinked"
     assert chain.payload["payload"]["state"] == WorkflowState.WAITING_REQUIREMENTS_APPROVAL
-    assert verify_chain_records([
-        {
-            "stream_id": chain.stream_id,
-            "sequence": chain.sequence,
-            "previous_hash": chain.previous_hash,
-            "record_hash": chain.record_hash,
-            "payload": chain.payload,
-        }
-    ]) == []
+    assert_single_valid_chain(session, "workflow.relinked")
+
+
+@pytest.mark.asyncio
+async def test_workflow_cancel_writes_tamper_evident_audit_chain() -> None:
+    row = project(ProjectStatus.CREATED)
+    session = WorkflowWriteSession(row)
+    workflow = WorkflowInstanceModel(
+        id=uuid.uuid4(),
+        project_id=row.id,
+        definition_name="vertical_slice",
+        workflow_version="1.0",
+        state=WorkflowState.PROJECT_CREATED,
+        current_step=None,
+        context_version=1,
+        correlation_id=uuid.uuid4(),
+        optimistic_version=1,
+    )
+    service = WorkflowService(session)  # type: ignore[arg-type]
+    repository = CancelRepository(workflow)
+    service.repository = repository  # type: ignore[assignment]
+
+    result = await service.cancel(
+        workflow_id=workflow.id,
+        actor_id="operator",
+        reason="Operator stopped the run.",
+    )
+
+    audit = next(item for item in session.added if isinstance(item, AuditEventModel))
+    chain = assert_single_valid_chain(session, "workflow.cancelled")
+    assert session.committed is True
+    assert result.state == WorkflowState.CANCELLED
+    assert repository.transitions == [WorkflowState.CANCELLING, WorkflowState.CANCELLED]
+    assert audit.event_type == "workflow.cancelled"
+    assert audit.payload["audit_chain"]["record_hash"] == chain.record_hash
+    assert chain.payload["payload"]["reason"] == "Operator stopped the run."

@@ -20,7 +20,6 @@ from ai_enterprise.domain.workflow.enums import TERMINAL_STATES, WorkflowState, 
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     ExecutionRunModel,
     IntegrationAttemptModel,
     IntegrationCommitModel,
@@ -291,19 +290,16 @@ class WorkflowService:
                 reason="Workflow execution started",
                 checkpoint=False,
             )
-            self.session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=workflow.project_id,
-                    event_type="workflow.transitioned",
-                    actor_type="system",
-                    actor_id="workflow-engine",
-                    payload={
-                        "workflow_id": str(workflow.id),
-                        "state": workflow.state,
-                        "correlation_id": str(workflow.correlation_id),
-                    },
-                )
+            await AuditWriter(self.session).append_project_event(
+                project_id=workflow.project_id,
+                event_type="workflow.transitioned",
+                actor_type="system",
+                actor_id="workflow-engine",
+                payload={
+                    "workflow_id": str(workflow.id),
+                    "state": workflow.state,
+                    "correlation_id": str(workflow.correlation_id),
+                },
             )
         elif state is WorkflowState.REQUIREMENTS_RUNNING:
             project = await self.session.get(ProjectModel, workflow.project_id)
@@ -696,19 +692,16 @@ class WorkflowService:
             reason="Cancellation persisted; no active resource lease remains",
             checkpoint=False,
         )
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=workflow.project_id,
-                event_type="workflow.cancelled",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "workflow_id": str(workflow.id),
-                    "reason": reason,
-                    "correlation_id": str(workflow.correlation_id),
-                },
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=workflow.project_id,
+            event_type="workflow.cancelled",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "workflow_id": str(workflow.id),
+                "reason": reason,
+                "correlation_id": str(workflow.correlation_id),
+            },
         )
         await self.session.commit()
         return workflow
