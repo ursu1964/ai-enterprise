@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.enums import JobType
 from ai_enterprise.domain.execution.enums import ExecutionStatus, TestStatus
 from ai_enterprise.domain.hashing import hash_json
@@ -22,7 +23,6 @@ from ai_enterprise.domain.integration.policies import (
     PatchEligibilityPolicy,
 )
 from ai_enterprise.infrastructure.database.models import (
-    AuditEventModel,
     ExecutionRunModel,
     ExecutionTestResultModel,
     IntegrationApprovalModel,
@@ -129,19 +129,16 @@ class ControlledIntegrationService:
         execution.patch_status = (
             PatchStatus.INTEGRATION_ELIGIBLE if decision.eligible else execution.patch_status
         )
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=execution.project_id,
-                event_type="patch.integration_eligibility_evaluated",
-                actor_type="system",
-                actor_id="control-plane",
-                payload={
-                    "execution_run_id": str(execution.id),
-                    "eligible": decision.eligible,
-                    "failure_reasons": eligibility.failure_reasons,
-                },
-            )
+        await self._append_audit_event(
+            project_id=execution.project_id,
+            event_type="patch.integration_eligibility_evaluated",
+            actor_type="system",
+            actor_id="control-plane",
+            payload={
+                "execution_run_id": str(execution.id),
+                "eligible": decision.eligible,
+                "failure_reasons": eligibility.failure_reasons,
+            },
         )
         await self._session.commit()
         await self._session.refresh(eligibility)
@@ -206,20 +203,17 @@ class ControlledIntegrationService:
         )
         self._session.add(approval)
         execution.patch_status = PatchStatus.INTEGRATION_APPROVED
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="patch.integration_approval_granted",
-                actor_type=actor_type,
-                actor_id=actor_subject,
-                payload={
-                    "approval_id": str(approval.id),
-                    "execution_run_id": str(execution.id),
-                    "patch_sha256": approval.approved_patch_sha256,
-                    "target_branch": target_branch,
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="patch.integration_approval_granted",
+            actor_type=actor_type,
+            actor_id=actor_subject,
+            payload={
+                "approval_id": str(approval.id),
+                "execution_run_id": str(execution.id),
+                "patch_sha256": approval.approved_patch_sha256,
+                "target_branch": target_branch,
+            },
         )
         await self._session.commit()
         await self._session.refresh(approval)
@@ -263,19 +257,16 @@ class ControlledIntegrationService:
         self._session.add(attempt)
         approval.decision = IntegrationApprovalDecision.CONSUMED
         execution.patch_status = PatchStatus.INTEGRATING
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=approval.project_id,
-                event_type="integration.attempt_created",
-                actor_type="system",
-                actor_id="control-plane",
-                payload={
-                    "attempt_id": str(attempt.id),
-                    "approval_id": str(approval.id),
-                    "correlation_id": str(attempt.correlation_id),
-                },
-            )
+        await self._append_audit_event(
+            project_id=approval.project_id,
+            event_type="integration.attempt_created",
+            actor_type="system",
+            actor_id="control-plane",
+            payload={
+                "attempt_id": str(attempt.id),
+                "approval_id": str(approval.id),
+                "correlation_id": str(attempt.correlation_id),
+            },
         )
         await JobRepository(self._session).enqueue(
             project_id=approval.project_id,
@@ -291,3 +282,20 @@ class ControlledIntegrationService:
         await self._session.commit()
         await self._session.refresh(attempt)
         return attempt
+
+    async def _append_audit_event(
+        self,
+        *,
+        project_id: uuid.UUID,
+        event_type: str,
+        actor_type: str,
+        actor_id: str,
+        payload: dict[str, object],
+    ) -> None:
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type=event_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
+        )
