@@ -314,6 +314,122 @@ def _project_phase_from_workflow(workflow: WorkflowInstanceModel | None) -> str:
     return state.replace("_", " ")
 
 
+def _phase_owner(phase: str, crews: list[CrewRunModel], jobs: list[JobModel]) -> str:
+    phase_keywords = {
+        "requirements": ("requirements",),
+        "architecture": ("architecture",),
+        "planning": ("planning", "work_package"),
+        "execution": ("execution", "implementation"),
+        "integration": ("integration",),
+    }.get(phase, (phase,))
+    for crew in reversed(crews):
+        crew_name = crew.crew_name.lower()
+        if any(keyword in crew_name for keyword in phase_keywords):
+            return crew.crew_name
+    for job in jobs:
+        job_type = job.job_type.lower()
+        if any(keyword in job_type for keyword in phase_keywords):
+            return job.job_type.replace("_", " ")
+    if phase == "intake":
+        return "manifesto factory"
+    if phase == "completed":
+        return "workflow engine"
+    return f"{phase.replace('_', ' ')} crew"
+
+
+def _phase_evidence(
+    phase: str,
+    workflow: WorkflowInstanceModel | None,
+    jobs: list[JobModel],
+    crews: list[CrewRunModel],
+    packages: list[WorkPackageModel],
+) -> list[str]:
+    evidence: list[str] = []
+    if workflow is not None:
+        evidence.append("linked workflow")
+    succeeded_jobs = [
+        job for job in jobs if job.status == "succeeded" and phase in job.job_type
+    ]
+    if succeeded_jobs:
+        evidence.append(f"{len(succeeded_jobs)} completed worker job(s)")
+    matching_crews = [crew for crew in crews if phase in crew.crew_name.lower()]
+    if matching_crews:
+        evidence.append(f"{len(matching_crews)} crew signal(s)")
+    if phase in {"planning", "execution"} and packages:
+        evidence.append(f"{len(packages)} work package record(s)")
+    return evidence
+
+
+def _phase_confidence(
+    workflow: WorkflowInstanceModel | None,
+    evidence: list[str],
+    current_issues: list[dict[str, Any]],
+) -> str:
+    if current_issues:
+        return "needs review"
+    if workflow is not None:
+        return "live workflow"
+    if evidence:
+        return "evidence backed"
+    return "early estimate"
+
+
+def _dashboard_issue(job: JobModel, *, historical: bool) -> dict[str, Any]:
+    resolution = job_resolution(job) or {}
+    label = "Reviewed history" if historical else meaning_for(job.status)["label"]
+    action = (
+        "Use this as learning evidence; it does not block current health."
+        if historical
+        else "Open Problems, inspect attempts, and decide whether to retry or repair."
+    )
+    return {
+        "job_id": job.id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "label": label,
+        "failure_class": job.last_failure_class,
+        "last_error": job.last_error,
+        "resolution": resolution,
+        "operator_action": action,
+    }
+
+
+def _phase_detail(
+    *,
+    phase: str,
+    workflow: WorkflowInstanceModel | None,
+    jobs: list[JobModel],
+    crews: list[CrewRunModel],
+    packages: list[WorkPackageModel],
+    next_action: str,
+) -> dict[str, Any]:
+    current_issues = [
+        _dashboard_issue(job, historical=False) for job in unresolved_problem_jobs(jobs)
+    ]
+    historical_issues = [
+        _dashboard_issue(job, historical=True)
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
+    evidence = _phase_evidence(phase, workflow, jobs, crews, packages)
+    return {
+        "label": phase.replace("_", " ").title(),
+        "confidence": _phase_confidence(workflow, evidence, current_issues),
+        "owner_crew": _phase_owner(phase, crews, jobs),
+        "completed_evidence": evidence,
+        "remaining_work": (
+            "Resolve current issues before scaling this project."
+            if current_issues
+            else "Continue the workflow and preserve proof for this phase."
+            if workflow is not None
+            else "Start or relink the workflow before treating this phase as live."
+        ),
+        "next_action": next_action,
+        "current_issues": current_issues,
+        "historical_issues": historical_issues,
+    }
+
+
 def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[str, object]]:
     completed: list[dict[str, object]] = [
         {
@@ -590,6 +706,15 @@ async def dashboard_manager(
         )
         current_meaning = meaning_for(state)
         phase_meaning = meaning_for(phase)
+        next_action = (
+            "Open Problems and resolve failed work before scaling this project."
+            if tasks["problems"]
+            else project_workflow.recommended_operator_action
+            if project_workflow and project_workflow.recommended_operator_action
+            else "Start or relink the workflow after manifesto intake."
+            if project_workflow is None
+            else "Continue monitoring this project execution graph."
+        )
         summaries.append(
             {
                 "id": project.id,
@@ -597,6 +722,14 @@ async def dashboard_manager(
                 **status_read_model(project.status),
                 "phase": phase,
                 "phase_meaning": phase_meaning,
+                "phase_detail": _phase_detail(
+                    phase=phase,
+                    workflow=project_workflow,
+                    jobs=project_jobs,
+                    crews=crew_by_project.get(project.id, []),
+                    packages=project_packages,
+                    next_action=next_action,
+                ),
                 "state": state,
                 "state_meaning": current_meaning,
                 "repository_path": project.repository_path,
@@ -629,15 +762,7 @@ async def dashboard_manager(
                     f"{tasks['done']} done, {tasks['active']} active, "
                     f"{tasks['standby']} standby, {tasks['problems']} problem tasks."
                 ),
-                "next_action": (
-                    "Open Problems and resolve failed work before scaling this project."
-                    if tasks["problems"]
-                    else project_workflow.recommended_operator_action
-                    if project_workflow and project_workflow.recommended_operator_action
-                    else "Start or relink the workflow after manifesto intake."
-                    if project_workflow is None
-                    else "Continue monitoring this project execution graph."
-                ),
+                "next_action": next_action,
             }
         )
 

@@ -220,6 +220,20 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["totals"]["tasks_active"] == 1
     assert response["totals"]["online_workers"] == 1
     assert response["projects"][0]["phase"] == "requirements"
+    assert response["projects"][0]["phase_detail"]["label"] == "Requirements"
+    assert response["projects"][0]["phase_detail"]["confidence"] == "live workflow"
+    assert response["projects"][0]["phase_detail"]["owner_crew"] == "requirements"
+    assert response["projects"][0]["phase_detail"]["completed_evidence"] == [
+        "linked workflow",
+        "1 completed worker job(s)",
+        "1 crew signal(s)",
+    ]
+    assert response["projects"][0]["phase_detail"]["remaining_work"] == (
+        "Continue the workflow and preserve proof for this phase."
+    )
+    assert response["projects"][0]["phase_detail"]["next_action"] == (
+        "Watch the requirements artifact and approve when ready."
+    )
     assert response["projects"][0]["state_meaning"]["label"] == "Active"
     assert response["projects"][0]["status_label"] == "Ready to start"
     assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
@@ -237,6 +251,48 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "assigns" for edge in response["graph"]["edges"])
     assert all("status_label" in node for node in response["graph"]["nodes"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_manager_splits_current_and_historical_project_issues() -> None:
+    now = datetime.now(UTC)
+    row = project(now)
+    active_failure = job(now, row.id, "dead_letter")
+    active_failure.last_error = "result.json missing"
+    acknowledged = job(now, row.id, "dead_letter")
+    acknowledged.payload = {
+        "operator_resolution": {
+            "state": "acknowledged",
+            "acknowledged_by": "operator",
+            "acknowledged_at": now.isoformat(),
+            "reason": "Reviewed during recovery.",
+            "action_taken": "Preserved as training evidence.",
+        }
+    }
+    rows = [
+        [row],
+        [workflow(now, row.id)],
+        [active_failure, acknowledged],
+        [],
+        [],
+        [],
+        [],
+        [],
+    ]
+
+    response = await dashboard_manager(QuerySession(rows), actor())  # type: ignore[arg-type]
+
+    phase_detail = response["projects"][0]["phase_detail"]
+    assert response["projects"][0]["tasks"]["problems"] == 1
+    assert phase_detail["confidence"] == "needs review"
+    assert phase_detail["remaining_work"] == (
+        "Resolve current issues before scaling this project."
+    )
+    assert phase_detail["current_issues"][0]["label"] == (
+        "Reviewed failure or recovery needed"
+    )
+    assert phase_detail["historical_issues"][0]["label"] == "Reviewed history"
+    assert phase_detail["historical_issues"][0]["resolution"]["state"] == "acknowledged"
 
 
 @pytest.mark.asyncio
