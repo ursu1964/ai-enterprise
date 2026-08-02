@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 
-from ai_enterprise.api.dependencies import ActorDependency
+from ai_enterprise.api.dependencies import Actor, ActorDependency, require_capability
 from ai_enterprise.api.evolution_schemas import (
     ConstitutionalAssessmentRequest,
     EvolutionAssessmentResponse,
@@ -22,9 +22,15 @@ from ai_enterprise.domain.evolution.exceptions import EvolutionError
 router = APIRouter(prefix="/evolution-assessments", tags=["governed-evolution"])
 
 
-def _require_governor(actor_type: str, role: str) -> None:
-    if actor_type != "human" or role != "evolution_governor":
-        raise HTTPException(status_code=403, detail="Human evolution_governor required")
+def _require_governor(actor: Actor) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human evolution governor required")
+    try:
+        require_capability(actor, "evolution.assess", "global")
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403, detail="Evolution assessment capability required"
+        ) from exc
 
 
 def _failure(exc: EvolutionError) -> HTTPException:
@@ -38,7 +44,7 @@ def _failure(exc: EvolutionError) -> HTTPException:
 async def assess_prerequisites(
     request: PrerequisiteAssessmentRequest, actor: ActorDependency
 ) -> EvolutionAssessmentResponse:
-    _require_governor(actor.actor_type, actor.role)
+    _require_governor(actor)
     try:
         EvolutionGovernanceService().require_platform_prerequisites(request.available_prerequisites)
     except EvolutionError as exc:
@@ -52,7 +58,7 @@ async def assess_prerequisites(
 async def assess_shadow_command(
     request: ShadowCommandAssessmentRequest, actor: ActorDependency
 ) -> EvolutionAssessmentResponse:
-    _require_governor(actor.actor_type, actor.role)
+    _require_governor(actor)
     try:
         EvolutionGovernanceService().assess_shadow_command(ShadowCommand(**request.model_dump()))
     except EvolutionError as exc:
@@ -66,7 +72,7 @@ async def assess_shadow_command(
 async def assess_policy_exception(
     request: ExceptionAssessmentRequest, actor: ActorDependency
 ) -> EvolutionAssessmentResponse:
-    _require_governor(actor.actor_type, actor.role)
+    _require_governor(actor)
     try:
         EvolutionGovernanceService().assess_exception(
             PolicyException(
@@ -92,7 +98,7 @@ async def assess_policy_exception(
 async def assess_constitutional_amendment(
     request: ConstitutionalAssessmentRequest, actor: ActorDependency
 ) -> EvolutionAssessmentResponse:
-    _require_governor(actor.actor_type, actor.role)
+    _require_governor(actor)
     amendment = ConstitutionalAmendment(
         id=request.amendment_id,
         change_proposal_id=request.change_proposal_id,

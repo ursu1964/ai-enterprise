@@ -2,9 +2,11 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.routing import APIRoute
 
-from ai_enterprise.api.routes.evolution import router
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.evolution import _require_governor, router
 from ai_enterprise.application.evolution.service import EvolutionGovernanceService
 from ai_enterprise.domain.evolution.entities import (
     ConstitutionalAmendment,
@@ -269,3 +271,40 @@ def test_api_is_assessment_only_and_has_no_activation_endpoint() -> None:
     paths = {route.path for route in router.routes if isinstance(route, APIRoute)}
     assert "/evolution-assessments/constitutional-amendments" in paths
     assert all("/activate" not in path and "/rollout" not in path for path in paths)
+
+
+def test_evolution_assessment_requires_human_global_capability() -> None:
+    with pytest.raises(HTTPException, match="Evolution assessment capability"):
+        _require_governor(Actor("governor", "human", "evolution_governor"))
+
+    with pytest.raises(HTTPException, match="Evolution assessment capability"):
+        _require_governor(
+            Actor(
+                "governor",
+                "human",
+                "evolution_governor",
+                frozenset({"evolution.assess"}),
+                scopes=frozenset({"project:wrong"}),
+            )
+        )
+
+    with pytest.raises(HTTPException, match="Human evolution governor"):
+        _require_governor(
+            Actor(
+                "governor-service",
+                "service",
+                "evolution_governor",
+                frozenset({"evolution.assess"}),
+                scopes=frozenset({"global"}),
+            )
+        )
+
+    _require_governor(
+        Actor(
+            "governor",
+            "human",
+            "evolution_governor",
+            frozenset({"evolution.assess"}),
+            scopes=frozenset({"global"}),
+        )
+    )
