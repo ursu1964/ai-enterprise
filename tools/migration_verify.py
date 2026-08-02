@@ -385,14 +385,14 @@ def verify_server_readiness(
         "github_access_hooks",
         all(
             key in env
-            for key in {
+            for key in (
                 "LOCAL_GIT_REMOTE_URL",
                 "GITHUB_INTEGRATION_MODE",
                 "GITHUB_APP_ID",
                 "GITHUB_APP_INSTALLATION_ID",
                 "GITHUB_PRIVATE_KEY_PATH",
                 "GITHUB_TOKEN_FILE",
-            }
+            )
         ),
         "GitHub and Git remote integration hooks are documented.",
         "Add GitHub App, token-file, or SSH remote variables before production project creation.",
@@ -409,12 +409,12 @@ def verify_server_readiness(
         "managed_infrastructure_hooks",
         all(
             key in env
-            for key in {
+            for key in (
                 "MANAGED_POSTGRES_URL",
                 "OBJECT_STORAGE_PROVIDER",
                 "OBJECT_STORAGE_BUCKET",
                 "OBJECT_STORAGE_REGION",
-            }
+            )
         ),
         "Managed Postgres and object storage hooks are documented.",
         "Add managed database and object-storage variables to .env.server.example.",

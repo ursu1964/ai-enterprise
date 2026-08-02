@@ -9,10 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "api" / "src"))
 
-from ai_enterprise.infrastructure.review.secret_scanner import (  # noqa: E402
-    SecretScanner,
-)
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan repository content for secret material.")
@@ -24,6 +20,8 @@ def main() -> int:
     )
     parser.add_argument("repository", nargs="?", default=".")
     args = parser.parse_args()
+
+    from ai_enterprise.infrastructure.review.secret_scanner import SecretScanner
 
     repository = Path(args.repository).resolve()
     scanner = SecretScanner()

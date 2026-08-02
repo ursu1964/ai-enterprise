@@ -77,8 +77,10 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
             "path": str(path),
             "summary": "Infrastructure choices file is missing.",
             "findings": [
-                f"Create {path} from "
-                "docs/enterprise/real-world-infrastructure-decisions.template.json."
+                (
+                    f"Create {path} from "
+                    "docs/enterprise/real-world-infrastructure-decisions.template.json."
+                )
             ],
             "next_action": (
                 "Copy the template, fill real provider values, then run "

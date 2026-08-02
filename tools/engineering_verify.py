@@ -637,6 +637,7 @@ def _run_full_gates(root: Path) -> int:
         (root / "apps" / "api", (sys.executable, "-m", "pytest", "-q", "tests")),
     )
     for cwd, command in commands:
+        print(f"running full gate: {' '.join(command)} [cwd={cwd.relative_to(root)}]")
         if subprocess.run(command, cwd=cwd, check=False).returncode != 0:
             return 1
     return 0
