@@ -1415,6 +1415,17 @@ DASHBOARD_HTML = r"""<!doctype html>
       flex-wrap: wrap;
       gap: 8px;
     }
+    .launch-contract-list {
+      display: grid;
+      gap: 6px;
+    }
+    .launch-contract-list > strong {
+      margin: 0;
+      font-size: 0.86rem;
+    }
+    .launch-contract-list .listbox {
+      max-height: 220px;
+    }
     .info-card {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
@@ -3019,7 +3030,17 @@ DASHBOARD_HTML = r"""<!doctype html>
           nextAction: blocked.length
             ? blocked[0].message
             : "Press Start Manifesto Batch to create projects, formation packs, and workflows.",
-          proof: "Client-side preflight only. No database record, workflow, job, or artifact was created."
+          proof: "Client-side preflight only. No database record, workflow, job, or artifact was created.",
+          items: document.projects.map((project, index) => ({
+            name: project.name || `Project ${index + 1}`,
+            status: validations[index].ok ? "ready" : "blocked",
+            detail: validations[index].ok
+              ? `Ready to create at ${(project.repository_path || defaults.repository_path || "repository path not shown")}.`
+              : validations[index].message,
+            action: validations[index].ok
+              ? "Start Manifesto Batch when you want to create this project."
+              : "Correct this project in the manifesto before launch."
+          }))
         });
         setOrientation(2, blocked.length ? "Preview found missing batch details. Correct them before launch." : "Preview is ready. Start the manifesto batch when you want the factory to create work.");
         coach(
@@ -3051,7 +3072,17 @@ DASHBOARD_HTML = r"""<!doctype html>
         nextAction: validation.ok
           ? "Press Start Process to create the project, formation pack, and workflow."
           : validation.message,
-        proof: "Client-side preflight only. No database record, workflow, job, or artifact was created."
+        proof: "Client-side preflight only. No database record, workflow, job, or artifact was created.",
+        items: [{
+          name: projectInput.name || "Single project",
+          status: validation.ok ? "ready" : "blocked",
+          detail: validation.ok
+            ? `Ready to create at ${projectInput.repository_path}.`
+            : validation.message,
+          action: validation.ok
+            ? "Press Start Process when you want to create governed work."
+            : "Complete the required fields before starting."
+        }]
       });
       setOrientation(2, validation.ok ? "Preview is ready. Start the process when you want the factory to create work." : "Preview found missing details. Complete the fields before starting.");
       coach(
@@ -3089,7 +3120,13 @@ DASHBOARD_HTML = r"""<!doctype html>
         recommendedName: project.name,
         recommendedUrl: `/dashboard?project=${project.id}`,
         nextAction: "Open Execution and watch the project graph for phase, task, crew, event, and telemetry movement.",
-        proof: "Project record, formation pack, workflow start, and dashboard graph."
+        proof: "Project record, formation pack, workflow start, and dashboard graph.",
+        items: [{
+          name: project.name,
+          status: "started",
+          detail: `Created at ${project.repository_path || projectInput.repository_path}.`,
+          action: "Open the project graph and verify live execution movement."
+        }]
       });
       setOrientation(3, "Formation pack created and workflow started. Inspect the live project graph next.");
       coach(
@@ -3130,6 +3167,23 @@ DASHBOARD_HTML = r"""<!doctype html>
       ));
       const started = results.filter(result => result.status === "fulfilled").map(result => result.value);
       const failed = results.length - started.length;
+      const launchItems = results.map((result, index) => {
+        const sourceProject = { ...defaults, ...document.projects[index] };
+        if (result.status === "fulfilled") {
+          return {
+            name: result.value.name,
+            status: "started",
+            detail: `Created at ${result.value.repository_path || sourceProject.repository_path}.`,
+            action: "Open Execution and inspect this project graph."
+          };
+        }
+        return {
+          name: sourceProject.name || `Project ${index + 1}`,
+          status: "failed",
+          detail: friendlyLaunchError(result.reason),
+          action: "Correct the manifesto or inspect API logs before retrying."
+        };
+      });
       byId("factoryStatus").textContent = `Started ${started.length}; failed ${failed}. Opening execution control...`;
       renderLaunchContract({
         status: failed ? "partial" : "started",
@@ -3146,7 +3200,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         nextAction: failed
           ? "Open Execution for started work, then inspect Problems or correct the manifesto before retrying failed launches."
           : "Open Execution and inspect the first project while the portfolio continues in parallel.",
-        proof: "Manifesto batch, project records, formation packs, workflow starts, and execution graph."
+        proof: "Manifesto batch, project records, formation packs, workflow starts, and execution graph.",
+        items: launchItems
       });
       setOrientation(3, `Manifesto batch started: ${countSentence(started.length, "project")}, ${countSentence(failed, "launch issue")}. Inspect Execution first.`);
       coach(
@@ -3181,6 +3236,19 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="human-copy">
           <span><b>Next:</b> ${esc(contract.nextAction || "Open Execution and inspect the current graph state.")}</span>
           <span><b>Proof:</b> ${esc(contract.proof || "Dashboard source freshness, project records, workflow state, and telemetry.")}</span>
+        </div>
+        <div class="launch-contract-list">
+          <strong>Project Readiness</strong>
+          ${listbox(contract.items || [], item => `
+            <div class="list-item">
+              <div>
+                <div class="list-title">${esc(item.name || "Unnamed project")}</div>
+                <div class="list-meta">${esc(item.detail || "No detail reported yet.")}</div>
+                <div class="list-meta">Next: ${esc(item.action || "Continue with the guided launch path.")}</div>
+              </div>
+              <span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span>
+            </div>
+          `, "No project readiness items yet. Press Preview Launch or start the factory to populate this list.")}
         </div>
         <div class="launch-contract-actions">
           <button class="launch-open" data-target="${esc(recommendedTarget || "execution")}">Open Recommended View</button>
@@ -3259,7 +3327,15 @@ DASHBOARD_HTML = r"""<!doctype html>
         nextAction: result.blocked_count
           ? "Correct blocked launch information before starting the mock factory."
           : "Launch the mock factory when you are ready to create or reuse the portfolio projects.",
-        proof: "Preview contract, readiness count, reused projects, blocked projects, and recommended first inspection target."
+        proof: "Preview contract, readiness count, reused projects, blocked projects, and recommended first inspection target.",
+        items: (result.projects || []).map(project => ({
+          name: project.name,
+          status: project.ready ? (project.action || "ready") : "blocked",
+          detail: project.ready
+            ? `${project.action === "reuse" ? "Will reuse existing project" : "Ready to create"} at ${project.repository_path}.`
+            : (project.missing_information || []).join("; "),
+          action: project.operator_action || "Continue with the mock factory launch path."
+        }))
       });
       renderMockFactoryProjects(result, "preview");
       coach(
@@ -3289,7 +3365,23 @@ DASHBOARD_HTML = r"""<!doctype html>
         recommendedName: result.recommended_first_project?.name || "No project ready yet",
         recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
         nextAction: result.next_action,
-        proof: "Created or reused projects, formation packs, workflows, jobs, telemetry links, and recommended dashboard path."
+        proof: "Created or reused projects, formation packs, workflows, jobs, telemetry links, and recommended dashboard path.",
+        items: (result.projects || []).map(project => ({
+          name: project.name,
+          status: project.workflow || project.project_record || "started",
+          detail: `${project.project_record || "Project"}; formation pack ${project.formation_pack || "not reported"}; workflow ${project.workflow || "not reported"}.`,
+          action: project.next_action || "Open this project dashboard for inspection."
+        })).concat((result.blocked || []).map(item => ({
+          name: item.name,
+          status: "blocked",
+          detail: (item.issues || []).join("; ") || "Launch needs more information.",
+          action: item.operator_action || "Fix blocked launch information."
+        }))).concat((result.failed || []).map(item => ({
+          name: item.name,
+          status: "failed",
+          detail: (item.issues || []).join("; ") || "Launch failed.",
+          action: item.operator_action || "Inspect logs and retry after correction."
+        })))
       });
       renderMockFactoryProjects(result, "launch");
       setOrientation(3, "Mock autonomy started. Open Execution and select a demo project to watch graph movement, tasks, crews, events, and telemetry.");
@@ -3339,6 +3431,8 @@ DASHBOARD_HTML = r"""<!doctype html>
     function humanStatus(status) {
       const labels = {
         created: "Ready to start",
+        reuse: "Will reuse existing work",
+        reused: "Reused existing work",
         project_created: "Ready to start",
         work_package_approved: "Plan approved, execution not started",
         waiting_work_package_approval: "Ready for work-package review",

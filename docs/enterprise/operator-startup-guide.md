@@ -218,6 +218,8 @@ In Factory, press Preview Launch before Start Process when you want a no-risk ch
 no records. It only explains whether the project or manifesto batch is ready and what is missing.
 After preview or start, use Launch Result as the operating checkpoint: it explains status, created
 work, reused work, blocked work, the recommended first project, the next action, and the proof path.
+For manifesto batches, read Project Readiness inside Launch Result. It lists every project, whether
+it is ready, blocked, reused, or started, and what to do next.
 
 It connects the local health check, operator jobs, worker instances, project list, runtime metrics,
 workflow lookup, project intelligence graph, and graph links into one browser interface.

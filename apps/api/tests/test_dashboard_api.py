@@ -161,8 +161,18 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Launch Mock Factory Test" in response.text
     assert "Mock Autonomy" in response.text
     assert "Launch Result" in response.text
+    assert "Project Readiness" in response.text
+    assert "No project readiness items yet" in response.text
+    assert "launch-contract-list" in response.text
     assert "Open Recommended View" in response.text
     assert "Open Proof Path" in response.text
+    assert (
+        "No project readiness items yet. Press Preview Launch or start the factory "
+        "to populate this list."
+        in response.text
+    )
+    assert "Start Manifesto Batch when you want to create this project." in response.text
+    assert "Will reuse existing work" in response.text
     assert "Partly started, needs review" in response.text
     assert "Started and ready to inspect" in response.text
     assert "Blocked until missing details are fixed" in response.text
