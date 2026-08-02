@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify engineering-static evolution-check federation-check intelligence-check etra-check engineering-full
+.PHONY: build up down restart logs ps migrate migration enterprise-start test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-artifact
 
 build:
 	docker compose build
@@ -76,11 +76,14 @@ etra-check:
 engineering-full:
 	python tools/engineering_verify.py --full --json
 
+release-artifact:
+	python tools/release_artifact.py --output artifacts/release-verification.json
+
 check-fast: lint typecheck test
 
 check-ci: engineering-static evolution-check federation-check intelligence-check engineering-full etra-check
 
-check-release: compose-check migration-check secret-scan docker-smoke check-ci
+check-release: compose-check migration-check secret-scan docker-smoke check-ci release-artifact
 
 check: compose-check migration-check lint typecheck test
 
