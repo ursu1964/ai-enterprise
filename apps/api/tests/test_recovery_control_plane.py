@@ -3,18 +3,23 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import UniqueConstraint
 
+from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.recovery_schemas import (
     RecoveryIncidentRequest,
     RollbackApprovalRequest,
 )
+from ai_enterprise.api.routes.recovery import get_assessment, get_attempt, get_incident
 from ai_enterprise.application.recovery.service import RecoveryControlPlaneService
 from ai_enterprise.domain.recovery.exceptions import RollbackApprovalHumanRequired
 from ai_enterprise.infrastructure.database.models import (
     Base,
+    RecoveryAssessmentModel,
     RecoveryAttemptModel,
+    RecoveryIncidentModel,
     RollbackApprovalModel,
     RollbackRecordModel,
 )
@@ -84,3 +89,129 @@ def test_recovery_tables_bind_one_record_and_attempt() -> None:
     assert "rollback_approval_id" in attempt_uniques
     assert "rollback_approvals" in Base.metadata.tables
     assert RollbackApprovalModel.__table__.c.approval_binding_sha256.nullable is False
+
+
+class RecoveryReadSession:
+    def __init__(self, rows: dict[tuple[type, object], object]) -> None:
+        self.rows = rows
+
+    async def get(self, model: type, identity: object) -> object | None:
+        return self.rows.get((model, identity))
+
+
+def _recovery_reader(project_id) -> Actor:
+    return Actor(
+        "reader",
+        "human",
+        "recovery_operator",
+        frozenset({"recovery.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+
+def _wrong_recovery_reader() -> Actor:
+    return _recovery_reader(uuid4())
+
+
+def _incident(project_id) -> RecoveryIncidentModel:
+    return RecoveryIncidentModel(
+        id=uuid4(),
+        integration_attempt_id=uuid4(),
+        rollback_record_id=uuid4(),
+        project_id=project_id,
+        reported_by="human:operator",
+        severity="high",
+        summary="Regression observed",
+        details="Requests fail after integration.",
+        affected_environment="production",
+        detected_at=datetime.now(UTC),
+        external_reference=None,
+        created_at=datetime.now(UTC),
+    )
+
+
+def _assessment(incident: RecoveryIncidentModel) -> RecoveryAssessmentModel:
+    return RecoveryAssessmentModel(
+        id=uuid4(),
+        incident_id=incident.id,
+        rollback_record_id=incident.rollback_record_id,
+        status="completed",
+        recommended_strategy="revert_commit",
+        risk_level="medium",
+        expected_remote_head_sha="a" * 40,
+        integration_commit_is_ancestor=True,
+        direct_revert_possible=True,
+        database_coordination_required=False,
+        external_coordination_required=False,
+        required_test_commands=[],
+        findings=[],
+        assessment_policy_version="recovery-assessment-v1",
+        assessment_binding_sha256="b" * 64,
+        assessed_by="human:operator",
+        assessed_at=datetime.now(UTC),
+    )
+
+
+def _attempt(project_id, assessment: RecoveryAssessmentModel) -> RecoveryAttemptModel:
+    return RecoveryAttemptModel(
+        id=uuid4(),
+        rollback_approval_id=uuid4(),
+        recovery_assessment_id=assessment.id,
+        rollback_record_id=assessment.rollback_record_id,
+        project_id=project_id,
+        target_branch="main",
+        expected_remote_head_sha="a" * 40,
+        integration_commit_sha="c" * 40,
+        recovery_strategy="revert_commit",
+        status="queued",
+        correlation_id=uuid4(),
+        failure_class=None,
+        failure_code=None,
+        failure_message=None,
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_recovery_read_routes_reject_wrong_project_scope() -> None:
+    project_id = uuid4()
+    incident = _incident(project_id)
+    assessment = _assessment(incident)
+    attempt = _attempt(project_id, assessment)
+    session = RecoveryReadSession(
+        {
+            (RecoveryIncidentModel, incident.id): incident,
+            (RecoveryAssessmentModel, assessment.id): assessment,
+            (RecoveryAttemptModel, attempt.id): attempt,
+        }
+    )
+    denied = _wrong_recovery_reader()
+
+    for route, identity in (
+        (get_incident, incident.id),
+        (get_assessment, assessment.id),
+        (get_attempt, attempt.id),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await route(identity, session, denied)  # type: ignore[arg-type, misc]
+        assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_recovery_read_routes_accept_project_scope() -> None:
+    project_id = uuid4()
+    incident = _incident(project_id)
+    assessment = _assessment(incident)
+    attempt = _attempt(project_id, assessment)
+    session = RecoveryReadSession(
+        {
+            (RecoveryIncidentModel, incident.id): incident,
+            (RecoveryAssessmentModel, assessment.id): assessment,
+            (RecoveryAttemptModel, attempt.id): attempt,
+        }
+    )
+    actor = _recovery_reader(project_id)
+
+    assert (await get_incident(incident.id, session, actor)).id == incident.id  # type: ignore[arg-type]
+    assert (await get_assessment(assessment.id, session, actor)).id == assessment.id  # type: ignore[arg-type]
+    assert (await get_attempt(attempt.id, session, actor)).id == attempt.id  # type: ignore[arg-type]

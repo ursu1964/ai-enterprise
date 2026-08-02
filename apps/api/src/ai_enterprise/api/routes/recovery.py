@@ -2,7 +2,12 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.recovery_schemas import (
     RecoveryAssessmentResponse,
     RecoveryAttemptRequest,
@@ -34,6 +39,10 @@ def _error(exc: RecoveryError) -> HTTPException:
         "ROLLBACK_APPROVAL_NOT_ACTIVE": 409,
     }.get(exc.code, 409)
     return HTTPException(status_code=status_code, detail={"code": exc.code, "message": str(exc)})
+
+
+def _require_recovery_read(actor: Actor, project_id: uuid.UUID) -> None:
+    require_capability(actor, "recovery.read", f"project:{project_id}")
 
 
 @router.post(
@@ -140,27 +149,35 @@ async def create_recovery_attempt(
 
 @router.get("/recovery-incidents/{incident_id}", response_model=RecoveryIncidentResponse)
 async def get_incident(
-    incident_id: uuid.UUID, session: SessionDependency
+    incident_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> RecoveryIncidentResponse:
     value = await session.get(RecoveryIncidentModel, incident_id)
     if value is None:
         raise HTTPException(status_code=404, detail="Recovery incident not found")
+    _require_recovery_read(actor, value.project_id)
     return RecoveryIncidentResponse.model_validate(value)
 
 
 @router.get("/recovery-assessments/{assessment_id}", response_model=RecoveryAssessmentResponse)
 async def get_assessment(
-    assessment_id: uuid.UUID, session: SessionDependency
+    assessment_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> RecoveryAssessmentResponse:
     value = await session.get(RecoveryAssessmentModel, assessment_id)
     if value is None:
         raise HTTPException(status_code=404, detail="Recovery assessment not found")
+    incident = await session.get(RecoveryIncidentModel, value.incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Recovery incident not found")
+    _require_recovery_read(actor, incident.project_id)
     return RecoveryAssessmentResponse.model_validate(value)
 
 
 @router.get("/recovery-attempts/{attempt_id}", response_model=RecoveryAttemptResponse)
-async def get_attempt(attempt_id: uuid.UUID, session: SessionDependency) -> RecoveryAttemptResponse:
+async def get_attempt(
+    attempt_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> RecoveryAttemptResponse:
     value = await session.get(RecoveryAttemptModel, attempt_id)
     if value is None:
         raise HTTPException(status_code=404, detail="Recovery attempt not found")
+    _require_recovery_read(actor, value.project_id)
     return RecoveryAttemptResponse.model_validate(value)
