@@ -316,3 +316,153 @@ async def test_audit_integrity_route_reports_tampered_chain_record() -> None:
 
     assert response.integrity_status == "failed"
     assert response.failures[0]["reason"] == "record_hash_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_audit_integrity_route_reports_broken_chain_link() -> None:
+    project_id = uuid4()
+    stream_id = f"project:{project_id}"
+    project = ProjectModel(
+        id=project_id,
+        name="Audit Link Project",
+        description="Project used for route-level audit link verification.",
+        repository_path="/tmp/audit-link",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+    first_payload = {
+        "audit_event_id": str(uuid4()),
+        "project_id": str(project_id),
+        "event_type": "project.created",
+        "actor_type": "human",
+        "actor_id": "operator",
+        "payload": {"status": "created"},
+    }
+    first_hash = canonical_chain_record_hash(
+        stream_id=stream_id, sequence=1, previous_hash=None, payload=first_payload
+    )
+    second_payload = {
+        "audit_event_id": str(uuid4()),
+        "project_id": str(project_id),
+        "event_type": "project.approved",
+        "actor_type": "human",
+        "actor_id": "approver",
+        "payload": {"status": "approved"},
+    }
+    second_hash = canonical_chain_record_hash(
+        stream_id=stream_id, sequence=2, previous_hash=first_hash, payload=second_payload
+    )
+    records = [
+        AuditChainRecordModel(
+            id=uuid4(),
+            stream_id=stream_id,
+            sequence=1,
+            event_id=uuid4(),
+            previous_hash=None,
+            record_hash=first_hash,
+            payload=first_payload,
+        ),
+        AuditChainRecordModel(
+            id=uuid4(),
+            stream_id=stream_id,
+            sequence=2,
+            event_id=uuid4(),
+            previous_hash="0" * 64,
+            record_hash=second_hash,
+            payload=second_payload,
+        ),
+    ]
+
+    class Result:
+        def scalars(self) -> "Result":
+            return self
+
+        def all(self) -> list[AuditChainRecordModel]:
+            return records
+
+    class Session:
+        async def get(self, model: type, identity: object) -> object | None:
+            return project
+
+        async def execute(self, statement: object) -> Result:
+            return Result()
+
+    actor = Actor(
+        "auditor",
+        "human",
+        "auditor",
+        frozenset({"audit.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    response = await audit_integrity(project_id, Session(), actor)  # type: ignore[arg-type]
+
+    assert response.integrity_status == "failed"
+    assert any(item["reason"] == "previous_hash_mismatch" for item in response.failures)
+
+
+@pytest.mark.asyncio
+async def test_audit_integrity_route_reports_verified_chain() -> None:
+    project_id = uuid4()
+    stream_id = f"project:{project_id}"
+    project = ProjectModel(
+        id=project_id,
+        name="Audit Verified Project",
+        description="Project used for route-level audit verification.",
+        repository_path="/tmp/audit-verified",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+    payload = {
+        "audit_event_id": str(uuid4()),
+        "project_id": str(project_id),
+        "event_type": "project.created",
+        "actor_type": "human",
+        "actor_id": "operator",
+        "payload": {"status": "created"},
+    }
+    record = AuditChainRecordModel(
+        id=uuid4(),
+        stream_id=stream_id,
+        sequence=1,
+        event_id=uuid4(),
+        previous_hash=None,
+        record_hash=canonical_chain_record_hash(
+            stream_id=stream_id, sequence=1, previous_hash=None, payload=payload
+        ),
+        payload=payload,
+    )
+
+    class Result:
+        def scalars(self) -> "Result":
+            return self
+
+        def all(self) -> list[AuditChainRecordModel]:
+            return [record]
+
+    class Session:
+        async def get(self, model: type, identity: object) -> object | None:
+            return project
+
+        async def execute(self, statement: object) -> Result:
+            return Result()
+
+    actor = Actor(
+        "auditor",
+        "human",
+        "auditor",
+        frozenset({"audit.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    response = await audit_integrity(project_id, Session(), actor)  # type: ignore[arg-type]
+
+    assert response.integrity_status == "verified"
+    assert response.event_count == 1
+    assert response.failures == []
