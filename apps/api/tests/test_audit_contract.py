@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.audit import export as export_audit
 from ai_enterprise.domain.audit.exceptions import InvalidAuditCursorError
 from ai_enterprise.domain.audit.policies import AuditCursor, sanitize_payload
 from ai_enterprise.infrastructure.audit.audit_exporter import AuditExporter
@@ -59,3 +62,20 @@ def test_export_contains_checksums_and_root_hash() -> None:
         assert checksums_file is not None
         checksums = json.load(checksums_file)
         assert len(checksums["summary.json"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_audit_export_requires_project_scoped_capability() -> None:
+    project_id = uuid4()
+    denied = Actor(
+        "auditor",
+        "human",
+        "auditor",
+        frozenset({"audit.export"}),
+        scopes=frozenset({f"project:{uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await export_audit(project_id, object(), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403

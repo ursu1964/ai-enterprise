@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from ai_enterprise.api.dependencies import SessionDependency
+from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, require_capability
 from ai_enterprise.application.audit.dto import (
     AuditTimelineResponse,
     IntegrityResponse,
@@ -25,10 +25,11 @@ def _not_found(exc: AuditProjectNotFoundError) -> HTTPException:
 
 @router.get("/{project_id}/audit/timeline", response_model=AuditTimelineResponse)
 async def timeline(
-    project_id: uuid.UUID, session: SessionDependency,
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
     limit: int = Query(default=100, ge=1, le=500), cursor: str | None = None,
     aggregate_type: str | None = None, event_type: str | None = None,
 ) -> AuditTimelineResponse:
+    require_capability(actor, "audit.read", f"project:{project_id}")
     try:
         return await AuditQueryService(session).timeline(
             project_id=project_id, limit=limit, cursor_value=cursor,
@@ -42,8 +43,9 @@ async def timeline(
 
 @router.get("/{project_id}/audit/summary", response_model=ProjectAuditSummaryResponse)
 async def summary(
-    project_id: uuid.UUID, session: SessionDependency,
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> ProjectAuditSummaryResponse:
+    require_capability(actor, "audit.read", f"project:{project_id}")
     try:
         return await AuditQueryService(session).summary(project_id)
     except AuditProjectNotFoundError as exc:
@@ -52,8 +54,9 @@ async def summary(
 
 @router.get("/{project_id}/audit/provenance", response_model=ProjectProvenanceResponse)
 async def provenance(
-    project_id: uuid.UUID, session: SessionDependency,
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> ProjectProvenanceResponse:
+    require_capability(actor, "audit.read", f"project:{project_id}")
     try:
         return await AuditQueryService(session).provenance(project_id)
     except AuditProjectNotFoundError as exc:
@@ -62,8 +65,9 @@ async def provenance(
 
 @router.get("/{project_id}/audit/integrity", response_model=IntegrityResponse)
 async def integrity(
-    project_id: uuid.UUID, session: SessionDependency,
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> IntegrityResponse:
+    require_capability(actor, "audit.read", f"project:{project_id}")
     try:
         return await AuditQueryService(session).integrity(project_id)
     except AuditProjectNotFoundError as exc:
@@ -71,7 +75,10 @@ async def integrity(
 
 
 @router.get("/{project_id}/audit/export")
-async def export(project_id: uuid.UUID, session: SessionDependency) -> Response:
+async def export(
+    project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> Response:
+    require_capability(actor, "audit.export", f"project:{project_id}")
     try:
         files = await AuditQueryService(session).export_data(project_id)
     except AuditProjectNotFoundError as exc:

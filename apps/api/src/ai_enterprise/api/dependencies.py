@@ -29,6 +29,28 @@ class Actor:
     scopes: frozenset[str] = frozenset()
 
 
+def require_capability(actor: Actor, capability: str, scope: str | None = None) -> None:
+    scoped_capability = f"{capability}:{scope}" if scope else capability
+    if scoped_capability in actor.capabilities:
+        return
+    if capability in actor.capabilities:
+        if scope is None or not actor.scopes or actor.scopes & {
+            "global",
+            "all",
+            "development",
+            scope,
+        }:
+            return
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            f"Capability {capability} is required"
+            if scope is None
+            else f"Capability {capability} is required for scope {scope}"
+        ),
+    )
+
+
 async def get_actor(
     session: Annotated[AsyncSession | None, Depends(get_session)] = None,
     actor_id: Annotated[str | None, Header(alias="X-Actor-ID")] = None,

@@ -22,7 +22,12 @@ from ai_enterprise.api.agent_runtime_schemas import (
     SkillVersionResponse,
     ToolResponse,
 )
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.application.agent_runtime_persistence_service import (
     AgentRuntimePersistenceError,
     AgentRuntimePersistenceService,
@@ -312,11 +317,22 @@ async def _session(session_id: uuid.UUID, session: SessionDependency) -> AgentRu
     return row
 
 
+def _require_runtime_read(actor: Actor, row: AgentRuntimeSessionModel) -> None:
+    try:
+        require_capability(actor, "runtime.read", f"runtime_session:{row.id}")
+        return
+    except HTTPException:
+        pass
+    require_capability(actor, "runtime.read", f"{row.scope_type}:{row.scope_id}")
+
+
 @router.get("/agent-runtime-sessions/{session_id}", response_model=RuntimeSessionResponse)
 async def get_runtime_session(
-    session_id: uuid.UUID, session: SessionDependency
+    session_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> RuntimeSessionResponse:
-    return RuntimeSessionResponse.model_validate(await _session(session_id, session))
+    row = await _session(session_id, session)
+    _require_runtime_read(actor, row)
+    return RuntimeSessionResponse.model_validate(row)
 
 
 @router.post("/agent-runtime-sessions/{session_id}/cancel", response_model=RuntimeSessionResponse)
@@ -332,7 +348,14 @@ async def cancel_runtime_session(
     return RuntimeSessionResponse.model_validate(row)
 
 
-async def _lineage(model: Any, session_id: uuid.UUID, session: SessionDependency) -> list[dict]:
+async def _lineage(
+    model: Any,
+    session_id: uuid.UUID,
+    session: SessionDependency,
+    actor: Actor,
+) -> list[dict]:
+    runtime_session = await _session(session_id, session)
+    _require_runtime_read(actor, runtime_session)
     rows: list[Any] = list(
         await session.scalars(select(model).where(model.runtime_session_id == session_id))
     )
@@ -343,20 +366,28 @@ async def _lineage(model: Any, session_id: uuid.UUID, session: SessionDependency
 
 
 @router.get("/agent-runtime-sessions/{session_id}/context")
-async def get_context(session_id: uuid.UUID, session: SessionDependency) -> list[dict]:
-    return await _lineage(ContextManifestModel, session_id, session)
+async def get_context(
+    session_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> list[dict]:
+    return await _lineage(ContextManifestModel, session_id, session, actor)
 
 
 @router.get("/agent-runtime-sessions/{session_id}/tool-invocations")
-async def get_tool_invocations(session_id: uuid.UUID, session: SessionDependency) -> list[dict]:
-    return await _lineage(ToolInvocationModel, session_id, session)
+async def get_tool_invocations(
+    session_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> list[dict]:
+    return await _lineage(ToolInvocationModel, session_id, session, actor)
 
 
 @router.get("/agent-runtime-sessions/{session_id}/model-invocations")
-async def get_model_invocations(session_id: uuid.UUID, session: SessionDependency) -> list[dict]:
-    return await _lineage(ModelInvocationModel, session_id, session)
+async def get_model_invocations(
+    session_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> list[dict]:
+    return await _lineage(ModelInvocationModel, session_id, session, actor)
 
 
 @router.get("/agent-runtime-sessions/{session_id}/validation")
-async def get_validation(session_id: uuid.UUID, session: SessionDependency) -> list[dict]:
-    return await _lineage(AgentOutputValidationModel, session_id, session)
+async def get_validation(
+    session_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> list[dict]:
+    return await _lineage(AgentOutputValidationModel, session_id, session, actor)

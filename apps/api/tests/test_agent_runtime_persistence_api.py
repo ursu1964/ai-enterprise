@@ -1,10 +1,12 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
+from fastapi import HTTPException
 
 from ai_enterprise.agent_runtime_worker import AgentRuntimeWorker
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.agent_runtime import router
+from ai_enterprise.api.routes.agent_runtime import get_runtime_session, get_tool_invocations, router
 from ai_enterprise.application.agent_runtime.workflow_binding import (
     GovernedWorkflowRuntimeBinding,
     require_governed_runtime,
@@ -69,6 +71,88 @@ def test_required_runtime_api_surface_is_registered() -> None:
         "/api/v1/agent-runtime-sessions/{session_id}/model-invocations",
         "/api/v1/agent-runtime-sessions/{session_id}/validation",
     } <= paths
+
+
+class RuntimeReadSession:
+    def __init__(self, runtime_session: AgentRuntimeSessionModel) -> None:
+        self.runtime_session = runtime_session
+
+    async def get(self, model: type, identity: uuid.UUID) -> object | None:
+        if model is AgentRuntimeSessionModel and identity == self.runtime_session.id:
+            return self.runtime_session
+        return None
+
+    async def scalars(self, statement: object) -> list[object]:
+        return []
+
+
+def runtime_session(scope_id: uuid.UUID | None = None) -> AgentRuntimeSessionModel:
+    return AgentRuntimeSessionModel(
+        id=uuid.uuid4(),
+        workflow_type="project_delivery",
+        workflow_run_id=uuid.uuid4(),
+        scope_type="project",
+        scope_id=scope_id or uuid.uuid4(),
+        agent_profile_id=uuid.uuid4(),
+        agent_profile_version_id=uuid.uuid4(),
+        assignment_id=uuid.uuid4(),
+        role_version_id=uuid.uuid4(),
+        runtime_specification_id=uuid.uuid4(),
+        runtime_specification_hash="a" * 64,
+        context_manifest_hash="b" * 64,
+        selected_model_deployment_id=None,
+        status="running",
+        attempt_number=1,
+        counters={},
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_read_requires_matching_capability_scope() -> None:
+    row = runtime_session()
+    session = RuntimeReadSession(row)
+
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"project:{uuid.uuid4()}"}),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await get_runtime_session(row.id, session, denied)  # type: ignore[arg-type]
+    assert exc.value.status_code == 403
+
+    allowed = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"project:{row.scope_id}"}),
+    )
+    response = await get_runtime_session(row.id, session, allowed)  # type: ignore[arg-type]
+    assert response.id == row.id
+
+
+@pytest.mark.asyncio
+async def test_runtime_lineage_accepts_runtime_session_scope() -> None:
+    row = runtime_session()
+    actor = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"runtime_session:{row.id}"}),
+    )
+
+    response = await get_tool_invocations(
+        row.id,
+        RuntimeReadSession(row),  # type: ignore[arg-type]
+        actor,
+    )
+
+    assert response == []
 
 
 @pytest.mark.asyncio
