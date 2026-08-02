@@ -653,6 +653,7 @@ bd7331b feat(aios): add release readiness gates
 c20ae59 feat(aios): make connected preflight runtime aware
 e7c8bf8 feat(aios): report github credential source
 dde8f90 feat(aios): add github auth status command
+1fa8574 chore(aios): add connected proof make targets
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -726,6 +727,7 @@ Preflight now reports the active GitHub credential source without printing the t
 Supported sources are environment variables, `gh auth login`, and the Git credential helper.
 Current machine state: `gh` is installed, but `gh auth status` reports no logged-in GitHub host.
 Operator command: `python -m apps.cli.main ax-github-auth --format json --strict`.
+Make targets: `make github-auth`, `make connected-preflight`, and `make connected-readiness`.
 ```
 
 Runtime-state handling update:
@@ -756,6 +758,8 @@ OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_capability_sy
 OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_pull_request.py tests/unit/test_aios_execution_github_provider.py tests/unit/test_aios_execution_connected_preflight.py
 OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_github_auth_cli.py capabilities/verification/tests/test_shutdown_verification.py tests/integration/test_security_baseline.py
 python -m apps.cli.main ax-github-auth --format json --strict
+make github-auth
+make connected-preflight
 make secret-scan-release
 python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
 python -m pytest -q tests/unit/test_scan_secrets.py
@@ -771,6 +775,8 @@ deterministic AIOS tests: 21 passed, 1 skipped
 credential-source tests: 25 passed, 1 skipped
 github-auth command tests: 23 passed
 github-auth command: gh_cli=available, gh_logged_in=false, token_source=missing
+make github-auth: reports missing token
+make connected-preflight: all checks pass except missing token
 secret-scan-release: gitleaks-ok; 29 baseline findings suppressed; secret-scan-ok
 scanner tests: 7 passed
 ```
