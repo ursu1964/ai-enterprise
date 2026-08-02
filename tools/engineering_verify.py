@@ -639,6 +639,10 @@ def _run_full_gates(root: Path) -> int:
     for cwd, command in commands:
         print(f"running full gate: {' '.join(command)} [cwd={cwd.relative_to(root)}]")
         if subprocess.run(command, cwd=cwd, check=False).returncode != 0:
+            print(
+                "::error file=tools/engineering_verify.py::"
+                f"full gate failed: {' '.join(command)} [cwd={cwd.relative_to(root)}]"
+            )
             return 1
     return 0
 
