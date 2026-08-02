@@ -4,7 +4,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import or_, select
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.knowledge_schemas import (
     CandidateResponse,
     ExtractKnowledgeRequest,
@@ -37,6 +42,27 @@ router = APIRouter(tags=["organizational-knowledge"])
 
 def _error(exc: KnowledgeError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
+
+
+def _knowledge_scope(scope_type: str, scope_id: uuid.UUID) -> str:
+    return f"{scope_type}:{scope_id}"
+
+
+def _require_knowledge_capability(
+    actor: Actor, capability: str, scope: str | None = None
+) -> None:
+    try:
+        require_capability(actor, capability, scope)
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403, detail=f"Knowledge capability {capability} required"
+        ) from exc
+
+
+def _require_item_capability(actor: Actor, capability: str, item: KnowledgeItemModel) -> None:
+    _require_knowledge_capability(
+        actor, capability, _knowledge_scope(item.scope_type, item.scope_id)
+    )
 
 
 @router.get("/knowledge-sources/{source_id}", response_model=SourceResponse)
@@ -141,7 +167,10 @@ async def list_items(
 
 @router.post("/knowledge-items/{item_id}/supersede", response_model=ItemResponse)
 async def supersede_item(
-    item_id: uuid.UUID, request: SupersedeRequest, session: SessionDependency
+    item_id: uuid.UUID,
+    request: SupersedeRequest,
+    session: SessionDependency,
+    actor: ActorDependency,
 ) -> ItemResponse:
     old, new = (
         await session.get(KnowledgeItemModel, item_id),
@@ -149,6 +178,9 @@ async def supersede_item(
     )
     if old is None or new is None or old.id == new.id:
         raise HTTPException(409, "Valid distinct knowledge items required")
+    _require_item_capability(actor, "knowledge.item.supersede", old)
+    if (old.scope_type, old.scope_id) != (new.scope_type, new.scope_id):
+        _require_item_capability(actor, "knowledge.item.supersede", new)
     old.temporal_status = "superseded"
     session.add(
         KnowledgeSupersessionModel(
@@ -163,11 +195,10 @@ async def supersede_item(
 async def withdraw_item(
     item_id: uuid.UUID, request: WithdrawRequest, session: SessionDependency, actor: ActorDependency
 ) -> ItemResponse:
-    if actor.role not in {"knowledge-curator", "platform-admin", "platform_administrator"}:
-        raise HTTPException(403, "Knowledge curator role required")
     row = await session.get(KnowledgeItemModel, item_id)
     if row is None:
         raise HTTPException(404, "Knowledge item not found")
+    _require_item_capability(actor, "knowledge.item.withdraw", row)
     row.temporal_status, row.valid_until = "withdrawn", datetime.now(UTC)
     project_id = row.scope_id if row.scope_type == "project" else None
     stream_id = (
@@ -187,8 +218,11 @@ async def withdraw_item(
 
 @router.get("/knowledge-contradictions")
 async def list_contradictions(
-    session: SessionDependency, status: str | None = Query(default=None)
+    session: SessionDependency,
+    actor: ActorDependency,
+    status: str | None = Query(default=None),
 ) -> list[dict]:
+    _require_knowledge_capability(actor, "knowledge.contradiction.read", "global")
     query = select(KnowledgeContradictionModel)
     if status:
         query = query.where(KnowledgeContradictionModel.status == status)
@@ -200,8 +234,12 @@ async def list_contradictions(
 
 @router.post("/knowledge-contradictions/{contradiction_id}/resolve")
 async def resolve_contradiction(
-    contradiction_id: uuid.UUID, request: ResolveContradictionRequest, session: SessionDependency
+    contradiction_id: uuid.UUID,
+    request: ResolveContradictionRequest,
+    session: SessionDependency,
+    actor: ActorDependency,
 ) -> dict[str, str]:
+    _require_knowledge_capability(actor, "knowledge.contradiction.resolve", "global")
     row = await session.get(KnowledgeContradictionModel, contradiction_id)
     if row is None:
         raise HTTPException(404, "Knowledge contradiction not found")

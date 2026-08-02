@@ -2,8 +2,14 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import HTTPException
 
-from ai_enterprise.api.routes.knowledge import router
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.knowledge import (
+    _require_item_capability,
+    _require_knowledge_capability,
+    router,
+)
 from ai_enterprise.application.knowledge_commands import (
     ExtractKnowledgeCandidates,
     PromoteProjectKnowledgeToOrganization,
@@ -65,6 +71,83 @@ def test_knowledge_api_surface_is_complete() -> None:
         "/api/v1/knowledge-contradictions",
         "/api/v1/knowledge-contradictions/{contradiction_id}/resolve",
     } <= paths
+
+
+def test_knowledge_capability_checks_require_matching_scope() -> None:
+    with pytest.raises(HTTPException, match="Knowledge capability"):
+        _require_knowledge_capability(
+            Actor(
+                "curator",
+                "human",
+                "knowledge-curator",
+                frozenset({"knowledge.contradiction.read"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "knowledge.contradiction.read",
+            "global",
+        )
+
+    _require_knowledge_capability(
+        Actor(
+            "curator",
+            "human",
+            "knowledge-curator",
+            frozenset({"knowledge.contradiction.read"}),
+            scopes=frozenset({"global"}),
+        ),
+        "knowledge.contradiction.read",
+        "global",
+    )
+
+
+def test_knowledge_item_capability_checks_item_scope() -> None:
+    project_id = uuid.uuid4()
+    item = KnowledgeItemModel(
+        id=uuid.uuid4(),
+        knowledge_key="project.policy.release",
+        version_number=1,
+        item_type="policy",
+        title="Release policy",
+        statement="Release only after verification passes.",
+        scope_type="project",
+        scope_id=project_id,
+        classification="internal",
+        trust_level="verified",
+        temporal_status="current",
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        evidence_manifest={},
+        evidence_manifest_hash="a" * 64,
+        knowledge_document={},
+        knowledge_hash="b" * 64,
+        promoted_from_candidate_id=uuid.uuid4(),
+        promotion_review_id=None,
+    )
+
+    with pytest.raises(HTTPException, match="Knowledge capability"):
+        _require_item_capability(
+            Actor(
+                "curator",
+                "human",
+                "knowledge-curator",
+                frozenset({"knowledge.item.withdraw"}),
+                scopes=frozenset({f"project:{uuid.uuid4()}"}),
+            ),
+            "knowledge.item.withdraw",
+            item,
+        )
+
+    _require_item_capability(
+        Actor(
+            "curator",
+            "human",
+            "knowledge-curator",
+            frozenset({"knowledge.item.withdraw"}),
+            scopes=frozenset({f"project:{project_id}"}),
+        ),
+        "knowledge.item.withdraw",
+        item,
+    )
 
 
 def test_validation_rejects_classification_downgrade_and_secrets() -> None:
