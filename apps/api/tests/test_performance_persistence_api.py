@@ -287,13 +287,25 @@ def test_cross_organization_access_requires_scoped_capability() -> None:
     auditor = Actor("auditor", "human", "performance-auditor")
     with pytest.raises(HTTPException, match="Organization-scoped"):
         _require_org(auditor, organization_id, "read")
+    admin_without_scope = Actor("admin", "human", "platform-admin")
+    with pytest.raises(HTTPException, match="Organization-scoped"):
+        _require_org(admin_without_scope, organization_id, "read")
     scoped = Actor(
         "auditor",
         "human",
         "performance-auditor",
-        frozenset({f"performance.read:{organization_id}"}),
+        frozenset({"performance.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
     )
     _require_org(scoped, organization_id, "read")
+    global_scoped = Actor(
+        "auditor",
+        "human",
+        "performance-auditor",
+        frozenset({"performance.read"}),
+        scopes=frozenset({"global"}),
+    )
+    _require_org(global_scoped, organization_id, "read")
     with pytest.raises(HTTPException, match="Organization-scoped"):
         _require_org(scoped, uuid.uuid4(), "read")
 

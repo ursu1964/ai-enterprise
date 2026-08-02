@@ -7,7 +7,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.performance_schemas import (
     CertificationDecisionRequest,
     CertificationResponse,
@@ -54,10 +59,12 @@ def _require_human(actor: Actor, roles: set[str]) -> None:
 
 
 def _require_org(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
-    if actor.role in ADMIN_ROLES:
-        return
-    if f"performance.{action}:{organization_id}" not in actor.capabilities:
-        raise HTTPException(403, "Organization-scoped performance authority required")
+    try:
+        require_capability(actor, f"performance.{action}", f"organization:{organization_id}")
+    except HTTPException as exc:
+        raise HTTPException(
+            403, "Organization-scoped performance authority required"
+        ) from exc
 
 
 def _require_role(actor: Actor, roles: set[str]) -> None:
