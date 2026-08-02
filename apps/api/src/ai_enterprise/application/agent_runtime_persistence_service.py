@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentRuntimeSessionModel,
@@ -17,7 +18,6 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     SkillVersionModel,
     ToolDefinitionModel,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.organization.models import AgentAssignmentModel
 
 
@@ -31,17 +31,16 @@ class AgentRuntimePersistenceService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(
+    async def _audit(
         self, event: str, actor: Actor, project_id: uuid.UUID | None, **payload: Any
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=project_id,
-                event_type=event,
-                actor_type=actor.actor_type,
-                actor_id=actor.subject,
-                payload=payload,
-            )
+        await AuditWriter(self.session).append_event(
+            stream_id=f"project:{project_id}" if project_id else f"agent_runtime:{actor.subject}",
+            project_id=project_id,
+            event_type=event,
+            actor_type=actor.actor_type,
+            actor_id=actor.subject,
+            payload=payload,
         )
 
     async def create_skill(
@@ -74,7 +73,7 @@ class AgentRuntimePersistenceService:
             approval_status="draft",
         )
         self.session.add_all((skill, version))
-        self._audit(
+        await self._audit(
             "SkillVersionCreated",
             actor,
             None,
@@ -105,7 +104,7 @@ class AgentRuntimePersistenceService:
             approval_status="draft",
         )
         self.session.add(version)
-        self._audit(
+        await self._audit(
             "SkillVersionCreated",
             actor,
             None,
@@ -129,7 +128,7 @@ class AgentRuntimePersistenceService:
             "active",
             version.id,
         )
-        self._audit(
+        await self._audit(
             "SkillVersionApproved",
             actor,
             None,
@@ -155,7 +154,7 @@ class AgentRuntimePersistenceService:
             status="active",
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "ToolDefinitionRegistered",
             actor,
             None,
@@ -175,7 +174,7 @@ class AgentRuntimePersistenceService:
             id=uuid.uuid4(), status="registered", health_document={}, **values
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "ModelDeploymentRegistered",
             actor,
             None,
@@ -202,7 +201,7 @@ class AgentRuntimePersistenceService:
             raise AgentRuntimePersistenceError("Prompt key already exists")
         prompt = PromptRegistryModel(id=uuid.uuid4(), status="draft", **values)
         self.session.add(prompt)
-        self._audit(
+        await self._audit(
             "PromptRegistryCreated",
             actor,
             None,
@@ -239,7 +238,7 @@ class AgentRuntimePersistenceService:
             **values,
         )
         self.session.add(version)
-        self._audit(
+        await self._audit(
             "PromptVersionCreated",
             actor,
             None,
@@ -263,7 +262,7 @@ class AgentRuntimePersistenceService:
         version.approval_status = "approved"
         prompt.status = "active"
         prompt.current_version_id = version.id
-        self._audit(
+        await self._audit(
             "PromptVersionApproved",
             actor,
             None,
@@ -288,7 +287,7 @@ class AgentRuntimePersistenceService:
             raise AgentRuntimePersistenceError("Rollback target must be approved")
         prompt.current_version_id = version.id
         prompt.status = "active"
-        self._audit(
+        await self._audit(
             "PromptRollbackActivated",
             actor,
             None,
@@ -329,7 +328,7 @@ class AgentRuntimePersistenceService:
             **values,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "AgentRuntimeSessionCreated",
             actor,
             values["scope_id"] if values["scope_type"] == "project" else None,
@@ -345,7 +344,7 @@ class AgentRuntimePersistenceService:
         if row.status in {"completed", "cancelled", "failed", "timed_out"}:
             raise AgentRuntimePersistenceError("Terminal runtime session cannot be cancelled")
         row.status, row.completed_at = "cancelled", datetime.now(UTC)
-        self._audit(
+        await self._audit(
             "AgentRuntimeSessionCancelled",
             actor,
             row.scope_id if row.scope_type == "project" else None,

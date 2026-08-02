@@ -8,9 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.domain.specification.kernel import semantic_version
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.enterprise_evolution.models import (
     EnterpriseEvolutionArtifactModel,
     EnterpriseEvolutionDecisionModel,
@@ -86,15 +86,16 @@ class EnterpriseEvolutionService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(self, event: str, actor: str, payload: dict[str, Any]) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=None,
-                event_type=event,
-                actor_type="enterprise-evolution",
-                actor_id=actor,
-                payload=payload,
-            )
+    async def _audit(
+        self, event: str, organization_id: uuid.UUID, actor: str, payload: dict[str, Any]
+    ) -> None:
+        await AuditWriter(self.session).append_event(
+            stream_id=f"enterprise_evolution:{organization_id}",
+            project_id=None,
+            event_type=event,
+            actor_type="enterprise-evolution",
+            actor_id=actor,
+            payload=payload,
         )
 
     async def _evidence(
@@ -234,8 +235,9 @@ class EnterpriseEvolutionService:
         )
         self.session.add(row)
         self.session.add(transition)
-        self._audit(
+        await self._audit(
             "EnterpriseImprovementProposed",
+            organization_id,
             proposed_by,
             {"improvement_id": str(row.id), "proposal_hash": proposal_hash},
         )
@@ -312,8 +314,9 @@ class EnterpriseEvolutionService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EnterpriseEvolutionArtifactRecorded",
+            organization_id,
             created_by,
             {
                 "artifact_id": str(row.id),
@@ -386,8 +389,9 @@ class EnterpriseEvolutionService:
             decided_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EnterpriseEvolutionHumanDecision",
+            organization_id,
             decided_by,
             {"decision_id": str(row.id), "target_hash": target_hash, "decision": decision},
         )
@@ -472,8 +476,9 @@ class EnterpriseEvolutionService:
             transitioned_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EnterpriseImprovementTransitioned",
+            improvement.organization_id,
             transitioned_by,
             {
                 "improvement_id": str(improvement.id),

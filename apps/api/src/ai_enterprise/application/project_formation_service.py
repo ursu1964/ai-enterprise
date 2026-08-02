@@ -12,11 +12,11 @@ from ai_enterprise.api.project_formation_schemas import (
     FormationRequest,
     FormationResponse,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.enums import ArtifactType
 from ai_enterprise.domain.hashing import canonical_json, hash_json
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
-    AuditEventModel,
     ProjectModel,
 )
 
@@ -86,22 +86,17 @@ class ProjectFormationService:
                     human_summary=document.human_summary,
                 )
             )
-        self._session.add_all(
-            [
-                *artifacts,
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type="project_formation.pack_created",
-                    actor_type="human",
-                    actor_id=actor_id,
-                    payload={
-                        "status": status,
-                        "artifact_ids": [str(item.id) for item in artifacts],
-                        "missing_information": missing,
-                    },
-                ),
-            ]
+        self._session.add_all(artifacts)
+        await AuditWriter(self._session).append_project_event(
+            project_id=project.id,
+            event_type="project_formation.pack_created",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "status": status,
+                "artifact_ids": [str(item.id) for item in artifacts],
+                "missing_information": missing,
+            },
         )
         await self._session.commit()
         return FormationResponse(

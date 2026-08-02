@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.domain.specification.kernel import semantic_version
 from ai_enterprise.infrastructure.cognitive.models import (
@@ -15,7 +16,6 @@ from ai_enterprise.infrastructure.cognitive.models import (
     CognitiveLinkModel,
     CognitiveRecordModel,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.observability import increment_metric
 
 RECORD_TYPES = {
@@ -60,15 +60,16 @@ class CognitiveService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(self, event: str, actor: str, payload: dict[str, Any]) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=None,
-                event_type=event,
-                actor_type="cognitive-governance",
-                actor_id=actor,
-                payload=payload,
-            )
+    async def _audit(
+        self, event: str, organization_id: uuid.UUID, actor: str, payload: dict[str, Any]
+    ) -> None:
+        await AuditWriter(self.session).append_event(
+            stream_id=f"cognitive:{organization_id}",
+            project_id=None,
+            event_type=event,
+            actor_type="cognitive-governance",
+            actor_id=actor,
+            payload=payload,
         )
 
     @staticmethod
@@ -160,8 +161,9 @@ class CognitiveService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "CognitiveRecordRegistered",
+            organization_id,
             created_by,
             {"record_id": str(row.id), "record_type": record_type, "record_hash": digest},
         )
@@ -208,8 +210,9 @@ class CognitiveService:
             decided_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "CognitiveRecordHumanDecision",
+            record.organization_id,
             decided_by,
             {"record_id": str(record.id), "record_hash": record_hash, "decision": decision},
         )
@@ -250,7 +253,12 @@ class CognitiveService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit("CognitiveLinkRegistered", actor, {"link_id": str(row.id), "link_hash": digest})
+        await self._audit(
+            "CognitiveLinkRegistered",
+            source.organization_id,
+            actor,
+            {"link_id": str(row.id), "link_hash": digest},
+        )
         await self.session.commit()
         return row
 

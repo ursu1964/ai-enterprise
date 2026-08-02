@@ -8,9 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.domain.specification.kernel import semantic_version
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.ecosystem.models import (
     EcosystemApprovalModel,
     EcosystemAssetModel,
@@ -84,15 +84,16 @@ class EcosystemService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def _audit(self, event: str, actor: str, payload: dict[str, Any]) -> None:
-        self.session.add(
-            AuditEventModel(
-                project_id=None,
-                event_type=event,
-                actor_type="ecosystem-governance",
-                actor_id=actor,
-                payload=payload,
-            )
+    async def _audit(
+        self, event: str, organization_id: uuid.UUID, actor: str, payload: dict[str, Any]
+    ) -> None:
+        await AuditWriter(self.session).append_event(
+            stream_id=f"ecosystem:{organization_id}",
+            project_id=None,
+            event_type=event,
+            actor_type="ecosystem-governance",
+            actor_id=actor,
+            payload=payload,
         )
 
     @staticmethod
@@ -154,8 +155,9 @@ class EcosystemService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EcosystemEntityRegistered",
+            organization_id,
             created_by,
             {"entity_id": str(row.id), "entity_hash": digest},
         )
@@ -230,8 +232,9 @@ class EcosystemService:
             created_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EcosystemAssetRegistered",
+            organization_id,
             created_by,
             {"asset_id": str(row.id), "asset_type": asset_type, "asset_hash": digest},
         )
@@ -282,8 +285,9 @@ class EcosystemService:
             decided_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EcosystemAssetHumanDecision",
+            asset.organization_id,
             decided_by,
             {"approval_id": str(row.id), "asset_hash": asset_hash, "decision": decision},
         )
@@ -401,8 +405,9 @@ class EcosystemService:
             occurred_at=now,
         )
         self.session.add(row)
-        self._audit(
+        await self._audit(
             "EcosystemGatewayInvocationRecorded",
+            organization_id,
             actor,
             {"invocation_id": str(row.id), "status": status, "invocation_hash": digest},
         )
@@ -447,8 +452,11 @@ class EcosystemService:
             recorded_at=datetime.now(UTC),
         )
         self.session.add(row)
-        self._audit(
-            "EcosystemRelationshipRecorded", actor, {"edge_id": str(row.id), "edge_hash": digest}
+        await self._audit(
+            "EcosystemRelationshipRecorded",
+            source.organization_id,
+            actor,
+            {"edge_id": str(row.id), "edge_hash": digest},
         )
         await self.session.commit()
         return row
