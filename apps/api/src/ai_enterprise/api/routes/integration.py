@@ -2,7 +2,12 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.integration_schemas import (
     IntegrationApprovalRequest,
     IntegrationApprovalResponse,
@@ -19,6 +24,21 @@ from ai_enterprise.domain.integration.exceptions import IntegrationError
 from ai_enterprise.infrastructure.database.models import IntegrationAttemptModel
 
 router = APIRouter(tags=["controlled-integration"])
+
+
+def _require_integration_attempt_create(actor: Actor) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Integration operator authority is required")
+    try:
+        require_capability(actor, "integration.attempt.create", "global")
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403, detail="Integration operator authority is required"
+        ) from exc
+
+
+def _require_integration_read(actor: Actor, project_id: uuid.UUID) -> None:
+    require_capability(actor, "integration.read", f"project:{project_id}")
 
 
 @router.get(
@@ -73,8 +93,7 @@ async def approve_integration(
 async def create_integration_attempt(
     approval_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> IntegrationAttemptResponse:
-    if actor.actor_type != "human" or actor.role != "integration_operator":
-        raise HTTPException(status_code=403, detail="The integration_operator role is required")
+    _require_integration_attempt_create(actor)
     try:
         value = await ControlledIntegrationService(session).create_attempt(approval_id)
     except IntegrationNotFoundError as exc:
@@ -89,9 +108,10 @@ async def create_integration_attempt(
 
 @router.get("/integration-attempts/{attempt_id}", response_model=IntegrationAttemptResponse)
 async def get_integration_attempt(
-    attempt_id: uuid.UUID, session: SessionDependency
+    attempt_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> IntegrationAttemptResponse:
     value = await session.get(IntegrationAttemptModel, attempt_id)
     if value is None:
         raise HTTPException(status_code=404, detail="Integration attempt not found")
+    _require_integration_read(actor, value.project_id)
     return IntegrationAttemptResponse.model_validate(value)
