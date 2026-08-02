@@ -2,10 +2,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.dependencies import Actor, require_capability
 from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.infrastructure.agent_runtime.models import (
@@ -25,6 +26,15 @@ class AgentRuntimePersistenceError(ValueError):
     def __init__(self, detail: str, status_code: int = 409) -> None:
         super().__init__(detail)
         self.status_code = status_code
+
+
+def _require_runtime_admin(actor: Actor) -> None:
+    try:
+        require_capability(actor, "runtime.admin", "global")
+    except HTTPException as exc:
+        raise AgentRuntimePersistenceError(
+            "Runtime administrator capability required", 403
+        ) from exc
 
 
 class AgentRuntimePersistenceService:
@@ -142,8 +152,7 @@ class AgentRuntimePersistenceService:
     async def register_tool(
         self, key: str, version: str, document: dict[str, Any], actor: Actor
     ) -> ToolDefinitionModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         if await self.session.get(ToolDefinitionModel, (key, version)):
             raise AgentRuntimePersistenceError("Tool version already registered")
         row = ToolDefinitionModel(
@@ -168,8 +177,7 @@ class AgentRuntimePersistenceService:
     async def register_deployment(
         self, values: dict[str, Any], actor: Actor
     ) -> ModelDeploymentModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         row = ModelDeploymentModel(
             id=uuid.uuid4(), status="registered", health_document={}, **values
         )
@@ -190,8 +198,7 @@ class AgentRuntimePersistenceService:
         values: dict[str, Any],
         actor: Actor,
     ) -> PromptRegistryModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         if await self.session.scalar(
             select(PromptRegistryModel).where(
                 PromptRegistryModel.organization_id == values["organization_id"],
@@ -217,8 +224,7 @@ class AgentRuntimePersistenceService:
         values: dict[str, Any],
         actor: Actor,
     ) -> PromptVersionModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         if not values["prompt_layers"]:
             raise AgentRuntimePersistenceError("Prompt layers are required", 422)
         number = (
@@ -252,8 +258,7 @@ class AgentRuntimePersistenceService:
     async def approve_prompt_version(
         self, version: PromptVersionModel, actor: Actor
     ) -> PromptVersionModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         if version.approval_status != "draft":
             raise AgentRuntimePersistenceError("Only draft prompt versions may be approved")
         prompt = await self.session.get(PromptRegistryModel, version.prompt_id)
@@ -279,8 +284,7 @@ class AgentRuntimePersistenceService:
         version: PromptVersionModel,
         actor: Actor,
     ) -> PromptRegistryModel:
-        if actor.role not in {"platform-admin", "platform_administrator"}:
-            raise AgentRuntimePersistenceError("Platform administrator role required", 403)
+        _require_runtime_admin(actor)
         if version.prompt_id != prompt.id:
             raise AgentRuntimePersistenceError("Prompt version does not belong to prompt", 400)
         if version.approval_status != "approved":

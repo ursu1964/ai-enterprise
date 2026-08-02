@@ -48,7 +48,13 @@ class RuntimeSession:
 
 
 def admin() -> Actor:
-    return Actor(subject="platform-admin", actor_type="human", role="platform-admin")
+    return Actor(
+        subject="platform-admin",
+        actor_type="human",
+        role="platform-admin",
+        capabilities=frozenset({"runtime.admin"}),
+        scopes=frozenset({"global"}),
+    )
 
 
 def runtime_reader(organization_id: uuid.UUID) -> Actor:

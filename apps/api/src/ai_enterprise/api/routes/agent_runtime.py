@@ -211,8 +211,7 @@ async def update_model_health(
     session: SessionDependency,
     actor: ActorDependency,
 ) -> ModelDeploymentResponse:
-    if actor.role not in {"platform-admin", "platform_administrator"}:
-        raise HTTPException(403, "Platform administrator role required")
+    require_capability(actor, "runtime.admin", "global")
     row = await session.get(ModelDeploymentModel, deployment_id)
     if row is None:
         raise HTTPException(404, "Model deployment not found")

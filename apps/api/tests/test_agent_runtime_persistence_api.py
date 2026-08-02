@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.agent_runtime_worker import AgentRuntimeWorker
+from ai_enterprise.api.agent_runtime_schemas import ModelHealthRequest
 from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.routes.agent_runtime import (
     get_context,
@@ -16,6 +17,7 @@ from ai_enterprise.api.routes.agent_runtime import (
     get_validation,
     list_model_deployments,
     router,
+    update_model_health,
 )
 from ai_enterprise.application.agent_runtime.workflow_binding import (
     GovernedWorkflowRuntimeBinding,
@@ -325,16 +327,44 @@ async def test_tool_registry_reads_require_global_scope() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_registration_is_restricted_to_platform_administrators() -> None:
+async def test_tool_registration_requires_runtime_admin_capability() -> None:
     service = AgentRuntimePersistenceService(session=object())  # type: ignore[arg-type]
-    with pytest.raises(AgentRuntimePersistenceError, match="administrator") as denied:
+    with pytest.raises(AgentRuntimePersistenceError, match="administrator capability") as denied:
         await service.register_tool(
             "repository.read",
             "1",
             {},
-            Actor("agent", "agent", "engineer"),
+            Actor("platform-admin", "human", "platform-admin"),
         )
     assert denied.value.status_code == 403
+
+    with pytest.raises(AgentRuntimePersistenceError, match="administrator capability") as denied:
+        await service.register_tool(
+            "repository.read",
+            "1",
+            {},
+            Actor(
+                "platform-admin",
+                "human",
+                "platform-admin",
+                frozenset({"runtime.admin"}),
+                scopes=frozenset({f"organization:{uuid.uuid4()}"}),
+            ),
+        )
+    assert denied.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_model_health_update_requires_runtime_admin_capability() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await update_model_health(
+            uuid.uuid4(),
+            ModelHealthRequest(available=True, latency_ms=10, error_rate=0.0),
+            RuntimeRegistrySession([]),  # type: ignore[arg-type]
+            Actor("platform-admin", "human", "platform-admin"),
+        )
+
+    assert exc.value.status_code == 403
 
 
 def test_initial_seed_is_complete_and_structured() -> None:
