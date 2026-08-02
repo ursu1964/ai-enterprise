@@ -648,6 +648,7 @@ bd7331b feat(aios): add release readiness gates
 2204b76 chore(mcp): clean imports and type-safe helpers
 8c4671f docs: archive project rag analysis
 4ea2a92 chore(mcp): satisfy package lint checks
+2d7ccdf feat(aios): add connected proof preflight
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -675,3 +676,62 @@ graphify: updated
 ```
 
 Phase 3 can now start from a clean ProjectRAG baseline. No commits were pushed.
+
+## Phase 3 Connected Proof Preflight
+
+Updated: 2026-08-02
+
+ProjectRAG now has a read-only connected autonomy proof preflight:
+
+```bash
+python -m apps.cli.main ax-connected-preflight --repo /home/user/projects/project-rag --github-repo ursu1964/project-rag --format json --strict
+```
+
+What it checks:
+
+```text
+AIOS release readiness
+clean local repository
+origin remote
+GitHub token
+GitHub repository target
+optional gh CLI
+Gitleaks
+live model mode
+```
+
+Current observed result:
+
+```text
+pass: AIOS release readiness
+pass: repository clean
+pass: origin remote configured
+pass: GitHub repository target
+warn: gh CLI unavailable
+fail: GitHub token missing
+fail: Gitleaks missing
+fail: AIOS_USE_FAKE_MODELS is enabled
+ready: false
+```
+
+Verification:
+
+```bash
+python -m ruff check packages/aios_execution/connected_preflight.py packages/aios_execution/cli.py tests/unit/test_aios_execution_connected_preflight.py
+python -m pytest -q tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_github_provider.py
+```
+
+Observed result:
+
+```text
+ruff: all checks passed
+pytest: 19 passed
+```
+
+Phase 3 remains blocked by external setup, not by ProjectRAG code:
+
+```text
+1. Set AIOS_GIT_TOKEN or GITHUB_TOKEN, or run gh auth login.
+2. Install Gitleaks for release proof scanning.
+3. Disable fake models and start Ollama with the configured model.
+```
