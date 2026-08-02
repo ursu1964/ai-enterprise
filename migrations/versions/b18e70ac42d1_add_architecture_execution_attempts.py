@@ -6,10 +6,11 @@ Revises: f74b2c619ea0
 
 from collections.abc import Sequence
 
+from alembic import op
+
 from ai_enterprise.infrastructure.architecture.models import (
     ArchitectureExecutionAttemptModel,
 )
-from alembic import op
 
 revision: str = "b18e70ac42d1"
 down_revision: str | None = "f74b2c619ea0"

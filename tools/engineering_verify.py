@@ -608,14 +608,8 @@ def verify(root: Path) -> VerificationReport:
 
 def _run_full_gates(root: Path) -> int:
     commands = (
-        (
-            "apps/api/.venv/bin/ruff",
-            "check",
-            "apps/api/src",
-            "apps/api/tests",
-            "migrations",
-            "tools",
-        ),
+        ("bash", "-lc", "cd apps/api && .venv/bin/ruff check src tests ../../migrations"),
+        ("apps/api/.venv/bin/ruff", "check", "tools"),
         ("bash", "-lc", "cd apps/api && .venv/bin/mypy src"),
         (
             sys.executable,

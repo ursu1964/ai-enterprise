@@ -6,6 +6,8 @@ Revises: b18e70ac42d1
 
 from collections.abc import Sequence
 
+from alembic import op
+
 from ai_enterprise.infrastructure.decomposition.models import (
     CandidateOutputModel,
     DecompositionApprovalModel,
@@ -18,7 +20,6 @@ from ai_enterprise.infrastructure.decomposition.models import (
     WorkPackageDependencyModel,
     WorkPackageModel,
 )
-from alembic import op
 
 revision: str = "c60f3e1a9b72"
 down_revision: str | None = "b18e70ac42d1"
