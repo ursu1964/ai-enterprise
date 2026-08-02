@@ -649,6 +649,7 @@ bd7331b feat(aios): add release readiness gates
 8c4671f docs: archive project rag analysis
 4ea2a92 chore(mcp): satisfy package lint checks
 2d7ccdf feat(aios): add connected proof preflight
+176fdb9 fix(security): baseline historical secret scan findings
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -707,11 +708,21 @@ pass: AIOS release readiness
 pass: repository clean
 pass: origin remote configured
 pass: GitHub repository target
+pass: Gitleaks available
 warn: gh CLI unavailable
 fail: GitHub token missing
-fail: Gitleaks missing
 fail: AIOS_USE_FAKE_MODELS is enabled
 ready: false
+```
+
+Security release gate update:
+
+```text
+Gitleaks installed locally at /home/user/.local/bin/gitleaks.
+Current source tree scan: no leaks found.
+Release history scan: 29 known historical findings suppressed by redacted fingerprint baseline.
+Tracked-file scanner: secret-scan-ok.
+Baseline file: /home/user/projects/project-rag/.gitleaks-baseline.json.
 ```
 
 Verification:
@@ -719,6 +730,9 @@ Verification:
 ```bash
 python -m ruff check packages/aios_execution/connected_preflight.py packages/aios_execution/cli.py tests/unit/test_aios_execution_connected_preflight.py
 python -m pytest -q tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_github_provider.py
+make secret-scan-release
+python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
+python -m pytest -q tests/unit/test_scan_secrets.py
 ```
 
 Observed result:
@@ -726,12 +740,13 @@ Observed result:
 ```text
 ruff: all checks passed
 pytest: 19 passed
+secret-scan-release: gitleaks-ok; 29 baseline findings suppressed; secret-scan-ok
+scanner tests: 7 passed
 ```
 
 Phase 3 remains blocked by external setup, not by ProjectRAG code:
 
 ```text
 1. Set AIOS_GIT_TOKEN or GITHUB_TOKEN, or run gh auth login.
-2. Install Gitleaks for release proof scanning.
-3. Disable fake models and start Ollama with the configured model.
+2. Disable fake models and start Ollama with the configured model.
 ```
