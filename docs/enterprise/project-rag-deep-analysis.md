@@ -712,7 +712,7 @@ pass: origin remote configured
 pass: GitHub repository target
 pass: Gitleaks available
 pass: Ollama reachable at http://localhost:11434 when `AIOS_USE_FAKE_MODELS=false`
-warn: gh CLI unavailable
+pass: gh CLI available at /home/user/.local/bin/gh
 fail: GitHub token missing
 ready: false
 ```
@@ -728,6 +728,7 @@ Security release gate update:
 
 ```text
 Gitleaks installed locally at /home/user/.local/bin/gitleaks.
+GitHub CLI installed locally at /home/user/.local/bin/gh.
 Current source tree scan: no leaks found.
 Release history scan: 29 known historical findings suppressed by redacted fingerprint baseline.
 Tracked-file scanner: secret-scan-ok.
