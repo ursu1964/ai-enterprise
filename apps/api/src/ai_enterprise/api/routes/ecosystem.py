@@ -13,12 +13,12 @@ from ai_enterprise.api.ecosystem_schemas import (
     EntityRequest,
     InvocationRequest,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.ecosystem_service import (
     ASSET_TYPES,
     EcosystemError,
     EcosystemService,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.ecosystem.models import (
     EcosystemAssetModel,
     EcosystemEdgeModel,
@@ -49,14 +49,13 @@ def _error(exc: EcosystemError) -> HTTPException:
 async def _audit_read(
     session: SessionDependency, actor: Actor, organization_id: uuid.UUID, resource: str
 ) -> None:
-    session.add(
-        AuditEventModel(
-            project_id=None,
-            event_type="EcosystemRegistryRead",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"organization_id": str(organization_id), "resource": resource},
-        )
+    await AuditWriter(session).append_event(
+        stream_id=f"ecosystem:{organization_id}",
+        project_id=None,
+        event_type="EcosystemRegistryRead",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"organization_id": str(organization_id), "resource": resource},
     )
     await session.commit()
 

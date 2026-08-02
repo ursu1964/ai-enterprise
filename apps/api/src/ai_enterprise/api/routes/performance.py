@@ -21,11 +21,11 @@ from ai_enterprise.api.performance_schemas import (
     RecommendationRequest,
     RecommendationResponse,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.performance_integration_service import (
     PerformanceGovernanceError,
     PerformanceIntegrationService,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.performance.models import (
     AssignmentQualityModel,
     CapabilityCertificationModel,
@@ -71,14 +71,13 @@ async def _audit_read(
     resource: str,
     filters: dict[str, Any],
 ) -> None:
-    session.add(
-        AuditEventModel(
-            project_id=None,
-            event_type="PerformanceDataRead",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"resource": resource, "filters": filters},
-        )
+    await AuditWriter(session).append_event(
+        stream_id="performance:reads",
+        project_id=None,
+        event_type="PerformanceDataRead",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"resource": resource, "filters": filters},
     )
     await session.commit()
 
@@ -208,9 +207,10 @@ async def assignment_quality(
     rows = list(
         (
             await session.scalars(
-                select(AssignmentQualityModel).where(
-                    AssignmentQualityModel.organization_id == organization_id
-                ).limit(limit).offset(offset)
+                select(AssignmentQualityModel)
+                .where(AssignmentQualityModel.organization_id == organization_id)
+                .limit(limit)
+                .offset(offset)
             )
         ).all()
     )
@@ -244,10 +244,13 @@ async def list_trends(
     rows = list(
         (
             await session.scalars(
-                select(PerformanceTrendModel).where(
+                select(PerformanceTrendModel)
+                .where(
                     PerformanceTrendModel.organization_id == organization_id,
                     PerformanceTrendModel.window_days == window_days,
-                ).limit(limit).offset(offset)
+                )
+                .limit(limit)
+                .offset(offset)
             )
         ).all()
     )
@@ -404,9 +407,10 @@ async def list_learning_proposals(
     rows = list(
         (
             await session.scalars(
-                select(LearningProposalModel).where(
-                    LearningProposalModel.organization_id == organization_id
-                ).limit(limit).offset(offset)
+                select(LearningProposalModel)
+                .where(LearningProposalModel.organization_id == organization_id)
+                .limit(limit)
+                .offset(offset)
             )
         ).all()
     )

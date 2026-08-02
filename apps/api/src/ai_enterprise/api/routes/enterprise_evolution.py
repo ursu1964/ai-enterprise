@@ -12,12 +12,12 @@ from ai_enterprise.api.enterprise_evolution_schemas import (
     ImprovementRequest,
     TransitionRequest,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.enterprise_evolution_service import (
     ARTIFACT_TYPES,
     EnterpriseEvolutionError,
     EnterpriseEvolutionService,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.enterprise_evolution.models import (
     EnterpriseEvolutionArtifactModel,
     EnterpriseImprovementModel,
@@ -47,14 +47,13 @@ def _error(exc: EnterpriseEvolutionError) -> HTTPException:
 async def _read_audit(
     session: SessionDependency, actor: Actor, organization_id: uuid.UUID, resource: str
 ) -> None:
-    session.add(
-        AuditEventModel(
-            project_id=None,
-            event_type="EnterpriseEvolutionRead",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"organization_id": str(organization_id), "resource": resource},
-        )
+    await AuditWriter(session).append_event(
+        stream_id=f"enterprise_evolution:{organization_id}",
+        project_id=None,
+        event_type="EnterpriseEvolutionRead",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"organization_id": str(organization_id), "resource": resource},
     )
     await session.commit()
 

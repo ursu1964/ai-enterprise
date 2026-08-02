@@ -8,10 +8,10 @@ from sqlalchemy import select
 from ai_enterprise.api.dependencies import ActorDependency, SessionDependency
 from ai_enterprise.api.resilience_extended_schemas import GovernanceRecordRequest
 from ai_enterprise.api.routes.resilience import _authorize
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.resilience.extended_service import InstitutionalGovernanceValidator
 from ai_enterprise.domain.resilience.enums import Capability
 from ai_enterprise.domain.resilience.policies import ResiliencePolicyError
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.resilience.extended_models import (
     InstitutionalGovernanceRecordModel,
 )
@@ -79,20 +79,18 @@ async def create_governance_record(
         **request.model_dump(),
     )
     session.add(row)
-    session.add(
-        AuditEventModel(
-            id=uuid.uuid4(),
-            project_id=None,
-            event_type=f"resilience.governance.{record_type}_recorded",
-            actor_type="human",
-            actor_id=actor.subject,
-            payload={
-                "record_id": str(row.id),
-                "status": row.status,
-                "policy_version": row.policy_version,
-                "provider_evidence_present": bool(row.provider_evidence_hash),
-            },
-        )
+    await AuditWriter(session).append_event(
+        stream_id=f"resilience.governance:{record_type}",
+        project_id=None,
+        event_type=f"resilience.governance.{record_type}_recorded",
+        actor_type="human",
+        actor_id=actor.subject,
+        payload={
+            "record_id": str(row.id),
+            "status": row.status,
+            "policy_version": row.policy_version,
+            "provider_evidence_present": bool(row.provider_evidence_hash),
+        },
     )
     await session.commit()
     return {"id": row.id, "record_type": row.record_type, "status": row.status}

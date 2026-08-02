@@ -11,13 +11,13 @@ from ai_enterprise.api.cognitive_schemas import (
     CognitiveRecordRequest,
 )
 from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.cognitive_service import (
     RECORD_TYPES,
     CognitiveError,
     CognitiveService,
 )
 from ai_enterprise.infrastructure.cognitive.models import CognitiveRecordModel
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 
 router = APIRouter(prefix="/cognitive", tags=["strategic-intelligence"])
 ADMINS = {"platform-admin", "platform_administrator"}
@@ -122,14 +122,13 @@ async def records(
             )
         ).all()
     )
-    session.add(
-        AuditEventModel(
-            project_id=None,
-            event_type="CognitiveRegistryRead",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"organization_id": str(organization_id), "record_type": record_type},
-        )
+    await AuditWriter(session).append_event(
+        stream_id=f"cognitive:{organization_id}",
+        project_id=None,
+        event_type="CognitiveRegistryRead",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"organization_id": str(organization_id), "record_type": record_type},
     )
     await session.commit()
     return [

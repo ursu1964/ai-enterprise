@@ -17,11 +17,11 @@ from ai_enterprise.api.specification_schemas import (
     SpecificationResponse,
     ValidationRequest,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.specification_platform_service import (
     SpecificationPlatformError,
     SpecificationPlatformService,
 )
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.specification.models import (
     DriftDetectionRunModel,
     DriftFindingModel,
@@ -57,14 +57,12 @@ async def _audit_read(
     resource: str,
     filters: dict[str, str],
 ) -> None:
-    session.add(
-        AuditEventModel(
-            project_id=project_id,
-            event_type="SpecificationPlatformRead",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"resource": resource, "filters": filters},
-        )
+    await AuditWriter(session).append_project_event(
+        project_id=project_id,
+        event_type="SpecificationPlatformRead",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"resource": resource, "filters": filters},
     )
     await session.commit()
 

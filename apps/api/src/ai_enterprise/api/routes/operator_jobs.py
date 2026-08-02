@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, SettingsDependency
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.operator_job_resolution import acknowledge_job, job_resolution
-from ai_enterprise.infrastructure.database.models import AuditEventModel, JobModel
+from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.jobs.crash_safety import RetryPolicy
 from ai_enterprise.infrastructure.jobs.models import JobExecutionAttemptModel, WorkerInstanceModel
 from ai_enterprise.infrastructure.jobs.recovery import JobRecoveryService
@@ -44,9 +45,7 @@ async def recover_expired(
             base_seconds=settings.worker_retry_base_seconds,
             maximum_seconds=settings.worker_retry_maximum_seconds,
         ),
-    ).recover_expired(
-        stale_worker_after=timedelta(seconds=settings.worker_stale_after_seconds)
-    )
+    ).recover_expired(stale_worker_after=timedelta(seconds=settings.worker_stale_after_seconds))
     await session.commit()
     return {
         "workers_marked_offline": summary.workers_marked_offline,
@@ -107,20 +106,18 @@ async def acknowledge(
         reason=request.reason,
         action_taken=request.action_taken,
     )
-    session.add(
-        AuditEventModel(
-            project_id=job.project_id,
-            event_type="operator.job_acknowledged",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={
-                "job_id": str(job.id),
-                "job_type": job.job_type,
-                "status": job.status,
-                "reason": request.reason,
-                "action_taken": request.action_taken,
-            },
-        )
+    await AuditWriter(session).append_project_event(
+        project_id=job.project_id,
+        event_type="operator.job_acknowledged",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={
+            "job_id": str(job.id),
+            "job_type": job.job_type,
+            "status": job.status,
+            "reason": request.reason,
+            "action_taken": request.action_taken,
+        },
     )
     await session.commit()
     return {

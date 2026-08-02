@@ -16,9 +16,9 @@ from ai_enterprise.api.knowledge_schemas import (
     SupersedeRequest,
     WithdrawRequest,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.knowledge_service import KnowledgeError, KnowledgeService
 from ai_enterprise.application.organization_persistence_service import canonical_hash
-from ai_enterprise.infrastructure.database.models import AuditEventModel
 from ai_enterprise.infrastructure.knowledge.models import (
     KnowledgeCandidateModel,
     KnowledgeContradictionModel,
@@ -169,14 +169,17 @@ async def withdraw_item(
     if row is None:
         raise HTTPException(404, "Knowledge item not found")
     row.temporal_status, row.valid_until = "withdrawn", datetime.now(UTC)
-    session.add(
-        AuditEventModel(
-            project_id=row.scope_id if row.scope_type == "project" else None,
-            event_type="KnowledgeItemWithdrawn",
-            actor_type=actor.actor_type,
-            actor_id=actor.subject,
-            payload={"knowledge_item_id": str(row.id), "reason": request.reason},
-        )
+    project_id = row.scope_id if row.scope_type == "project" else None
+    stream_id = (
+        f"project:{project_id}" if project_id else f"knowledge:{row.scope_type}:{row.scope_id}"
+    )
+    await AuditWriter(session).append_event(
+        stream_id=stream_id,
+        project_id=project_id,
+        event_type="KnowledgeItemWithdrawn",
+        actor_type=actor.actor_type,
+        actor_id=actor.subject,
+        payload={"knowledge_item_id": str(row.id), "reason": request.reason},
     )
     await session.commit()
     return ItemResponse.model_validate(row)
