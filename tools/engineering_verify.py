@@ -608,22 +608,36 @@ def verify(root: Path) -> VerificationReport:
 
 def _run_full_gates(root: Path) -> int:
     commands = (
-        ("bash", "-lc", "cd apps/api && .venv/bin/ruff check src tests ../../migrations"),
-        ("apps/api/.venv/bin/ruff", "check", "tools"),
-        ("bash", "-lc", "cd apps/api && .venv/bin/mypy src"),
         (
-            sys.executable,
-            "-m",
-            "compileall",
-            "-q",
-            "apps/api/src",
-            "apps/api/tests",
-            "tools",
+            root / "apps" / "api",
+            (
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                "src",
+                "tests",
+                "../../migrations",
+            ),
         ),
-        ("apps/api/.venv/bin/pytest", "-q", "apps/api/tests"),
+        (root, (sys.executable, "-m", "ruff", "check", "tools")),
+        (root / "apps" / "api", (sys.executable, "-m", "mypy", "src")),
+        (
+            root,
+            (
+                sys.executable,
+                "-m",
+                "compileall",
+                "-q",
+                "apps/api/src",
+                "apps/api/tests",
+                "tools",
+            ),
+        ),
+        (root / "apps" / "api", (sys.executable, "-m", "pytest", "-q", "tests")),
     )
-    for command in commands:
-        if subprocess.run(command, cwd=root, check=False).returncode != 0:
+    for cwd, command in commands:
+        if subprocess.run(command, cwd=cwd, check=False).returncode != 0:
             return 1
     return 0
 
