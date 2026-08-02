@@ -66,6 +66,18 @@ def _runtime_session_response(row: AgentRuntimeSessionModel) -> RuntimeSessionRe
     return RuntimeSessionResponse(**payload)
 
 
+def _require_runtime_registry_read(
+    actor: Actor, organization_id: uuid.UUID | None = None
+) -> None:
+    if organization_id is not None:
+        try:
+            require_capability(actor, "runtime.read", f"organization:{organization_id}")
+            return
+        except HTTPException:
+            pass
+    require_capability(actor, "runtime.read", "global")
+
+
 @router.post(
     "/organizations/{organization_id}/skills", response_model=SkillResponse, status_code=201
 )
@@ -118,10 +130,13 @@ async def approve_skill_version(
 
 
 @router.get("/skills/{skill_id}", response_model=SkillResponse)
-async def get_skill(skill_id: uuid.UUID, session: SessionDependency) -> SkillResponse:
+async def get_skill(
+    skill_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
+) -> SkillResponse:
     row = await session.get(SkillModel, skill_id)
     if row is None:
         raise HTTPException(404, "Skill not found")
+    _require_runtime_registry_read(actor, row.organization_id)
     return SkillResponse.model_validate(row)
 
 
@@ -139,7 +154,8 @@ async def register_tool(
 
 
 @router.get("/tools", response_model=list[ToolResponse])
-async def list_tools(session: SessionDependency) -> list[ToolResponse]:
+async def list_tools(session: SessionDependency, actor: ActorDependency) -> list[ToolResponse]:
+    _require_runtime_registry_read(actor)
     rows = (
         await session.scalars(
             select(ToolDefinitionModel).order_by(
@@ -151,7 +167,10 @@ async def list_tools(session: SessionDependency) -> list[ToolResponse]:
 
 
 @router.get("/tools/{tool_key}/versions/{version}", response_model=ToolResponse)
-async def get_tool(tool_key: str, version: str, session: SessionDependency) -> ToolResponse:
+async def get_tool(
+    tool_key: str, version: str, session: SessionDependency, actor: ActorDependency
+) -> ToolResponse:
+    _require_runtime_registry_read(actor)
     row = await session.get(ToolDefinitionModel, (tool_key, version))
     if row is None:
         raise HTTPException(404, "Tool version not found")
@@ -171,7 +190,10 @@ async def register_model_deployment(
 
 
 @router.get("/model-deployments", response_model=list[ModelDeploymentResponse])
-async def list_model_deployments(session: SessionDependency) -> list[ModelDeploymentResponse]:
+async def list_model_deployments(
+    session: SessionDependency, actor: ActorDependency
+) -> list[ModelDeploymentResponse]:
+    _require_runtime_registry_read(actor)
     rows = (
         await session.scalars(
             select(ModelDeploymentModel).order_by(
@@ -215,7 +237,8 @@ async def create_prompt(
 
 
 @router.get("/prompts", response_model=list[PromptResponse])
-async def list_prompts(session: SessionDependency) -> list[PromptResponse]:
+async def list_prompts(session: SessionDependency, actor: ActorDependency) -> list[PromptResponse]:
+    _require_runtime_registry_read(actor)
     rows = (
         await session.scalars(
             select(PromptRegistryModel).order_by(
@@ -288,10 +311,12 @@ async def rollback_prompt(
 async def get_compiled_prompt(
     prompt_id: uuid.UUID,
     session: SessionDependency,
+    actor: ActorDependency,
 ) -> CompiledPromptResponse:
     prompt = await session.get(PromptRegistryModel, prompt_id)
     if prompt is None or prompt.current_version_id is None:
         raise HTTPException(404, "Active prompt version not found")
+    _require_runtime_registry_read(actor, prompt.organization_id)
     version = await session.get(PromptVersionModel, prompt.current_version_id)
     if version is None:
         raise HTTPException(404, "Active prompt version not found")

@@ -51,6 +51,16 @@ def admin() -> Actor:
     return Actor(subject="platform-admin", actor_type="human", role="platform-admin")
 
 
+def runtime_reader(organization_id: uuid.UUID) -> Actor:
+    return Actor(
+        subject="runtime-reader",
+        actor_type="human",
+        role="operator",
+        capabilities=frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+
+
 @pytest.mark.asyncio
 async def test_prompt_registry_supports_version_approval_and_rollback() -> None:
     organization_id = uuid.uuid4()
@@ -134,7 +144,11 @@ async def test_compiled_prompt_returns_ordered_manifest() -> None:
     session.gets[(PromptRegistryModel, prompt_id)] = prompt
     session.gets[(PromptVersionModel, version_id)] = version
 
-    response = await get_compiled_prompt(prompt_id, session)  # type: ignore[arg-type]
+    response = await get_compiled_prompt(
+        prompt_id,
+        session,  # type: ignore[arg-type]
+        runtime_reader(prompt.organization_id),
+    )
 
     assert response.prompt_key == "requirements.discovery"
     assert response.version_id == version_id

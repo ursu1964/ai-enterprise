@@ -7,8 +7,13 @@ from fastapi import HTTPException
 from ai_enterprise.agent_runtime_worker import AgentRuntimeWorker
 from ai_enterprise.api.dependencies import Actor
 from ai_enterprise.api.routes.agent_runtime import (
+    get_context,
+    get_model_invocations,
     get_runtime_session,
+    get_skill,
+    get_tool,
     get_tool_invocations,
+    get_validation,
     list_model_deployments,
     router,
 )
@@ -30,6 +35,7 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     ContextManifestModel,
     ModelDeploymentModel,
     ModelInvocationModel,
+    SkillModel,
     SkillVersionModel,
     ToolDefinitionModel,
     ToolInvocationModel,
@@ -103,6 +109,15 @@ class RuntimeListSession:
         return self
 
 
+class RuntimeRegistrySession(RuntimeListSession):
+    def __init__(self, rows: list[object], gets: dict[object, object] | None = None) -> None:
+        super().__init__(rows)
+        self.gets = gets or {}
+
+    async def get(self, model: type, identity: object) -> object | None:
+        return self.gets.get((model, identity))
+
+
 def runtime_session(scope_id: uuid.UUID | None = None) -> AgentRuntimeSessionModel:
     return AgentRuntimeSessionModel(
         id=uuid.uuid4(),
@@ -172,7 +187,18 @@ async def test_model_deployment_list_exposes_friendly_status_labels() -> None:
         health_document={"available": False},
     )
 
-    response = await list_model_deployments(RuntimeListSession([deployment]))  # type: ignore[arg-type]
+    actor = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({"global"}),
+    )
+
+    response = await list_model_deployments(
+        RuntimeListSession([deployment]),  # type: ignore[arg-type]
+        actor,
+    )
 
     assert response[0].status == "unavailable"
     assert response[0].status_label == "Source unavailable"
@@ -198,6 +224,104 @@ async def test_runtime_lineage_accepts_runtime_session_scope() -> None:
     )
 
     assert response == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "route",
+    [get_context, get_tool_invocations, get_model_invocations, get_validation],
+)
+async def test_runtime_lineage_rejects_wrong_actor_scope(route) -> None:
+    row = runtime_session()
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"runtime_session:{uuid.uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await route(
+            row.id,
+            RuntimeReadSession(row),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_runtime_registry_lists_require_global_read_scope() -> None:
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{uuid.uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await list_model_deployments(
+            RuntimeListSession([]),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_runtime_registry_object_reads_accept_only_matching_scope() -> None:
+    organization_id = uuid.uuid4()
+    skill = SkillModel(
+        id=uuid.uuid4(),
+        organization_id=organization_id,
+        skill_key="requirements-analysis-v1",
+        name="Requirements Analysis",
+        status="active",
+    )
+    session = RuntimeRegistrySession([], {(SkillModel, skill.id): skill})
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{uuid.uuid4()}"}),
+    )
+    allowed = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_skill(skill.id, session, denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
+    assert (await get_skill(skill.id, session, allowed)).id == skill.id  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_tool_registry_reads_require_global_scope() -> None:
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{uuid.uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_tool(
+            "repository.read",
+            "1",
+            RuntimeRegistrySession([]),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio
