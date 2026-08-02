@@ -14,7 +14,11 @@ from ai_enterprise.application.operator_job_resolution import (
     job_resolution,
     unresolved_problem_jobs,
 )
-from ai_enterprise.application.query.read_models import meaning_for, source_contract
+from ai_enterprise.application.query.read_models import (
+    meaning_for,
+    source_contract,
+    status_read_model,
+)
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
     AuditEventModel,
@@ -68,15 +72,6 @@ def _latest_time(rows: list[Any], field: str) -> datetime | None:
 
 def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
     return f"{count} {singular if count == 1 else plural or singular + 's'}"
-
-
-def _status_read_model(status: object) -> dict[str, Any]:
-    meaning = meaning_for(status)
-    return {
-        "status": meaning["raw"],
-        "status_label": meaning["label"],
-        "status_meaning": meaning,
-    }
 
 
 def _resolution_counts(jobs: list[JobModel]) -> dict[str, int]:
@@ -176,7 +171,7 @@ def _graph(
             "id": "enterprise",
             "label": "Enterprise Factory",
             "kind": "enterprise",
-            **_status_read_model("active"),
+            **status_read_model("active"),
             "human_summary": (
                 "The central operating system coordinating projects, crews, proof, "
                 "and reusable knowledge."
@@ -186,21 +181,21 @@ def _graph(
             "id": "resources",
             "label": "Managed Resources",
             "kind": "resource-group",
-            **_status_read_model("active" if resource_count else "empty"),
+            **status_read_model("active" if resource_count else "empty"),
             "human_summary": f"{resource_count} enterprise resource(s) are registered.",
         },
         {
             "id": "modules",
             "label": "Enterprise Modules",
             "kind": "module-group",
-            **_status_read_model("active" if module_count else "empty"),
+            **status_read_model("active" if module_count else "empty"),
             "human_summary": f"{module_count} governed module(s) are registered.",
         },
         {
             "id": "knowledge",
             "label": "Reusable Knowledge",
             "kind": "knowledge-group",
-            **_status_read_model("active" if knowledge_count else "empty"),
+            **status_read_model("active" if knowledge_count else "empty"),
             "human_summary": (
                 f"{knowledge_count} approved knowledge item(s) can inform future projects."
             ),
@@ -218,7 +213,7 @@ def _graph(
                 "id": project_node,
                 "label": project.name,
                 "kind": "project",
-                **_status_read_model(project.status),
+                **status_read_model(project.status),
                 "human_summary": (
                     f"{project.name} is {meaning_for(project.status)['label']}. "
                     "Open it to inspect workflow, work, proof, and reusable blueprints."
@@ -237,7 +232,7 @@ def _graph(
                 "id": workflow_node,
                 "label": workflow.current_step or workflow.state,
                 "kind": "workflow",
-                **_status_read_model(workflow.state),
+                **status_read_model(workflow.state),
                 "human_summary": (
                     f"The workflow is at {workflow.current_step or workflow.state}. "
                     "Recommended action: "
@@ -255,7 +250,7 @@ def _graph(
                 "id": job_node,
                 "label": job.job_type.replace("_", " ").title(),
                 "kind": "job",
-                **_status_read_model(job.status),
+                **status_read_model(job.status),
                 "human_summary": (
                     f"{job.job_type.replace('_', ' ')} is {meaning_for(job.status)['label']}. "
                     f"Attempt {job.attempt_count} of {job.max_attempts}."
@@ -270,7 +265,7 @@ def _graph(
                 "id": worker_node,
                 "label": worker.profile,
                 "kind": "worker",
-                **_status_read_model(worker.status),
+                **status_read_model(worker.status),
                 "human_summary": (
                     f"{worker.profile} worker is {meaning_for(worker.status)['label']}."
                 ),
@@ -324,7 +319,7 @@ def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[s
     completed: list[dict[str, object]] = [
         {
             "name": run.crew_name,
-            **_status_read_model(run.status),
+            **status_read_model(run.status),
             "assignment": (
                 "Completed project crew run."
                 if run.status == "succeeded"
@@ -340,7 +335,7 @@ def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[s
     active: list[dict[str, object]] = [
         {
             "name": job.job_type.replace("_", " "),
-            **_status_read_model(job.status),
+            **status_read_model(job.status),
             "assignment": "Work item controlled by the enterprise worker system.",
             "last_signal_at": job.last_leased_at or job.available_at or job.created_at,
         }
@@ -360,7 +355,7 @@ def _manager_graph(
             "id": "factory",
             "label": "Manifesto Factory",
             "kind": "factory",
-            **_status_read_model("active" if projects else "waiting_for_manifesto"),
+            **status_read_model("active" if projects else "waiting_for_manifesto"),
             "human_summary": (
                 "Manifestos become governed projects, workflows, tasks, crews, proof, "
                 "and reusable templates."
@@ -390,7 +385,7 @@ def _manager_graph(
                     "id": project_node,
                     "label": project.name,
                     "kind": "project",
-                    **_status_read_model(project_status),
+                    **status_read_model(project_status),
                     "human_summary": (
                         f"{project.name}: {summary['done']} done, {summary['active']} active, "
                         f"{summary['standby']} standby, {summary['problems']} problem tasks."
@@ -400,7 +395,7 @@ def _manager_graph(
                     "id": workflow_node,
                     "label": _project_phase_from_workflow(workflow),
                     "kind": "workflow",
-                    **_status_read_model("not_started" if workflow is None else workflow.state),
+                    **status_read_model("not_started" if workflow is None else workflow.state),
                     "human_summary": (
                         "Workflow is not started yet. Start it after manifesto intake."
                         if workflow is None
@@ -412,7 +407,7 @@ def _manager_graph(
                     "id": crew_node,
                     "label": "Crew Activity",
                     "kind": "crew",
-                    **_status_read_model("active" if crews or summary["active"] else "standby"),
+                    **status_read_model("active" if crews or summary["active"] else "standby"),
                     "human_summary": (
                         f"{len(crews)} completed crew signal(s), "
                         f"{summary['active']} active work signal(s)."
@@ -422,7 +417,7 @@ def _manager_graph(
                     "id": telemetry_node,
                     "label": "Telemetry",
                     "kind": "telemetry",
-                    **_status_read_model(
+                    **status_read_model(
                         "attention_required" if summary["problems"] else "nominal"
                     ),
                     "human_summary": (
@@ -599,7 +594,7 @@ async def dashboard_manager(
             {
                 "id": project.id,
                 "name": project.name,
-                **_status_read_model(project.status),
+                **status_read_model(project.status),
                 "phase": phase,
                 "phase_meaning": phase_meaning,
                 "state": state,

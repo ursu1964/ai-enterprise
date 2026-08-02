@@ -34,6 +34,36 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "The project identity and manifesto are registered.",
         "Start the workflow before presenting execution proof.",
     ),
+    "requirements_running": Meaning(
+        "Requirements work running",
+        "info",
+        "The requirements phase is actively producing or checking evidence.",
+        "Monitor requirements output and prepare for approval.",
+    ),
+    "waiting_requirements_approval": Meaning(
+        "Ready for requirements review",
+        "warn",
+        "Requirements evidence exists and is waiting for an explicit decision.",
+        "Review requirements evidence and approve or request changes.",
+    ),
+    "architecture_running": Meaning(
+        "Architecture work running",
+        "info",
+        "The architecture phase is actively producing or checking evidence.",
+        "Monitor architecture output and prepare for approval.",
+    ),
+    "waiting_architecture_approval": Meaning(
+        "Ready for architecture review",
+        "warn",
+        "Architecture evidence exists and is waiting for an explicit decision.",
+        "Review architecture evidence and approve or request changes.",
+    ),
+    "planning_running": Meaning(
+        "Planning work running",
+        "info",
+        "The work-package planning phase is actively decomposing implementation work.",
+        "Monitor planning output and prepare for work-package review.",
+    ),
     "work_package_approved": Meaning(
         "Plan approved, execution not started",
         "ok",
@@ -45,6 +75,48 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "warn",
         "A work package is waiting for an explicit human decision.",
         "Review the work package and approve or reject it.",
+    ),
+    "execution_running": Meaning(
+        "Execution running",
+        "info",
+        "Approved implementation work is running and producing change evidence.",
+        "Monitor execution evidence, tests, and failure signals.",
+    ),
+    "patch_review_running": Meaning(
+        "Patch review running",
+        "info",
+        "The candidate patch is being reviewed against policy and evidence.",
+        "Wait for review output before integration.",
+    ),
+    "waiting_integration_approval": Meaning(
+        "Ready for integration approval",
+        "warn",
+        "Reviewed change evidence is waiting for an integration decision.",
+        "Approve integration only after evidence and risk are clear.",
+    ),
+    "integrating": Meaning(
+        "Integration running",
+        "info",
+        "Approved work is being integrated into the target branch or environment.",
+        "Monitor integration status and rollback evidence.",
+    ),
+    "completed": Meaning(
+        "Completed",
+        "ok",
+        "The workflow completed with the required evidence.",
+        "Use the workflow evidence for reporting and reuse decisions.",
+    ),
+    "cancelling": Meaning(
+        "Cancellation in progress",
+        "warn",
+        "The workflow is stopping and clearing active work safely.",
+        "Wait for cancellation to finish before relaunching work.",
+    ),
+    "cancelled": Meaning(
+        "Cancelled",
+        "warn",
+        "The workflow was stopped before completion.",
+        "Review the cancellation reason before creating replacement work.",
     ),
     "manual_intervention": Meaning(
         "Review before running",
@@ -160,6 +232,48 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "The signal is available but incomplete or reduced.",
         "Inspect source details before relying on it.",
     ),
+    "draft": Meaning(
+        "Draft",
+        "info",
+        "The runtime or registry item is being prepared and is not approved yet.",
+        "Review and approve it before production use.",
+    ),
+    "approved": Meaning(
+        "Approved",
+        "ok",
+        "The item passed review and can be used within its approved scope.",
+        "Use it only within the recorded capability and scope.",
+    ),
+    "registered": Meaning(
+        "Registered",
+        "info",
+        "The item exists in the registry but may still need health or approval evidence.",
+        "Check health, approval, and scope before relying on it.",
+    ),
+    "pending": Meaning(
+        "Pending review",
+        "warn",
+        "The item is waiting for review or completion.",
+        "Inspect the pending evidence and complete the required decision.",
+    ),
+    "awaiting_review": Meaning(
+        "Awaiting review",
+        "warn",
+        "The item has been produced and is waiting for governed review.",
+        "Review findings and approve or request changes.",
+    ),
+    "validation_failed": Meaning(
+        "Validation failed",
+        "bad",
+        "Validation found issues that block trusted use.",
+        "Inspect validation findings and repair the source artifact.",
+    ),
+    "started": Meaning(
+        "Started",
+        "info",
+        "The runtime or workflow has started and should soon produce live evidence.",
+        "Monitor follow-up events and health signals.",
+    ),
     "current": Meaning(
         "Current phase",
         "info",
@@ -205,6 +319,15 @@ def meaning_for(status: object) -> dict[str, str]:
         ),
     )
     return {"raw": raw, **meaning.model_dump()}
+
+
+def status_read_model(status: object) -> dict[str, Any]:
+    meaning = meaning_for(status)
+    return {
+        "status": meaning["raw"],
+        "status_label": meaning["label"],
+        "status_meaning": meaning,
+    }
 
 
 def source_contract(

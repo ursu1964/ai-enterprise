@@ -32,6 +32,7 @@ from ai_enterprise.application.agent_runtime_persistence_service import (
     AgentRuntimePersistenceError,
     AgentRuntimePersistenceService,
 )
+from ai_enterprise.application.query.read_models import status_read_model
 from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentOutputValidationModel,
     AgentRuntimeSessionModel,
@@ -51,6 +52,18 @@ router = APIRouter(tags=["governed-agent-runtime"])
 
 def _error(exc: AgentRuntimePersistenceError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
+
+
+def _model_deployment_response(row: ModelDeploymentModel) -> ModelDeploymentResponse:
+    payload = ModelDeploymentResponse.model_validate(row).model_dump()
+    payload.update(status_read_model(row.status))
+    return ModelDeploymentResponse(**payload)
+
+
+def _runtime_session_response(row: AgentRuntimeSessionModel) -> RuntimeSessionResponse:
+    payload = RuntimeSessionResponse.model_validate(row).model_dump()
+    payload.update(status_read_model(row.status))
+    return RuntimeSessionResponse(**payload)
 
 
 @router.post(
@@ -154,7 +167,7 @@ async def register_model_deployment(
         row = await AgentRuntimePersistenceService(session).register_deployment(values, actor)
     except AgentRuntimePersistenceError as exc:
         raise _error(exc) from exc
-    return ModelDeploymentResponse.model_validate(row)
+    return _model_deployment_response(row)
 
 
 @router.get("/model-deployments", response_model=list[ModelDeploymentResponse])
@@ -166,7 +179,7 @@ async def list_model_deployments(session: SessionDependency) -> list[ModelDeploy
             )
         )
     ).all()
-    return [ModelDeploymentResponse.model_validate(row) for row in rows]
+    return [_model_deployment_response(row) for row in rows]
 
 
 @router.post("/model-deployments/{deployment_id}/health", response_model=ModelDeploymentResponse)
@@ -184,7 +197,7 @@ async def update_model_health(
     row.health_document = request.model_dump()
     row.status = "active" if request.available else "unavailable"
     await session.commit()
-    return ModelDeploymentResponse.model_validate(row)
+    return _model_deployment_response(row)
 
 
 @router.post("/prompts", response_model=PromptResponse, status_code=201)
@@ -307,7 +320,7 @@ async def start_runtime_session(
         row = await AgentRuntimePersistenceService(session).start_session(values, actor)
     except AgentRuntimePersistenceError as exc:
         raise _error(exc) from exc
-    return RuntimeSessionResponse.model_validate(row)
+    return _runtime_session_response(row)
 
 
 async def _session(session_id: uuid.UUID, session: SessionDependency) -> AgentRuntimeSessionModel:
@@ -332,7 +345,7 @@ async def get_runtime_session(
 ) -> RuntimeSessionResponse:
     row = await _session(session_id, session)
     _require_runtime_read(actor, row)
-    return RuntimeSessionResponse.model_validate(row)
+    return _runtime_session_response(row)
 
 
 @router.post("/agent-runtime-sessions/{session_id}/cancel", response_model=RuntimeSessionResponse)
@@ -345,7 +358,7 @@ async def cancel_runtime_session(
         )
     except AgentRuntimePersistenceError as exc:
         raise _error(exc) from exc
-    return RuntimeSessionResponse.model_validate(row)
+    return _runtime_session_response(row)
 
 
 async def _lineage(

@@ -6,7 +6,12 @@ from fastapi import HTTPException
 
 from ai_enterprise.agent_runtime_worker import AgentRuntimeWorker
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.agent_runtime import get_runtime_session, get_tool_invocations, router
+from ai_enterprise.api.routes.agent_runtime import (
+    get_runtime_session,
+    get_tool_invocations,
+    list_model_deployments,
+    router,
+)
 from ai_enterprise.application.agent_runtime.workflow_binding import (
     GovernedWorkflowRuntimeBinding,
     require_governed_runtime,
@@ -23,6 +28,7 @@ from ai_enterprise.infrastructure.agent_runtime.models import (
     AgentRuntimeSpecificationModel,
     CapabilitySkillBindingModel,
     ContextManifestModel,
+    ModelDeploymentModel,
     ModelInvocationModel,
     SkillVersionModel,
     ToolDefinitionModel,
@@ -86,6 +92,17 @@ class RuntimeReadSession:
         return []
 
 
+class RuntimeListSession:
+    def __init__(self, rows: list[object]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[object]:
+        return self.rows
+
+    async def scalars(self, statement: object) -> "RuntimeListSession":
+        return self
+
+
 def runtime_session(scope_id: uuid.UUID | None = None) -> AgentRuntimeSessionModel:
     return AgentRuntimeSessionModel(
         id=uuid.uuid4(),
@@ -133,6 +150,34 @@ async def test_runtime_read_requires_matching_capability_scope() -> None:
     )
     response = await get_runtime_session(row.id, session, allowed)  # type: ignore[arg-type]
     assert response.id == row.id
+    assert response.status_label == "Work is running"
+    assert response.status_meaning is not None
+    assert response.status_meaning["operator_action"]
+
+
+@pytest.mark.asyncio
+async def test_model_deployment_list_exposes_friendly_status_labels() -> None:
+    deployment = ModelDeploymentModel(
+        id=uuid.uuid4(),
+        organization_id=None,
+        provider_key="local",
+        model_reference="gemma3:12b",
+        deployment_class="local",
+        context_window=8192,
+        supports_tools=True,
+        supports_structured_output=True,
+        maximum_data_classification="internal",
+        status="unavailable",
+        metadata_document={},
+        health_document={"available": False},
+    )
+
+    response = await list_model_deployments(RuntimeListSession([deployment]))  # type: ignore[arg-type]
+
+    assert response[0].status == "unavailable"
+    assert response[0].status_label == "Source unavailable"
+    assert response[0].status_meaning is not None
+    assert response[0].status_meaning["severity"] == "bad"
 
 
 @pytest.mark.asyncio

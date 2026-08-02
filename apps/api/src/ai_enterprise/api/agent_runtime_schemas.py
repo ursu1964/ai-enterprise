@@ -142,6 +142,8 @@ class ModelDeploymentResponse(OrmResult):
     model_reference: str
     deployment_class: str
     status: str
+    status_label: str | None = None
+    status_meaning: dict[str, str] | None = None
     health_document: dict[str, Any]
 
 
@@ -159,5 +161,7 @@ class RuntimeSessionResponse(OrmResult):
     context_manifest_hash: str | None
     selected_model_deployment_id: uuid.UUID | None
     status: str
+    status_label: str | None = None
+    status_meaning: dict[str, str] | None = None
     attempt_number: int
     created_at: datetime
