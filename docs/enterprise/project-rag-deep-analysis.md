@@ -650,6 +650,7 @@ bd7331b feat(aios): add release readiness gates
 4ea2a92 chore(mcp): satisfy package lint checks
 2d7ccdf feat(aios): add connected proof preflight
 176fdb9 fix(security): baseline historical secret scan findings
+c20ae59 feat(aios): make connected preflight runtime aware
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -693,6 +694,7 @@ What it checks:
 ```text
 AIOS release readiness
 clean local repository
+runtime learning state, reported separately as a warning
 origin remote
 GitHub token
 GitHub repository target
@@ -709,10 +711,17 @@ pass: repository clean
 pass: origin remote configured
 pass: GitHub repository target
 pass: Gitleaks available
+pass: Ollama reachable at http://localhost:11434 when `AIOS_USE_FAKE_MODELS=false`
 warn: gh CLI unavailable
 fail: GitHub token missing
-fail: AIOS_USE_FAKE_MODELS is enabled
 ready: false
+```
+
+Runtime-state handling update:
+
+```text
+Connected preflight now blocks on real source changes, but treats `.nora` runtime learning and routing state as a non-blocking warning.
+This keeps the living application from blocking proof runs just because it learned or updated metrics.
 ```
 
 Security release gate update:
@@ -730,6 +739,8 @@ Verification:
 ```bash
 python -m ruff check packages/aios_execution/connected_preflight.py packages/aios_execution/cli.py tests/unit/test_aios_execution_connected_preflight.py
 python -m pytest -q tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py tests/unit/test_aios_execution_github_provider.py
+AIOS_USE_FAKE_MODELS=false python -m apps.cli.main ax-connected-preflight --repo /home/user/projects/project-rag --github-repo ursu1964/project-rag --format json --strict
+OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_capability_synthesis.py tests/unit/test_aios_execution_connected_preflight.py tests/unit/test_aios_execution_status_cli.py
 make secret-scan-release
 python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
 python -m pytest -q tests/unit/test_scan_secrets.py
@@ -740,6 +751,8 @@ Observed result:
 ```text
 ruff: all checks passed
 pytest: 19 passed
+live preflight: source clean, Ollama pass, GitHub token missing
+deterministic AIOS tests: 21 passed, 1 skipped
 secret-scan-release: gitleaks-ok; 29 baseline findings suppressed; secret-scan-ok
 scanner tests: 7 passed
 ```
@@ -748,5 +761,4 @@ Phase 3 remains blocked by external setup, not by ProjectRAG code:
 
 ```text
 1. Set AIOS_GIT_TOKEN or GITHUB_TOKEN, or run gh auth login.
-2. Disable fake models and start Ollama with the configured model.
 ```
