@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -181,6 +181,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Completed Evidence" in response.text
     assert "Remaining Work" in response.text
     assert "Current Issues" in response.text
+    assert "Historical samples" in response.text
+    assert "Average phase" in response.text
     assert "lifecycle" in response.text
     assert "Source phase:" in response.text
     assert "Improvement proposals" in response.text
@@ -384,6 +386,10 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["phases"][2]["current_issues"] == []
     assert response["phases"][2]["historical_issues"] == []
     assert response["remaining_steps"]
+    assert response["estimate"]["label"] == "Early estimate"
+    assert response["estimate"]["confidence"] == "early"
+    assert response["estimate"]["historical_sample_count"] == 0
+    assert response["estimate"]["average_phase_minutes"] == 30
     assert response["crew"][0]["crew_name"] == "architecture"
     assert response["jobs"][0]["job_type"] == "plan_work_package"
     assert response["telemetry"]["always_active"] is True
@@ -402,6 +408,90 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["blueprints"][0]["improvement_proposals"] == []
     assert response["blueprints"][1]["kind"] == "agent_team_pattern"
     assert response["blueprints"][2]["kind"] == "business_effect_pattern"
+
+
+@pytest.mark.asyncio
+async def test_project_intelligence_uses_observed_transition_timing_for_estimates() -> None:
+    now = datetime.now(UTC)
+    project_id = uuid.uuid4()
+    workflow_id = uuid.uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Estimated Project",
+        description="A project with transition timing for project intelligence estimates.",
+        repository_path="/home/user/projects/estimated-project",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={"project_type": "dashboards_reporting"},
+        created_at=now,
+        updated_at=now,
+    )
+    workflow = WorkflowInstanceModel(
+        id=workflow_id,
+        project_id=project_id,
+        definition_name="project_delivery",
+        workflow_version="1",
+        state="waiting_architecture_approval",
+        current_step="architecture",
+        context_version=1,
+        correlation_id=uuid.uuid4(),
+        optimistic_version=1,
+        cancellation_requested_at=None,
+        failure_code=None,
+        failure_message=None,
+        recommended_operator_action="Approve architecture.",
+        started_at=now,
+        completed_at=None,
+        updated_at=now,
+    )
+    transitions = [
+        WorkflowTransitionModel(
+            id=uuid.uuid4(),
+            workflow_id=workflow_id,
+            sequence=index,
+            previous_state=previous,
+            current_state=current,
+            step=step,
+            actor_type="service",
+            actor_id="workflow",
+            reason=f"{current} reached.",
+            policy_evidence={},
+            workflow_version="1",
+            correlation_id=workflow.correlation_id,
+            occurred_at=occurred_at,
+        )
+        for index, (previous, current, step, occurred_at) in enumerate(
+            [
+                ("project_created", "requirements_running", "requirements", now),
+                (
+                    "requirements_running",
+                    "waiting_requirements_approval",
+                    "requirements",
+                    now + timedelta(minutes=10),
+                ),
+                (
+                    "waiting_requirements_approval",
+                    "waiting_architecture_approval",
+                    "architecture",
+                    now + timedelta(minutes=30),
+                ),
+            ],
+            start=1,
+        )
+    ]
+
+    response = await project_intelligence(
+        project_id,
+        Session([project], scalar=workflow, scalar_rows=[transitions, [], [], [], []]),  # type: ignore[arg-type]
+    )
+
+    assert response["estimate"]["label"] == "Observed estimate"
+    assert response["estimate"]["confidence"] == "observed"
+    assert response["estimate"]["historical_sample_count"] == 2
+    assert response["estimate"]["average_phase_minutes"] == 15
+    assert response["estimate"]["estimated_minutes_remaining"] == 75
 
 
 @pytest.mark.asyncio

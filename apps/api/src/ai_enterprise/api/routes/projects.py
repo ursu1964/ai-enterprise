@@ -224,11 +224,7 @@ async def project_intelligence(
         "remaining_steps": [
             phase["name"] for phase in phases if phase["status"] == "remaining"
         ],
-        "estimate": {
-            "remaining_phase_count": remaining_count,
-            "estimated_minutes_remaining": remaining_count * 30,
-            "basis": "Local heuristic until historical duration telemetry is available.",
-        },
+        "estimate": _estimate_remaining_work(transitions, remaining_count),
         "operating_state": {
             "degraded": workflow is None,
             "reason": None
@@ -283,6 +279,53 @@ async def project_intelligence(
             "transition_count": len(transitions),
             "job_count": len(jobs),
         },
+    }
+
+
+def _estimate_remaining_work(
+    transitions: list[WorkflowTransitionModel],
+    remaining_phase_count: int,
+) -> dict[str, object]:
+    if remaining_phase_count <= 0:
+        return {
+            "remaining_phase_count": 0,
+            "estimated_minutes_remaining": 0,
+            "basis": "Project has no remaining phases in the current read model.",
+            "confidence": "complete",
+            "label": "Complete",
+            "historical_sample_count": 0,
+            "average_phase_minutes": 0,
+        }
+    ordered = sorted(
+        transition.occurred_at for transition in transitions if transition.occurred_at
+    )
+    durations = [
+        (current - previous).total_seconds() / 60
+        for previous, current in zip(ordered, ordered[1:], strict=False)
+        if current > previous
+    ]
+    if durations:
+        average = round(sum(durations) / len(durations), 1)
+        return {
+            "remaining_phase_count": remaining_phase_count,
+            "estimated_minutes_remaining": max(1, round(average * remaining_phase_count)),
+            "basis": (
+                "Observed workflow transition timing from this project. Treat as calibrated "
+                "when more phase history accumulates."
+            ),
+            "confidence": "calibrated" if len(durations) >= 3 else "observed",
+            "label": "Calibrated estimate" if len(durations) >= 3 else "Observed estimate",
+            "historical_sample_count": len(durations),
+            "average_phase_minutes": average,
+        }
+    return {
+        "remaining_phase_count": remaining_phase_count,
+        "estimated_minutes_remaining": remaining_phase_count * 30,
+        "basis": "Local heuristic until historical duration telemetry is available.",
+        "confidence": "early",
+        "label": "Early estimate",
+        "historical_sample_count": 0,
+        "average_phase_minutes": 30,
     }
 
 

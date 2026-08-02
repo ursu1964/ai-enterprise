@@ -2545,8 +2545,8 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function statusClass(status) {
       const value = String(status || "").toLowerCase();
-      if (["online", "ok", "succeeded", "completed", "active", "nominal"].includes(value)) return "ok";
-      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed"].includes(value)) return "warn";
+      if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated"].includes(value)) return "ok";
+      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "observed"].includes(value)) return "warn";
       if (["failed", "dead_letter", "abandoned", "offline", "attention_required"].includes(value)) return "bad";
       return "info";
     }
@@ -2579,6 +2579,10 @@ DASHBOARD_HTML = r"""<!doctype html>
         reusable: "Reusable",
         deprecated: "Deprecated",
         improved: "Improved",
+        early: "Early estimate",
+        observed: "Observed estimate",
+        calibrated: "Calibrated estimate",
+        complete: "Complete",
         online: "Online",
         offline: "Offline",
         degraded: "Degraded"
@@ -2810,9 +2814,12 @@ DASHBOARD_HTML = r"""<!doctype html>
             ["Action", payload.operating_state.recommended_action || "Continue with the guided route."]
           ], payload.operating_state.degraded ? "warn" : "ok")}
           ${infoCard("Time Estimate", `${payload.estimate.estimated_minutes_remaining} min`, [
-            ["Meaning", "Estimated remaining work"],
+            ["Meaning", payload.estimate.label || "Estimated remaining work"],
+            ["Confidence", humanStatus(payload.estimate.confidence || "early")],
+            ["Historical samples", `${payload.estimate.historical_sample_count || 0}`],
+            ["Average phase", `${payload.estimate.average_phase_minutes || 0} min`],
             ["Basis", payload.estimate.basis]
-          ], "info")}
+          ], statusClass(payload.estimate.confidence || "early"))}
           ${infoCard("Evidence", `${payload.reuse.work_package_count} packages`, [
             ["Artifacts", `${payload.reuse.artifact_count}`],
             ["Types", payload.reuse.artifact_types.join(", ") || "No artifact types yet"]
