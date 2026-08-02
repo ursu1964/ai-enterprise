@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.decomposition.core import (
     DecompositionPolicy,
     DecompositionState,
@@ -34,7 +35,6 @@ from ai_enterprise.infrastructure.architecture.models import (
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     JobModel,
     ProjectModel,
 )
@@ -177,7 +177,7 @@ class DecompositionService:
                 max_attempts=3,
             )
         )
-        self._audit(
+        await self._audit(
             project_id,
             "WorkPackageDecompositionRequested",
             actor.subject,
@@ -373,7 +373,7 @@ class DecompositionService:
                 else DecompositionState.AWAITING_REVIEW,
             )
             run.completed_at = datetime.now(UTC)
-            self._audit(
+            await self._audit(
                 run.project_id,
                 "WorkPackageDecompositionValidated",
                 "system",
@@ -446,7 +446,7 @@ class DecompositionService:
                 )
             )
             await self._materialize(artifact)
-        self._audit(
+        await self._audit(
             run.project_id,
             f"WorkPackageDecomposition{decision.title().replace('_', '')}",
             actor.subject,
@@ -565,16 +565,13 @@ class DecompositionService:
         assert_transition(DecompositionState(run.status), state)
         run.status = state
 
-    def _audit(
+    async def _audit(
         self, project_id: uuid.UUID, event: str, actor: str, payload: dict[str, Any]
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type=event,
-                actor_type="human" if actor != "system" else "system",
-                actor_id=actor,
-                payload=payload,
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=project_id,
+            event_type=event,
+            actor_type="human" if actor != "system" else "system",
+            actor_id=actor,
+            payload=payload,
         )

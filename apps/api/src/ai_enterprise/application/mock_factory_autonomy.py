@@ -15,6 +15,7 @@ from ai_enterprise.api.project_formation_schemas import (
     MockFactoryProjectResponse,
     MockFactoryStartResponse,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.project_formation_service import ProjectFormationService
 from ai_enterprise.application.project_workflow import ProjectWorkflowService
 from ai_enterprise.application.workflow.service import WorkflowService, workflow_state_for_project
@@ -23,7 +24,6 @@ from ai_enterprise.domain.enums import ApprovalDecision, ArtifactType, ProjectSt
 from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
-    AuditEventModel,
     ProjectModel,
     WorkPackageModel,
 )
@@ -503,19 +503,16 @@ class MockEnterpriseAutonomyService:
         workflow.failure_code = None
         workflow.failure_message = None
         workflow.recommended_operator_action = action
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="workflow.autonomy_recovered",
-                actor_type="system",
-                actor_id=actor_id,
-                payload={
-                    "workflow_id": str(workflow.id),
-                    "state": state,
-                    "reason": "Recovered controlled demo workflow after obsolete transition bug.",
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=project.id,
+            event_type="workflow.autonomy_recovered",
+            actor_type="system",
+            actor_id=actor_id,
+            payload={
+                "workflow_id": str(workflow.id),
+                "state": state,
+                "reason": "Recovered controlled demo workflow after obsolete transition bug.",
+            },
         )
         await self._session.commit()
         await self._session.refresh(workflow)

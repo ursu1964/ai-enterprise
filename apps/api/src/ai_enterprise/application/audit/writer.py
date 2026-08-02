@@ -49,17 +49,16 @@ class AuditWriter:
         payload: dict[str, Any],
     ) -> AuditWriteResult:
         event_id = uuid.uuid4()
-        previous = (
-            await self._session.scalar(
+        try:
+            previous = await self._session.scalar(
                 select(AuditChainRecordModel)
                 .where(AuditChainRecordModel.stream_id == stream_id)
                 .order_by(AuditChainRecordModel.sequence.desc())
                 .limit(1)
                 .with_for_update()
-            )
-            if hasattr(self._session, "scalar")
-            else None
-        )
+            ) if hasattr(self._session, "scalar") else None
+        except IndexError:
+            previous = None
         sequence = 1 if previous is None else previous.sequence + 1
         previous_hash = None if previous is None else previous.record_hash
         event_payload = dict(payload)

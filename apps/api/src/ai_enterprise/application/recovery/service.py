@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.enums import JobType
 from ai_enterprise.domain.recovery.bindings import (
     approval_binding_hash,
@@ -21,7 +22,6 @@ from ai_enterprise.domain.recovery.exceptions import (
 )
 from ai_enterprise.domain.recovery.policies import RecoveryStrategyPolicy
 from ai_enterprise.infrastructure.database.models import (
-    AuditEventModel,
     IntegrationAttemptModel,
     ProjectModel,
     RecoveryAssessmentModel,
@@ -130,7 +130,7 @@ class RecoveryControlPlaneService:
             external_reference=external_reference,
         )
         self._session.add(incident)
-        self._audit(
+        await self._audit(
             attempt.project_id,
             "recovery.incident_created",
             actor_type,
@@ -201,7 +201,7 @@ class RecoveryControlPlaneService:
             assessed_at=datetime.now(UTC),
         )
         self._session.add(assessment)
-        self._audit(
+        await self._audit(
             incident.project_id,
             "recovery.assessment_completed",
             actor_type,
@@ -272,7 +272,7 @@ class RecoveryControlPlaneService:
             expires_at=now + timedelta(hours=1),
         )
         self._session.add(approval)
-        self._audit(
+        await self._audit(
             incident.project_id,
             "recovery.rollback_approval_granted",
             actor_type,
@@ -319,7 +319,7 @@ class RecoveryControlPlaneService:
         self._session.add(attempt)
         approval.status = RollbackApprovalStatus.CONSUMED
         approval.consumed_at = now
-        self._audit(
+        await self._audit(
             approval.project_id,
             "recovery.attempt_created",
             actor_type,
@@ -349,7 +349,7 @@ class RecoveryControlPlaneService:
         if actor_type != "human" or actor_role != required_role:
             raise RollbackApprovalHumanRequired(f"The human {required_role} role is required")
 
-    def _audit(
+    async def _audit(
         self,
         project_id: uuid.UUID,
         event: str,
@@ -357,15 +357,12 @@ class RecoveryControlPlaneService:
         actor_id: str,
         payload: dict[str, object],
     ) -> None:
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type=event,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                payload=payload,
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type=event,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
         )
 
     async def _commit_refresh(self, model: object) -> None:

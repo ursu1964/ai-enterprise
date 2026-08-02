@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.enums import ArtifactType, JobType, ProjectStatus, RunStatus
 from ai_enterprise.domain.requirements_revision.models import RequirementsReviewDecision
 from ai_enterprise.domain.requirements_revision.policies import (
@@ -13,7 +14,6 @@ from ai_enterprise.domain.requirements_revision.policies import (
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     CrewRunModel,
     JobModel,
     ProjectModel,
@@ -143,22 +143,19 @@ class RequirementsRevisionService:
             priority=100,
             max_attempts=3,
         )
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type="requirements.revision.requested",
-                actor_type="human",
-                actor_id=reviewer,
-                payload={
-                    "source_artifact_id": str(artifact.id),
-                    "source_review_decision_id": str(approval.id),
-                    "revision_request_id": str(request.id),
-                    "revision_cycle_id": str(cycle.id),
-                    "execution_run_id": str(attempt.id),
-                    "feedback_hash": feedback.feedback_hash,
-                },
-            )
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type="requirements.revision.requested",
+            actor_type="human",
+            actor_id=reviewer,
+            payload={
+                "source_artifact_id": str(artifact.id),
+                "source_review_decision_id": str(approval.id),
+                "revision_request_id": str(request.id),
+                "revision_cycle_id": str(cycle.id),
+                "execution_run_id": str(attempt.id),
+                "feedback_hash": feedback.feedback_hash,
+            },
         )
         await self._session.commit()
         return cycle

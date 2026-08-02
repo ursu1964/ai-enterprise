@@ -10,6 +10,7 @@ from ai_enterprise.application.architecture_operations.observability import (
     ArchitectureMetric,
     record_metric,
 )
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.domain.architecture.enums import (
     ArchitectureArtifactStatus,
     ArchitectureReviewDecision,
@@ -30,7 +31,6 @@ from ai_enterprise.infrastructure.architecture.models import (
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
 )
 from ai_enterprise.infrastructure.jobs.repository import JobRepository
 
@@ -123,7 +123,7 @@ class ArchitectureGovernanceService:
             max_attempts=2,
         )
         record_metric(ArchitectureMetric.RUNS)
-        self._audit(project_id, "architecture.run.created", "system", {"run_id": str(run.id)})
+        await self._audit(project_id, "architecture.run.created", "system", {"run_id": str(run.id)})
         await self.session.commit()
         await self.session.refresh(run)
         return run
@@ -183,7 +183,7 @@ class ArchitectureGovernanceService:
         self.session.add(artifact)
         record_metric(ArchitectureMetric.RUNS_COMPLETED)
         record_metric(ArchitectureMetric.ARTIFACTS_CREATED)
-        self._audit(
+        await self._audit(
             run.project_id,
             "architecture.completed",
             actor.subject,
@@ -223,7 +223,7 @@ class ArchitectureGovernanceService:
         artifact.status = ArchitectureArtifactStatus.UNDER_REVIEW
         self.session.add(review)
         record_metric(ArchitectureMetric.REVIEWS_OPEN)
-        self._audit(
+        await self._audit(
             artifact.project_id,
             "architecture.review.opened",
             actor.subject,
@@ -281,7 +281,7 @@ class ArchitectureGovernanceService:
             if decision is ArchitectureReviewDecision.REQUEST_CHANGES
             else ArchitectureMetric.REVIEWS_COMPLETED
         )
-        self._audit(
+        await self._audit(
             artifact.project_id,
             "architecture.review.completed",
             actor.subject,
@@ -381,7 +381,7 @@ class ArchitectureGovernanceService:
             max_attempts=2,
         )
         record_metric(ArchitectureMetric.REVISIONS)
-        self._audit(
+        await self._audit(
             source.project_id,
             "architecture.revision.created",
             actor.subject,
@@ -451,7 +451,7 @@ class ArchitectureGovernanceService:
         artifact.status = ArchitectureArtifactStatus.APPROVED
         self.session.add(approval)
         record_metric(ArchitectureMetric.APPROVALS)
-        self._audit(
+        await self._audit(
             artifact.project_id,
             "architecture.approved",
             actor.subject,
@@ -502,16 +502,13 @@ class ArchitectureGovernanceService:
             raise ArchitectureNotFoundError("Architecture artifact not found")
         return row
 
-    def _audit(
+    async def _audit(
         self, project_id: uuid.UUID, event: str, actor: str, payload: dict[str, object]
     ) -> None:
-        self.session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project_id,
-                event_type=event,
-                actor_type="system" if actor == "system" else "human",
-                actor_id=actor,
-                payload=payload,
-            )
+        await AuditWriter(self.session).append_project_event(
+            project_id=project_id,
+            event_type=event,
+            actor_type="system" if actor == "system" else "human",
+            actor_id=actor,
+            payload=payload,
         )
