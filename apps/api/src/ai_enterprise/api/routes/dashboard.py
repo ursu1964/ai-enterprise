@@ -1863,6 +1863,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div class="span-12"><textarea id="factoryDescription" placeholder="Project manifesto summary"></textarea></div>
         </div>
         <div class="toolbar" style="margin-top: 10px;">
+          <button id="previewFactory">Preview Launch</button>
           <button id="startFactory">Start Process</button>
           <button id="startManifestBatch">Start Manifesto Batch</button>
           <button id="previewMockFactory">Preview Mock Factory</button>
@@ -2324,6 +2325,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       }];
       const edges = [];
       manager.projects.slice(0, 5).forEach((project, index) => {
+        const phaseDetail = project.phase_detail || {};
         const y = 42 + index * 74;
         const projectId = `project:${project.id}`;
         const workflowId = `workflow:${project.id}`;
@@ -2333,7 +2335,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           {
             id: projectId,
             label: project.name,
-            subtitle: `${project.phase} · ${project.tasks.active} active`,
+            subtitle: `${phaseDetail.label || project.phase} · ${phaseDetail.confidence || project.tasks.active + " active"}`,
             kind: "project",
             status: project.state,
             x: 218,
@@ -2342,7 +2344,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           },
           {
             id: workflowId,
-            label: project.phase,
+            label: phaseDetail.label || project.phase,
             subtitle: project.workflow ? humanStatus(project.workflow.state) : "Not started",
             kind: "workflow",
             status: project.workflow ? project.workflow.state : "not_started",
@@ -2382,6 +2384,39 @@ DASHBOARD_HTML = r"""<!doctype html>
       return { nodes, edges };
     }
 
+    function phaseIssueCount(project) {
+      const detail = project.phase_detail || {};
+      return (detail.current_issues || []).length;
+    }
+
+    function phaseHistoryCount(project) {
+      const detail = project.phase_detail || {};
+      return (detail.historical_issues || []).length;
+    }
+
+    function phaseEvidenceText(project) {
+      const evidence = project.phase_detail?.completed_evidence || [];
+      return evidence.length ? evidence.join(", ") : "No completed phase evidence yet.";
+    }
+
+    function renderPhaseDetailRows(project) {
+      const detail = project.phase_detail || {};
+      return `
+        <div class="list-item">
+          <div><div class="list-title">Phase confidence</div><div class="list-meta">${esc(detail.remaining_work || "Start or relink the workflow before treating this phase as live.")}</div></div>
+          <span class="pill ${statusClass(detail.confidence || "early estimate")}">${esc(humanStatus(detail.confidence || "early estimate"))}</span>
+        </div>
+        <div class="list-item">
+          <div><div class="list-title">Owner crew</div><div class="list-meta">${esc(phaseEvidenceText(project))}</div></div>
+          <span class="pill info">${esc(detail.owner_crew || "workflow engine")}</span>
+        </div>
+        <div class="list-item">
+          <div><div class="list-title">Issue split</div><div class="list-meta">${esc(phaseIssueCount(project))} current issue(s), ${esc(phaseHistoryCount(project))} reviewed history item(s).</div></div>
+          <span class="pill ${phaseIssueCount(project) ? "bad" : "ok"}">${esc(phaseIssueCount(project) ? "needs action" : "clear")}</span>
+        </div>
+      `;
+    }
+
     function renderExecutionInspector(node) {
       const project = node.project;
       if (!project) {
@@ -2401,6 +2436,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="muted">${esc(project.human_summary)}</div>
         <div class="signal">
           <div class="list-item"><div><div class="list-title">Where we are</div><div class="list-meta">${esc(project.phase)} · ${esc(project.next_action)}</div></div><span class="pill ${statusClass(project.state)}">${esc(humanStatus(project.state))}</span></div>
+          ${renderPhaseDetailRows(project)}
           <div class="list-item"><div><div class="list-title">Tasks</div><div class="list-meta">${esc(project.tasks.done)} done, ${esc(project.tasks.active)} active, ${esc(project.tasks.standby)} standby, ${esc(project.tasks.problems)} problem.</div></div><span class="pill info">${esc(project.tasks.total)} total</span></div>
           <div class="list-item"><div><div class="list-title">Crew</div><div class="list-meta">${esc(project.crews[0]?.assignment || "No active crew signal yet.")}</div></div><span class="pill ${project.crews.length ? "ok" : "info"}">${esc(project.crews.length)} signal(s)</span></div>
           <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(project.telemetry.job_signal_count)} job signal(s), ${esc(project.telemetry.event_count)} event(s), ${esc(project.telemetry.work_package_count)} work package(s).</div></div><span class="pill ${statusClass(project.telemetry.signal)}">${esc(humanStatus(project.telemetry.signal))}</span></div>
@@ -2454,8 +2490,12 @@ DASHBOARD_HTML = r"""<!doctype html>
       const projects = manager?.projects || [];
       byId("executionProjects").innerHTML = listbox(projects, project => `
         <button class="list-item execution-project-open" data-execution-node="project:${esc(project.id)}">
-          <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">${esc(project.human_summary)}</div></div>
-          <span class="pill ${statusClass(project.state)}">${esc(humanStatus(project.state))}</span>
+          <div>
+            <div class="list-title">${esc(project.name)}</div>
+            <div class="list-meta">${esc(project.human_summary)}</div>
+            <div class="list-meta">Phase: ${esc(project.phase_detail?.label || project.phase)} · confidence ${esc(project.phase_detail?.confidence || "early estimate")} · owner ${esc(project.phase_detail?.owner_crew || "workflow engine")}</div>
+          </div>
+          <span class="pill ${statusClass(project.phase_detail?.confidence || project.state)}">${esc(humanStatus(project.phase_detail?.confidence || project.state))}</span>
         </button>
       `, "No manifesto project is visible yet. Open Factory, attach a manifesto, and start a governed project.");
       document.querySelectorAll(".execution-project-open").forEach(item => {
@@ -2466,8 +2506,13 @@ DASHBOARD_HTML = r"""<!doctype html>
       });
       byId("executionTasks").innerHTML = listbox(projects, project => `
         <div class="list-item">
-          <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">Done ${esc(project.tasks.done)} · active ${esc(project.tasks.active)} · standby ${esc(project.tasks.standby)} · problems ${esc(project.tasks.problems)}</div><div class="list-meta">${esc(project.crews[0]?.name || "Crew waits for assigned work.")}</div></div>
-          <span class="pill info">${esc(project.tasks.total)} task(s)</span>
+          <div>
+            <div class="list-title">${esc(project.name)}</div>
+            <div class="list-meta">Done ${esc(project.tasks.done)} · active ${esc(project.tasks.active)} · standby ${esc(project.tasks.standby)} · problems ${esc(project.tasks.problems)}</div>
+            <div class="list-meta">Evidence: ${esc(phaseEvidenceText(project))}</div>
+            <div class="list-meta">Remaining: ${esc(project.phase_detail?.remaining_work || "Continue the guided workflow.")}</div>
+          </div>
+          <span class="pill ${phaseIssueCount(project) ? "bad" : "info"}">${esc(phaseIssueCount(project))} current</span>
         </div>
       `, "No tasks have been created yet. Start the workflow so crews can produce work signals.");
       const telemetryRows = projects.flatMap(project =>
@@ -2891,8 +2936,8 @@ DASHBOARD_HTML = r"""<!doctype html>
       return "The factory could not start this project. Check project details, manifesto format, and source freshness before retrying.";
     }
 
-    async function startFactoryProject() {
-      const projectInput = {
+    function currentFactoryProjectInput() {
+      return {
         name: byId("factoryName").value.trim(),
         description: byId("factoryDescription").value.trim(),
         repository_path: byId("factoryRepo").value.trim(),
@@ -2900,6 +2945,78 @@ DASHBOARD_HTML = r"""<!doctype html>
         default_branch: byId("factoryBranch").value.trim() || "main",
         manifest: loadedManifestDocument ? normalizeManifest(loadedManifestDocument) : {}
       };
+    }
+
+    function previewFactoryLaunch() {
+      const document = loadedManifestDocument;
+      if (document && Array.isArray(document.projects) && document.projects.length) {
+        const defaults = document.defaults || {};
+        const validations = document.projects.map(project => validateProjectInput({ ...defaults, ...project }));
+        const blocked = validations.filter(result => !result.ok);
+        const ready = validations.length - blocked.length;
+        byId("factoryStatus").textContent = blocked.length
+          ? `Preview found ${countSentence(blocked.length, "project")} that needs correction before batch launch.`
+          : `Preview ready: ${countSentence(ready, "project")} can start in parallel.`;
+        renderLaunchContract({
+          status: blocked.length ? "blocked" : "ready",
+          summary: blocked.length
+            ? "No records were created. The batch manifesto needs correction before launch."
+            : "No records were created. The batch manifesto is ready for supervised parallel launch.",
+          started: 0,
+          created: ready,
+          reused: 0,
+          blocked: blocked.length,
+          failed: 0,
+          recommendedName: ready ? (document.projects.find((_, index) => validations[index].ok)?.name || "First ready project") : "Fix manifesto first",
+          recommendedUrl: "/dashboard#factory",
+          nextAction: blocked.length
+            ? blocked[0].message
+            : "Press Start Manifesto Batch to create projects, formation packs, and workflows.",
+          proof: "Client-side preflight only. No database record, workflow, job, or artifact was created."
+        });
+        setOrientation(2, blocked.length ? "Preview found missing batch details. Correct them before launch." : "Preview is ready. Start the manifesto batch when you want the factory to create work.");
+        coach(
+          blocked.length ? "Batch Preview Needs Input" : "Batch Preview Ready",
+          blocked.length ? blocked[0].message : "The manifesto batch has enough information to create governed work.",
+          ["Continue in Factory", "factory"],
+          ["Open Execution", "execution"]
+        );
+        return;
+      }
+
+      const projectInput = currentFactoryProjectInput();
+      const validation = validateProjectInput(projectInput);
+      byId("factoryStatus").textContent = validation.ok
+        ? "Preview ready: the project can be created."
+        : validation.message;
+      renderLaunchContract({
+        status: validation.ok ? "ready" : "blocked",
+        summary: validation.ok
+          ? "No records were created. This project is ready for supervised launch."
+          : "No records were created. Missing launch details must be fixed first.",
+        started: 0,
+        created: validation.ok ? 1 : 0,
+        reused: 0,
+        blocked: validation.ok ? 0 : 1,
+        failed: 0,
+        recommendedName: projectInput.name || "Complete project name",
+        recommendedUrl: "/dashboard#factory",
+        nextAction: validation.ok
+          ? "Press Start Process to create the project, formation pack, and workflow."
+          : validation.message,
+        proof: "Client-side preflight only. No database record, workflow, job, or artifact was created."
+      });
+      setOrientation(2, validation.ok ? "Preview is ready. Start the process when you want the factory to create work." : "Preview found missing details. Complete the fields before starting.");
+      coach(
+        validation.ok ? "Launch Preview Ready" : "Launch Preview Needs Input",
+        validation.ok ? "The project has enough information to start governed factory work." : validation.message,
+        ["Continue in Factory", "factory"],
+        ["Open Execution", "execution"]
+      );
+    }
+
+    async function startFactoryProject() {
+      const projectInput = currentFactoryProjectInput();
       const validation = validateProjectInput(projectInput);
       if (!validation.ok) {
         byId("factoryStatus").textContent = validation.message;
@@ -3166,9 +3283,9 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function statusClass(status) {
       const value = String(status || "").toLowerCase();
-      if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated", "ready", "started"].includes(value)) return "ok";
-      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "observed", "needs_setup", "partial", "blocked"].includes(value)) return "warn";
-      if (["failed", "dead_letter", "abandoned", "offline", "attention_required"].includes(value)) return "bad";
+      if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated", "ready", "started", "live workflow", "evidence backed"].includes(value)) return "ok";
+      if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "early estimate", "observed", "needs_setup", "partial", "blocked"].includes(value)) return "warn";
+      if (["failed", "dead_letter", "abandoned", "offline", "attention_required", "needs review"].includes(value)) return "bad";
       return "info";
     }
 
@@ -3206,8 +3323,12 @@ DASHBOARD_HTML = r"""<!doctype html>
         deprecated: "Deprecated",
         improved: "Improved",
         early: "Early estimate",
+        "early estimate": "Early estimate",
         observed: "Observed estimate",
         calibrated: "Calibrated estimate",
+        "live workflow": "Live workflow",
+        "evidence backed": "Evidence backed",
+        "needs review": "Needs review",
         complete: "Complete",
         online: "Online",
         offline: "Offline",
@@ -3681,6 +3802,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         byId("factoryStatus").textContent = `Manifesto error: ${error.message}`;
       });
     });
+    byId("previewFactory").addEventListener("click", previewFactoryLaunch);
     byId("startFactory").addEventListener("click", () => {
       startFactoryProject().catch(error => {
         byId("factoryStatus").textContent = friendlyLaunchError(error);

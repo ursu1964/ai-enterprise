@@ -214,9 +214,10 @@ Direct dashboard panel links:
 - Telemetry and metrics: `http://localhost:8000/dashboard#metrics`
 - Documentation Hub: `http://localhost:8000/dashboard/documentation-hub`
 
-In Factory, use Launch Result as the operating checkpoint after preview or start. It explains
-status, created work, reused work, blocked work, the recommended first project, the next action, and
-the proof path.
+In Factory, press Preview Launch before Start Process when you want a no-risk check. Preview creates
+no records. It only explains whether the project or manifesto batch is ready and what is missing.
+After preview or start, use Launch Result as the operating checkpoint: it explains status, created
+work, reused work, blocked work, the recommended first project, the next action, and the proof path.
 
 It connects the local health check, operator jobs, worker instances, project list, runtime metrics,
 workflow lookup, project intelligence graph, and graph links into one browser interface.

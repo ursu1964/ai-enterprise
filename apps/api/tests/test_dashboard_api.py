@@ -145,6 +145,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Enterprise Movement Graph" in response.text
     assert "Operating Picture Signals" in response.text
     assert "Factory Creation Graph" in response.text
+    assert "Preview Launch" in response.text
+    assert "No records were created. This project is ready for supervised launch." in response.text
+    assert (
+        "Client-side preflight only. No database record, workflow, job, or artifact was created."
+        in response.text
+    )
     assert "Preview Mock Factory" in response.text
 
     assert "Launch Mock Factory Test" in response.text
@@ -219,6 +225,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Plan approved, execution not started" in response.text
     assert "Confidence:" in response.text
     assert "Owner:" in response.text
+    assert "Phase confidence" in response.text
+    assert "Owner crew" in response.text
+    assert "Issue split" in response.text
+    assert "Evidence:" in response.text
+    assert "Remaining:" in response.text
+    assert "Live workflow" in response.text
+    assert "Evidence backed" in response.text
+    assert "Needs review" in response.text
     assert "Completed Evidence" in response.text
     assert "Remaining Work" in response.text
     assert "Current Issues" in response.text
