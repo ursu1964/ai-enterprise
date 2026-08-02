@@ -1,11 +1,12 @@
 import uuid
 from datetime import UTC, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.api.architecture_schemas import FindingRequest
-from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.dependencies import Actor, require_capability
 from ai_enterprise.application.architecture_operations.observability import (
     ArchitectureMetric,
     record_metric,
@@ -48,10 +49,12 @@ class ArchitectureNotFoundError(ArchitectureGovernanceError):
 
 
 def _require(actor: Actor, role: str, capability: str, *, human: bool = True) -> None:
-    if actor.role != role or (actor.capabilities and capability not in actor.capabilities):
-        raise ArchitectureAuthorizationError(f"Missing capability: {capability}")
     if human and actor.actor_type != "human":
         raise ArchitectureAuthorizationError("A human principal is required")
+    try:
+        require_capability(actor, capability, "global")
+    except HTTPException as exc:
+        raise ArchitectureAuthorizationError(f"Missing capability: {capability}") from exc
 
 
 class ArchitectureGovernanceService:

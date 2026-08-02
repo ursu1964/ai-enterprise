@@ -84,6 +84,7 @@ def test_capability_and_human_authority_fail_closed() -> None:
         actor_type="agent",
         role="architecture_approver",
         capabilities=frozenset({"architecture.approve"}),
+        scopes=frozenset({"global"}),
         trusted=True,
     )
     with pytest.raises(ArchitectureGovernanceError, match="human"):
@@ -94,6 +95,35 @@ def test_capability_and_human_authority_fail_closed() -> None:
             "architecture_approver",
             "architecture.approve",
         )
+    with pytest.raises(ArchitectureGovernanceError, match="Missing capability"):
+        _require(
+            Actor("human-1", "human", "architecture_approver"),
+            "architecture_approver",
+            "architecture.approve",
+        )
+    with pytest.raises(ArchitectureGovernanceError, match="Missing capability"):
+        _require(
+            Actor(
+                "human-1",
+                "human",
+                "architecture_approver",
+                frozenset({"architecture.approve"}),
+                scopes=frozenset({"project:wrong"}),
+            ),
+            "architecture_approver",
+            "architecture.approve",
+        )
+    _require(
+        Actor(
+            "human-1",
+            "human",
+            "architecture_operator",
+            frozenset({"architecture.approve"}),
+            scopes=frozenset({"global"}),
+        ),
+        "architecture_approver",
+        "architecture.approve",
+    )
 
 
 def test_architecture_tables_are_bounded_and_registered() -> None:
