@@ -3,8 +3,10 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 
-from ai_enterprise.api.routes.operator_jobs import router
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.operator_jobs import _require_operator, router
 from ai_enterprise.application.operator_job_resolution import acknowledge_job, job_is_acknowledged
 from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.jobs.crash_safety import (
@@ -54,6 +56,40 @@ def test_operator_recovery_and_visibility_routes_are_registered() -> None:
     assert "/operator/jobs/by-id/{job_id}/acknowledge" in paths
     assert "/operator/jobs/by-id/{job_id}/attempts" in paths
     assert "/operator/jobs/worker-instances" in paths
+
+
+def test_operator_job_authority_requires_scoped_capability() -> None:
+    with pytest.raises(HTTPException, match="operator authority"):
+        _require_operator(
+            Actor(
+                "operator",
+                "service",
+                "operator",
+                frozenset({"operator.jobs.manage"}),
+                scopes=frozenset({"global"}),
+            )
+        )
+    with pytest.raises(HTTPException, match="operator authority"):
+        _require_operator(Actor("operator", "human", "operator"))
+    with pytest.raises(HTTPException, match="operator authority"):
+        _require_operator(
+            Actor(
+                "operator",
+                "human",
+                "operator",
+                frozenset({"operator.jobs.manage"}),
+                scopes=frozenset({"project:wrong"}),
+            )
+        )
+    _require_operator(
+        Actor(
+            "operator",
+            "human",
+            "operator",
+            frozenset({"operator.jobs.manage"}),
+            scopes=frozenset({"global"}),
+        )
+    )
 
 
 def test_acknowledged_dead_letter_keeps_evidence_but_marks_resolution() -> None:

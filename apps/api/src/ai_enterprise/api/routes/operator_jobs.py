@@ -5,7 +5,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, SettingsDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    SettingsDependency,
+    require_capability,
+)
 from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.operator_job_resolution import acknowledge_job, job_resolution
 from ai_enterprise.infrastructure.database.models import JobModel
@@ -21,15 +27,15 @@ class AcknowledgeJobRequest(BaseModel):
     action_taken: str = Field(min_length=5, max_length=1_000)
 
 
-def _require_operator(actor: ActorDependency) -> None:
-    if actor.actor_type != "human" or actor.role not in {
-        "operator",
-        "administrator",
-        "admin",
-        "platform-admin",
-        "platform_administrator",
-    }:
+def _require_operator(actor: Actor) -> None:
+    if actor.actor_type != "human":
         raise HTTPException(status_code=403, detail="Human operator authority is required")
+    try:
+        require_capability(actor, "operator.jobs.manage", "global")
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403, detail="Human operator authority is required"
+        ) from exc
 
 
 @router.post("/recover-expired")
