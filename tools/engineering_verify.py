@@ -607,6 +607,9 @@ def verify(root: Path) -> VerificationReport:
 
 
 def _run_full_gates(root: Path) -> int:
+    def annotation_text(value: str) -> str:
+        return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
     commands = (
         (
             root / "apps" / "api",
@@ -638,10 +641,24 @@ def _run_full_gates(root: Path) -> int:
     )
     for cwd, command in commands:
         print(f"running full gate: {' '.join(command)} [cwd={cwd.relative_to(root)}]")
-        if subprocess.run(command, cwd=cwd, check=False).returncode != 0:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if result.stdout:
+            print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+        if result.returncode != 0:
+            detail = result.stdout[-1800:] if result.stdout else "no command output"
             print(
                 "::error file=tools/engineering_verify.py::"
-                f"full gate failed: {' '.join(command)} [cwd={cwd.relative_to(root)}]"
+                + annotation_text(
+                    f"full gate failed: {' '.join(command)} "
+                    f"[cwd={cwd.relative_to(root)}]\n{detail}"
+                )
             )
             return 1
     return 0
