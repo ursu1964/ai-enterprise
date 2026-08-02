@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.config import Settings
 from ai_enterprise.domain.enums import (
     ApprovalDecision,
@@ -33,7 +34,6 @@ from ai_enterprise.domain.hashing import hash_json, hash_text
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
-    AuditEventModel,
     ExecutionEventModel,
     ExecutionRunModel,
     ExecutionTestResultModel,
@@ -168,21 +168,18 @@ class ExecutionApplicationService:
             max_attempts=1,
         )
 
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type="execution.requested",
-                actor_type="human",
-                actor_id=actor_id,
-                payload={
-                    "execution_id": str(run_id),
-                    "work_package_id": str(work_package.id),
-                    "contract_hash": work_package.contract_hash,
-                    "base_commit_sha": work_package.base_commit_sha,
-                    "job_id": str(job.id),
-                },
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type="execution.requested",
+            actor_type="human",
+            actor_id=actor_id,
+            payload={
+                "execution_id": str(run_id),
+                "work_package_id": str(work_package.id),
+                "contract_hash": work_package.contract_hash,
+                "base_commit_sha": work_package.base_commit_sha,
+                "job_id": str(job.id),
+            },
         )
 
         await self._session.commit()
@@ -360,7 +357,7 @@ class ExecutionApplicationService:
                 )
                 run.failure_message = "Implementation or one or more required tests failed"
                 run.finished_at = datetime.now(UTC)
-                self._add_terminal_events(
+                await self._add_terminal_events(
                     run=run,
                     project=project,
                     work_package=work_package,
@@ -450,20 +447,17 @@ class ExecutionApplicationService:
 
             run.finished_at = datetime.now(UTC)
 
-            self._session.add(
-                AuditEventModel(
-                    id=uuid.uuid4(),
-                    project_id=project.id,
-                    event_type=event_type,
-                    actor_type="system",
-                    actor_id="execution-worker",
-                    payload={
-                        "execution_id": str(run.id),
-                        "work_package_id": str(work_package.id),
-                        "patch_sha256": patch.sha256,
-                        "test_summary": self._test_summary(result),
-                    },
-                )
+            await self._append_audit_event(
+                project_id=project.id,
+                event_type=event_type,
+                actor_type="system",
+                actor_id="execution-worker",
+                payload={
+                    "execution_id": str(run.id),
+                    "work_package_id": str(work_package.id),
+                    "patch_sha256": patch.sha256,
+                    "test_summary": self._test_summary(result),
+                },
             )
 
             self._session.add(
@@ -519,19 +513,16 @@ class ExecutionApplicationService:
                 )
 
                 if failed_project is not None:
-                    self._session.add(
-                        AuditEventModel(
-                            id=uuid.uuid4(),
-                            project_id=failed_project.id,
-                            event_type="execution.failed",
-                            actor_type="system",
-                            actor_id="execution-worker",
-                            payload={
-                                "execution_id": str(run.id),
-                                "failure_code": run.failure_code,
-                                "error": str(exc),
-                            },
-                        )
+                    await self._append_audit_event(
+                        project_id=failed_project.id,
+                        event_type="execution.failed",
+                        actor_type="system",
+                        actor_id="execution-worker",
+                        payload={
+                            "execution_id": str(run.id),
+                            "failure_code": run.failure_code,
+                            "error": str(exc),
+                        },
                     )
 
                 await self._session.commit()
@@ -663,7 +654,7 @@ class ExecutionApplicationService:
         if work_package.contract.get("network", {}).get("policy") != "none":
             raise ApprovalInvalidError("Execution network must be disabled")
 
-    def _add_terminal_events(
+    async def _add_terminal_events(
         self,
         *,
         run: ExecutionRunModel,
@@ -678,15 +669,12 @@ class ExecutionApplicationService:
             "failure_code": run.failure_code,
             "test_summary": test_summary,
         }
-        self._session.add(
-            AuditEventModel(
-                id=uuid.uuid4(),
-                project_id=project.id,
-                event_type=event_type,
-                actor_type="system",
-                actor_id="execution-worker",
-                payload=payload,
-            )
+        await self._append_audit_event(
+            project_id=project.id,
+            event_type=event_type,
+            actor_type="system",
+            actor_id="execution-worker",
+            payload=payload,
         )
         self._session.add(
             ExecutionEventModel(
@@ -698,6 +686,23 @@ class ExecutionApplicationService:
                     "failure_code": run.failure_code,
                 },
             )
+        )
+
+    async def _append_audit_event(
+        self,
+        *,
+        project_id: uuid.UUID,
+        event_type: str,
+        actor_type: str,
+        actor_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        await AuditWriter(self._session).append_project_event(
+            project_id=project_id,
+            event_type=event_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
         )
 
     def _build_runtime_input(
