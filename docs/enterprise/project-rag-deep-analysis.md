@@ -654,6 +654,7 @@ c20ae59 feat(aios): make connected preflight runtime aware
 e7c8bf8 feat(aios): report github credential source
 dde8f90 feat(aios): add github auth status command
 1fa8574 chore(aios): add connected proof make targets
+4fc2361 chore(aios): run all connected readiness checks
 ```
 
 The root `ProjectRAG Deep Analysis.md` copy was preserved inside ProjectRAG at:
@@ -728,6 +729,7 @@ Supported sources are environment variables, `gh auth login`, and the Git creden
 Current machine state: `gh` is installed, but `gh auth status` reports no logged-in GitHub host.
 Operator command: `python -m apps.cli.main ax-github-auth --format json --strict`.
 Make targets: `make github-auth`, `make connected-preflight`, and `make connected-readiness`.
+`make connected-readiness` always runs both auth status and connected preflight, then fails if either check fails.
 ```
 
 Runtime-state handling update:
@@ -760,6 +762,7 @@ OPENAI_API_KEY= python -m pytest -q tests/unit/test_aios_execution_github_auth_c
 python -m apps.cli.main ax-github-auth --format json --strict
 make github-auth
 make connected-preflight
+make connected-readiness
 make secret-scan-release
 python -m ruff check scripts/scan_secrets.py tests/unit/test_scan_secrets.py
 python -m pytest -q tests/unit/test_scan_secrets.py
@@ -777,6 +780,7 @@ github-auth command tests: 23 passed
 github-auth command: gh_cli=available, gh_logged_in=false, token_source=missing
 make github-auth: reports missing token
 make connected-preflight: all checks pass except missing token
+make connected-readiness: runs both checks; source clean; fails only on missing token
 secret-scan-release: gitleaks-ok; 29 baseline findings suppressed; secret-scan-ok
 scanner tests: 7 passed
 ```
