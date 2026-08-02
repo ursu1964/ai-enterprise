@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.resilience_schemas import (
     BackupManifestRequest,
     ContinuityActivationRequest,
@@ -49,10 +54,19 @@ router = APIRouter(prefix="/resilience", tags=["enterprise-resilience"])
 
 
 def _human(actor: Actor, roles: set[str]) -> None:
-    if actor.actor_type != "human" or actor.role not in roles:
+    if actor.actor_type != "human":
         raise HTTPException(
             status_code=403, detail="Required human resilience authority is missing"
         )
+    for role in roles:
+        try:
+            require_capability(actor, f"resilience.{role}", "global")
+            return
+        except HTTPException:
+            continue
+    raise HTTPException(
+        status_code=403, detail="Required human resilience authority is missing"
+    )
 
 
 async def _authorize(

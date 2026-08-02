@@ -34,11 +34,42 @@ async def test_resilience_mutation_requires_actor_headers() -> None:
 
 def test_resilience_authority_is_human_and_role_scoped() -> None:
     with pytest.raises(HTTPException) as agent_denied:
-        _human(Actor("agent-1", "agent", "resilience_admin"), {"resilience_admin"})
+        _human(
+            Actor(
+                "agent-1",
+                "agent",
+                "resilience_admin",
+                frozenset({"resilience.resilience_admin"}),
+                scopes=frozenset({"global"}),
+            ),
+            {"resilience_admin"},
+        )
     assert agent_denied.value.status_code == 403
     with pytest.raises(HTTPException):
         _human(Actor("human-1", "human", "developer"), {"resilience_admin"})
-    _human(Actor("human-1", "human", "resilience_admin"), {"resilience_admin"})
+    with pytest.raises(HTTPException):
+        _human(Actor("human-1", "human", "resilience_admin"), {"resilience_admin"})
+    with pytest.raises(HTTPException):
+        _human(
+            Actor(
+                "human-1",
+                "human",
+                "resilience_admin",
+                frozenset({"resilience.resilience_admin"}),
+                scopes=frozenset({"organization:wrong"}),
+            ),
+            {"resilience_admin"},
+        )
+    _human(
+        Actor(
+            "human-1",
+            "human",
+            "developer",
+            frozenset({"resilience.resilience_admin"}),
+            scopes=frozenset({"global"}),
+        ),
+        {"resilience_admin"},
+    )
 
 
 def test_resilience_models_are_registered_in_shared_metadata() -> None:
