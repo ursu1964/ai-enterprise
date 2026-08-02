@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -817,6 +817,7 @@ async def dashboard_manager(
                 endpoint="/api/v1/projects",
                 record_count=len(projects),
                 latest_at=_latest_time(projects, "updated_at"),
+                stale_after=timedelta(hours=24),
                 empty_reason="No manifesto project has been created yet.",
                 operator_action="Open Factory and create or ingest a manifesto project.",
             ),
@@ -825,6 +826,7 @@ async def dashboard_manager(
                 endpoint="/api/v1/workflows",
                 record_count=len(workflows),
                 latest_at=_latest_time(workflows, "updated_at"),
+                stale_after=timedelta(hours=2),
                 empty_reason="Projects exist without durable workflow records.",
                 operator_action="Start or relink workflows before presenting execution proof.",
             ),
@@ -833,6 +835,7 @@ async def dashboard_manager(
                 endpoint="/api/v1/operator/jobs",
                 record_count=len(jobs),
                 latest_at=_latest_time(jobs, "created_at"),
+                stale_after=timedelta(minutes=30),
                 empty_reason="No worker jobs have been queued or executed for these projects.",
                 operator_action="Start workflow execution to create job evidence.",
             ),
@@ -841,6 +844,7 @@ async def dashboard_manager(
                 endpoint="/api/v1/operator/jobs/worker-instances",
                 record_count=len(workers),
                 latest_at=_latest_time(workers, "last_heartbeat_at"),
+                stale_after=timedelta(minutes=5),
                 empty_reason="No worker heartbeat is visible.",
                 operator_action="Start worker services before scaling parallel work.",
             ),
@@ -850,6 +854,7 @@ async def dashboard_manager(
                 record_count=len(metrics) + len(audits),
                 latest_at=_latest_time(metrics, "calculated_at")
                 or _latest_time(audits, "created_at"),
+                stale_after=timedelta(minutes=15),
                 empty_reason="No governed metrics or audit events are visible for this view.",
                 operator_action="Run work and collect audit or performance evidence.",
             ),
@@ -858,6 +863,7 @@ async def dashboard_manager(
                 endpoint="/api/v1/query/dashboard-manager",
                 record_count=len(summaries),
                 latest_at=datetime.now(UTC) if summaries else None,
+                stale_after=timedelta(minutes=5),
                 empty_reason=(
                     "The graph has no project nodes because no project records are visible."
                 ),

@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -310,6 +310,32 @@ async def test_dashboard_manager_explains_empty_source_sections() -> None:
     assert response["sections"]["workers"]["operator_action"] == (
         "Start worker services before scaling parallel work."
     )
+
+
+@pytest.mark.asyncio
+async def test_dashboard_manager_marks_stale_source_sections() -> None:
+    now = datetime.now(UTC)
+    row = project(now)
+    stale_worker = worker(now)
+    stale_worker.last_heartbeat_at = now - timedelta(minutes=10)
+    rows = [
+        [row],
+        [],
+        [],
+        [],
+        [],
+        [stale_worker],
+        [],
+        [],
+    ]
+
+    response = await dashboard_manager(QuerySession(rows), actor())  # type: ignore[arg-type]
+
+    assert response["sections"]["workers"]["state"] == "stale"
+    assert response["sections"]["workers"]["freshness"] == "stale"
+    assert response["sections"]["workers"]["meaning"]["label"] == "Stale"
+    assert response["sections"]["workers"]["stale_after_seconds"] == 300
+    assert response["sections"]["workers"]["freshness_age_seconds"] >= 600
 
 
 @pytest.mark.asyncio

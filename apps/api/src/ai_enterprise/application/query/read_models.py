@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -298,6 +298,12 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "The source is reachable but has no records for this section.",
         "Create or link records before expecting this section to show data.",
     ),
+    "available": Meaning(
+        "Available",
+        "ok",
+        "The source is reachable and has records for this section.",
+        "Use this section for the current operating picture.",
+    ),
     "intake": Meaning(
         "Intake needed",
         "info",
@@ -493,25 +499,59 @@ def source_contract(
     record_count: int,
     latest_at: datetime | None = None,
     available: bool = True,
+    stale_after: timedelta | None = None,
     empty_reason: str | None = None,
     operator_action: str | None = None,
 ) -> dict[str, Any]:
-    state = "available" if available and record_count else "empty" if available else "unavailable"
+    generated_at = datetime.now(UTC)
+    age_seconds: float | None = None
+    if latest_at is not None:
+        age_seconds = max(0.0, (generated_at - latest_at).total_seconds())
+    is_stale = (
+        available
+        and record_count > 0
+        and latest_at is not None
+        and stale_after is not None
+        and generated_at - latest_at > stale_after
+    )
+    if not available:
+        state = "unavailable"
+    elif record_count == 0:
+        state = "empty"
+    elif is_stale:
+        state = "stale"
+    else:
+        state = "available"
+    freshness = (
+        "unavailable"
+        if not available
+        else "not_observed"
+        if latest_at is None
+        else "stale"
+        if is_stale
+        else "fresh"
+    )
     return {
         "source": name,
         "endpoint": endpoint,
         "available": available,
         "state": state,
-        "freshness": "fresh" if latest_at else "not_observed",
+        "freshness": freshness,
         "last_updated": latest_at,
+        "freshness_age_seconds": age_seconds,
+        "stale_after_seconds": (
+            None if stale_after is None else int(stale_after.total_seconds())
+        ),
         "record_count": record_count,
-        "empty_reason": empty_reason if record_count == 0 else None,
+        "empty_reason": empty_reason if available and record_count == 0 else None,
         "operator_action": operator_action
         or (
             "No records exist yet; create or link records for this section."
             if record_count == 0
+            else "Refresh this source before making delivery decisions."
+            if is_stale
             else "Use this section for the current operating picture."
         ),
         "meaning": meaning_for(state),
-        "generated_at": datetime.now(UTC),
+        "generated_at": generated_at,
     }

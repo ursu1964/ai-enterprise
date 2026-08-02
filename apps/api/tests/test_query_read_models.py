@@ -1,4 +1,10 @@
-from ai_enterprise.application.query.read_models import meaning_for, status_read_model
+from datetime import UTC, datetime, timedelta
+
+from ai_enterprise.application.query.read_models import (
+    meaning_for,
+    source_contract,
+    status_read_model,
+)
 from ai_enterprise.domain.workflow.enums import WorkflowState
 
 
@@ -15,6 +21,54 @@ def test_runtime_statuses_have_friendly_read_models() -> None:
     assert status_read_model("draft")["status_label"] == "Draft"
     assert status_read_model("registered")["status_label"] == "Registered"
     assert status_read_model("validation_failed")["status_label"] == "Validation failed"
+
+
+def test_source_contract_reports_fresh_stale_empty_and_unavailable_states() -> None:
+    now = datetime.now(UTC)
+
+    fresh = source_contract(
+        name="Jobs",
+        endpoint="/api/v1/operator/jobs",
+        record_count=2,
+        latest_at=now - timedelta(seconds=30),
+        stale_after=timedelta(minutes=5),
+    )
+    stale = source_contract(
+        name="Workers",
+        endpoint="/api/v1/operator/jobs/worker-instances",
+        record_count=1,
+        latest_at=now - timedelta(minutes=10),
+        stale_after=timedelta(minutes=5),
+    )
+    empty = source_contract(
+        name="Projects",
+        endpoint="/api/v1/projects",
+        record_count=0,
+        empty_reason="No projects exist yet.",
+    )
+    unavailable = source_contract(
+        name="Telemetry",
+        endpoint="/dashboard/telemetry-summary",
+        record_count=0,
+        available=False,
+    )
+
+    assert fresh["state"] == "available"
+    assert fresh["freshness"] == "fresh"
+    assert fresh["meaning"]["label"] == "Available"
+    assert fresh["freshness_age_seconds"] is not None
+    assert fresh["stale_after_seconds"] == 300
+    assert stale["state"] == "stale"
+    assert stale["freshness"] == "stale"
+    assert stale["meaning"]["label"] == "Stale"
+    assert stale["operator_action"] == (
+        "Refresh this source before making delivery decisions."
+    )
+    assert empty["state"] == "empty"
+    assert empty["empty_reason"] == "No projects exist yet."
+    assert unavailable["state"] == "unavailable"
+    assert unavailable["freshness"] == "unavailable"
+    assert unavailable["empty_reason"] is None
 
 
 def test_factory_recovery_knowledge_and_evolution_states_have_friendly_meaning() -> None:
