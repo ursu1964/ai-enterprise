@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
-from ai_enterprise.api.routes.specifications import router
+from ai_enterprise.api.dependencies import Actor
+from ai_enterprise.api.routes.specifications import _authority, router
 from ai_enterprise.application.specification_platform_service import (
     SpecificationGenerationWorker,
     SpecificationPlatformError,
@@ -78,6 +80,30 @@ def specification(
         created_by="engineer",
         created_at=datetime.now(UTC),
     )
+
+
+def test_specification_authority_requires_scoped_capability() -> None:
+    organization_id = uuid.uuid4()
+    with pytest.raises(HTTPException, match="specification authority"):
+        _authority(Actor("admin", "human", "platform-admin"), organization_id, "read")
+    scoped = Actor(
+        "engineer",
+        "human",
+        "engineer",
+        frozenset({"specification.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+    _authority(scoped, organization_id, "read")
+    global_scoped = Actor(
+        "engineer",
+        "human",
+        "engineer",
+        frozenset({"specification.read"}),
+        scopes=frozenset({"global"}),
+    )
+    _authority(global_scoped, organization_id, "read")
+    with pytest.raises(HTTPException, match="specification authority"):
+        _authority(scoped, uuid.uuid4(), "read")
 
 
 def test_schema_api_migration_and_append_only_evidence_graph_are_complete() -> None:

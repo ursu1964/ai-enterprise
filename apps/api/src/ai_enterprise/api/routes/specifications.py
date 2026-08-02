@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import or_, select
 
-from ai_enterprise.api.dependencies import Actor, ActorDependency, SessionDependency
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.api.specification_schemas import (
     DecisionRequest,
     DriftRunRequest,
@@ -31,7 +36,6 @@ from ai_enterprise.infrastructure.specification.models import (
 )
 
 router = APIRouter(prefix="/specifications", tags=["specification-engineering"])
-ADMINS = {"platform-admin", "platform_administrator"}
 
 
 def _error(exc: SpecificationPlatformError) -> HTTPException:
@@ -39,10 +43,12 @@ def _error(exc: SpecificationPlatformError) -> HTTPException:
 
 
 def _authority(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
-    if actor.role in ADMINS:
-        return
-    if f"specification.{action}:{organization_id}" not in actor.capabilities:
-        raise HTTPException(403, "Organization-scoped specification authority required")
+    try:
+        require_capability(actor, f"specification.{action}", f"organization:{organization_id}")
+    except HTTPException as exc:
+        raise HTTPException(
+            403, "Organization-scoped specification authority required"
+        ) from exc
 
 
 def _human(actor: Actor) -> None:
