@@ -15,3 +15,41 @@ def test_runtime_statuses_have_friendly_read_models() -> None:
     assert status_read_model("draft")["status_label"] == "Draft"
     assert status_read_model("registered")["status_label"] == "Registered"
     assert status_read_model("validation_failed")["status_label"] == "Validation failed"
+
+
+def test_factory_recovery_knowledge_and_evolution_states_have_friendly_meaning() -> None:
+    states = {
+        "intake",
+        "ready",
+        "blocked",
+        "partial",
+        "ready_for_approval",
+        "draft_needs_clarification",
+        "proposed",
+        "promoted",
+        "rejected",
+        "pending_human_review",
+        "revertible",
+        "consumed",
+        "expired",
+        "timed_out",
+        "passed",
+        "tested",
+        "closed",
+        "denied",
+        "analyzed",
+        "simulated",
+        "reviewed",
+        "superseded",
+        "stale",
+        "disputed",
+        "verified",
+        "unsupported",
+    }
+
+    for state in states:
+        meaning = meaning_for(state)
+
+        assert meaning["label"] != state
+        assert "no specialized explanation" not in meaning["meaning"]
+        assert meaning["operator_action"]
