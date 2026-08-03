@@ -195,10 +195,19 @@ class MockEnterpriseAutonomyService:
                 reused_count=len(would_reuse),
                 blocked_count=len(would_block),
                 failed_count=0,
+                review_needed_count=len(would_block),
                 workflows_started_count=0,
                 workflows_waiting_count=0,
+                recommended_first_project_id=(
+                    recommended.existing_project_id if recommended is not None else None
+                ),
                 recommended_first_project_name=(
                     recommended.name if recommended is not None else None
+                ),
+                recommended_first_project_url=(
+                    recommended.dashboard_url
+                    if recommended is not None and recommended.dashboard_url is not None
+                    else ("/dashboard#factory" if recommended is not None else None)
                 ),
                 operator_action=(
                     "Start the mock factory to create or reuse the ready portfolio projects."
@@ -239,6 +248,7 @@ class MockEnterpriseAutonomyService:
             try:
                 project = await self._existing_project(spec)
                 project_record = "created"
+                existing_workflow = None
                 if project is None:
                     project = await self._create_project(spec, actor_id=actor_id)
                 else:
@@ -268,6 +278,13 @@ class MockEnterpriseAutonomyService:
                     workflows_waiting.append(workflow.id)
                     await WorkflowService(self._session).notify(project.id)
                 await self._continue_autonomy(project, actor_id=actor_id)
+                result_category = project_record
+                if project_record == "reused":
+                    result_category = (
+                        "reused_workflow_waiting"
+                        if existing_workflow is not None
+                        else "reused_workflow_started"
+                    )
 
                 project_response = MockFactoryProjectResponse(
                     project_id=project.id,
@@ -275,6 +292,7 @@ class MockEnterpriseAutonomyService:
                     name=project.name,
                     project_type=spec.project_type,
                     repository_path=project.repository_path,
+                    result_category=result_category,
                     project_record=project_record,
                     formation_pack=formation_pack,
                     workflow=workflow_state,
@@ -312,10 +330,17 @@ class MockEnterpriseAutonomyService:
                 reused_count=len(reused),
                 blocked_count=len(blocked),
                 failed_count=len(failed),
+                review_needed_count=len(blocked) + len(failed),
                 workflows_started_count=len(workflows_started),
                 workflows_waiting_count=len(workflows_waiting),
+                recommended_first_project_id=(
+                    recommended.project_id if recommended is not None else None
+                ),
                 recommended_first_project_name=(
                     recommended.name if recommended is not None else None
+                ),
+                recommended_first_project_url=(
+                    recommended.dashboard_url if recommended is not None else None
                 ),
                 operator_action=next_action,
             ),

@@ -6,6 +6,8 @@ from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, S
 from ai_enterprise.api.project_formation_schemas import (
     FormationRequest,
     FormationResponse,
+    FoundryWorkspaceRequest,
+    FoundryWorkspaceResponse,
     MockFactoryPreviewResponse,
     MockFactoryStartResponse,
 )
@@ -13,6 +15,10 @@ from ai_enterprise.application.mock_factory_autonomy import MockEnterpriseAutono
 from ai_enterprise.application.project_formation_service import (
     ProjectFormationError,
     ProjectFormationService,
+)
+from ai_enterprise.application.project_foundry_workspace import (
+    ProjectFoundryWorkspaceError,
+    ProjectFoundryWorkspaceService,
 )
 
 router = APIRouter(prefix="/project-formation", tags=["project-formation"])
@@ -76,3 +82,39 @@ async def create_project_formation_pack(
         )
     except ProjectFormationError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@router.post(
+    "/projects/{project_id}/foundry-workspace",
+    response_model=FoundryWorkspaceResponse,
+    status_code=201,
+)
+async def create_project_foundry_workspace(
+    project_id: uuid.UUID,
+    request: FoundryWorkspaceRequest,
+    session: SessionDependency,
+    settings: SettingsDependency,
+    actor: ActorDependency,
+) -> FoundryWorkspaceResponse:
+    _require_human(actor)
+    try:
+        return await ProjectFoundryWorkspaceService(session, settings).generate_workspace(
+            project_id,
+            request,
+            actor_id=actor.subject,
+        )
+    except ProjectFoundryWorkspaceError as exc:
+        status_code = 422 if exc.missing_information else 404
+        raise HTTPException(
+            status_code,
+            {
+                "message": str(exc),
+                "missing_information": exc.missing_information,
+                "next_action": (
+                    "Complete the missing Foundry intake sections, then generate the workspace "
+                    "again."
+                    if exc.missing_information
+                    else "Confirm the project exists and retry workspace generation."
+                ),
+            },
+        ) from exc

@@ -32,6 +32,12 @@ def test_project_foundry_core_artifacts_exist() -> None:
     assert missing == []
 
 
+def test_api_image_packages_project_foundry_templates() -> None:
+    dockerfile = (ROOT / "apps/api/Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY templates/project-foundry /app/templates/project-foundry" in dockerfile
+
+
 def test_aeos_master_spec_defines_platform_and_instance_boundary() -> None:
     text = (ROOT / "docs/aeos/README.md").read_text(encoding="utf-8")
 

@@ -238,6 +238,24 @@ When a loaded manifesto is incomplete, the preview explains the missing project 
 directory, or GitHub connection in operator language before launch.
 After preview or start, use Launch Result as the operating checkpoint: it explains status, created
 work, reused work, blocked work, the recommended first project, the next action, and the proof path.
+
+Project Foundry runtime workspace generation is available after a project exists:
+
+```bash
+rtk curl -s -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'X-Actor-ID: local-dashboard-admin' \
+  -H 'X-Actor-Type: human' \
+  -H 'X-Actor-Role: platform-admin' \
+  http://localhost:8000/api/v1/project-formation/projects/PROJECT_ID/foundry-workspace \
+  --data @project-intake.json
+```
+
+`project-intake.json` must contain `intake`, optional `workspace_path`, optional
+`github_repository_url`, and optional `overwrite_existing`. The runtime checks the AEOS intake
+sections, creates the Project Foundry repository files under `REPOSITORY_ALLOWED_ROOT`, links the
+project to the generated workspace, and reports created or reused files. If intake is incomplete, it
+returns the missing sections in human correction language.
 For manifesto batches, read Project Readiness inside Launch Result. It lists every project, whether
 it is ready, blocked, reused, or started, and what to do next.
 

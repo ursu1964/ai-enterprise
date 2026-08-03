@@ -33,6 +33,7 @@ COPY docker/observability /app/docker/observability
 COPY docker/reverse-proxy /app/docker/reverse-proxy
 COPY deploy/systemd /app/deploy/systemd
 COPY deploy/kubernetes /app/deploy/kubernetes
+COPY templates/project-foundry /app/templates/project-foundry
 COPY docs/enterprise/deployment-blueprint-module.md /app/docs/enterprise/deployment-blueprint-module.md
 COPY docs/enterprise/real-world-infrastructure-decisions.template.json /app/docs/enterprise/real-world-infrastructure-decisions.template.json
 COPY docs/enterprise/operator-startup-guide.md /app/docs/enterprise/operator-startup-guide.md

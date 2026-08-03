@@ -193,6 +193,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "launchContractFromFactoryResult" in response.text
     assert "launch_plan" in response.text
     assert "launch_result" in response.text
+    assert "review_needed_count" in response.text
+    assert "workflows_started_count" in response.text
+    assert "workflows_waiting_count" in response.text
+    assert "Workflows Started" in response.text
+    assert "Workflows Waiting" in response.text
+    assert "recommended_first_project_id" in response.text
+    assert "recommended_first_project_url" in response.text
+    assert "result_category" in response.text
     assert "Preview contract, launch plan summary" in response.text
     assert "Launch result summary" in response.text
 

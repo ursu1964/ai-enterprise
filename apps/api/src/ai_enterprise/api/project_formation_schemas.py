@@ -36,12 +36,33 @@ class FormationResponse(BaseModel):
     traceability: dict[str, Any]
 
 
+class FoundryWorkspaceRequest(BaseModel):
+    intake: dict[str, Any] = Field(default_factory=dict)
+    workspace_path: str | None = Field(default=None, max_length=2000)
+    github_repository_url: str | None = Field(default=None, max_length=2000)
+    overwrite_existing: bool = False
+
+
+class FoundryWorkspaceResponse(BaseModel):
+    project_id: uuid.UUID
+    status: str
+    workspace_path: str
+    github_repository_url: str | None
+    created_files: list[str]
+    reused_files: list[str]
+    created_directories: list[str]
+    missing_information: list[str]
+    next_action: str
+    proof: dict[str, Any]
+
+
 class MockFactoryProjectResponse(BaseModel):
     project_id: uuid.UUID
     workflow_id: uuid.UUID
     name: str
     project_type: str
     repository_path: str
+    result_category: str
     project_record: str
     formation_pack: str
     workflow: str
@@ -77,9 +98,12 @@ class MockFactoryLaunchSummaryResponse(BaseModel):
     reused_count: int = 0
     blocked_count: int = 0
     failed_count: int = 0
+    review_needed_count: int = 0
     workflows_started_count: int = 0
     workflows_waiting_count: int = 0
+    recommended_first_project_id: uuid.UUID | None = None
     recommended_first_project_name: str | None = None
+    recommended_first_project_url: str | None = None
     operator_action: str
 
 

@@ -3271,7 +3271,9 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div class="launch-contract-cell"><span>Started</span><strong>${esc(contract.started ?? 0)}</strong></div>
           <div class="launch-contract-cell"><span>Created</span><strong>${esc(contract.created ?? 0)}</strong></div>
           <div class="launch-contract-cell"><span>Reused</span><strong>${esc(contract.reused ?? 0)}</strong></div>
-          <div class="launch-contract-cell"><span>Needs Action</span><strong>${esc((contract.blocked ?? 0) + (contract.failed ?? 0))}</strong></div>
+          <div class="launch-contract-cell"><span>Workflows Started</span><strong>${esc(contract.workflowsStarted ?? 0)}</strong></div>
+          <div class="launch-contract-cell"><span>Workflows Waiting</span><strong>${esc(contract.workflowsWaiting ?? 0)}</strong></div>
+          <div class="launch-contract-cell"><span>Needs Action</span><strong>${esc(contract.reviewNeeded ?? ((contract.blocked ?? 0) + (contract.failed ?? 0)))}</strong></div>
           <div class="launch-contract-cell"><span>Inspect First</span><strong>${esc(contract.recommendedName || "Execution graph")}</strong></div>
         </div>
         <div class="human-copy">
@@ -3357,6 +3359,9 @@ DASHBOARD_HTML = r"""<!doctype html>
     function launchContractFromFactoryResult(result, mode) {
       const summary = mode === "preview" ? result.launch_plan || {} : result.launch_result || {};
       const recommended = result.recommended_first_project || {};
+      const recommendedUrl = summary.recommended_first_project_url
+        || recommended.dashboard_url
+        || "/dashboard#factory";
       const created = summary.created_count
         ?? result.created_count
         ?? result.would_create_count
@@ -3364,6 +3369,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       const reused = summary.reused_count ?? result.would_reuse_count ?? result.reused_count ?? 0;
       const blocked = summary.blocked_count ?? result.would_block_count ?? result.blocked_count ?? 0;
       const failed = summary.failed_count ?? result.failed_count ?? 0;
+      const reviewNeeded = summary.review_needed_count ?? (blocked + failed);
       const started = mode === "preview" ? 0 : result.started_count ?? (created + reused);
       return {
         status: result.status,
@@ -3373,8 +3379,12 @@ DASHBOARD_HTML = r"""<!doctype html>
         reused,
         blocked,
         failed,
-        recommendedName: recommended.name || summary.recommended_first_project_name || (mode === "preview" ? "No ready project yet" : "No project ready yet"),
-        recommendedUrl: recommended.dashboard_url || "/dashboard#factory",
+        reviewNeeded,
+        workflowsStarted: summary.workflows_started_count ?? result.workflows_started?.length ?? 0,
+        workflowsWaiting: summary.workflows_waiting_count ?? result.workflows_waiting?.length ?? 0,
+        recommendedId: summary.recommended_first_project_id || recommended.project_id || recommended.existing_project_id || null,
+        recommendedName: summary.recommended_first_project_name || recommended.name || (mode === "preview" ? "No ready project yet" : "No project ready yet"),
+        recommendedUrl,
         nextAction: summary.operator_action || result.next_action || (
           blocked || failed
             ? "Correct blocked launch information before starting the mock factory."
@@ -3426,7 +3436,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         ...contract,
         items: (result.projects || []).map(project => ({
           name: project.name,
-          status: project.workflow || project.project_record || "started",
+          status: project.result_category || project.workflow || project.project_record || "started",
           detail: `${project.project_record || "Project"}; formation pack ${project.formation_pack || "waiting for proof"}; workflow ${project.workflow || "waiting for proof"}.`,
           action: project.next_action || "Open this project dashboard for inspection."
         })).concat((result.blocked || []).map(item => ({

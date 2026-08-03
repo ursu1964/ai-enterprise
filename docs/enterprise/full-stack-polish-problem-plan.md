@@ -165,6 +165,19 @@ Acceptance:
 - A returned client manifest can create a Foundry-compliant project workspace.
 - Missing required sections produce human correction messages.
 
+Status: implemented on 2026-08-03.
+
+Evidence:
+
+- Added `POST /api/v1/project-formation/projects/{project_id}/foundry-workspace`.
+- The runtime validates the AEOS project-intake sections before writing files.
+- Valid intake generates `PROJECT.yaml`, `AGENTS.md`, governance files, intake files,
+  requirements, traceability, architecture notes, and planning files.
+- Generated workspaces are constrained to `REPOSITORY_ALLOWED_ROOT`.
+- Existing files are reused unless overwrite is explicitly requested.
+- The project record is linked to the generated workspace path and optional GitHub repository URL.
+- Focused Project Formation tests passed.
+
 ### Slice 3B - Documentation Discipline and Hub
 
 Goal: every dashboard and product change updates documentation after verification, and operators
