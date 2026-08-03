@@ -71,12 +71,29 @@ def write_evidence(
     document = {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
+        "git": {
+            "commit": _git(["rev-parse", "HEAD"], root),
+            "branch": _git(["branch", "--show-current"], root),
+            "dirty": bool(_git(["status", "--porcelain"], root)),
+        },
         "gates": gates,
     }
     target = output if output.is_absolute() else root / output
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return document
+
+
+def _git(args: list[str], root: Path) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", *args],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
 
 
 def _parse_gate_command(value: str) -> tuple[str, str]:

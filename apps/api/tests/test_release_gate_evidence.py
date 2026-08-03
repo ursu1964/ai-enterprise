@@ -25,6 +25,7 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
 
     assert "release-gate-evidence-fast" in makefile
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
+    assert "--require-evidence-for lint,typecheck,test" in makefile
     assert "tools/release_gate_evidence.py" in makefile
     assert "check-release: compose-check migration-check check-fast" in makefile
 
@@ -42,6 +43,7 @@ def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> 
     )
 
     assert document["schema_version"] == "1.0"
+    assert {"commit", "branch", "dirty"} <= set(document["git"])
     assert document["gates"]["passing-gate"]["status"] == "passed"
     assert document["gates"]["passing-gate"]["return_code"] == 0
     assert document["gates"]["failing-gate"]["status"] == "failed"

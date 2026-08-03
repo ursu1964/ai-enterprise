@@ -47,39 +47,69 @@ def _artifact_hash(document: dict[str, Any]) -> str:
 
 def _load_gate_evidence(root: Path, evidence_file: Path | None) -> dict[str, Any]:
     if evidence_file is None:
-        return {}
+        return {"loaded": False, "path": None, "git": {}, "gates": {}}
     path = evidence_file if evidence_file.is_absolute() else root / evidence_file
     if not path.exists():
-        return {}
+        return {"loaded": False, "path": str(evidence_file), "git": {}, "gates": {}}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        return {}
+        return {"loaded": False, "path": str(evidence_file), "git": {}, "gates": {}}
     gates = payload.get("gates", {})
     if not isinstance(gates, dict):
-        return {}
+        return {"loaded": False, "path": str(evidence_file), "git": {}, "gates": {}}
     return {
-        str(name): evidence
-        for name, evidence in gates.items()
-        if isinstance(evidence, dict)
+        "loaded": True,
+        "path": str(evidence_file),
+        "git": payload.get("git", {}) if isinstance(payload.get("git", {}), dict) else {},
+        "gates": {
+            str(name): evidence
+            for name, evidence in gates.items()
+            if isinstance(evidence, dict)
+        },
     }
 
 
 def build_artifact(
-    root: Path, *, status: str = "passed", evidence_file: Path | None = None
+    root: Path,
+    *,
+    status: str = "passed",
+    evidence_file: Path | None = None,
+    require_evidence_for: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     migration_report = migration_verify.verify(root / "migrations" / "versions")
-    gate_evidence = _load_gate_evidence(root, evidence_file)
+    evidence_payload = _load_gate_evidence(root, evidence_file)
+    gate_evidence = evidence_payload["gates"]
+    current_git = {
+        "commit": _git(["rev-parse", "HEAD"], root),
+        "branch": _git(["branch", "--show-current"], root),
+        "dirty": bool(_git(["status", "--porcelain"], root)),
+    }
+    evidence_git = evidence_payload["git"]
+    missing_required_evidence = [
+        name for name in require_evidence_for if name not in gate_evidence
+    ]
+    evidence_commit_matches = (
+        not evidence_payload["loaded"]
+        or not evidence_git.get("commit")
+        or evidence_git.get("commit") == current_git["commit"]
+    )
     gate_status = status if migration_report["conformant"] else "failed"
     gates = [
         {
             "name": name,
             "command": command,
-            "status": gate_evidence.get(name, {}).get("status", gate_status),
+            "status": (
+                "failed"
+                if name in missing_required_evidence or not evidence_commit_matches
+                else gate_evidence.get(name, {}).get("status", gate_status)
+            ),
             "required": True,
+            "evidence_required": name in require_evidence_for,
             "evidence": {
                 "source": "make check-release dependency",
                 "recorded_by": "tools/release_artifact.py",
                 "executed_before_artifact": True,
+                "missing_required_evidence": name in missing_required_evidence,
                 **gate_evidence.get(name, {}),
             },
         }
@@ -90,26 +120,33 @@ def build_artifact(
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "failed" if gate_failure_count else gate_status,
-        "git": {
-            "commit": _git(["rev-parse", "HEAD"], root),
-            "branch": _git(["branch", "--show-current"], root),
-            "dirty": bool(_git(["status", "--porcelain"], root)),
-        },
+        "git": current_git,
         "gates": gates,
         "gate_summary": {
             "total": len(gates),
             "passed": sum(1 for gate in gates if gate["status"] == "passed"),
             "failed": gate_failure_count,
+            "captured_evidence_required": sorted(require_evidence_for),
+            "captured_evidence_missing": missing_required_evidence,
             "execution_model": (
                 "Release gates are executed by make check-release before this "
                 "artifact is written."
             ),
+        },
+        "gate_evidence_file": {
+            "path": evidence_payload["path"],
+            "loaded": evidence_payload["loaded"],
+            "git": evidence_git,
+            "commit_matches_current": evidence_commit_matches,
+            "missing_required_gates": missing_required_evidence,
         },
         "migration_verification": migration_report,
         "artifact_policy": {
             "created_after_successful_release_gate": True,
             "archive_path": "artifacts/release-verification.json",
             "fails_when_migration_verification_fails": True,
+            "fails_when_required_gate_evidence_missing": True,
+            "fails_when_gate_evidence_commit_mismatch": True,
         },
     }
     document["artifact_hash"] = _artifact_hash(document)
@@ -122,8 +159,14 @@ def write_artifact(
     *,
     status: str = "passed",
     evidence_file: Path | None = None,
+    require_evidence_for: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    document = build_artifact(root, status=status, evidence_file=evidence_file)
+    document = build_artifact(
+        root,
+        status=status,
+        evidence_file=evidence_file,
+        require_evidence_for=require_evidence_for,
+    )
     target = output if output.is_absolute() else root / output
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -140,6 +183,11 @@ def main() -> int:
         default=None,
         help="Optional JSON file with per-gate evidence under a top-level gates object.",
     )
+    parser.add_argument(
+        "--require-evidence-for",
+        default="",
+        help="Comma-separated gate names that must have captured evidence.",
+    )
     args = parser.parse_args()
     root = Path(args.root).resolve()
     evidence_file = Path(args.evidence_file) if args.evidence_file else None
@@ -148,6 +196,9 @@ def main() -> int:
         Path(args.output),
         status=args.status,
         evidence_file=evidence_file,
+        require_evidence_for=tuple(
+            item.strip() for item in args.require_evidence_for.split(",") if item.strip()
+        ),
     )
     print(json.dumps(document, sort_keys=True))
     return 0 if document["status"] == "passed" else 1

@@ -29,6 +29,8 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
     assert document["migration_verification"]["rollback_feasible_count"] == 2
     assert document["gate_summary"]["total"] == len(document["gates"])
     assert document["gate_summary"]["failed"] == 0
+    assert document["gate_summary"]["captured_evidence_required"] == []
+    assert document["gate_evidence_file"]["loaded"] is False
     assert "make check-release" in document["gate_summary"]["execution_model"]
     assert {gate["name"] for gate in document["gates"]} >= {
         "compose-check",
@@ -46,6 +48,8 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
         for gate in document["gates"]
     )
     assert document["artifact_policy"]["fails_when_migration_verification_fails"] is True
+    assert document["artifact_policy"]["fails_when_required_gate_evidence_missing"] is True
+    assert document["artifact_policy"]["fails_when_gate_evidence_commit_mismatch"] is True
     assert len(document["artifact_hash"]) == 64
 
 
@@ -101,6 +105,52 @@ def test_release_artifact_merges_supplied_gate_evidence(tmp_path: Path) -> None:
         "artifacts/docker-smoke.json"
     )
     assert gates["engineering-full"]["status"] == "failed"
+
+
+def test_release_artifact_fails_when_required_captured_evidence_is_missing(
+    tmp_path: Path,
+) -> None:
+    root = _release_root(tmp_path)
+    evidence_file = root / "artifacts" / "gate-evidence.json"
+    evidence_file.parent.mkdir()
+    evidence_file.write_text(
+        """
+{
+  "gates": {
+    "lint": {
+      "status": "passed",
+      "return_code": 0
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    document = release_artifact.build_artifact(
+        root,
+        evidence_file=evidence_file,
+        require_evidence_for=("lint", "typecheck", "test"),
+    )
+    gates = {gate["name"]: gate for gate in document["gates"]}
+
+    assert document["status"] == "failed"
+    assert document["gate_summary"]["captured_evidence_required"] == [
+        "lint",
+        "test",
+        "typecheck",
+    ]
+    assert document["gate_summary"]["captured_evidence_missing"] == [
+        "typecheck",
+        "test",
+    ]
+    assert document["gate_evidence_file"]["missing_required_gates"] == [
+        "typecheck",
+        "test",
+    ]
+    assert gates["lint"]["status"] == "passed"
+    assert gates["typecheck"]["status"] == "failed"
+    assert gates["typecheck"]["evidence"]["missing_required_evidence"] is True
 
 
 def test_release_artifact_writes_json_file(tmp_path: Path) -> None:

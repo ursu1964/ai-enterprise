@@ -113,7 +113,7 @@ engineering-full:
 	python tools/engineering_verify.py --full --json
 
 release-artifact:
-	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --output artifacts/release-verification.json
+	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for lint,typecheck,test --output artifacts/release-verification.json
 
 release-gate-evidence-fast:
 	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q'
