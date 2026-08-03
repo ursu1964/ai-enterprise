@@ -22,32 +22,26 @@ Live stack status:
 
 ## Remaining Problems
 
-1. Empty graph data can still feel like broken functionality.
-   - Ecosystem graph returns 0 nodes and 0 edges.
-   - Evidence graph returns 0 nodes and 0 edges.
-   - Dashboard now labels empty graph checks, but the system still needs seeded examples or setup
-     actions.
-
-2. Generic empty copy remains in shared helpers.
-   - `No records.` does not explain what the operator should do.
-   - Empty states must say whether the source is empty, delayed, missing context, or unavailable.
-
-3. Dashboard still creates too much business meaning in JavaScript.
+1. Dashboard still creates some business meaning in JavaScript.
    - This is acceptable for the current API-hosted dashboard, but the next stable architecture needs
-     one authoritative dashboard manager read model.
+     even more status vocabulary, recovery guidance, graph summaries, and business effects returned
+     by one authoritative dashboard manager read model.
 
-4. Some live worker history looks noisy.
-   - There are 2 online workers, 1 degraded worker, and 7 offline historical worker records.
-   - The dashboard should default to current capacity and keep old workers under history.
+2. Browser-level regression coverage is still lighter than API coverage.
+   - API tests now protect the main read models, dashboard HTML, graph setup action, wording
+     contracts, and source states.
+   - A later slice should add Playwright checks for `/dashboard`, `/dashboard/demo`,
+     `/dashboard/documentation-hub`, and the graph/setup interactions.
 
-5. Raw count phrases still appear in dashboard text.
-   - Examples: `project(s)`, `worker(s)`, `problem(s)`.
-   - These are accurate but less professional than sentence-style business text.
+3. Production telemetry and migration proof still depend on real infrastructure.
+   - Local dashboards expose readiness, metrics, graph proof, recovery, and server migration
+     guidance.
+   - Real Grafana/Prometheus targets, TLS identity, server secrets, backups, object storage, and
+     multiserver workers must be configured in the target environment.
 
-6. Project Foundry is documented and downloadable, but not yet a runtime module.
-   - The core specification, schemas, prompt contracts, gates, and repository template now exist.
-   - Later slices should create API-level validation and project workspace generation from the
-     Foundry contracts.
+4. Reuse and blueprint lifecycle is visible but not yet a complete closed loop.
+   - Blueprint candidates and improvement proposals are displayed.
+   - Future slices should promote approved patterns into versioned reusable factory templates.
 
 ## Implementation Order
 
@@ -234,3 +228,11 @@ Evidence:
   available, and needs-attention states, with next action and proof-path language.
 - Shared empty table/listbox states now use the same human structure: status, next action, and
   expected result when governed factory data arrives.
+- Graph Hub now has a local-only `Create Demo Graph Proof` setup action that seeds governed
+  ecosystem and evidence graph records for the current development organization/project.
+- Local dashboard context now grants graph read authority for ecosystem and specification evidence
+  checks, so setup proof and graph-check buttons use the same live data source.
+- Plan status was refreshed after graph setup, empty-state, worker-history, Project Foundry runtime,
+  and raw-count wording slices so solved items are not presented as remaining defects.
+- Business Decision Board now prefers the official dashboard-manager `business_board` projection
+  instead of deriving every primary card in browser JavaScript.

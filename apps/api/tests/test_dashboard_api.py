@@ -12,6 +12,7 @@ from ai_enterprise.api.routes import dashboard as dashboard_routes
 from ai_enterprise.api.routes.dashboard import (
     dashboard_context,
     dashboard_deployment_blueprint,
+    dashboard_graph_demo_setup,
     dashboard_infrastructure_choices,
     dashboard_server_readiness,
     dashboard_telemetry_summary,
@@ -64,12 +65,23 @@ class DashboardSession:
     def __init__(self, scalar_rows: list[Any], scalars_rows: list[list[Any]]) -> None:
         self.scalar_rows = scalar_rows
         self.scalars_rows = scalars_rows
+        self.added: list[Any] = []
+        self.commit_count = 0
 
     async def scalar(self, statement: object) -> Any:
         return self.scalar_rows.pop(0) if self.scalar_rows else None
 
     async def scalars(self, statement: object) -> Scalars:
         return Scalars(self.scalars_rows.pop(0) if self.scalars_rows else [])
+
+    async def get(self, model: type, identity: uuid.UUID) -> Any:
+        return None
+
+    def add(self, row: Any) -> None:
+        self.added.append(row)
+
+    async def commit(self) -> None:
+        self.commit_count += 1
 
 
 def project_reader(project_id: uuid.UUID) -> Actor:
@@ -136,6 +148,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Service Pulse" in response.text
     assert "HTTP Flow" not in response.text
     assert "Business decision board" in response.text
+    assert "state.dashboardManager?.business_board" in response.text
     assert "Guided Route" in response.text
     assert 'data-view="execution"' in response.text
     assert "Project Execution Control" in response.text
@@ -387,6 +400,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Authenticated Graph Context" in response.text
     assert "The dashboard will use the current organization and project" in response.text
     assert "authenticatedGraphPreview" in response.text
+    assert "Create Demo Graph Proof" in response.text
+    assert "/dashboard/graph-demo/setup" in response.text
+    assert "Demo graph proof is ready" in response.text
     assert "Ready to check" in response.text
     assert "payload.nodes || payload.entities || []" in response.text
     assert "map is ready but empty" in response.text
@@ -500,7 +516,14 @@ async def test_local_dashboard_context_actor_can_read_query_model() -> None:
         actor_role="platform-admin",
     )
 
-    assert actor.capabilities == frozenset({"operator.jobs.manage", "query.read"})
+    assert actor.capabilities == frozenset(
+        {
+            "ecosystem.read",
+            "operator.jobs.manage",
+            "query.read",
+            "specification.read",
+        }
+    )
     assert actor.scopes == frozenset({"global"})
 
 
@@ -1310,6 +1333,76 @@ async def test_dashboard_context_is_disabled_in_production(monkeypatch: pytest.M
 
     assert getattr(exc.value, "status_code", None) == 403
     assert "disabled outside development" in str(getattr(exc.value, "detail", ""))
+
+
+@pytest.mark.asyncio
+async def test_dashboard_graph_demo_setup_creates_local_graph_records() -> None:
+    now = datetime.now(UTC)
+    organization = OrganizationModel(
+        id=uuid.uuid4(),
+        organization_key="ai-enterprise",
+        name="AI Enterprise",
+        status="active",
+        policy_set_id=uuid.uuid4(),
+        version=1,
+    )
+    project = ProjectModel(
+        id=uuid.uuid4(),
+        name="Graph Demo Project",
+        description="A project used to seed graph proof.",
+        repository_path="/home/user/projects/graph-demo",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+        created_at=now,
+        updated_at=now,
+    )
+    session = DashboardSession(
+        [organization, project, None, None, None, None, None, None],
+        [[], []],
+    )
+
+    response = await dashboard_graph_demo_setup(session)  # type: ignore[arg-type]
+
+    assert response["status"] == "ready"
+    assert response["organization_id"] == str(organization.id)
+    assert response["project_id"] == str(project.id)
+    assert response["ecosystem"]["entities"] == 2
+    assert response["ecosystem"]["edges"] == 1
+    assert response["evidence"]["nodes"] == 2
+    assert response["evidence"]["edges"] == 1
+    assert response["next_action"] == (
+        "Open Graph, then check Ecosystem and Evidence again."
+    )
+    assert len(session.added) >= 6
+    assert session.commit_count >= 6
+
+
+@pytest.mark.asyncio
+async def test_dashboard_graph_demo_setup_is_disabled_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await dashboard_graph_demo_setup(DashboardSession([], []))  # type: ignore[arg-type]
+    finally:
+        get_settings.cache_clear()
+
+    assert getattr(exc.value, "status_code", None) == 403
+    assert "disabled outside development" in str(getattr(exc.value, "detail", ""))
+
+
+@pytest.mark.asyncio
+async def test_dashboard_graph_demo_setup_requires_existing_project() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await dashboard_graph_demo_setup(DashboardSession([None, None], []))  # type: ignore[arg-type]
+
+    assert getattr(exc.value, "status_code", None) == 409
+    assert "Create or load a project" in str(getattr(exc.value, "detail", ""))
 
 
 @pytest.mark.asyncio

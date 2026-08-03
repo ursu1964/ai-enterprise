@@ -12,10 +12,13 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from sqlalchemy import select
 
 from ai_enterprise.api.dependencies import SessionDependency
+from ai_enterprise.application.ecosystem_service import EcosystemService
 from ai_enterprise.application.operator_job_resolution import (
     job_is_acknowledged,
     unresolved_problem_jobs,
 )
+from ai_enterprise.application.organization_persistence_service import canonical_hash
+from ai_enterprise.application.specification_platform_service import SpecificationPlatformService
 from ai_enterprise.config import get_settings
 from ai_enterprise.infrastructure.database.models import JobModel, ProjectModel
 from ai_enterprise.infrastructure.organization.models import OrganizationModel
@@ -199,6 +202,121 @@ async def dashboard_context(session: SessionDependency) -> dict[str, object]:
                 "trusted proxy authentication and durable authority grants."
             ),
         },
+    }
+
+
+@router.post("/dashboard/graph-demo/setup")
+async def dashboard_graph_demo_setup(session: SessionDependency) -> dict[str, object]:
+    settings = get_settings()
+    if settings.app_env.lower() in {"production", "staging"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Local graph demo setup is disabled outside development.",
+        )
+    organization = await session.scalar(select(OrganizationModel).order_by(OrganizationModel.name))
+    project = await session.scalar(select(ProjectModel).order_by(ProjectModel.updated_at.desc()))
+    if organization is None or project is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Create or load a project before seeding demo graph proof.",
+        )
+
+    actor = "local-dashboard-graph-demo"
+    ecosystem = EcosystemService(session)
+    platform = SpecificationPlatformService(session)
+    factory = await ecosystem.register_entity(
+        organization_id=organization.id,
+        entity_type="external_service",
+        entity_key="demo.ai-enterprise.factory",
+        display_name="AI Enterprise Factory",
+        document={
+            "purpose": "Demo graph anchor for manifesto-to-project execution.",
+            "operator_note": "Created by local dashboard setup so the graph is visible.",
+        },
+        classification="internal",
+        created_by=actor,
+    )
+    client = await ecosystem.register_entity(
+        organization_id=organization.id,
+        entity_type="customer",
+        entity_key=f"demo.project.{project.id}",
+        display_name=f"{project.name} requester",
+        document={
+            "project_id": str(project.id),
+            "purpose": "Demo requester node linked to the current project.",
+        },
+        classification="internal",
+        created_by=actor,
+    )
+    ecosystem_edge = await ecosystem.add_edge(
+        client,
+        factory,
+        relationship="collaborates",
+        document={
+            "project_id": str(project.id),
+            "meaning": "The requester collaborates with the AI Enterprise factory.",
+            "next_action": "Open project execution to create more governed records.",
+        },
+        actor=actor,
+    )
+
+    requirement = await platform.add_evidence_node(
+        organization_id=organization.id,
+        project_id=project.id,
+        node_type="requirement",
+        reference_id=project.id,
+        reference_hash=canonical_hash(
+            {"project_id": str(project.id), "demo_node": "requirement"}
+        ),
+        classification="internal",
+        document={
+            "title": "Demo requirement",
+            "meaning": "Client intent is captured as the first proof node.",
+        },
+        actor=actor,
+    )
+    execution = await platform.add_evidence_node(
+        organization_id=organization.id,
+        project_id=project.id,
+        node_type="execution_proof",
+        reference_id=project.id,
+        reference_hash=canonical_hash(
+            {"project_id": str(project.id), "demo_node": "execution_proof"}
+        ),
+        classification="internal",
+        document={
+            "title": "Demo execution proof",
+            "meaning": "Workflow movement is represented as proof connected to intent.",
+        },
+        actor=actor,
+    )
+    evidence_edge = await platform.add_evidence_edge(
+        requirement,
+        execution,
+        relationship="proves",
+        document={
+            "project_id": str(project.id),
+            "meaning": "Execution proof is linked back to the requirement.",
+        },
+        actor=actor,
+    )
+
+    return {
+        "status": "ready",
+        "organization_id": str(organization.id),
+        "project_id": str(project.id),
+        "summary": "Demo graph proof is available for the current local project.",
+        "ecosystem": {
+            "entities": 2,
+            "edges": 1,
+            "edge_id": str(ecosystem_edge.id),
+        },
+        "evidence": {
+            "nodes": 2,
+            "edges": 1,
+            "edge_id": str(evidence_edge.id),
+        },
+        "next_action": "Open Graph, then check Ecosystem and Evidence again.",
     }
 
 
@@ -1979,6 +2097,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div class="span-12"><input id="graphProjectId" placeholder="Current project context"></div>
         </div>
         <div class="toolbar" style="margin-top: 10px;">
+          <button id="setupGraphDemo">Create Demo Graph Proof</button>
           <button id="checkEcosystemGraph">Check Ecosystem</button>
           <button id="checkEvidenceGraph">Check Evidence</button>
         </div>
@@ -2237,6 +2356,21 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     function businessBrief() {
+      const board = state.dashboardManager?.business_board;
+      if (board?.cards?.length) {
+        return {
+          health: board.health || state.dashboardManager.headline?.meaning?.label || "Factory status available",
+          value: board.value || state.dashboardManager.headline?.summary || "Manager projection is available.",
+          risk: board.risk || "No urgent delivery risk is visible in the manager projection.",
+          next: [
+            board.next?.label || "Open Execution",
+            board.next?.target || "execution",
+            board.next?.message || "Inspect live project movement, crew signals, telemetry, and proof."
+          ],
+          online: state.dashboardManager.totals?.online_workers ?? state.workers.filter(worker => worker.status === "online").length,
+          cards: board.cards
+        };
+      }
       if (state.operatingPicture) {
         const headline = state.operatingPicture.headline;
         const firstAction = state.operatingPicture.recommendations?.[0];
@@ -2285,20 +2419,20 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function renderBusinessBoard() {
       const brief = businessBrief();
-      const cards = [
-        ["Business State", brief.health, `${countSentence(brief.online, "worker")} online. The board refreshes every 15 seconds.`, "overview"],
-        ["Value in Motion", brief.value, "Use this to see whether delivery capacity is producing outcomes.", "projects"],
-        ["Risk and Attention", brief.risk, "Fix risk before scaling parallel work.", brief.next[1]],
-        ["Recommended Next Move", brief.next[2], "This is the best next action from the current live state.", brief.next[1]]
+      const cards = brief.cards || [
+        { title: "Business State", message: brief.health, effect: `${countSentence(brief.online, "worker")} online. The board refreshes every 15 seconds.`, target: "overview", button_label: "Open" },
+        { title: "Value in Motion", message: brief.value, effect: "Use this to see whether delivery capacity is producing outcomes.", target: "projects", button_label: "Open" },
+        { title: "Risk and Attention", message: brief.risk, effect: "Fix risk before scaling parallel work.", target: brief.next[1], button_label: "Open" },
+        { title: "Recommended Next Move", message: brief.next[2], effect: "This is the best next action from the current live state.", target: brief.next[1], button_label: brief.next[0] }
       ];
-      byId("businessBoard").innerHTML = cards.map(([title, message, effect, target], index) => `
+      byId("businessBoard").innerHTML = cards.map(card => `
         <article class="business-card">
           <div>
-            <strong>${esc(title)}</strong>
-            <p>${esc(message)}</p>
-            <p>${esc(effect)}</p>
+            <strong>${esc(card.title)}</strong>
+            <p>${esc(card.message)}</p>
+            <p>${esc(card.effect)}</p>
           </div>
-          <button class="business-open" data-target="${esc(target)}">${index === 3 ? esc(brief.next[0]) : "Open"}</button>
+          <button class="business-open" data-target="${esc(card.target)}">${esc(card.button_label || "Open")}</button>
         </article>
       `).join("");
       document.querySelectorAll(".business-open").forEach(item => {
@@ -2920,6 +3054,32 @@ DASHBOARD_HTML = r"""<!doctype html>
         ]
       };
       renderSurfaceNodes("authenticatedGraphPreview", models[stateName] || models.waiting);
+    }
+
+    async function setupGraphDemoProof() {
+      byId("authenticatedGraphStatus").innerHTML = `<strong>Creating demo graph proof</strong><div class="muted">Preparing safe local ecosystem and evidence records for the current project.</div>`;
+      renderAuthenticatedGraphPreview("ecosystem", "waiting");
+      try {
+        const payload = await json("/dashboard/graph-demo/setup", { method: "POST" });
+        if (payload.organization_id) byId("graphOrganizationId").value = payload.organization_id;
+        if (payload.project_id) byId("graphProjectId").value = payload.project_id;
+        byId("authenticatedGraphStatus").innerHTML = `
+          <strong class="ok">Demo graph proof is ready</strong>
+          <div class="muted">${esc(payload.summary || "Demo ecosystem and evidence records were created or reused.")}</div>
+          <div class="muted">Ecosystem: ${esc(countSentence(payload.ecosystem?.entities || 0, "entity"))}, ${esc(countSentence(payload.ecosystem?.edges || 0, "edge"))}. Evidence: ${esc(countSentence(payload.evidence?.nodes || 0, "node"))}, ${esc(countSentence(payload.evidence?.edges || 0, "edge"))}.</div>
+          <div class="muted">Next: ${esc(payload.next_action || "Check Ecosystem and Evidence again.")}</div>
+        `;
+        renderAuthenticatedGraphPreview("ecosystem", "available", payload.ecosystem?.entities || 0, payload.ecosystem?.edges || 0);
+        coach(
+          "Demo Graph Ready",
+          payload.next_action || "Open Graph, then check Ecosystem and Evidence again.",
+          ["Check Ecosystem", "graph"],
+          ["Open Projects", "projects"]
+        );
+      } catch (error) {
+        byId("authenticatedGraphStatus").innerHTML = `<strong class="bad">Demo graph setup needs attention</strong><div class="muted">${esc(error.message)}. Create or load a project, then try again.</div>`;
+        renderAuthenticatedGraphPreview("ecosystem", "attention");
+      }
     }
 
     function renderCapabilities() {
@@ -3942,7 +4102,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           key: "being_retried",
           label: "Being retried",
           className: "warn",
-          summary: "Work that is queued, leased, running, or waiting for retry.",
+          summary: "Work waiting for capacity, accepted by a worker, running, or retrying.",
         },
         reviewed_history: {
           key: "reviewed_history",
@@ -4470,6 +4630,11 @@ DASHBOARD_HTML = r"""<!doctype html>
     byId("workerFilter").addEventListener("change", render);
     byId("loadProject").addEventListener("click", () => loadProjectDashboard());
     byId("clarifyVision").addEventListener("click", clarifyVision);
+    byId("setupGraphDemo").addEventListener("click", () => {
+      setupGraphDemoProof().catch(error => {
+        byId("authenticatedGraphStatus").innerHTML = `<strong class="bad">Demo graph setup needs attention</strong><div class="muted">${esc(error.message)}</div>`;
+      });
+    });
     byId("checkEcosystemGraph").addEventListener("click", () => checkAuthenticatedGraph("ecosystem"));
     byId("checkEvidenceGraph").addEventListener("click", () => checkAuthenticatedGraph("evidence"));
     byId("manifestFile").addEventListener("change", event => {

@@ -335,6 +335,12 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["query_policy"]["mode"] == "dashboard_manager_projection"
     assert response["headline"]["state"] == "active"
     assert response["headline"]["meaning"]["label"] == "Active"
+    assert response["business_board"]["health"] == "Active"
+    assert response["business_board"]["next"]["target"] == "execution"
+    assert response["business_board"]["cards"][0]["title"] == "Business State"
+    assert "manager read model" in response["business_board"]["cards"][0]["effect"]
+    assert "1 project visible" in response["business_board"]["cards"][1]["message"]
+    assert "No urgent delivery risk" in response["business_board"]["cards"][2]["message"]
     assert response["totals"]["projects"] == 1
     assert response["totals"]["tasks_done"] == 1
     assert response["totals"]["tasks_active"] == 1
@@ -683,6 +689,8 @@ async def test_dashboard_manager_explains_empty_source_sections() -> None:
     )  # type: ignore[arg-type]
 
     assert response["headline"]["state"] == "waiting_for_manifesto"
+    assert response["business_board"]["next"]["target"] == "factory"
+    assert response["business_board"]["cards"][3]["button_label"] == "Open Factory"
     assert response["sections"]["projects"]["state"] == "empty"
     assert response["sections"]["projects"]["empty_reason"] == (
         "Waiting for the first manifesto project to be created or ingested."

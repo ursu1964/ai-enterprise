@@ -160,6 +160,91 @@ def _recommendations(
     return items
 
 
+def _dashboard_business_board(
+    *,
+    manager_state: str,
+    summaries: list[dict[str, Any]],
+    total_done: int,
+    total_active: int,
+    total_standby: int,
+    total_problems: int,
+    online_workers: int,
+) -> dict[str, Any]:
+    headline = meaning_for(manager_state)
+    if total_problems:
+        next_label = "Open Problems"
+        next_target = "problems"
+        next_message = (
+            "Resolve current delivery risk before adding more parallel project work."
+        )
+    elif summaries:
+        next_label = "Open Execution"
+        next_target = "execution"
+        next_message = (
+            "Inspect live project movement, crew signals, telemetry, and proof."
+        )
+    else:
+        next_label = "Open Factory"
+        next_target = "factory"
+        next_message = "Attach a manifesto and create the first governed workflow."
+
+    business_state = (
+        f"{headline['label']}. "
+        f"{_count_phrase(online_workers, 'worker')} online."
+    )
+    value = (
+        f"{_count_phrase(len(summaries), 'project')} visible. "
+        f"{_count_phrase(total_active, 'active task')} moving, "
+        f"{_count_phrase(total_standby, 'standby task')} waiting, "
+        f"{_count_phrase(total_done, 'done task')} proven."
+    )
+    risk = (
+        f"{_count_phrase(total_problems, 'issue')} need recovery review before scaling."
+        if total_problems
+        else "No urgent delivery risk is visible in the manager projection."
+    )
+    return {
+        "health": headline["label"],
+        "value": value,
+        "risk": risk,
+        "next": {
+            "label": next_label,
+            "target": next_target,
+            "message": next_message,
+        },
+        "cards": [
+            {
+                "title": "Business State",
+                "message": business_state,
+                "effect": "The board refreshes every 15 seconds from the manager read model.",
+                "target": "overview",
+                "button_label": "Open",
+            },
+            {
+                "title": "Value in Motion",
+                "message": value,
+                "effect": "Use this to see whether delivery capacity is producing outcomes.",
+                "target": "projects",
+                "button_label": "Open",
+            },
+            {
+                "title": "Risk and Attention",
+                "message": risk,
+                "effect": "Fix risk before scaling parallel work.",
+                "target": next_target if total_problems else "problems",
+                "button_label": "Open",
+            },
+            {
+                "title": "Recommended Next Move",
+                "message": next_message,
+                "effect": "This is the best next action from the current live state.",
+                "target": next_target,
+                "button_label": next_label,
+            },
+        ],
+    }
+
+
 def _graph(
     *,
     projects: list[ProjectModel],
@@ -1147,6 +1232,15 @@ async def dashboard_manager(
         else "waiting_for_manifesto"
     )
     recovery_proposals = _failure_improvement_proposals(jobs)
+    business_board = _dashboard_business_board(
+        manager_state=manager_state,
+        summaries=summaries,
+        total_done=total_done,
+        total_active=total_active,
+        total_standby=total_standby,
+        total_problems=total_problems,
+        online_workers=len(online_workers),
+    )
     return {
         "generated_at": datetime.now(UTC),
         "query_policy": {
@@ -1184,6 +1278,7 @@ async def dashboard_manager(
             "events": len(audits),
             "governed_metrics": len(metrics),
         },
+        "business_board": business_board,
         "recovery": {
             "improvement_proposals": recovery_proposals,
             "proposal_basis": (

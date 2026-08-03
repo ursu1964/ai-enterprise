@@ -101,7 +101,14 @@ async def get_actor(
             subject=actor_id,
             actor_type=actor_type,
             role=actor_role,
-            capabilities=frozenset({"operator.jobs.manage", "query.read"}),
+            capabilities=frozenset(
+                {
+                    "ecosystem.read",
+                    "operator.jobs.manage",
+                    "query.read",
+                    "specification.read",
+                }
+            ),
             trusted=trusted,
             scopes=frozenset({"global"}),
         )

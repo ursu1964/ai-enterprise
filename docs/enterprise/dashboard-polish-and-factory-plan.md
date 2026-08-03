@@ -21,33 +21,22 @@ primary source of business truth.
 
 ## Main Gaps
 
-0. The Business Decision Board has a current dashboard bug: when the operating picture is available,
-   `businessBrief()` returns a different object shape than `renderBusinessBoard()` expects. This can
-   produce undefined text or broken button behavior. Fix this before cosmetic polish.
+0. Correctness repairs from the first polish slice are complete.
+   - Business Decision Board object shape is stable.
+   - Movement graph SVG rendering and operating-picture surface nodes use separate containers.
+   - Relinked workflow history returns `200`.
+   - Empty graph endpoint responses are presented as setup states, not broken surfaces.
+   - Acknowledged dead-letter jobs are historical evidence, not active project risk.
 
-0.1. The movement graph has a possible rendering conflict. `renderMovementGraph()` treats
-   `movementGraph` as an SVG, while management graph rendering can target the same ID with HTML
-   surface nodes. Keep SVG graph rendering and HTML surface-node rendering on separate containers.
+1. Some raw backend vocabulary still exists internally as API values, filters, and diagnostic
+   details. Primary dashboard text must continue to translate these values into plain language.
 
-0.2. Workflow history is currently broken for relinked projects. Relink writes
-   `previous_state="unlinked"`, but `WorkflowTransitionResponse.previous_state` is typed as
-   `WorkflowState`. Live verification on the relinked workflows returned HTTP 500 from
-   `/api/v1/workflows/{workflow_id}/history`. Fix the response contract or relink transition value
-   before relying on workflow history in the dashboard.
-
-1. Some panels still expose backend vocabulary such as `dead_letter`, `manual_intervention`,
-   `retry_wait`, and `work_package_approved` without a plain-language label beside it.
-
-2. Dashboard JavaScript duplicates interpretation that already belongs in backend read models. This
+2. Dashboard JavaScript still duplicates some interpretation that already belongs in backend read models. This
    creates risk that Overview, Problems, Metrics, and Projects disagree.
 
-3. Project intelligence still needs a stronger distinction between current problems and historical
-   acknowledged failures. Historical evidence should remain visible, but it must not confuse the
-   business state.
-
-3.1. This is a verified contract disagreement: the global operating picture reports zero unresolved
-   problems after acknowledged dead letters, but project intelligence telemetry can still count
-   acknowledged dead letters as active project risk.
+3. Project intelligence now separates current problems from acknowledged historical failures. The
+   next improvement is richer explanation around the lesson learned and reusable guardrail created
+   from each reviewed failure.
 
 4. Data-source status is visible, but source contracts are informal. Every dashboard section should
    declare which endpoint feeds it, what stale data means, and what fallback message appears.
@@ -56,11 +45,8 @@ primary source of business truth.
    strong launch result contract: what started, what failed, what needs input, and which project graph
    should be opened first.
 
-6. Graph panels exist, but graph availability and empty graph states still need better business
-   explanations. Empty should mean "not prepared yet" or "no records yet", not "broken".
-
-6.1. Empty graph endpoints must not be displayed as fully available. The dashboard needs separate
-   graph states: ready, empty, missing context, permission denied, and unavailable.
+6. Graph panels now explain waiting, empty, available, and needs-attention states. The next
+   improvement is richer node-level proof and blueprint reuse lineage.
 
 7. Metrics mix raw runtime counters and governed performance. The dashboard should explain the
    difference: raw telemetry proves the system is alive; governed metrics prove quality, speed,
@@ -355,3 +341,34 @@ Verified:
 - Focused dashboard and project-formation tests passed.
 - Ruff: passed.
 - Mypy: passed.
+
+### 2026-08-03 - Plan Refresh and Vocabulary Tightening
+
+Completed:
+
+- Updated this plan so already-repaired issues are recorded as complete instead of remaining
+  dashboard defects.
+- Kept raw backend state values available as filters and diagnostics, while confirming primary
+  dashboard text translates them into human labels.
+- Replaced the remaining visible recovery-group phrase that exposed backend worker vocabulary.
+
+Verified:
+
+- Focused dashboard tests passed.
+- Dashboard source scan confirms primary empty-state and raw-count regressions are still covered by
+  tests.
+
+### 2026-08-03 - Business Board Read-Model Slice
+
+Completed:
+
+- Added a `business_board` contract to `/api/v1/query/dashboard-manager`.
+- Moved Business State, Value in Motion, Risk and Attention, and Recommended Next Move messages
+  into the manager read model.
+- Updated the dashboard to prefer the manager business board while keeping the older local
+  calculation as a fallback if the manager source is unavailable.
+
+Verified:
+
+- Focused dashboard tests passed.
+- Focused query-platform tests passed.
