@@ -518,6 +518,90 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
     return proposals
 
 
+def _reuse_learning_summary(
+    projects: list[ProjectModel],
+    jobs: list[JobModel],
+    crew_runs: list[CrewRunModel],
+    work_packages: list[WorkPackageModel],
+    recovery_proposals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    jobs_by_project: dict[uuid.UUID, list[JobModel]] = {}
+    crew_by_project: dict[uuid.UUID, list[CrewRunModel]] = {}
+    packages_by_project: dict[uuid.UUID, list[WorkPackageModel]] = {}
+    for job in jobs:
+        jobs_by_project.setdefault(job.project_id, []).append(job)
+    for run in crew_runs:
+        crew_by_project.setdefault(run.project_id, []).append(run)
+    for package in work_packages:
+        packages_by_project.setdefault(package.project_id, []).append(package)
+
+    blueprint_candidates: list[dict[str, Any]] = []
+    for project in projects:
+        project_jobs = jobs_by_project.get(project.id, [])
+        project_runs = crew_by_project.get(project.id, [])
+        project_packages = packages_by_project.get(project.id, [])
+        completed_jobs = [job for job in project_jobs if job.status == "succeeded"]
+        completed_runs = [run for run in project_runs if run.status == "succeeded"]
+        evidence_count = len(completed_jobs) + len(completed_runs) + len(project_packages)
+        if evidence_count == 0:
+            continue
+        project_type = (
+            str(project.manifest.get("project_type", "enterprise_project"))
+            if isinstance(project.manifest, dict)
+            else "enterprise_project"
+        )
+        lifecycle = "reviewed" if evidence_count >= 4 else "candidate"
+        blueprint_candidates.append(
+            {
+                "blueprint_key": f"{project_type}.{project.id}.learning_candidate",
+                "project_id": str(project.id),
+                "project_name": project.name,
+                "project_type": project_type,
+                "lifecycle": lifecycle,
+                "evidence_count": evidence_count,
+                "evidence_sources": {
+                    "succeeded_jobs": len(completed_jobs),
+                    "succeeded_crew_runs": len(completed_runs),
+                    "work_packages": len(project_packages),
+                },
+                "reuse_readiness": (
+                    "review evidence for catalog promotion"
+                    if lifecycle == "reviewed"
+                    else "collect more proof before reuse"
+                ),
+                "operator_action": (
+                    "Open the project dashboard, review proof, then promote the "
+                    "workflow or crew pattern only after evidence review."
+                ),
+            }
+        )
+
+    guardrail_candidates = [
+        {
+            "proposal_key": proposal["improvement_draft"]["improvement_key"],
+            "failure_class": proposal["failure_class"],
+            "current_failure_count": proposal["current_failure_count"],
+            "evidence_status": proposal["evidence_status"],
+            "operator_action": proposal["operator_action"],
+        }
+        for proposal in recovery_proposals
+        if "improvement_draft" in proposal and "evidence_status" in proposal
+    ]
+
+    return {
+        "blueprint_candidates": blueprint_candidates[:5],
+        "guardrail_candidates": guardrail_candidates[:5],
+        "summary": (
+            f"{_count_phrase(len(blueprint_candidates), 'blueprint candidate')}, "
+            f"{_count_phrase(len(guardrail_candidates), 'guardrail candidate')}."
+        ),
+        "operator_action": (
+            "Promote reusable project patterns only after proof review, and convert "
+            "repeated failures into guarded templates."
+        ),
+    }
+
+
 def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[str, object]]:
     completed: list[dict[str, object]] = [
         {
@@ -862,6 +946,7 @@ async def dashboard_manager(
         if total_active or summaries
         else "waiting_for_manifesto"
     )
+    recovery_proposals = _failure_improvement_proposals(jobs)
     return {
         "generated_at": datetime.now(UTC),
         "query_policy": {
@@ -900,11 +985,18 @@ async def dashboard_manager(
             "governed_metrics": len(metrics),
         },
         "recovery": {
-            "improvement_proposals": _failure_improvement_proposals(jobs),
+            "improvement_proposals": recovery_proposals,
             "proposal_basis": (
                 "Repeated unresolved failure classes across dashboard-manager jobs."
             ),
         },
+        "reuse": _reuse_learning_summary(
+            projects,
+            jobs,
+            crew_runs,
+            work_packages,
+            recovery_proposals,
+        ),
         "sections": {
             "projects": source_contract(
                 name="Projects",

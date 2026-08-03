@@ -2771,12 +2771,17 @@ DASHBOARD_HTML = r"""<!doctype html>
       } else if (byId("operatingPictureSignals")) {
         byId("operatingPictureSignals").innerHTML = `<div class="mini muted">Operating picture is not loaded yet. Refresh to reconnect the governed read model.</div>`;
       }
+      const reuse = state.dashboardManager?.reuse || {};
+      const blueprintLearning = reuse.blueprint_candidates || [];
+      const guardrailLearning = reuse.guardrail_candidates || [];
       renderSurfaceNodes("blueprintGraph", [
         { title: "Code Graph", detail: "Graphify architecture map for the repository.", idea: "Use it to understand what code areas a change touches.", effect: "Reduces blind edits and improves architecture navigation.", signal: "open", kind: "info", action: "graphify" },
         { title: "Project Foundry Core", detail: "AEOS project factory specification, schemas, prompt contracts, gates, and repository template.", idea: "Use it as the standard operating contract for every governed project.", effect: "Turns the Corel manifest into reusable enterprise factory rules.", signal: "download", kind: "ok", action: "foundry" },
         { title: "Ecosystem Graph", detail: "Shows enterprise relationships after governed records are linked.", idea: "Inspect enterprise relationships before broad changes.", effect: "Improves cross-object governance.", signal: "check map", kind: "info", action: "ecosystem" },
         { title: "Evidence Graph", detail: "Shows project proof after requirements, decisions, and evidence are recorded.", idea: "Trace decisions back to requirements and proof.", effect: "Improves audit readiness.", signal: "check proof", kind: "info", action: "evidence" },
         { title: "Project Blueprints", detail: "Workflow, specialist-crew, and economic-proof patterns produced by project intelligence.", idea: "Promote repeated successful structures into templates.", effect: "Increases reuse across future projects.", signal: "reuse", kind: "ok", action: "projects" },
+        { title: "Blueprint Learning Queue", detail: reuse.summary || "No reusable learning candidates have been observed yet.", idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: blueprintLearning.length ? "ok" : "info", action: "projects" },
+        { title: "Guardrail Learning Queue", detail: `${guardrailLearning.length} repeated-failure guardrail candidate(s).`, idea: "Repeated failures should become recovery checklists, tests, or template guardrails.", effect: "Keeps the factory from repeating known failure classes.", signal: `${guardrailLearning.length} guardrail`, kind: guardrailLearning.length ? "warn" : "ok", action: "problems" },
         { title: "Future Templates", detail: "Reusable patterns become stronger starting points for later manifestos.", idea: "Feed lessons back into the next project creation cycle.", effect: "Compounds delivery speed and quality over time.", signal: "evolve", kind: "ok", action: "factory" }
       ]);
     }

@@ -238,6 +238,21 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["status_label"] == "Ready to start"
     assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
     assert response["projects"][0]["tasks"]["done"] == 1
+    assert response["reuse"]["blueprint_candidates"][0]["project_id"] == str(project_id)
+    assert response["reuse"]["blueprint_candidates"][0]["project_type"] == (
+        "dashboards_reporting"
+    )
+    assert response["reuse"]["blueprint_candidates"][0]["lifecycle"] == "candidate"
+    assert response["reuse"]["blueprint_candidates"][0]["evidence_count"] == 2
+    assert response["reuse"]["blueprint_candidates"][0]["evidence_sources"] == {
+        "succeeded_jobs": 1,
+        "succeeded_crew_runs": 1,
+        "work_packages": 0,
+    }
+    assert "collect more proof" in response["reuse"]["blueprint_candidates"][0][
+        "reuse_readiness"
+    ]
+    assert "proof review" in response["reuse"]["operator_action"]
     assert response["projects"][0]["tasks"]["active"] == 1
     assert response["projects"][0]["crews"][0]["name"] == "run requirements crew"
     assert response["projects"][0]["crews"][0]["status_label"] == "Waiting for worker capacity"
@@ -347,6 +362,12 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     assert proposal["improvement_draft"]["risk_document"]["requires_human_review"] is True
     assert "recovery checklist" in proposal["recommendation"]
     assert "inspect attempts" in proposal["operator_action"]
+    guardrail = response["reuse"]["guardrail_candidates"][0]
+    assert guardrail["proposal_key"] == "operations.failure.runtime_guardrail"
+    assert guardrail["failure_class"] == "runtime"
+    assert guardrail["current_failure_count"] == 2
+    assert guardrail["evidence_status"]["ready_to_submit"] is False
+    assert "1 guardrail candidate" in response["reuse"]["summary"]
 
 
 @pytest.mark.asyncio

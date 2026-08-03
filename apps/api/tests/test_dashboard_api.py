@@ -224,6 +224,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "infrastructureChoicesTable" in response.text
     assert "Advanced raw metrics" in response.text
     assert "Blueprint Graph Hub" in response.text
+    assert "Blueprint Learning Queue" in response.text
+    assert "Guardrail Learning Queue" in response.text
+    assert "dashboardManager?.reuse" in response.text
+    assert "blueprint_candidates" in response.text
+    assert "guardrail_candidates" in response.text
+    assert "No reusable learning candidates have been observed yet." in response.text
     assert "lifecycle_detail" in response.text
     assert "promotion_blockers" in response.text
     assert "Promotion blockers:" in response.text
