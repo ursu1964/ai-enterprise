@@ -3,8 +3,15 @@ import sys
 from pathlib import Path
 
 
+def _repo_root() -> Path:
+    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Could not locate repository root with tools directory")
+
+
 def _load(name: str):
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

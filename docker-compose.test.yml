@@ -5,7 +5,7 @@ services:
       dockerfile: apps/api/Dockerfile
       args:
         UV_SYNC_ARGS: ""
-    command: ["pytest", "-q"]
+    command: ["pytest", "-q", "apps/api/tests"]
     env_file:
       - .env
     environment:
@@ -18,10 +18,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./apps/api/tests:/app/tests:ro
+      - ./.github:/app/.github:ro
+      - ./.gitignore:/app/.gitignore:ro
+      - ./apps:/app/apps:ro
+      - ./docs:/app/docs:ro
+      - ./infrastructure:/app/infrastructure:ro
+      - ./specifications:/app/specifications:ro
+      - ./templates:/app/templates:ro
       - ./tools:/app/tools:ro
       - ./migrations:/app/migrations:ro
-      - ./apps/api/Dockerfile:/app/apps/api/Dockerfile:ro
       - ./Makefile:/app/Makefile:ro
       - ./docker-compose.yml:/app/docker-compose.yml:ro
       - ./docker-compose.test.yml:/app/docker-compose.test.yml:ro

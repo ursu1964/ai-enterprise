@@ -1,6 +1,14 @@
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+
+def _repo_root() -> Path:
+    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Could not locate repository root with tools directory")
+
+
+ROOT = _repo_root()
 
 
 def test_project_foundry_core_artifacts_exist() -> None:

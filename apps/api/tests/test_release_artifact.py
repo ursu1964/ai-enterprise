@@ -3,8 +3,15 @@ import sys
 from pathlib import Path
 
 
+def _repo_root() -> Path:
+    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Could not locate repository root with tools directory")
+
+
 def _load(name: str):
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     if name == "release_artifact":
         _load("migration_verify")
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
@@ -153,16 +160,19 @@ def test_release_artifact_fails_when_required_captured_evidence_is_missing(
     assert gates["typecheck"]["evidence"]["missing_required_evidence"] is True
 
 
-def test_release_artifact_passes_when_all_fast_and_ci_evidence_is_present(
+def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
     tmp_path: Path,
 ) -> None:
     root = _release_root(tmp_path)
     evidence_file = root / "artifacts" / "gate-evidence.json"
     evidence_file.parent.mkdir()
     required = (
+        "compose-check",
+        "migration-check",
         "lint",
         "typecheck",
         "test",
+        "secret-scan",
         "docker-smoke",
         "engineering-static",
         "evolution-check",

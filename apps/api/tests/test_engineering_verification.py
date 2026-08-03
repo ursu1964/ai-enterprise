@@ -5,11 +5,18 @@ import sys
 from pathlib import Path
 
 
+def _repo_root() -> Path:
+    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Could not locate repository root with tools directory")
+
+
 def _load(name: str):
     if name == "engineering_verify":
         _load("etra_conformance")
         _load("generate_engineering_artifacts")
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     path = root / "tools" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
@@ -20,7 +27,7 @@ def _load(name: str):
 
 
 def _isolated_root(tmp_path: Path) -> Path:
-    source = Path(__file__).resolve().parents[3]
+    source = _repo_root()
     for name in (".github", "apps", "docs", "migrations", "tools", ".gitignore"):
         (tmp_path / name).symlink_to(source / name, target_is_directory=(source / name).is_dir())
     shutil.copytree(source / "specifications", tmp_path / "specifications")
@@ -30,7 +37,7 @@ def _isolated_root(tmp_path: Path) -> Path:
 
 def test_engineering_specifications_and_generated_artifacts_are_current() -> None:
     verifier = _load("engineering_verify")
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     report = verifier.verify(root)
     assert report.conformant, report.findings
     assert report.checks >= 200
@@ -121,7 +128,7 @@ def test_evidence_hash_binds_contract_implementation_content(tmp_path) -> None:
     verifier = _load("engineering_verify")
     root = _isolated_root(tmp_path)
     (root / "apps").unlink()
-    source_root = Path(__file__).resolve().parents[3]
+    source_root = _repo_root()
     for relative in (
         "apps/api/src/ai_enterprise/main.py",
         "apps/api/src/ai_enterprise/config.py",
@@ -140,9 +147,52 @@ def test_evidence_hash_binds_contract_implementation_content(tmp_path) -> None:
     assert first != second
 
 
+def test_full_gate_commands_prefer_api_virtualenv(tmp_path: Path) -> None:
+    verifier = _load("engineering_verify")
+    bin_dir = tmp_path / "apps" / "api" / ".venv" / "bin"
+    bin_dir.mkdir(parents=True)
+    for tool in ("ruff", "mypy", "pytest", "python"):
+        (bin_dir / tool).write_text("", encoding="utf-8")
+
+    commands = verifier._full_gate_commands(tmp_path)
+
+    assert commands[0] == (
+        tmp_path / "apps" / "api",
+        (
+            str(bin_dir / "ruff"),
+            "check",
+            "src",
+            "tests",
+            "../../migrations",
+        ),
+    )
+    assert commands[1] == (tmp_path, (str(bin_dir / "ruff"), "check", "tools"))
+    assert commands[2] == (
+        tmp_path / "apps" / "api",
+        (str(bin_dir / "mypy"), "src"),
+    )
+    assert commands[3][1][0] == str(bin_dir / "python")
+    assert commands[4] == (
+        tmp_path / "apps" / "api",
+        (str(bin_dir / "pytest"), "-q", "tests"),
+    )
+
+
+def test_full_gate_commands_fall_back_to_python_modules(tmp_path: Path) -> None:
+    verifier = _load("engineering_verify")
+
+    commands = verifier._full_gate_commands(tmp_path)
+
+    assert commands[0][1][:3] == (sys.executable, "-m", "ruff")
+    assert commands[1][1][:3] == (sys.executable, "-m", "ruff")
+    assert commands[2][1] == (sys.executable, "-m", "mypy", "src")
+    assert commands[3][1][0] == sys.executable
+    assert commands[4][1] == (sys.executable, "-m", "pytest", "-q", "tests")
+
+
 def test_generator_refuses_symlink_output(tmp_path) -> None:
     generator = _load("generate_engineering_artifacts")
-    source_root = Path(__file__).resolve().parents[3]
+    source_root = _repo_root()
     specification = tmp_path / generator.SOURCE
     specification.parent.mkdir(parents=True)
     specification.write_bytes((source_root / generator.SOURCE).read_bytes())

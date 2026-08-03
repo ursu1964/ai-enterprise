@@ -26,9 +26,28 @@ CI_GATE_COMMANDS: dict[str, str] = {
     "etra-check": "python tools/etra_conformance.py --root . --json",
 }
 
+RELEASE_GATE_COMMANDS: dict[str, str] = {
+    "compose-check": "docker compose config --quiet",
+    "migration-check": (
+        "cd apps/api && .venv/bin/alembic heads && "
+        ".venv/bin/alembic upgrade head --sql >/dev/null && "
+        "cd ../.. && python tools/migration_verify.py --json"
+    ),
+    **FAST_GATE_COMMANDS,
+    "secret-scan": "python tools/secret_scan.py --all",
+    "docker-smoke": "python tools/docker_smoke.py --require-worker",
+    "engineering-static": "python tools/engineering_verify.py --static --json",
+    "evolution-check": "python tools/evolution_verify.py --json",
+    "federation-check": "python tools/federation_verify.py --json",
+    "intelligence-check": "python tools/intelligence_verify.py --json",
+    "engineering-full": "python tools/engineering_verify.py --full --json",
+    "etra-check": "python tools/etra_conformance.py --root . --json",
+}
+
 GATE_COMMAND_PROFILES: dict[str, dict[str, str]] = {
     "fast": FAST_GATE_COMMANDS,
     "ci": CI_GATE_COMMANDS,
+    "release": RELEASE_GATE_COMMANDS,
 }
 
 
@@ -151,7 +170,10 @@ def main() -> int:
         "--profile",
         action="append",
         choices=sorted(GATE_COMMAND_PROFILES),
-        help="Named gate command profile. May be repeated; explicit gate commands override profiles.",
+        help=(
+            "Named gate command profile. May be repeated; explicit gate commands "
+            "override profiles."
+        ),
     )
     parser.add_argument(
         "--gate-command",

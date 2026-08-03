@@ -444,13 +444,17 @@ rtk make test
 Release evidence:
 
 ```bash
-rtk make release-gate-evidence-fast
-rtk make release-artifact
+rtk make check-release
 ```
 
-`release-gate-evidence-fast` captures lint, typecheck, and test command output under
-`artifacts/release-gates/` and writes `artifacts/gate-evidence.json`. `release-artifact`
-merges that evidence into `artifacts/release-verification.json`.
+`check-release` captures compose, migration, lint, typecheck, test, secret scan, Docker smoke,
+engineering, evolution, federation, intelligence, and ETRA evidence under `artifacts/release-gates/`,
+writes `artifacts/gate-evidence.json`, then merges it into
+`artifacts/release-verification.json`.
+
+Docker smoke uses the local dashboard-admin operator headers by default. When
+`TRUSTED_PROXY_HMAC_SECRET` is set, it also signs the operator assertion so the same smoke check can
+verify staging or production surfaces behind trusted-proxy enforcement.
 
 Alembic must have one head:
 

@@ -3,8 +3,15 @@ import sys
 from pathlib import Path
 
 
+def _repo_root() -> Path:
+    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Could not locate repository root with tools directory")
+
+
 def _load(name: str):
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     if name == "release_artifact":
         _load("migration_verify")
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
@@ -20,20 +27,23 @@ release_artifact = _load("release_artifact")
 
 
 def test_makefile_exposes_release_gate_evidence_target() -> None:
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     makefile = (root / "Makefile").read_text(encoding="utf-8")
 
     assert "release-gate-evidence-fast" in makefile
     assert "release-gate-evidence-ci" in makefile
+    assert "release-gate-evidence-release" in makefile
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
     assert (
-        "--require-evidence-for lint,typecheck,test,docker-smoke,engineering-static,"
-        "evolution-check,federation-check,intelligence-check,engineering-full,etra-check"
+        "--require-evidence-for compose-check,migration-check,lint,typecheck,test,"
+        "secret-scan,docker-smoke,engineering-static,evolution-check,federation-check,"
+        "intelligence-check,engineering-full,etra-check"
         in makefile
     )
     assert "tools/release_gate_evidence.py" in makefile
     assert "--profile fast" in makefile
     assert "--profile ci" in makefile
+    assert "--profile release" in makefile
     ci_commands = {
         "engineering-static=python tools/engineering_verify.py --static --json",
         "docker-smoke=python tools/docker_smoke.py --require-worker",
@@ -53,8 +63,8 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     check_release = next(
         line for line in makefile.splitlines() if line.startswith("check-release:")
     )
-    assert "release-gate-evidence-ci release-artifact" in check_release
-    assert check_release.index("release-gate-evidence-ci") < check_release.index(
+    assert "release-gate-evidence-release release-artifact" in check_release
+    assert check_release.index("release-gate-evidence-release") < check_release.index(
         "release-artifact"
     )
 
@@ -70,6 +80,21 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     )
     assert release_gate_evidence.GATE_COMMAND_PROFILES["ci"] == (
         release_gate_evidence.CI_GATE_COMMANDS
+    )
+    assert release_gate_evidence.GATE_COMMAND_PROFILES["release"] == (
+        release_gate_evidence.RELEASE_GATE_COMMANDS
+    )
+    assert set(release_gate_evidence.RELEASE_GATE_COMMANDS) == {
+        name for name, _command in release_artifact.DEFAULT_GATES
+    }
+    assert release_gate_evidence.RELEASE_GATE_COMMANDS["compose-check"] == (
+        "docker compose config --quiet"
+    )
+    assert "tools/migration_verify.py --json" in (
+        release_gate_evidence.RELEASE_GATE_COMMANDS["migration-check"]
+    )
+    assert release_gate_evidence.RELEASE_GATE_COMMANDS["secret-scan"] == (
+        "python tools/secret_scan.py --all"
     )
     assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
         "python tools/docker_smoke.py --require-worker"

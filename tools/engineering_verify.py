@@ -610,36 +610,7 @@ def _run_full_gates(root: Path) -> int:
     def annotation_text(value: str) -> str:
         return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
-    commands = (
-        (
-            root / "apps" / "api",
-            (
-                sys.executable,
-                "-m",
-                "ruff",
-                "check",
-                "src",
-                "tests",
-                "../../migrations",
-            ),
-        ),
-        (root, (sys.executable, "-m", "ruff", "check", "tools")),
-        (root / "apps" / "api", (sys.executable, "-m", "mypy", "src")),
-        (
-            root,
-            (
-                sys.executable,
-                "-m",
-                "compileall",
-                "-q",
-                "apps/api/src",
-                "apps/api/tests",
-                "tools",
-            ),
-        ),
-        (root / "apps" / "api", (sys.executable, "-m", "pytest", "-q", "tests")),
-    )
-    for cwd, command in commands:
+    for cwd, command in _full_gate_commands(root):
         print(f"running full gate: {' '.join(command)} [cwd={cwd.relative_to(root)}]")
         result = subprocess.run(
             command,
@@ -662,6 +633,51 @@ def _run_full_gates(root: Path) -> int:
             )
             return 1
     return 0
+
+
+def _api_python(root: Path) -> str:
+    executable = root / "apps" / "api" / ".venv" / "bin" / "python"
+    return str(executable) if executable.exists() else sys.executable
+
+
+def _api_module_command(root: Path, name: str) -> tuple[str, ...]:
+    executable = root / "apps" / "api" / ".venv" / "bin" / name
+    return (str(executable),) if executable.exists() else (sys.executable, "-m", name)
+
+
+def _full_gate_commands(root: Path) -> tuple[tuple[Path, tuple[str, ...]], ...]:
+    ruff = _api_module_command(root, "ruff")
+    mypy = _api_module_command(root, "mypy")
+    pytest = _api_module_command(root, "pytest")
+    python = _api_python(root)
+    commands = (
+        (
+            root / "apps" / "api",
+            (
+                *ruff,
+                "check",
+                "src",
+                "tests",
+                "../../migrations",
+            ),
+        ),
+        (root, (*ruff, "check", "tools")),
+        (root / "apps" / "api", (*mypy, "src")),
+        (
+            root,
+            (
+                python,
+                "-m",
+                "compileall",
+                "-q",
+                "apps/api/src",
+                "apps/api/tests",
+                "tools",
+            ),
+        ),
+        (root / "apps" / "api", (*pytest, "-q", "tests")),
+    )
+    return commands
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -111,7 +111,9 @@ def test_test_compose_profile_installs_dev_dependencies() -> None:
 
     assert "api-test:" in test_compose
     assert 'UV_SYNC_ARGS: ""' in test_compose
-    assert 'command: ["pytest", "-q"]' in test_compose
+    assert 'command: ["pytest", "-q", "apps/api/tests"]' in test_compose
+    assert "./apps:/app/apps:ro" in test_compose
+    assert "./templates:/app/templates:ro" in test_compose
     assert "docker-test:" in makefile
 
 

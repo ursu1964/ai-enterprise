@@ -2,16 +2,57 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
+import os
 import time
 import urllib.error
 import urllib.request
 from typing import Any
 
+DEFAULT_ACTOR_ID = "local-dashboard-admin"
+DEFAULT_ACTOR_TYPE = "human"
+DEFAULT_ACTOR_ROLE = "platform-admin"
+
+
+def _sign_identity_assertion(
+    *, secret: str, actor_id: str, actor_type: str, actor_role: str, timestamp: int
+) -> str:
+    message = f"{actor_id}\n{actor_type}\n{actor_role}\n{timestamp}".encode()
+    return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+
+
+def operator_headers(
+    *,
+    actor_id: str = DEFAULT_ACTOR_ID,
+    actor_type: str = DEFAULT_ACTOR_TYPE,
+    actor_role: str = DEFAULT_ACTOR_ROLE,
+    trusted_proxy_secret: str | None = None,
+    timestamp: int | None = None,
+) -> dict[str, str]:
+    headers = {
+        "X-Actor-ID": actor_id,
+        "X-Actor-Type": actor_type,
+        "X-Actor-Role": actor_role,
+    }
+    if trusted_proxy_secret:
+        asserted_at = timestamp or int(time.time())
+        headers["X-Proxy-Timestamp"] = str(asserted_at)
+        headers["X-Proxy-Signature"] = _sign_identity_assertion(
+            secret=trusted_proxy_secret,
+            actor_id=actor_id,
+            actor_type=actor_type,
+            actor_role=actor_role,
+            timestamp=asserted_at,
+        )
+    return headers
+
+
 OPERATOR_HEADERS = {
-    "X-Actor-ID": "docker-smoke",
+    "X-Actor-ID": DEFAULT_ACTOR_ID,
     "X-Actor-Type": "human",
-    "X-Actor-Role": "operator",
+    "X-Actor-Role": DEFAULT_ACTOR_ROLE,
 }
 
 
@@ -57,6 +98,10 @@ def run_smoke(
     interval: float,
     timeout: float,
     require_worker: bool,
+    actor_id: str = DEFAULT_ACTOR_ID,
+    actor_type: str = DEFAULT_ACTOR_TYPE,
+    actor_role: str = DEFAULT_ACTOR_ROLE,
+    trusted_proxy_secret: str | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
@@ -88,7 +133,12 @@ def run_smoke(
         status, content_type, body = _request(
             base_url,
             "/api/v1/operator/jobs/worker-instances",
-            headers=OPERATOR_HEADERS,
+            headers=operator_headers(
+                actor_id=actor_id,
+                actor_type=actor_type,
+                actor_role=actor_role,
+                trusted_proxy_secret=trusted_proxy_secret,
+            ),
             timeout=timeout,
         )
         payload = _json(body)
@@ -122,6 +172,19 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=2.0)
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--require-worker", action="store_true")
+    parser.add_argument("--actor-id", default=os.getenv("DOCKER_SMOKE_ACTOR_ID", DEFAULT_ACTOR_ID))
+    parser.add_argument(
+        "--actor-type",
+        default=os.getenv("DOCKER_SMOKE_ACTOR_TYPE", DEFAULT_ACTOR_TYPE),
+    )
+    parser.add_argument(
+        "--actor-role",
+        default=os.getenv("DOCKER_SMOKE_ACTOR_ROLE", DEFAULT_ACTOR_ROLE),
+    )
+    parser.add_argument(
+        "--trusted-proxy-secret",
+        default=os.getenv("TRUSTED_PROXY_HMAC_SECRET") or None,
+    )
     args = parser.parse_args()
 
     try:
@@ -131,6 +194,10 @@ def main() -> int:
             interval=args.interval,
             timeout=args.timeout,
             require_worker=args.require_worker,
+            actor_id=args.actor_id,
+            actor_type=args.actor_type,
+            actor_role=args.actor_role,
+            trusted_proxy_secret=args.trusted_proxy_secret,
         )
     except (RuntimeError, urllib.error.URLError, TimeoutError) as exc:
         print(json.dumps({"conformant": False, "error": str(exc)}, sort_keys=True))

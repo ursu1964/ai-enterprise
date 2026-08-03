@@ -8,13 +8,20 @@ import pytest
 
 
 def _load(name: str):
-    root = Path(__file__).resolve().parents[3]
+    root = _repo_root()
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _repo_root() -> Path:
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "tools").is_dir():
+            return candidate
+    raise AssertionError("Unable to locate repository root from test path")
 
 
 docker_smoke = _load("docker_smoke")
@@ -67,6 +74,19 @@ def test_docker_smoke_reports_health_metrics_and_workers(monkeypatch: pytest.Mon
     worker_check = _check(report, "worker_visibility")
     assert worker_check["worker_count"] == 1
     assert worker_check["worker_statuses"] == ["online"]
+
+
+def test_docker_smoke_can_sign_operator_headers() -> None:
+    headers = docker_smoke.operator_headers(
+        trusted_proxy_secret="x" * 32,
+        timestamp=123,
+    )
+
+    assert headers["X-Actor-ID"] == "local-dashboard-admin"
+    assert headers["X-Actor-Type"] == "human"
+    assert headers["X-Actor-Role"] == "platform-admin"
+    assert headers["X-Proxy-Timestamp"] == "123"
+    assert len(headers["X-Proxy-Signature"]) == 64
 
 
 def test_docker_smoke_requires_visible_worker(monkeypatch: pytest.MonkeyPatch) -> None:
