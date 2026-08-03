@@ -637,6 +637,19 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["economic_effects"]["viability"] == "viable"
     assert response["blueprints"][0]["kind"] == "workflow_pattern"
     assert response["blueprints"][0]["lifecycle"] == "reviewed"
+    assert response["blueprints"][0]["lifecycle_detail"]["label"] == (
+        "Reviewed candidate"
+    )
+    assert response["blueprints"][0]["lifecycle_detail"]["trust_level"] == "reviewed"
+    assert "needs proof before reuse" in response["blueprints"][0]["lifecycle_detail"][
+        "meaning"
+    ]
+    assert "Collect the remaining proof" in response["blueprints"][0][
+        "lifecycle_detail"
+    ]["next_action"]
+    assert "complete all delivery phases" in response["blueprints"][0][
+        "lifecycle_detail"
+    ]["promotion_blockers"]
     assert response["blueprints"][0]["source_phase"] == "workflow"
     assert response["blueprints"][0]["reuse_proof"]["economic_viability"] == "viable"
     assert response["blueprints"][0]["reuse_proof"]["reuse_multiplier"] == 1.0
@@ -842,6 +855,18 @@ async def test_project_intelligence_classifies_worker_errors_for_humans() -> Non
     assert response["errors"][0]["likely_cause"].startswith("The project path may be missing")
     assert response["errors"][0]["raw_diagnostic"] == "fatal: ambiguous argument HEAD"
     assert response["blueprints"][0]["lifecycle"] == "improved"
+    assert response["blueprints"][0]["lifecycle_detail"]["label"] == (
+        "Improvement needed"
+    )
+    assert response["blueprints"][0]["lifecycle_detail"]["trust_level"] == (
+        "guardrail_required"
+    )
+    assert "guardrails before this pattern is reused" in response["blueprints"][0][
+        "lifecycle_detail"
+    ]["meaning"]
+    assert "resolve current issues before reuse" in response["blueprints"][0][
+        "lifecycle_detail"
+    ]["promotion_blockers"]
     assert response["blueprints"][0]["improvement_proposals"][0]["phase"] == "intake"
     assert response["blueprints"][0]["improvement_proposals"][0]["failure_class"] == "git"
 

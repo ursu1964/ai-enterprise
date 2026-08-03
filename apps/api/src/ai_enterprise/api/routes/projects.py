@@ -625,6 +625,13 @@ def _blueprints(
         "source_project_type": project_type,
         "evidence_count": evidence_count,
         "completed_phase_count": completed_phase_count,
+        "lifecycle_detail": _blueprint_lifecycle_detail(
+            lifecycle=lifecycle,
+            completed_phase_count=completed_phase_count,
+            evidence_count=evidence_count,
+            problem_count=problem_count,
+            viability=str(economic_effects["viability"]),
+        ),
         "reuse_proof": {
             "economic_viability": economic_effects["viability"],
             "reuse_multiplier": economic_effects["reuse_multiplier"],
@@ -704,6 +711,64 @@ def _blueprint_lifecycle(
     if evidence_count:
         return "reviewed"
     return "candidate"
+
+
+def _blueprint_lifecycle_detail(
+    *,
+    lifecycle: str,
+    completed_phase_count: int,
+    evidence_count: int,
+    problem_count: int,
+    viability: str,
+) -> dict[str, object]:
+    blockers: list[str] = []
+    if completed_phase_count < 7:
+        blockers.append("complete all delivery phases")
+    if evidence_count < 4:
+        blockers.append("bind at least four evidence items")
+    if viability != "viable":
+        blockers.append("record viable economic proof")
+    if problem_count:
+        blockers.append("resolve current issues before reuse")
+    if lifecycle == "reusable":
+        return {
+            "label": "Reusable",
+            "trust_level": "reuse_ready",
+            "meaning": "This blueprint has enough delivery proof to seed future work.",
+            "next_action": "Promote through the blueprint catalog with its evidence bundle.",
+            "promotion_blockers": [],
+        }
+    if lifecycle == "reviewed":
+        return {
+            "label": "Reviewed candidate",
+            "trust_level": "reviewed",
+            "meaning": "Evidence exists, but the blueprint still needs proof before reuse.",
+            "next_action": "Collect the remaining proof and review it for catalog promotion.",
+            "promotion_blockers": blockers,
+        }
+    if lifecycle == "improved":
+        return {
+            "label": "Improvement needed",
+            "trust_level": "guardrail_required",
+            "meaning": "Current issues should become guardrails before this pattern is reused.",
+            "next_action": "Resolve failures, attach evidence, and update the reusable pattern.",
+            "promotion_blockers": blockers,
+        }
+    if lifecycle == "deprecated":
+        return {
+            "label": "Deprecated",
+            "trust_level": "do_not_reuse",
+            "meaning": "This blueprint has been replaced or retired.",
+            "next_action": "Use the superseding blueprint before starting new work.",
+            "promotion_blockers": ["use superseding blueprint"],
+        }
+    return {
+        "label": "Candidate",
+        "trust_level": "candidate",
+        "meaning": "The pattern is visible but not yet reviewed or proven for reuse.",
+        "next_action": "Finish execution and collect governed evidence before promotion.",
+        "promotion_blockers": blockers,
+    }
 
 
 def _blueprint_improvement_proposals(phases: list[dict[str, object]]) -> list[dict[str, str]]:
