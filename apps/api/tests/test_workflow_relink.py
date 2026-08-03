@@ -5,7 +5,11 @@ import pytest
 
 from ai_enterprise.api.routes.workflows import router
 from ai_enterprise.api.workflow_schemas import WorkflowTransitionResponse
-from ai_enterprise.application.workflow.service import WorkflowService, workflow_state_for_project
+from ai_enterprise.application.workflow.service import (
+    WorkflowService,
+    workflow_relink_decision_for_project,
+    workflow_state_for_project,
+)
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.workflow.context import WorkflowContext
@@ -266,13 +270,76 @@ def test_workflow_relink_maps_each_project_status_to_explicit_protocol_action(
     assert expected_action in action
 
 
+def test_workflow_relink_mapping_is_exhaustive_for_project_statuses() -> None:
+    covered_statuses = {
+        ProjectStatus.CREATED,
+        ProjectStatus.REQUIREMENTS_QUEUED,
+        ProjectStatus.REQUIREMENTS_RUNNING,
+        ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+        ProjectStatus.REQUIREMENTS_APPROVED,
+        ProjectStatus.REQUIREMENTS_REJECTED,
+        ProjectStatus.REQUIREMENTS_FAILED,
+        ProjectStatus.ARCHITECTURE_QUEUED,
+        ProjectStatus.ARCHITECTURE_RUNNING,
+        ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL,
+        ProjectStatus.ARCHITECTURE_APPROVED,
+        ProjectStatus.ARCHITECTURE_REJECTED,
+        ProjectStatus.ARCHITECTURE_FAILED,
+        ProjectStatus.WORK_PACKAGE_QUEUED,
+        ProjectStatus.WORK_PACKAGE_PLANNING,
+        ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL,
+        ProjectStatus.WORK_PACKAGE_APPROVED,
+        ProjectStatus.WORK_PACKAGE_REJECTED,
+        ProjectStatus.WORK_PACKAGE_FAILED,
+    }
+
+    assert covered_statuses == set(ProjectStatus)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        ProjectStatus.REQUIREMENTS_APPROVED,
+        ProjectStatus.ARCHITECTURE_APPROVED,
+        ProjectStatus.WORK_PACKAGE_APPROVED,
+    ],
+)
+def test_workflow_relink_marks_approved_statuses_ready_to_advance(
+    status: ProjectStatus,
+) -> None:
+    decision = workflow_relink_decision_for_project(project(status))
+
+    assert decision.advance_ready is True
+    assert decision.decision_already_made is True
+    assert "Advance the workflow" in decision.operator_action
+    assert "approve or request changes" not in decision.operator_action
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+        ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL,
+        ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL,
+    ],
+)
+def test_workflow_relink_marks_awaiting_approval_statuses_as_waiting_for_decision(
+    status: ProjectStatus,
+) -> None:
+    decision = workflow_relink_decision_for_project(project(status))
+
+    assert decision.advance_ready is False
+    assert decision.decision_already_made is False
+    assert "approve or request changes" in decision.operator_action
+
+
 def test_workflow_relink_route_is_registered() -> None:
     paths = {route.path for route in router.routes}
 
     assert "/projects/{project_id}/workflow/relink" in paths
 
 
-def test_workflow_relink_maps_approved_work_package_to_manual_execution_review() -> None:
+def test_workflow_relink_maps_approved_work_package_to_advance_ready_execution() -> None:
     state, step, action = workflow_state_for_project(project(ProjectStatus.WORK_PACKAGE_APPROVED))
 
     assert state == WorkflowState.PLANNING_RUNNING
@@ -286,6 +353,16 @@ def test_workflow_relink_sends_manifest_mismatch_to_manual_intervention() -> Non
     assert state == WorkflowState.MANUAL_INTERVENTION
     assert step is None
     assert "manifest hash" in action
+
+
+def test_workflow_relink_sends_unknown_legacy_status_to_manual_intervention() -> None:
+    decision = workflow_relink_decision_for_project(project("legacy_execution_review"))
+
+    assert decision.workflow_state == WorkflowState.MANUAL_INTERVENTION
+    assert decision.current_step is None
+    assert decision.advance_ready is False
+    assert decision.decision_already_made is False
+    assert "not mapped" in decision.operator_action
 
 
 def test_relinked_workflow_history_accepts_bootstrap_previous_state() -> None:
@@ -350,11 +427,19 @@ async def test_workflow_relink_writes_tamper_evident_audit_chain() -> None:
     assert isinstance(context, WorkflowContextModel)
     assert isinstance(transition, WorkflowTransitionModel)
     assert workflow.state == WorkflowState.WAITING_REQUIREMENTS_APPROVAL
+    assert context.context["metadata"]["relink"] == {
+        "project_status": ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+        "relink_reason": "Review requirements evidence and approve or request changes.",
+        "advance_ready": False,
+        "decision_already_made": False,
+    }
     audit = next(item for item in session.added if isinstance(item, AuditEventModel))
     chain = next(item for item in session.added if isinstance(item, AuditChainRecordModel))
     assert audit.event_type == WorkflowEventName.RELINKED
     assert chain.payload["event_type"] == WorkflowEventName.RELINKED
     assert chain.payload["payload"]["state"] == WorkflowState.WAITING_REQUIREMENTS_APPROVAL
+    assert chain.payload["payload"]["advance_ready"] is False
+    assert chain.payload["payload"]["decision_already_made"] is False
     assert_single_valid_chain(session, WorkflowEventName.RELINKED)
 
 

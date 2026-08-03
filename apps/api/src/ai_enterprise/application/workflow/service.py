@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -45,9 +46,38 @@ class WorkflowConflictError(RuntimeError):
     pass
 
 
-def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, str | None, str]:
+@dataclass(frozen=True, slots=True)
+class WorkflowRelinkDecision:
+    workflow_state: WorkflowState
+    current_step: WorkflowStepName | None
+    relink_reason: str
+    operator_action: str
+    advance_ready: bool = False
+    decision_already_made: bool = False
+
+
+def _relink_decision(
+    workflow_state: WorkflowState,
+    current_step: WorkflowStepName | None,
+    operator_action: str,
+    *,
+    advance_ready: bool = False,
+    decision_already_made: bool = False,
+    relink_reason: str | None = None,
+) -> WorkflowRelinkDecision:
+    return WorkflowRelinkDecision(
+        workflow_state=workflow_state,
+        current_step=current_step,
+        relink_reason=relink_reason or operator_action,
+        operator_action=operator_action,
+        advance_ready=advance_ready,
+        decision_already_made=decision_already_made,
+    )
+
+
+def workflow_relink_decision_for_project(project: ProjectModel) -> WorkflowRelinkDecision:
     if hash_json(project.manifest) != project.manifest_hash:
-        return (
+        return _relink_decision(
             WorkflowState.MANUAL_INTERVENTION,
             None,
             (
@@ -57,37 +87,39 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
         )
     status = str(project.status)
     if status == ProjectStatus.CREATED:
-        return (
+        return _relink_decision(
             WorkflowState.PROJECT_CREATED,
             None,
             "Start the workflow when the operator is ready to generate requirements.",
         )
     if status in {ProjectStatus.REQUIREMENTS_QUEUED, ProjectStatus.REQUIREMENTS_RUNNING}:
-        return (
+        return _relink_decision(
             WorkflowState.REQUIREMENTS_RUNNING,
             WorkflowStepName.REQUIREMENTS,
             "Wait for requirements generation or inspect the requirements job.",
         )
     if status == ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL:
-        return (
+        return _relink_decision(
             WorkflowState.WAITING_REQUIREMENTS_APPROVAL,
             WorkflowStepName.REQUIREMENTS,
             "Review requirements evidence and approve or request changes.",
         )
     if status == ProjectStatus.REQUIREMENTS_APPROVED:
-        return (
+        return _relink_decision(
             WorkflowState.REQUIREMENTS_RUNNING,
             WorkflowStepName.REQUIREMENTS,
             "Requirements are approved. Advance the workflow to architecture.",
+            advance_ready=True,
+            decision_already_made=True,
         )
     if status == ProjectStatus.REQUIREMENTS_REJECTED:
-        return (
+        return _relink_decision(
             WorkflowState.MANUAL_INTERVENTION,
             WorkflowStepName.REQUIREMENTS,
             "Requirements were rejected. Revise evidence before advancing.",
         )
     if status == ProjectStatus.REQUIREMENTS_FAILED:
-        return (
+        return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.REQUIREMENTS,
             "Requirements work failed. Review job evidence before retrying.",
@@ -96,31 +128,33 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
         ProjectStatus.ARCHITECTURE_QUEUED,
         ProjectStatus.ARCHITECTURE_RUNNING,
     }:
-        return (
+        return _relink_decision(
             WorkflowState.ARCHITECTURE_RUNNING,
             WorkflowStepName.ARCHITECTURE,
             "Wait for architecture generation or inspect the architecture job.",
         )
     if status == ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL:
-        return (
+        return _relink_decision(
             WorkflowState.WAITING_ARCHITECTURE_APPROVAL,
             WorkflowStepName.ARCHITECTURE,
             "Review architecture evidence and approve or request changes.",
         )
     if status == ProjectStatus.ARCHITECTURE_APPROVED:
-        return (
+        return _relink_decision(
             WorkflowState.ARCHITECTURE_RUNNING,
             WorkflowStepName.ARCHITECTURE,
             "Architecture is approved. Advance the workflow to work-package planning.",
+            advance_ready=True,
+            decision_already_made=True,
         )
     if status == ProjectStatus.ARCHITECTURE_REJECTED:
-        return (
+        return _relink_decision(
             WorkflowState.MANUAL_INTERVENTION,
             WorkflowStepName.ARCHITECTURE,
             "Architecture was rejected. Revise evidence before advancing.",
         )
     if status == ProjectStatus.ARCHITECTURE_FAILED:
-        return (
+        return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.ARCHITECTURE,
             "Architecture work failed. Review job evidence before retrying.",
@@ -129,40 +163,49 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
         ProjectStatus.WORK_PACKAGE_QUEUED,
         ProjectStatus.WORK_PACKAGE_PLANNING,
     }:
-        return (
+        return _relink_decision(
             WorkflowState.PLANNING_RUNNING,
             WorkflowStepName.PLANNING,
             "Wait for work-package planning or inspect planning jobs.",
         )
     if status == ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL:
-        return (
+        return _relink_decision(
             WorkflowState.WAITING_WORK_PACKAGE_APPROVAL,
             WorkflowStepName.PLANNING,
             "Review work-package evidence and approve or request changes.",
         )
     if status == ProjectStatus.WORK_PACKAGE_APPROVED:
-        return (
+        return _relink_decision(
             WorkflowState.PLANNING_RUNNING,
             WorkflowStepName.PLANNING,
             "Work package is approved. Advance the workflow to execution.",
+            advance_ready=True,
+            decision_already_made=True,
         )
     if status == ProjectStatus.WORK_PACKAGE_REJECTED:
-        return (
+        return _relink_decision(
             WorkflowState.MANUAL_INTERVENTION,
             WorkflowStepName.PLANNING,
             "Work package was rejected. Revise evidence before execution.",
         )
     if status == ProjectStatus.WORK_PACKAGE_FAILED:
-        return (
+        return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.PLANNING,
             "Work-package planning failed. Review job evidence before retrying.",
         )
-    return (
+    return _relink_decision(
         WorkflowState.MANUAL_INTERVENTION,
         None,
         "Project status is not mapped to an automatic workflow step. Review before running.",
     )
+
+
+def workflow_state_for_project(
+    project: ProjectModel,
+) -> tuple[WorkflowState, WorkflowStepName | None, str]:
+    decision = workflow_relink_decision_for_project(project)
+    return decision.workflow_state, decision.current_step, decision.operator_action
 
 
 class WorkflowService:
@@ -241,26 +284,34 @@ class WorkflowService:
         project = await self.session.get(ProjectModel, project_id)
         if project is None:
             raise WorkflowNotFoundError(f"Project {project_id} does not exist")
-        state, step, action = workflow_state_for_project(project)
+        decision = workflow_relink_decision_for_project(project)
         workflow_id, correlation_id = uuid.uuid4(), uuid.uuid4()
         workflow = WorkflowInstanceModel(
             id=workflow_id,
             project_id=project_id,
             definition_name="vertical_slice",
             workflow_version=self.VERSION,
-            state=state,
-            current_step=step,
+            state=decision.workflow_state,
+            current_step=decision.current_step,
             context_version=1,
             correlation_id=correlation_id,
             optimistic_version=1,
-            recommended_operator_action=action,
+            recommended_operator_action=decision.operator_action,
         )
         context = WorkflowContext(
             workflow_id=workflow_id,
             project_id=project_id,
-            current_state=state,
+            current_state=decision.workflow_state,
             correlation_id=correlation_id,
             actor_id=actor_id,
+            metadata={
+                "relink": {
+                    "project_status": str(project.status),
+                    "relink_reason": decision.relink_reason,
+                    "advance_ready": decision.advance_ready,
+                    "decision_already_made": decision.decision_already_made,
+                }
+            },
         )
         self.session.add(workflow)
         await self.session.flush()
@@ -269,7 +320,7 @@ class WorkflowService:
                 id=uuid.uuid4(),
                 workflow_id=workflow_id,
                 version=1,
-                state=state,
+                state=decision.workflow_state,
                 context=context.model_dump(mode="json"),
                 context_hash=context.content_hash(),
             )
@@ -280,8 +331,8 @@ class WorkflowService:
                 workflow_id=workflow_id,
                 sequence=1,
                 previous_state="unlinked",
-                current_state=state,
-                step=step,
+                current_state=decision.workflow_state,
+                step=decision.current_step,
                 actor_type="human",
                 actor_id=actor_id,
                 reason=reason,
@@ -296,8 +347,11 @@ class WorkflowService:
             actor_id=actor_id,
             payload={
                 "workflow_id": str(workflow_id),
-                "state": state,
+                "state": decision.workflow_state,
                 "reason": reason,
+                "relink_reason": decision.relink_reason,
+                "advance_ready": decision.advance_ready,
+                "decision_already_made": decision.decision_already_made,
             },
         )
         await self.session.commit()
