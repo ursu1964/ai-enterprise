@@ -223,6 +223,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No project readiness items yet" in response.text
     assert "Live evidence is waiting for the first governed record" in response.text
     assert "Evidence is waiting for the first governed record" in response.text
+    assert "Status: ${esc(emptyMessage)}" in response.text
+    assert "Next: follow the panel guidance, then refresh this dashboard." in response.text
+    assert (
+        "Result: when the factory creates governed data, it appears here automatically."
+        in response.text
+    )
     assert "launch-contract-list" in response.text
     assert "Open Recommended View" in response.text
     assert "Open Proof Path" in response.text
@@ -380,9 +386,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "/dashboard/project-foundry-core" in response.text
     assert "Authenticated Graph Context" in response.text
     assert "The dashboard will use the current organization and project" in response.text
+    assert "authenticatedGraphPreview" in response.text
     assert "Ready to check" in response.text
     assert "payload.nodes || payload.entities || []" in response.text
     assert "map is ready but empty" in response.text
+    assert "The graph is not broken; it is waiting for governed execution records." in response.text
+    assert "Last check found" in response.text
+    assert "/api/v1/ecosystem/graph" in response.text
+    assert "/api/v1/specifications/evidence/graph" in response.text
     assert "operator headers" not in response.text
     assert "/api/v1/query/operating-picture" in response.text
     assert "/api/v1/project-formation/projects/" in response.text
@@ -467,7 +478,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Past problems will appear here after review" in response.text
     assert "Nothing to show yet" not in response.text
     assert "Waiting for live evidence" in response.text
-    assert "When the factory creates data, it will appear here automatically." in response.text
+    assert "Waiting for table evidence" in response.text
+    assert "when the factory creates governed data, it appears here automatically" in response.text
     assert "Historical samples" in response.text
     assert "Average phase" in response.text
     assert "lifecycle" in response.text

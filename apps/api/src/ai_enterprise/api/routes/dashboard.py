@@ -1983,6 +1983,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <button id="checkEvidenceGraph">Check Evidence</button>
         </div>
         <div id="authenticatedGraphStatus" class="mini muted">The dashboard will use the current organization and project when you check a graph.</div>
+        <div id="authenticatedGraphPreview" class="surface-graph"></div>
       </article>
       <article class="panel span-6"><h2>Development Map</h2><div id="graphStatus" class="mini muted">Graphify output is available when graphify-out/graph.html is mounted.</div></article>
     </section>
@@ -2051,26 +2052,31 @@ DASHBOARD_HTML = r"""<!doctype html>
       return response.text();
     }
 
+    function emptyState(emptyMessage, title = "Waiting for live evidence") {
+      return `
+        <div class="listbox">
+          <div class="list-item empty-state">
+            <div>
+              <div class="list-title">${esc(title)}</div>
+              <div class="list-meta">Status: ${esc(emptyMessage)}</div>
+              <div class="list-meta">Next: follow the panel guidance, then refresh this dashboard.</div>
+              <div class="list-meta">Result: when the factory creates governed data, it appears here automatically.</div>
+            </div>
+            <span class="pill info">ready</span>
+          </div>
+        </div>
+      `;
+    }
+
     function table(rows, columns, emptyMessage = "Evidence is waiting for the first governed record in this section.") {
-      if (!rows.length) return `<div class="mini muted">${esc(emptyMessage)}</div>`;
+      if (!rows.length) return emptyState(emptyMessage, "Waiting for table evidence");
       return `<table><thead><tr>${columns.map(col => `<th>${esc(col.label)}</th>`).join("")}</tr></thead><tbody>` +
         rows.map(row => `<tr>${columns.map(col => `<td>${esc(col.value(row))}</td>`).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
 
     function listbox(rows, renderItem, emptyMessage = "Live evidence is waiting for the first governed record in this section.") {
-      if (!rows.length) return `
-        <div class="listbox">
-          <div class="list-item empty-state">
-            <div>
-              <div class="list-title">Waiting for live evidence</div>
-              <div class="list-meta">${esc(emptyMessage)}</div>
-              <div class="list-meta">Next: follow the panel guidance, then refresh. When the factory creates data, it will appear here automatically.</div>
-            </div>
-            <span class="pill info">ready</span>
-          </div>
-        </div>
-      `;
+      if (!rows.length) return emptyState(emptyMessage);
       return `<div class="listbox">${rows.map(renderItem).join("")}</div>`;
     }
 
@@ -2688,11 +2694,13 @@ DASHBOARD_HTML = r"""<!doctype html>
           if (action === "projects") goTarget("projects");
           if (action === "problems") goTarget("problems");
           if (action === "metrics") goTarget("metrics");
+          if (action === "graph") goTarget("graph");
           if (action === "graphify") window.location.href = "/dashboard/graphify";
           if (action === "foundry") window.location.href = "/dashboard/project-foundry-core";
           if (action === "ecosystem" || action === "evidence") {
             switchView("graph");
             byId("authenticatedGraphStatus").innerHTML = `<strong>Ready to check</strong><div class="muted">The dashboard has loaded the current organization${action === "evidence" ? " and project" : ""}. Press the check button to see whether records are linked yet.</div>`;
+            renderAuthenticatedGraphPreview(action, "waiting");
           }
         });
       });
@@ -2872,12 +2880,46 @@ DASHBOARD_HTML = r"""<!doctype html>
         const edges = Array.isArray(payload.edges) ? payload.edges.length : 0;
         if (nodes === 0 && edges === 0) {
           byId("authenticatedGraphStatus").innerHTML = `<strong class="warn">${esc(kind)} map is ready but empty</strong><div class="muted">The connection works. Link governed records during project execution, then refresh to see relationships here.</div>`;
+          renderAuthenticatedGraphPreview(kind, "empty", nodes, edges);
           return;
         }
         byId("authenticatedGraphStatus").innerHTML = `<strong class="ok">${esc(kind)} map available</strong><div class="muted">${esc(countSentence(nodes, "node"))}, ${esc(countSentence(edges, "edge"))}. The dashboard is reading linked records for this project or organization.</div>`;
+        renderAuthenticatedGraphPreview(kind, "available", nodes, edges);
       } catch (error) {
         byId("authenticatedGraphStatus").innerHTML = `<strong class="bad">${esc(kind)} map needs attention</strong><div class="muted">The dashboard could not read this map. Refresh context first; if it repeats, inspect API readiness and permissions.</div>`;
+        renderAuthenticatedGraphPreview(kind, "attention", 0, 0);
       }
+    }
+
+    function renderAuthenticatedGraphPreview(kind = "ecosystem", stateName = "waiting", nodes = 0, edges = 0) {
+      const noun = kind === "evidence" ? "proof map" : "enterprise map";
+      const setupTarget = kind === "evidence" ? "projects" : "factory";
+      const proofPath = kind === "evidence"
+        ? "/api/v1/specifications/evidence/graph"
+        : "/api/v1/ecosystem/graph";
+      const models = {
+        waiting: [
+          { title: "Select Context", detail: "The graph check uses the current organization and project fields.", idea: "Confirm context before reading relationships.", effect: "Avoids showing the wrong enterprise map.", signal: "ready", kind: "info", action: "graph" },
+          { title: "Check Map", detail: "Use Check Ecosystem or Check Evidence to read the live graph API.", idea: "One click proves whether records are linked.", effect: "Separates empty data from broken data.", signal: "next", kind: "ok", action: "graph" },
+          { title: "Proof Path", detail: proofPath, idea: "This is the API path that feeds the graph result.", effect: "Makes the data source auditable.", signal: "proof", kind: "info", action: "graphify" }
+        ],
+        empty: [
+          { title: "Connection Works", detail: `${noun} is ready but no linked records exist yet.`, idea: "The graph is not broken; it is waiting for governed execution records.", effect: "Reduces confusion when a new installation has no relationships.", signal: "ready", kind: "warn", action: "execution" },
+          { title: "Create Links", detail: "Start or continue a manifesto workflow so requirements, tasks, crews, decisions, and proof can connect.", idea: "Relationships appear after the factory records movement.", effect: "Turns an empty graph into project evidence.", signal: "next", kind: "ok", action: setupTarget },
+          { title: "Verify Later", detail: `Refresh this check after workflow progress. Last check found ${countSentence(nodes, "node")} and ${countSentence(edges, "edge")}.`, idea: "Use the same proof path after new records are created.", effect: "Shows measurable graph growth over time.", signal: "proof", kind: "info", action: "projects" }
+        ],
+        available: [
+          { title: "Map Has Records", detail: `${countSentence(nodes, "node")} and ${countSentence(edges, "edge")} are linked.`, idea: "The graph is reading live governed relationships.", effect: "Supports impact analysis and audit proof.", signal: "live", kind: "ok", action: "projects" },
+          { title: "Inspect Movement", detail: "Open the project graph to see phase, crew, task, proof, and remaining work.", idea: "Use the visual map to decide the next controlled action.", effect: "Improves delivery steering.", signal: "inspect", kind: "info", action: "projects" },
+          { title: "Reuse Evidence", detail: "Turn repeated successful structures into blueprints after review.", idea: "Graph proof feeds future templates.", effect: "Increases reusable enterprise capability.", signal: "reuse", kind: "ok", action: "graph" }
+        ],
+        attention: [
+          { title: "Map Needs Attention", detail: "The dashboard could not read the graph API for this context.", idea: "Refresh context first, then check API readiness and permissions.", effect: "Separates permission problems from empty data.", signal: "check", kind: "bad", action: "metrics" },
+          { title: "Confirm Readiness", detail: "Use readiness and telemetry before trusting graph output.", idea: "Data source health must be visible before decisions.", effect: "Prevents decisions from stale or blocked signals.", signal: "verify", kind: "warn", action: "metrics" },
+          { title: "Proof Path", detail: proofPath, idea: "This is the source to inspect if the issue repeats.", effect: "Gives the operator a clear recovery path.", signal: "proof", kind: "info", action: "graphify" }
+        ]
+      };
+      renderSurfaceNodes("authenticatedGraphPreview", models[stateName] || models.waiting);
     }
 
     function renderCapabilities() {
@@ -4547,6 +4589,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
     animateField();
     renderCapabilities();
+    renderAuthenticatedGraphPreview();
     setOrientation(0, "Start here: write a client idea or attach a manifesto in Factory.");
     refresh().then(() => {
       const projectId = new URL(window.location.href).searchParams.get("project");

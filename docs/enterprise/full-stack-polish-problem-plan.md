@@ -230,3 +230,7 @@ Evidence:
 - Guided Recovery Center rows now expose clear recovery compartments: operator decision,
   current delivery risk, proof, and next action for blocked, retrying, running, reviewed, and
   completed work.
+- Authenticated ecosystem/evidence graph checks now render a guided mini-map for waiting, empty,
+  available, and needs-attention states, with next action and proof-path language.
+- Shared empty table/listbox states now use the same human structure: status, next action, and
+  expected result when governed factory data arrives.
