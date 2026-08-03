@@ -1916,8 +1916,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div id="problemGraph" class="surface-graph"></div>
       </article>
       <article class="panel span-12">
-        <div class="toolbar"><h2>Recovery and Work History</h2><select id="jobFilter"><option value="current">Current action</option><option value="history">Reviewed history</option><option value="">All records</option><option value="queued">Waiting for capacity</option><option value="running">Running now</option><option value="failed">Needs recovery</option><option value="dead_letter">Needs review</option><option value="succeeded">Completed</option></select></div>
-        <div id="jobActionStatus" class="mini muted">Select a recovery action to inspect attempt proof or record reviewed recoveries.</div>
+        <div class="toolbar"><h2>Guided Recovery Center</h2><select id="jobFilter"><option value="current">Work that needs a decision</option><option value="history">Reviewed proof history</option><option value="">All work records</option><option value="queued">Waiting for capacity</option><option value="running">Running now</option><option value="failed">Needs recovery</option><option value="dead_letter">Needs review</option><option value="succeeded">Completed</option></select></div>
+        <div id="jobActionStatus" class="mini muted">Choose a work item to see the proof, the recommended fix, and whether it still affects current delivery risk.</div>
         <div id="jobsTable"></div>
       </article>
       <article class="panel span-12">
@@ -3765,6 +3765,62 @@ DASHBOARD_HTML = r"""<!doctype html>
       return `${humanJobType(job.job_type)} is tracked by the factory.`;
     }
 
+    function jobRecoveryDecision(job) {
+      const attempts = `${job.attempt_count || 0} of ${job.max_attempts || 0}`;
+      if (isAcknowledgedJob(job)) {
+        return {
+          decision: "Reviewed recovery",
+          risk: "Historical proof only. This record no longer affects current delivery risk.",
+          proof: job.operator_resolution?.reason || job.last_error || "Operator review is recorded.",
+          nextAction: "Keep this as audit evidence and use the lesson when updating guardrails.",
+          className: "info",
+        };
+      }
+      if (isProblemJob(job)) {
+        return {
+          decision: "Operator decision required",
+          risk: "Current delivery risk until recovery is reviewed or the work is safely retried.",
+          proof: job.last_error || job.last_failure_class || "Worker proof is missing. Open attempts before deciding.",
+          nextAction: "Open attempt proof, identify the recovery path, then record reviewed recovery when complete.",
+          className: "bad",
+        };
+      }
+      if (["retry_wait", "queued"].includes(job.status)) {
+        return {
+          decision: "Waiting for capacity",
+          risk: "Low current risk unless this queue keeps growing or retry pressure repeats.",
+          proof: `Attempt progress ${attempts}. Next availability ${job.available_at || "not scheduled"}.`,
+          nextAction: "Watch worker capacity and only intervene if the item stops progressing.",
+          className: "warn",
+        };
+      }
+      if (["running", "leased"].includes(job.status)) {
+        return {
+          decision: "Work in progress",
+          risk: "Active delivery work. Current risk depends on heartbeat and deadline proof.",
+          proof: `Worker ${job.lease_owner || "waiting for worker identity"} accepted attempt ${job.attempt_count || 0}.`,
+          nextAction: "Inspect only if the lease expires, the worker goes offline, or the same class repeats.",
+          className: "info",
+        };
+      }
+      if (job.status === "succeeded") {
+        return {
+          decision: "No decision needed",
+          risk: "Healthy history. This completed record supports delivery proof.",
+          proof: `Completed after ${attempts} attempts.`,
+          nextAction: "Use this as evidence for phase completion and blueprint learning.",
+          className: "ok",
+        };
+      }
+      return {
+        decision: "Monitor",
+        risk: "No immediate recovery decision is required from this state.",
+        proof: job.last_error || `Attempt progress ${attempts}.`,
+        nextAction: "Keep this record visible until it becomes completed, retrying, or blocked.",
+        className: "info",
+      };
+    }
+
     function failureImprovementProposals() {
       const counts = {};
       state.jobs
@@ -3995,11 +4051,17 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="mini">
           <strong class="${esc(group.className)}">${esc(group.label)}</strong>
           <div class="list-meta">${esc(group.summary)}</div>
-          ${listbox(group.jobs, job => `
+          ${listbox(group.jobs, job => {
+            const decision = jobRecoveryDecision(job);
+            return `
             <div class="list-item">
               <div>
                 <div class="list-title">${esc(humanJobType(job.job_type))}</div>
                 <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
+                <div class="list-meta"><strong>Decision:</strong> ${esc(decision.decision)}</div>
+                <div class="list-meta"><strong>Current Risk:</strong> ${esc(decision.risk)}</div>
+                <div class="list-meta"><strong>Proof:</strong> ${esc(decision.proof)}</div>
+                <div class="list-meta"><strong>Next Action:</strong> ${esc(decision.nextAction)}</div>
                 <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
                 <details><summary>Proof detail</summary><div class="list-meta">${esc(job.last_error || "Worker proof has not been attached to this record yet.")}</div></details>
                 <div class="toolbar" style="justify-content: flex-start; margin-top: 8px;">
@@ -4007,9 +4069,10 @@ DASHBOARD_HTML = r"""<!doctype html>
                   ${isProblemJob(job) && !isAcknowledgedJob(job) ? `<button class="job-acknowledge" data-job-id="${esc(job.id)}">Record Reviewed Recovery</button>` : ""}
                 </div>
               </div>
-              <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
+              <span class="pill ${esc(decision.className)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
             </div>
-          `, "No jobs in this recovery group.")}
+          `;
+          }, "No jobs in this recovery group.")}
         </div>
       `).join("") || listbox([], job => job, filter === "history"
         ? "No reviewed history is visible yet. Resolved jobs will appear here after completion or acknowledgment."

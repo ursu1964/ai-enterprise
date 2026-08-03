@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import docker
+from docker.client import DockerClient, from_env
 from docker.errors import APIError, ImageNotFound
 
 from ai_enterprise.domain.execution.exceptions import (
@@ -51,9 +51,9 @@ class ContainerRunResult:
 class DockerExecutionRuntime:
     def __init__(self, docker_base_url: str | None = None) -> None:
         if docker_base_url:
-            self._client = docker.DockerClient(base_url=docker_base_url)
+            self._client = DockerClient(base_url=docker_base_url)
         else:
-            self._client = docker.from_env()
+            self._client = from_env()
 
         self._client.ping()
 

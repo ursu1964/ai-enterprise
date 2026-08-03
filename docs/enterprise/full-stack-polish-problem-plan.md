@@ -221,3 +221,12 @@ Evidence:
   count-marker style in primary operator text.
 - Source freshness cards now show human meaning, next action, and proof path so operators know
   whether to continue, refresh, or open a recovery surface.
+- Project intelligence phase evidence now says `1 workflow transition` or
+  `N workflow transitions` instead of exposing raw `workflow transition(s)` wording.
+- Broader verification also fixed Docker execution/review runtime imports so ruff and mypy pass
+  cleanly in the Docker API test environment.
+- The Problems tab now presents a `Guided Recovery Center` with decision/proof/risk language
+  instead of the older `Recovery and Work History` queue label.
+- Guided Recovery Center rows now expose clear recovery compartments: operator decision,
+  current delivery risk, proof, and next action for blocked, retrying, running, reviewed, and
+  completed work.

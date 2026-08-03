@@ -254,14 +254,15 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "grid-template-rows: auto auto minmax(0, 1fr) auto" in response.text
     assert "overflow-wrap: anywhere" in response.text
     assert "Telemetry Pulse Graph" in response.text
-    assert "Recovery and Work History" in response.text
+    assert "Guided Recovery Center" in response.text
+    assert "Recovery and Work History" not in response.text
     assert "Worker Capacity" in response.text
     assert "Current capacity" in response.text
     assert "Offline history" in response.text
     assert "Ready to accept enterprise work." in response.text
     assert "Historical worker instance. It is not part of current capacity." in response.text
-    assert "Current action" in response.text
-    assert "Reviewed history" in response.text
+    assert "Work that needs a decision" in response.text
+    assert "Reviewed proof history" in response.text
     assert "Needs action" in response.text
     assert "Being retried" in response.text
     assert "Healthy history" in response.text
@@ -283,7 +284,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "not available yet" not in response.text
     assert "Attempt proof needs attention" in response.text
     assert "Review could not be recorded" in response.text
-    assert "inspect attempt proof or record reviewed recoveries" in response.text
+    assert "recommended fix" in response.text
+    assert "current delivery risk" in response.text
+    assert "jobRecoveryDecision" in response.text
+    assert "Operator decision required" in response.text
+    assert "Current delivery risk until recovery is reviewed" in response.text
+    assert "Open attempt proof, identify the recovery path" in response.text
+    assert "Reviewed recovery" in response.text
+    assert "Healthy history. This completed record supports delivery proof." in response.text
     assert "Failed work changes the operating picture" not in response.text
     assert "Review failed or blocked work" not in response.text
     assert "quality or blocked work is slowing progress" in response.text
