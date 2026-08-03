@@ -32,6 +32,8 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
         in makefile
     )
     assert "tools/release_gate_evidence.py" in makefile
+    assert "--profile fast" in makefile
+    assert "--profile ci" in makefile
     ci_commands = {
         "engineering-static=python tools/engineering_verify.py --static --json",
         "docker-smoke=python tools/docker_smoke.py --require-worker",
@@ -41,7 +43,13 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
         "engineering-full=python tools/engineering_verify.py --full --json",
         "etra-check=python tools/etra_conformance.py --root . --json",
     }
-    assert all(f"--gate-command '{command}'" in makefile for command in ci_commands)
+    assert all(
+        command in {
+            f"{name}={gate_command}"
+            for name, gate_command in release_gate_evidence.CI_GATE_COMMANDS.items()
+        }
+        for command in ci_commands
+    )
     check_release = next(
         line for line in makefile.splitlines() if line.startswith("check-release:")
     )
@@ -49,6 +57,34 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     assert check_release.index("release-gate-evidence-ci") < check_release.index(
         "release-artifact"
     )
+
+
+def test_release_gate_profiles_capture_expected_commands() -> None:
+    assert release_gate_evidence.FAST_GATE_COMMANDS == {
+        "lint": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
+        "typecheck": "cd apps/api && .venv/bin/mypy src",
+        "test": "cd apps/api && .venv/bin/pytest -q",
+    }
+    assert release_gate_evidence.GATE_COMMAND_PROFILES["fast"] == (
+        release_gate_evidence.FAST_GATE_COMMANDS
+    )
+    assert release_gate_evidence.GATE_COMMAND_PROFILES["ci"] == (
+        release_gate_evidence.CI_GATE_COMMANDS
+    )
+    assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
+        "python tools/docker_smoke.py --require-worker"
+    )
+
+
+def test_release_gate_profiles_can_be_overridden() -> None:
+    assert release_gate_evidence._resolve_gate_commands(  # noqa: SLF001
+        ["fast"],
+        [("test", "python -m pytest tests/smoke")],
+    ) == {
+        "lint": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
+        "typecheck": "cd apps/api && .venv/bin/mypy src",
+        "test": "python -m pytest tests/smoke",
+    }
 
 
 def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> None:

@@ -10,6 +10,29 @@ from pathlib import Path
 from typing import Any
 
 
+FAST_GATE_COMMANDS: dict[str, str] = {
+    "lint": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
+    "typecheck": "cd apps/api && .venv/bin/mypy src",
+    "test": "cd apps/api && .venv/bin/pytest -q",
+}
+
+CI_GATE_COMMANDS: dict[str, str] = {
+    **FAST_GATE_COMMANDS,
+    "docker-smoke": "python tools/docker_smoke.py --require-worker",
+    "engineering-static": "python tools/engineering_verify.py --static --json",
+    "evolution-check": "python tools/evolution_verify.py --json",
+    "federation-check": "python tools/federation_verify.py --json",
+    "intelligence-check": "python tools/intelligence_verify.py --json",
+    "engineering-full": "python tools/engineering_verify.py --full --json",
+    "etra-check": "python tools/etra_conformance.py --root . --json",
+}
+
+GATE_COMMAND_PROFILES: dict[str, dict[str, str]] = {
+    "fast": FAST_GATE_COMMANDS,
+    "ci": CI_GATE_COMMANDS,
+}
+
+
 def _safe_name(name: str) -> str:
     return "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in name)
 
@@ -107,14 +130,34 @@ def _parse_gate_command(value: str) -> tuple[str, str]:
     return name, command
 
 
+def _resolve_gate_commands(
+    profiles: list[str] | None,
+    gate_commands: list[tuple[str, str]] | None,
+) -> dict[str, str]:
+    resolved: dict[str, str] = {}
+    for profile in profiles or []:
+        resolved.update(GATE_COMMAND_PROFILES[profile])
+    resolved.update(dict(gate_commands or []))
+    if not resolved:
+        raise argparse.ArgumentTypeError(
+            "at least one --profile or --gate-command is required"
+        )
+    return resolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Capture release gate command evidence.")
     parser.add_argument("--root", default=".")
     parser.add_argument(
+        "--profile",
+        action="append",
+        choices=sorted(GATE_COMMAND_PROFILES),
+        help="Named gate command profile. May be repeated; explicit gate commands override profiles.",
+    )
+    parser.add_argument(
         "--gate-command",
         action="append",
         type=_parse_gate_command,
-        required=True,
         help="Gate command in name=command form. May be repeated.",
     )
     parser.add_argument("--output", default="artifacts/gate-evidence.json")
@@ -125,7 +168,7 @@ def main() -> int:
     root = Path(args.root).resolve()
     document = write_evidence(
         root=root,
-        gate_commands=dict(args.gate_command),
+        gate_commands=_resolve_gate_commands(args.profile, args.gate_command),
         output=Path(args.output),
         output_dir=Path(args.output_dir),
         timeout=args.timeout,

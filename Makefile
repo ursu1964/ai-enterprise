@@ -116,10 +116,10 @@ release-artifact:
 	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for lint,typecheck,test,docker-smoke,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json
 
 release-gate-evidence-fast:
-	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q'
+	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --profile fast
 
 release-gate-evidence-ci:
-	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q' --gate-command 'docker-smoke=python tools/docker_smoke.py --require-worker' --gate-command 'engineering-static=python tools/engineering_verify.py --static --json' --gate-command 'evolution-check=python tools/evolution_verify.py --json' --gate-command 'federation-check=python tools/federation_verify.py --json' --gate-command 'intelligence-check=python tools/intelligence_verify.py --json' --gate-command 'engineering-full=python tools/engineering_verify.py --full --json' --gate-command 'etra-check=python tools/etra_conformance.py --root . --json'
+	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --profile ci
 
 check-fast: lint typecheck test
 
