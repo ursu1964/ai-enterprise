@@ -232,11 +232,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "reuseReadiness" in response.text
     assert "next_catalog_review" in response.text
     assert "nextCatalogReview" in response.text
+    assert "evidence_bundle" in response.text
+    assert "nextReviewEvidenceCount" in response.text
     assert "catalog_review_ready" in response.text
     assert "needs_more_proof" in response.text
     assert "guardrails_evidence_required" in response.text
     assert "Review-ready:" in response.text
     assert "Next review:" in response.text
+    assert "proof item(s)" in response.text
     assert "needs proof:" in response.text
     assert "Evidence required:" in response.text
     assert "No reusable learning candidates have been observed yet." in response.text

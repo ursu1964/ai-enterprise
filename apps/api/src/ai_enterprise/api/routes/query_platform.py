@@ -637,6 +637,15 @@ def _reuse_learning_summary(
             "project_id": ready_blueprints[0]["project_id"],
             "project_name": ready_blueprints[0]["project_name"],
             "evidence_count": ready_blueprints[0]["evidence_count"],
+            "evidence_bundle": {
+                "sources": ready_blueprints[0]["evidence_sources"],
+                "promotion_blockers": ready_blueprints[0]["promotion_blockers"],
+                "review_criteria": [
+                    "at least two succeeded jobs",
+                    "at least one succeeded crew run",
+                    "at least one work package",
+                ],
+            },
             "operator_action": ready_blueprints[0]["readiness_detail"]["next_action"],
         },
         "readiness": {

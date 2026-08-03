@@ -352,6 +352,21 @@ async def test_dashboard_manager_marks_reuse_candidate_ready_for_catalog_review(
     assert response["reuse"]["next_catalog_review"]["project_id"] == str(project_id)
     assert response["reuse"]["next_catalog_review"]["project_name"] == row.name
     assert response["reuse"]["next_catalog_review"]["evidence_count"] == 4
+    assert response["reuse"]["next_catalog_review"]["evidence_bundle"]["sources"] == {
+        "succeeded_jobs": 2,
+        "succeeded_crew_runs": 1,
+        "work_packages": 1,
+    }
+    assert response["reuse"]["next_catalog_review"]["evidence_bundle"][
+        "promotion_blockers"
+    ] == []
+    assert response["reuse"]["next_catalog_review"]["evidence_bundle"][
+        "review_criteria"
+    ] == [
+        "at least two succeeded jobs",
+        "at least one succeeded crew run",
+        "at least one work package",
+    ]
 
 
 @pytest.mark.asyncio
