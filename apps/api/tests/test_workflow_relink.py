@@ -130,6 +130,138 @@ def test_workflow_relink_maps_created_project_to_startable_state() -> None:
     assert action.startswith("Start the workflow")
 
 
+@pytest.mark.parametrize(
+    ("status", "expected_state", "expected_step", "expected_action"),
+    [
+        (
+            ProjectStatus.CREATED,
+            WorkflowState.PROJECT_CREATED,
+            None,
+            "Start the workflow",
+        ),
+        (
+            ProjectStatus.REQUIREMENTS_QUEUED,
+            WorkflowState.REQUIREMENTS_RUNNING,
+            WorkflowStepName.REQUIREMENTS,
+            "requirements job",
+        ),
+        (
+            ProjectStatus.REQUIREMENTS_RUNNING,
+            WorkflowState.REQUIREMENTS_RUNNING,
+            WorkflowStepName.REQUIREMENTS,
+            "requirements job",
+        ),
+        (
+            ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+            WorkflowState.WAITING_REQUIREMENTS_APPROVAL,
+            WorkflowStepName.REQUIREMENTS,
+            "approve or request changes",
+        ),
+        (
+            ProjectStatus.REQUIREMENTS_APPROVED,
+            WorkflowState.REQUIREMENTS_RUNNING,
+            WorkflowStepName.REQUIREMENTS,
+            "Advance the workflow to architecture",
+        ),
+        (
+            ProjectStatus.REQUIREMENTS_REJECTED,
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.REQUIREMENTS,
+            "Requirements were rejected",
+        ),
+        (
+            ProjectStatus.REQUIREMENTS_FAILED,
+            WorkflowState.FAILED,
+            WorkflowStepName.REQUIREMENTS,
+            "Requirements work failed",
+        ),
+        (
+            ProjectStatus.ARCHITECTURE_QUEUED,
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowStepName.ARCHITECTURE,
+            "architecture job",
+        ),
+        (
+            ProjectStatus.ARCHITECTURE_RUNNING,
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowStepName.ARCHITECTURE,
+            "architecture job",
+        ),
+        (
+            ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL,
+            WorkflowState.WAITING_ARCHITECTURE_APPROVAL,
+            WorkflowStepName.ARCHITECTURE,
+            "approve or request changes",
+        ),
+        (
+            ProjectStatus.ARCHITECTURE_APPROVED,
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowStepName.ARCHITECTURE,
+            "Advance the workflow to work-package planning",
+        ),
+        (
+            ProjectStatus.ARCHITECTURE_REJECTED,
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.ARCHITECTURE,
+            "Architecture was rejected",
+        ),
+        (
+            ProjectStatus.ARCHITECTURE_FAILED,
+            WorkflowState.FAILED,
+            WorkflowStepName.ARCHITECTURE,
+            "Architecture work failed",
+        ),
+        (
+            ProjectStatus.WORK_PACKAGE_QUEUED,
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowStepName.PLANNING,
+            "planning jobs",
+        ),
+        (
+            ProjectStatus.WORK_PACKAGE_PLANNING,
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowStepName.PLANNING,
+            "planning jobs",
+        ),
+        (
+            ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL,
+            WorkflowState.WAITING_WORK_PACKAGE_APPROVAL,
+            WorkflowStepName.PLANNING,
+            "approve or request changes",
+        ),
+        (
+            ProjectStatus.WORK_PACKAGE_APPROVED,
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowStepName.PLANNING,
+            "Advance the workflow to execution",
+        ),
+        (
+            ProjectStatus.WORK_PACKAGE_REJECTED,
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.PLANNING,
+            "Work package was rejected",
+        ),
+        (
+            ProjectStatus.WORK_PACKAGE_FAILED,
+            WorkflowState.FAILED,
+            WorkflowStepName.PLANNING,
+            "Work-package planning failed",
+        ),
+    ],
+)
+def test_workflow_relink_maps_each_project_status_to_explicit_protocol_action(
+    status: ProjectStatus,
+    expected_state: WorkflowState,
+    expected_step: WorkflowStepName | None,
+    expected_action: str,
+) -> None:
+    state, step, action = workflow_state_for_project(project(status))
+
+    assert state == expected_state
+    assert step == expected_step
+    assert expected_action in action
+
+
 def test_workflow_relink_route_is_registered() -> None:
     paths = {route.path for route in router.routes}
 
@@ -139,9 +271,9 @@ def test_workflow_relink_route_is_registered() -> None:
 def test_workflow_relink_maps_approved_work_package_to_manual_execution_review() -> None:
     state, step, action = workflow_state_for_project(project(ProjectStatus.WORK_PACKAGE_APPROVED))
 
-    assert state == WorkflowState.WAITING_WORK_PACKAGE_APPROVAL
+    assert state == WorkflowState.PLANNING_RUNNING
     assert step == WorkflowStepName.PLANNING
-    assert "request execution" in action
+    assert "execution" in action
 
 
 def test_workflow_relink_sends_manifest_mismatch_to_manual_intervention() -> None:

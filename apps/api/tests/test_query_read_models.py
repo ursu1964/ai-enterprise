@@ -5,6 +5,23 @@ from ai_enterprise.application.query.read_models import (
     source_contract,
     status_read_model,
 )
+from ai_enterprise.domain.agent_runtime.enums import (
+    BindingStatus,
+    RegistryStatus,
+    ToolInvocationStatus,
+)
+from ai_enterprise.domain.enterprise_kernel.enums import (
+    EnterpriseModuleState,
+    EnterpriseResourceState,
+    EnterpriseScheduleState,
+    OrganizationalThreadState,
+)
+from ai_enterprise.domain.enums import (
+    JobStatus,
+    ProjectStatus,
+    RunStatus,
+    WorkPackageStatus,
+)
 from ai_enterprise.domain.workflow.enums import WorkflowState
 
 
@@ -21,6 +38,29 @@ def test_runtime_statuses_have_friendly_read_models() -> None:
     assert status_read_model("draft")["status_label"] == "Draft"
     assert status_read_model("registered")["status_label"] == "Registered"
     assert status_read_model("validation_failed")["status_label"] == "Validation failed"
+
+
+def test_core_read_model_states_have_specialized_operator_meaning() -> None:
+    enum_groups = (
+        ProjectStatus,
+        RunStatus,
+        JobStatus,
+        WorkPackageStatus,
+        RegistryStatus,
+        BindingStatus,
+        ToolInvocationStatus,
+        EnterpriseResourceState,
+        EnterpriseScheduleState,
+        EnterpriseModuleState,
+        OrganizationalThreadState,
+    )
+
+    for enum_group in enum_groups:
+        for state in enum_group:
+            meaning = meaning_for(state)
+
+            assert "no specialized explanation" not in meaning["meaning"]
+            assert meaning["operator_action"]
 
 
 def test_source_contract_reports_fresh_stale_empty_and_unavailable_states() -> None:

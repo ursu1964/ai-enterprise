@@ -118,6 +118,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Parallel Projects" in response.text
     assert "Tasks and Crews" in response.text
     assert "Events and Telemetry" in response.text
+    assert "Waiting for the first event timestamp." in response.text
+    assert "No timestamp yet" not in response.text
     assert "executionGraph" in response.text
     assert "renderExecutionDashboard" in response.text
     assert "/api/v1/query/dashboard-manager" in response.text
@@ -136,6 +138,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "parseClientManifestText" in response.text
     assert "fieldFromText" in response.text
     assert "source_document_type: \"client_project_manifest\"" in response.text
+    assert "Project summary is waiting for the client objective." in response.text
+    assert "Project base directory is required before launch." in response.text
+    assert "GitHub connection can be added now or after local project creation." in response.text
+    assert "No description" not in response.text
+    assert "No repository path" not in response.text
+    assert "No GitHub repository URL yet" not in response.text
     assert (
         "Download the client manifest, send it to the client or requesting service"
         in response.text
@@ -162,6 +170,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
         in response.text
     )
     assert "Preview Mock Factory" in response.text
+    assert "would create" in response.text
+    assert "would reuse" in response.text
+    assert "Preview contract, would-create projects, would-reuse projects" in response.text
 
     assert "Launch Mock Factory Test" in response.text
     assert "Mock Autonomy" in response.text
@@ -227,7 +238,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Real Infrastructure Choices" in response.text
     assert "/dashboard/infrastructure-choices" in response.text
     assert "infrastructureChoicesTable" in response.text
-    assert "Advanced raw metrics" in response.text
+    assert "Advanced metric names" in response.text
+    assert "System pulse counter or gauge used for operator proof." in response.text
+    assert "system pulse signal(s)" in response.text
+    assert "Advanced raw metrics" not in response.text
+    assert "raw signal(s)" not in response.text
     assert "Blueprint Graph Hub" in response.text
     assert "Blueprint Learning Queue" in response.text
     assert "Guardrail Learning Queue" in response.text
@@ -292,7 +307,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     )
     assert "friendlyLaunchError" in response.text
     assert "Technical detail" not in response.text
-    assert "No worker diagnostic was reported" in response.text
+    assert "Worker proof has not been attached to this record yet." in response.text
+    assert "No worker diagnostic was reported" not in response.text
     assert "reviewed history" in response.text
     assert "No current work needs action" in response.text
     assert "No current worker capacity is visible" in response.text
@@ -305,6 +321,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Phase confidence" in response.text
     assert "Owner crew" in response.text
     assert "Issue split" in response.text
+    assert "Proof status" in response.text
+    assert "Issue state" in response.text
     assert "Evidence:" in response.text
     assert "Remaining:" in response.text
     assert "Live workflow" in response.text
@@ -675,12 +693,20 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["phases"][2]["status"] == "current"
     assert response["phases"][2]["label"] == "Architecture"
     assert response["phases"][2]["confidence"] == "live workflow"
+    assert response["phases"][2]["proof_status"]["state"] == "evidence_backed"
+    assert response["phases"][2]["proof_status"]["evidence_count"] == 1
     assert response["phases"][2]["owner_crew"] == "architecture"
     assert response["phases"][2]["next_action"] == "Approve architecture."
     assert response["phases"][2]["completed_evidence"] == ["1 workflow transition(s)"]
     assert response["phases"][2]["remaining_work"] == (
         "Finish the current gate and record the next transition."
     )
+    assert response["phases"][2]["issue_summary"] == {
+        "current_count": 0,
+        "historical_count": 0,
+        "state": "clear",
+        "operator_action": "No active blockers are attached to this phase.",
+    }
     assert response["phases"][2]["current_issues"] == []
     assert response["phases"][2]["historical_issues"] == []
     assert response["remaining_steps"]

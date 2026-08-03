@@ -229,6 +229,8 @@ download.
 
 In Factory, press Preview Launch before Start Process when you want a no-risk check. Preview creates
 no records. It only explains whether the project or manifesto batch is ready and what is missing.
+When a loaded manifesto is incomplete, the preview explains the missing project summary, base
+directory, or GitHub connection in operator language before launch.
 After preview or start, use Launch Result as the operating checkpoint: it explains status, created
 work, reused work, blocked work, the recommended first project, the next action, and the proof path.
 For manifesto batches, read Project Readiness inside Launch Result. It lists every project, whether
@@ -307,6 +309,11 @@ Factory workflow:
 Mock autonomy API:
 
 ```bash
+curl http://localhost:8000/api/v1/project-formation/mock-factory/preview \
+  -H 'X-Actor-ID: local-dashboard-admin' \
+  -H 'X-Actor-Type: human' \
+  -H 'X-Actor-Role: platform-admin'
+
 curl -X POST http://localhost:8000/api/v1/project-formation/mock-factory/start \
   -H 'Content-Type: application/json' \
   -H 'X-Actor-ID: local-dashboard-admin' \
@@ -315,8 +322,10 @@ curl -X POST http://localhost:8000/api/v1/project-formation/mock-factory/start \
   -d '{}'
 ```
 
-The response lists each demo project, whether it was created or reused, whether the formation pack
-was prepared, the workflow ID, and the dashboard link for live inspection.
+Preview lists what would be created, what would be reused, what would be blocked, and the first
+project to inspect before any records are written. Start then returns each demo project, whether it
+was created or reused, whether the formation pack was prepared, workflow start or waiting state,
+blocked/failed launch items, and the dashboard link for live inspection.
 
 Operating discipline for every project:
 
@@ -324,10 +333,14 @@ Operating discipline for every project:
 - Calibration gates check manifest integrity, workflow tracking, error follow-up, reuse capture,
   and phase alignment.
 - Errors are followed as first-class project signals, not hidden logs.
-- Expand Proof detail when you need the worker diagnostic behind a problem, without making the main
-  dashboard read like raw logs.
+- Expand Proof detail when you need the worker proof behind a problem, without making the main
+  dashboard read like internal logs.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
+- Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty
+  event stream does not look like missing data.
+- Metrics keeps advanced metric names available, but presents them as system pulse proof instead of
+  raw infrastructure counters.
 - Improvements and solutions are proposed from telemetry and job failures.
 - Reusable artifacts, work packages, phase structure, agent crew, and checks become future template
   material.

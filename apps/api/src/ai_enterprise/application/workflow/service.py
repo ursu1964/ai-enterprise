@@ -51,25 +51,41 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
             ),
         )
     status = str(project.status)
-    if status in {
-        ProjectStatus.CREATED,
-        ProjectStatus.REQUIREMENTS_QUEUED,
-        ProjectStatus.REQUIREMENTS_RUNNING,
-    }:
+    if status == ProjectStatus.CREATED:
         return (
             WorkflowState.PROJECT_CREATED,
             None,
             "Start the workflow when the operator is ready to generate requirements.",
         )
-    if status in {
-        ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
-        ProjectStatus.REQUIREMENTS_APPROVED,
-        ProjectStatus.REQUIREMENTS_REJECTED,
-    }:
+    if status in {ProjectStatus.REQUIREMENTS_QUEUED, ProjectStatus.REQUIREMENTS_RUNNING}:
+        return (
+            WorkflowState.REQUIREMENTS_RUNNING,
+            WorkflowStepName.REQUIREMENTS,
+            "Wait for requirements generation or inspect the requirements job.",
+        )
+    if status == ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL:
         return (
             WorkflowState.WAITING_REQUIREMENTS_APPROVAL,
             WorkflowStepName.REQUIREMENTS,
             "Review requirements evidence and approve or request changes.",
+        )
+    if status == ProjectStatus.REQUIREMENTS_APPROVED:
+        return (
+            WorkflowState.REQUIREMENTS_RUNNING,
+            WorkflowStepName.REQUIREMENTS,
+            "Requirements are approved. Advance the workflow to architecture.",
+        )
+    if status == ProjectStatus.REQUIREMENTS_REJECTED:
+        return (
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.REQUIREMENTS,
+            "Requirements were rejected. Revise evidence before advancing.",
+        )
+    if status == ProjectStatus.REQUIREMENTS_FAILED:
+        return (
+            WorkflowState.FAILED,
+            WorkflowStepName.REQUIREMENTS,
+            "Requirements work failed. Review job evidence before retrying.",
         )
     if status in {
         ProjectStatus.ARCHITECTURE_QUEUED,
@@ -80,15 +96,29 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
             WorkflowStepName.ARCHITECTURE,
             "Wait for architecture generation or inspect the architecture job.",
         )
-    if status in {
-        ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL,
-        ProjectStatus.ARCHITECTURE_APPROVED,
-        ProjectStatus.ARCHITECTURE_REJECTED,
-    }:
+    if status == ProjectStatus.AWAITING_ARCHITECTURE_APPROVAL:
         return (
             WorkflowState.WAITING_ARCHITECTURE_APPROVAL,
             WorkflowStepName.ARCHITECTURE,
             "Review architecture evidence and approve or request changes.",
+        )
+    if status == ProjectStatus.ARCHITECTURE_APPROVED:
+        return (
+            WorkflowState.ARCHITECTURE_RUNNING,
+            WorkflowStepName.ARCHITECTURE,
+            "Architecture is approved. Advance the workflow to work-package planning.",
+        )
+    if status == ProjectStatus.ARCHITECTURE_REJECTED:
+        return (
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.ARCHITECTURE,
+            "Architecture was rejected. Revise evidence before advancing.",
+        )
+    if status == ProjectStatus.ARCHITECTURE_FAILED:
+        return (
+            WorkflowState.FAILED,
+            WorkflowStepName.ARCHITECTURE,
+            "Architecture work failed. Review job evidence before retrying.",
         )
     if status in {
         ProjectStatus.WORK_PACKAGE_QUEUED,
@@ -99,15 +129,29 @@ def workflow_state_for_project(project: ProjectModel) -> tuple[WorkflowState, st
             WorkflowStepName.PLANNING,
             "Wait for work-package planning or inspect planning jobs.",
         )
-    if status in {
-        ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL,
-        ProjectStatus.WORK_PACKAGE_APPROVED,
-        ProjectStatus.WORK_PACKAGE_REJECTED,
-    }:
+    if status == ProjectStatus.AWAITING_WORK_PACKAGE_APPROVAL:
         return (
             WorkflowState.WAITING_WORK_PACKAGE_APPROVAL,
             WorkflowStepName.PLANNING,
-            "Review approved work packages and request execution only when ready.",
+            "Review work-package evidence and approve or request changes.",
+        )
+    if status == ProjectStatus.WORK_PACKAGE_APPROVED:
+        return (
+            WorkflowState.PLANNING_RUNNING,
+            WorkflowStepName.PLANNING,
+            "Work package is approved. Advance the workflow to execution.",
+        )
+    if status == ProjectStatus.WORK_PACKAGE_REJECTED:
+        return (
+            WorkflowState.MANUAL_INTERVENTION,
+            WorkflowStepName.PLANNING,
+            "Work package was rejected. Revise evidence before execution.",
+        )
+    if status == ProjectStatus.WORK_PACKAGE_FAILED:
+        return (
+            WorkflowState.FAILED,
+            WorkflowStepName.PLANNING,
+            "Work-package planning failed. Review job evidence before retrying.",
         )
     return (
         WorkflowState.MANUAL_INTERVENTION,

@@ -132,6 +132,9 @@ class MockEnterpriseAutonomyService:
 
     async def preview_mock_factory(self) -> MockFactoryPreviewResponse:
         projects: list[MockFactoryPreviewProjectResponse] = []
+        would_create: list[MockFactoryPreviewProjectResponse] = []
+        would_reuse: list[MockFactoryPreviewProjectResponse] = []
+        would_block: list[MockFactoryLaunchIssueResponse] = []
         reused_count = 0
         blocked_count = 0
 
@@ -143,35 +146,38 @@ class MockEnterpriseAutonomyService:
                 reused_count += 1
             if not ready:
                 blocked_count += 1
-            projects.append(
-                MockFactoryPreviewProjectResponse(
-                    name=spec.name,
-                    project_type=spec.project_type,
-                    repository_path=spec.repository_path,
-                    default_branch="main",
-                    action="reuse" if existing_project is not None else "create",
-                    ready=ready,
-                    missing_information=missing_information,
-                    operator_action=(
-                        "Start mock factory to reuse this project and nudge its workflow."
-                        if existing_project is not None and ready
-                        else (
-                            "Start mock factory to create the project, formation pack, "
-                            "and workflow."
-                        )
-                        if ready
-                        else "Fix the missing launch information before starting this project."
-                    ),
-                    existing_project_id=(
-                        existing_project.id if existing_project is not None else None
-                    ),
-                    dashboard_url=(
-                        f"/dashboard?project={existing_project.id}"
-                        if existing_project is not None
-                        else None
-                    ),
-                )
+            preview_project = MockFactoryPreviewProjectResponse(
+                name=spec.name,
+                project_type=spec.project_type,
+                repository_path=spec.repository_path,
+                default_branch="main",
+                action="reuse" if existing_project is not None else "create",
+                ready=ready,
+                missing_information=missing_information,
+                operator_action=(
+                    "Start mock factory to reuse this project and nudge its workflow."
+                    if existing_project is not None and ready
+                    else (
+                        "Start mock factory to create the project, formation pack, "
+                        "and workflow."
+                    )
+                    if ready
+                    else "Fix the missing launch information before starting this project."
+                ),
+                existing_project_id=existing_project.id if existing_project is not None else None,
+                dashboard_url=(
+                    f"/dashboard?project={existing_project.id}"
+                    if existing_project is not None
+                    else None
+                ),
             )
+            projects.append(preview_project)
+            if not ready:
+                would_block.append(self._launch_issue(spec, "blocked", missing_information))
+            elif existing_project is not None:
+                would_reuse.append(preview_project)
+            else:
+                would_create.append(preview_project)
 
         recommended = next((item for item in projects if item.ready), None)
         return MockFactoryPreviewResponse(
@@ -183,9 +189,15 @@ class MockEnterpriseAutonomyService:
                 else "Mock factory preview found projects that need launch information."
             ),
             ready_count=len(projects) - blocked_count,
+            would_create_count=len(would_create),
+            would_reuse_count=len(would_reuse),
+            would_block_count=len(would_block),
             reused_count=reused_count,
             blocked_count=blocked_count,
             recommended_first_project=recommended,
+            would_create=would_create,
+            would_reuse=would_reuse,
+            would_block=would_block,
             projects=projects,
         )
 

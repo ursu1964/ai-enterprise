@@ -2,6 +2,7 @@ import io
 import json
 import tarfile
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -91,6 +92,24 @@ def test_chain_record_hash_detects_payload_and_link_tampering() -> None:
     second["payload"]["status"] = "approved"
     second["previous_hash"] = "0" * 64
     assert verify_chain_records([first, second])[0]["reason"] == "previous_hash_mismatch"
+
+
+def test_audit_events_are_constructed_only_by_audit_writer() -> None:
+    source_root = Path(__file__).parents[1] / "src" / "ai_enterprise"
+    allowed = {
+        source_root / "application" / "audit" / "writer.py",
+        source_root / "infrastructure" / "database" / "models.py",
+    }
+    violations: list[str] = []
+
+    for path in source_root.rglob("*.py"):
+        if path in allowed:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "AuditEventModel(" in text:
+            violations.append(str(path.relative_to(source_root)))
+
+    assert violations == []
 
 
 @pytest.mark.asyncio

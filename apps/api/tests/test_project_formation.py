@@ -4,7 +4,11 @@ from datetime import UTC, datetime
 import pytest
 
 from ai_enterprise.api.project_formation_schemas import FormationRequest
-from ai_enterprise.application.mock_factory_autonomy import MockEnterpriseAutonomyService
+from ai_enterprise.application import mock_factory_autonomy
+from ai_enterprise.application.mock_factory_autonomy import (
+    MockEnterpriseAutonomyService,
+    MockFactorySpec,
+)
 from ai_enterprise.application.project_formation_service import ProjectFormationService
 from ai_enterprise.domain.enums import ArtifactType, ProjectStatus
 from ai_enterprise.infrastructure.database.models import (
@@ -84,11 +88,53 @@ async def test_mock_factory_preview_reports_ready_reuse_without_writes() -> None
 
     assert response.status == "ready"
     assert response.ready_count == 4
+    assert response.would_create_count == 3
+    assert response.would_reuse_count == 1
+    assert response.would_block_count == 0
     assert response.reused_count == 1
     assert response.blocked_count == 0
+    assert len(response.would_create) == 3
+    assert response.would_reuse == [response.projects[0]]
+    assert response.would_block == []
     assert response.projects[0].action == "reuse"
     assert response.projects[0].dashboard_url == f"/dashboard?project={existing.id}"
     assert response.recommended_first_project == response.projects[0]
+    assert session.committed is False
+
+
+@pytest.mark.asyncio
+async def test_mock_factory_preview_groups_blocked_launch_items_without_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocked_spec = MockFactorySpec(
+        name="No Repository Path",
+        description="Create a project with invalid launch information for preview checks.",
+        repository_path="relative/path",
+        project_type="dashboards_reporting",
+        expected_outcome="A preview item that should be blocked before launch starts.",
+        target_users=["operator"],
+        constraints=["preview only"],
+        known_systems=["factory"],
+        deadline="today",
+        budget_signal="demo",
+    )
+    monkeypatch.setattr(mock_factory_autonomy, "MOCK_FACTORY_SPECS", (blocked_spec,))
+    session = PreviewSession([None])
+
+    response = await MockEnterpriseAutonomyService(  # type: ignore[arg-type]
+        session, object()
+    ).preview_mock_factory()
+
+    assert response.status == "blocked"
+    assert response.ready_count == 0
+    assert response.would_create_count == 0
+    assert response.would_reuse_count == 0
+    assert response.would_block_count == 1
+    assert response.blocked_count == 1
+    assert response.recommended_first_project is None
+    assert response.projects[0].ready is False
+    assert response.would_block[0].status == "blocked"
+    assert response.would_block[0].issues == ["repository path must be absolute"]
     assert session.committed is False
 
 

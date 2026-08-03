@@ -75,9 +75,15 @@ class MockFactoryPreviewResponse(BaseModel):
     status: str
     human_summary: str
     ready_count: int
+    would_create_count: int = 0
+    would_reuse_count: int = 0
+    would_block_count: int = 0
     reused_count: int
     blocked_count: int
     recommended_first_project: MockFactoryPreviewProjectResponse | None
+    would_create: list[MockFactoryPreviewProjectResponse] = Field(default_factory=list)
+    would_reuse: list[MockFactoryPreviewProjectResponse] = Field(default_factory=list)
+    would_block: list[MockFactoryLaunchIssueResponse] = Field(default_factory=list)
     projects: list[MockFactoryPreviewProjectResponse]
 
 

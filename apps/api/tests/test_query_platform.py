@@ -245,6 +245,10 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["phase"] == "requirements"
     assert response["projects"][0]["phase_detail"]["label"] == "Requirements"
     assert response["projects"][0]["phase_detail"]["confidence"] == "live workflow"
+    assert response["projects"][0]["phase_detail"]["proof_status"]["state"] == (
+        "evidence_backed"
+    )
+    assert response["projects"][0]["phase_detail"]["proof_status"]["evidence_count"] == 3
     assert response["projects"][0]["phase_detail"]["owner_crew"] == "requirements"
     assert response["projects"][0]["phase_detail"]["completed_evidence"] == [
         "linked workflow",
@@ -257,6 +261,12 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["phase_detail"]["next_action"] == (
         "Watch the requirements artifact and approve when ready."
     )
+    assert response["projects"][0]["phase_detail"]["issue_summary"] == {
+        "current_count": 0,
+        "historical_count": 0,
+        "state": "clear",
+        "operator_action": "No active blockers are attached to this phase.",
+    }
     assert response["projects"][0]["state_meaning"]["label"] == "Active"
     assert response["projects"][0]["status_label"] == "Ready to start"
     assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
@@ -446,6 +456,9 @@ async def test_dashboard_manager_splits_current_and_historical_project_issues() 
     assert phase_detail["remaining_work"] == (
         "Resolve current issues before scaling this project."
     )
+    assert phase_detail["issue_summary"]["current_count"] == 1
+    assert phase_detail["issue_summary"]["historical_count"] == 1
+    assert phase_detail["issue_summary"]["state"] == "needs_action"
     assert phase_detail["current_issues"][0]["label"] == (
         "Reviewed failure or recovery needed"
     )

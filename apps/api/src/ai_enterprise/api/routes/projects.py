@@ -189,6 +189,10 @@ async def project_intelligence(
             status_value = "remaining"
         phase_evidence = _phase_evidence(name, phase_transitions, artifacts, jobs)
         is_current = status_value == "current"
+        current_issues = [_classified_error(job) for job in problem_jobs] if is_current else []
+        historical_issues = [
+            _historical_issue(job) for job in historical_problem_jobs
+        ] if is_current else []
         phases.append(
             {
                 "name": name,
@@ -196,6 +200,7 @@ async def project_intelligence(
                 "status": status_value,
                 "status_meaning": meaning_for(status_value),
                 "confidence": _phase_confidence(status_value, phase_evidence, workflow),
+                "proof_status": _phase_proof_status(status_value, phase_evidence),
                 "states": sorted(states),
                 "transition_count": len(phase_transitions),
                 "last_transition_at": (
@@ -210,16 +215,9 @@ async def project_intelligence(
                     status_value,
                     workflow.recommended_operator_action if workflow is not None else None,
                 ),
-                "current_issues": [
-                    _classified_error(job) for job in problem_jobs
-                ]
-                if is_current
-                else [],
-                "historical_issues": [
-                    _historical_issue(job) for job in historical_problem_jobs
-                ]
-                if is_current
-                else [],
+                "issue_summary": _phase_issue_summary(current_issues, historical_issues),
+                "current_issues": current_issues,
+                "historical_issues": historical_issues,
             }
         )
     remaining_count = sum(1 for phase in phases if phase["status"] == "remaining")
@@ -960,6 +958,54 @@ def _phase_confidence(
     if status == "remaining":
         return "planned"
     return "inferred"
+
+
+def _phase_proof_status(status: str, evidence: list[str]) -> dict[str, object]:
+    if evidence:
+        return {
+            "state": "evidence_backed",
+            "available": True,
+            "evidence_count": len(evidence),
+            "operator_action": "Use completed evidence when reviewing this phase.",
+        }
+    if status == "current":
+        return {
+            "state": "waiting_for_current_phase_proof",
+            "available": False,
+            "evidence_count": 0,
+            "operator_action": "Finish the current gate so phase proof can be recorded.",
+        }
+    if status == "remaining":
+        return {
+            "state": "not_started",
+            "available": False,
+            "evidence_count": 0,
+            "operator_action": "Complete earlier phases before expecting proof here.",
+        }
+    return {
+        "state": "inferred_without_direct_proof",
+        "available": False,
+        "evidence_count": 0,
+        "operator_action": "Inspect workflow history before relying on this inferred phase.",
+    }
+
+
+def _phase_issue_summary(
+    current_issues: list[dict[str, object]],
+    historical_issues: list[dict[str, object]],
+) -> dict[str, object]:
+    current_count = len(current_issues)
+    history_count = len(historical_issues)
+    return {
+        "current_count": current_count,
+        "historical_count": history_count,
+        "state": "needs_action" if current_count else "clear",
+        "operator_action": (
+            "Open Problems and resolve current blockers for this phase."
+            if current_count
+            else "No active blockers are attached to this phase."
+        ),
+    }
 
 
 def _owner_crew_for_phase(name: str, runs: list[CrewRunModel]) -> str:

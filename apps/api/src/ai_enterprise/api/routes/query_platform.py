@@ -374,6 +374,49 @@ def _phase_confidence(
     return "early estimate"
 
 
+def _phase_proof_status(
+    evidence: list[str], workflow: WorkflowInstanceModel | None
+) -> dict[str, object]:
+    if evidence:
+        return {
+            "state": "evidence_backed",
+            "available": True,
+            "evidence_count": len(evidence),
+            "operator_action": "Use completed evidence when reviewing this phase.",
+        }
+    if workflow is not None:
+        return {
+            "state": "waiting_for_current_phase_proof",
+            "available": False,
+            "evidence_count": 0,
+            "operator_action": "Let the workflow record phase movement or artifacts.",
+        }
+    return {
+        "state": "not_started",
+        "available": False,
+        "evidence_count": 0,
+        "operator_action": "Start or relink the workflow before expecting phase proof.",
+    }
+
+
+def _phase_issue_summary(
+    current_issues: list[dict[str, Any]],
+    historical_issues: list[dict[str, Any]],
+) -> dict[str, object]:
+    current_count = len(current_issues)
+    historical_count = len(historical_issues)
+    return {
+        "current_count": current_count,
+        "historical_count": historical_count,
+        "state": "needs_action" if current_count else "clear",
+        "operator_action": (
+            "Open Problems and resolve current blockers for this phase."
+            if current_count
+            else "No active blockers are attached to this phase."
+        ),
+    }
+
+
 def _dashboard_issue(job: JobModel, *, historical: bool) -> dict[str, Any]:
     resolution = job_resolution(job) or {}
     label = "Reviewed history" if historical else meaning_for(job.status)["label"]
@@ -415,6 +458,7 @@ def _phase_detail(
     return {
         "label": phase.replace("_", " ").title(),
         "confidence": _phase_confidence(workflow, evidence, current_issues),
+        "proof_status": _phase_proof_status(evidence, workflow),
         "owner_crew": _phase_owner(phase, crews, jobs),
         "completed_evidence": evidence,
         "remaining_work": (
@@ -425,6 +469,7 @@ def _phase_detail(
             else "Start or relink the workflow before treating this phase as live."
         ),
         "next_action": next_action,
+        "issue_summary": _phase_issue_summary(current_issues, historical_issues),
         "current_issues": current_issues,
         "historical_issues": historical_issues,
     }

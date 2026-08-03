@@ -2452,12 +2452,12 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function phaseIssueCount(project) {
       const detail = project.phase_detail || {};
-      return (detail.current_issues || []).length;
+      return detail.issue_summary?.current_count ?? (detail.current_issues || []).length;
     }
 
     function phaseHistoryCount(project) {
       const detail = project.phase_detail || {};
-      return (detail.historical_issues || []).length;
+      return detail.issue_summary?.historical_count ?? (detail.historical_issues || []).length;
     }
 
     function phaseEvidenceText(project) {
@@ -2477,8 +2477,8 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="pill info">${esc(detail.owner_crew || "workflow engine")}</span>
         </div>
         <div class="list-item">
-          <div><div class="list-title">Issue split</div><div class="list-meta">${esc(phaseIssueCount(project))} current issue(s), ${esc(phaseHistoryCount(project))} reviewed history item(s).</div></div>
-          <span class="pill ${phaseIssueCount(project) ? "bad" : "ok"}">${esc(phaseIssueCount(project) ? "needs action" : "clear")}</span>
+          <div><div class="list-title">Issue split</div><div class="list-meta">${esc(detail.issue_summary?.operator_action || `${phaseIssueCount(project)} current issue(s), ${phaseHistoryCount(project)} reviewed history item(s).`)}</div></div>
+          <span class="pill ${phaseIssueCount(project) ? "bad" : "ok"}">${esc(detail.issue_summary?.state || (phaseIssueCount(project) ? "needs action" : "clear"))}</span>
         </div>
       `;
     }
@@ -2588,7 +2588,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       );
       byId("executionTelemetry").innerHTML = listbox(telemetryRows, row => `
         <div class="list-item">
-          <div><div class="list-title">${esc(row.project.name)}</div><div class="list-meta">${esc(row.event.summary)}</div><div class="list-meta">${esc(row.event.created_at || "No timestamp yet")}</div></div>
+          <div><div class="list-title">${esc(row.project.name)}</div><div class="list-meta">${esc(row.event.summary)}</div><div class="list-meta">${esc(row.event.created_at || "Waiting for the first event timestamp.")}</div></div>
           <span class="pill ${statusClass(row.project.telemetry.signal)}">${esc(humanStatus(row.project.telemetry.signal))}</span>
         </div>
       `, "No event telemetry is visible yet. Project events will appear as workflow and crew activity progresses.");
@@ -2926,9 +2926,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       byId("factoryBranch").value = project.default_branch || "main";
       byId("manifestPreview").innerHTML = `
         <strong>${esc(project.name || "Manifesto loaded")}</strong>
-        <div>${esc(project.description || "No description")}</div>
-        <div class="muted">${esc(project.repository_path || "No repository path")}</div>
-        <div class="muted">${esc(project.repository_url || "No GitHub repository URL yet")}</div>
+        <div>${esc(project.description || "Project summary is waiting for the client objective.")}</div>
+        <div class="muted">${esc(project.repository_path || "Project base directory is required before launch.")}</div>
+        <div class="muted">${esc(project.repository_url || "GitHub connection can be added now or after local project creation.")}</div>
       `;
       setOrientation(2, "Manifesto inserted. Check project type, repository path, and branch, then start one process or the batch.");
       coach(
@@ -3332,21 +3332,21 @@ DASHBOARD_HTML = r"""<!doctype html>
       const result = await json("/api/v1/project-formation/mock-factory/preview", {
         headers: actorHeaders
       });
-      byId("factoryStatus").textContent = `${result.ready_count} ready; ${result.reused_count} reused; ${result.blocked_count} blocked.`;
+      byId("factoryStatus").textContent = `${result.ready_count} ready; ${result.would_create_count ?? Math.max(0, (result.ready_count || 0) - (result.reused_count || 0))} would create; ${result.would_reuse_count ?? result.reused_count ?? 0} would reuse; ${result.would_block_count ?? result.blocked_count ?? 0} blocked.`;
       renderLaunchContract({
         status: result.status,
         summary: result.human_summary,
         started: 0,
-        created: result.ready_count - result.reused_count,
-        reused: result.reused_count,
-        blocked: result.blocked_count,
+        created: result.would_create_count ?? result.ready_count - result.reused_count,
+        reused: result.would_reuse_count ?? result.reused_count,
+        blocked: result.would_block_count ?? result.blocked_count,
         failed: 0,
         recommendedName: result.recommended_first_project?.name || "No ready project yet",
         recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
-        nextAction: result.blocked_count
+        nextAction: (result.would_block_count ?? result.blocked_count)
           ? "Correct blocked launch information before starting the mock factory."
           : "Launch the mock factory when you are ready to create or reuse the portfolio projects.",
-        proof: "Preview contract, readiness count, reused projects, blocked projects, and recommended first inspection target.",
+        proof: "Preview contract, would-create projects, would-reuse projects, blocked projects, and recommended first inspection target.",
         items: (result.projects || []).map(project => ({
           name: project.name,
           status: project.ready ? (project.action || "ready") : "blocked",
@@ -3758,7 +3758,7 @@ DASHBOARD_HTML = r"""<!doctype html>
                 <div class="list-title">${esc(humanJobType(job.job_type))}</div>
                 <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
                 <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
-                <details><summary>Proof detail</summary><div class="list-meta">${esc(job.last_error || "No worker diagnostic was reported for this record.")}</div></details>
+                <details><summary>Proof detail</summary><div class="list-meta">${esc(job.last_error || "Worker proof has not been attached to this record yet.")}</div></details>
                 <div class="toolbar" style="justify-content: flex-start; margin-top: 8px;">
                   <button class="job-attempts" data-job-id="${esc(job.id)}">Open Attempts</button>
                   ${isProblemJob(job) && !isAcknowledgedJob(job) ? `<button class="job-acknowledge" data-job-id="${esc(job.id)}">Acknowledge Reviewed Failure</button>` : ""}
@@ -3820,13 +3820,13 @@ DASHBOARD_HTML = r"""<!doctype html>
         </div>
       `, "Telemetry summary is not available yet. Refresh the dashboard or check API readiness.") + `
         <details class="mini" style="margin-top: 10px;">
-          <summary>Advanced raw metrics</summary>
+          <summary>Advanced metric names</summary>
           ${listbox(Object.entries(state.metrics).map(([name, value]) => ({ name, value })), metric => `
             <div class="list-item">
-              <div><div class="list-title mono">${esc(metric.name)}</div><div class="list-meta">Raw runtime counter or gauge.</div></div>
+              <div><div class="list-title mono">${esc(metric.name)}</div><div class="list-meta">System pulse counter or gauge used for operator proof.</div></div>
               <span class="pill info">${esc(metric.value)}</span>
             </div>
-          `, "No raw metrics have been emitted yet. Open the dashboard or API routes, then refresh.")}
+          `, "No metric names have been emitted yet. Open the dashboard or API routes, then refresh.")}
         </details>
       `;
       const readiness = state.serverReadiness;
@@ -3963,12 +3963,14 @@ DASHBOARD_HTML = r"""<!doctype html>
               ], statusClass(phase.status))}
               ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? `${phase.completed_evidence.length} proof item(s)` : "Waiting for phase proof", [
                 ["Evidence", (phase.completed_evidence || []).join(", ") || "Evidence will appear after the workflow records a phase transition or artifact."],
+                ["Proof status", phase.proof_status?.state || "waiting_for_phase_proof"],
                 ["Last transition", phase.last_transition_at || "No phase movement recorded yet."]
               ], phase.completed_evidence && phase.completed_evidence.length ? "ok" : "warn")}
               ${infoCard("Remaining Work", phase.remaining_work || "Continue the guided workflow.", [
-                ["Current issues", `${(phase.current_issues || []).length}`],
-                ["Reviewed history", `${(phase.historical_issues || []).length}`]
-              ], (phase.current_issues || []).length ? "bad" : "info")}
+                ["Current issues", `${phase.issue_summary?.current_count ?? (phase.current_issues || []).length}`],
+                ["Reviewed history", `${phase.issue_summary?.historical_count ?? (phase.historical_issues || []).length}`],
+                ["Issue state", phase.issue_summary?.state || ((phase.current_issues || []).length ? "needs_action" : "clear")]
+              ], (phase.issue_summary?.current_count ?? (phase.current_issues || []).length) ? "bad" : "info")}
               ${infoCard("Executed Steps", payload.executed_steps.length ? `${payload.executed_steps.length} done` : "Waiting for execution proof", [
                 ["Steps", payload.executed_steps.join(" -> ") || "Executed steps will appear after workflow movement is recorded."]
               ], payload.executed_steps.length ? "ok" : "warn")}
@@ -3982,13 +3984,13 @@ DASHBOARD_HTML = r"""<!doctype html>
             </div>
             <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong><div class="list-meta">Phase confidence, owner crew, executed work, remaining work, and proof are explained here in human language.</div>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
             <div class="grid" style="margin-top: 10px;">
-              <div class="mini span-6"><strong>Current Issues</strong><div class="list-meta">Used to show active blockers for the selected phase, with cause and next recovery action.</div>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No worker diagnostic was reported for this issue.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "This phase has no active blockers. If work fails, the cause and next recovery action will appear here.")}</div>
-              <div class="mini span-6"><strong>Reviewed History</strong><div class="list-meta">Used to preserve old problems after they are resolved or acknowledged, so proof is not lost.</div>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No worker diagnostic was reported for this history item.")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No resolved or acknowledged issues are attached to this phase yet. Past problems will appear here after review.")}</div>
+              <div class="mini span-6"><strong>Current Issues</strong><div class="list-meta">Used to show active blockers for the selected phase, with cause and next recovery action.</div>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this issue yet.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "This phase has no active blockers. If work fails, the cause and next recovery action will appear here.")}</div>
+              <div class="mini span-6"><strong>Reviewed History</strong><div class="list-meta">Used to preserve old problems after they are resolved or acknowledged, so proof is not lost.</div>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this history item yet.")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No resolved or acknowledged issues are attached to this phase yet. Past problems will appear here after review.")}</div>
               <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "This table shows which specialist crew worked on the project. No crew run is linked to this phase yet.")}</div>
               <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "This table shows worker jobs, attempts, and errors. No job history is linked to this project yet.")}</div>
               <div class="mini span-6"><strong>Calibration</strong>${listbox(payload.calibration, item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No calibration checks are available yet.")}</div>
               <div class="mini span-6"><strong>Improvements & Solutions</strong>${listbox(payload.improvements, item => `<div class="list-item"><div><div class="list-title">${esc(item.source)}</div><div class="list-meta">${esc(item.recommendation)}</div></div><span class="pill info">${esc(humanStatus(item.status))}</span></div>`, "No improvement proposals are needed right now.")}</div>
-              <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No worker diagnostic was reported for this error.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
+              <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this error yet.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
               <div class="mini span-6"><strong>Specialist Agents</strong>${listbox(payload.specialist_agents, item => `<div class="list-item"><div><div class="list-title">${esc(item.agent_key)}</div><div class="list-meta">${esc(item.specialty)} · ${esc(item.mission)}</div></div><span class="pill ok">${esc(humanStatus(item.status))}</span></div>`, "No specialist agents are suggested for this project type yet.")}</div>
               <div class="mini span-6"><strong>Economic Effects</strong>${listbox(Object.entries(payload.economic_effects).map(([name, value]) => ({ name, value })), item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.value)}</div></div><span class="pill info">proof</span></div>`, "Economic proof will appear after project evidence is collected.")}</div>
               <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => {
@@ -4083,7 +4085,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         jobs: sourceStatus(jobs, "Work", "problems", `${state.jobs.length} tracked job(s)`),
         workers: sourceStatus(workers, "Crew", "problems", `${state.workers.length} worker signal(s)`),
         projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
-        metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} raw signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
+        metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} system pulse signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
         query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Operating picture connection needs attention"),
         manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Execution manager connection needs attention"),
         server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness connection needs attention"),
