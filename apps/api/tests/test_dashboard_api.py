@@ -182,6 +182,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Operating Picture Signals" in response.text
     assert "Factory Creation Graph" in response.text
     assert "Preview Launch" in response.text
+    assert "Create Foundry Workspace" in response.text
+    assert "createFoundryWorkspaceFromDashboard" in response.text
+    assert "/foundry-workspace" in response.text
+    assert "Project Foundry created the repository blueprint" in response.text
+    assert "PROJECT.yaml, AGENTS.md, governance, intake, requirements" in response.text
     assert "No records were created. This project is ready for supervised launch." in response.text
     assert (
         "Client-side preflight only. No database record, workflow, job, or artifact was created."

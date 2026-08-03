@@ -256,6 +256,10 @@ rtk curl -s -X POST \
 sections, creates the Project Foundry repository files under `REPOSITORY_ALLOWED_ROOT`, links the
 project to the generated workspace, and reports created or reused files. If intake is incomplete, it
 returns the missing sections in human correction language.
+
+In the dashboard, use Factory -> Start Process first, then press Create Foundry Workspace. The
+Launch Result box changes to the workspace proof view and shows the generated path, created files,
+reused files, intake hash, and the next business action.
 For manifesto batches, read Project Readiness inside Launch Result. It lists every project, whether
 it is ready, blocked, reused, or started, and what to do next.
 

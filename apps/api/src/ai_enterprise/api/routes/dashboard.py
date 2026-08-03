@@ -1886,6 +1886,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <button id="previewFactory">Preview Launch</button>
           <button id="startFactory">Start Process</button>
           <button id="startManifestBatch">Start Manifesto Batch</button>
+          <button id="createFoundryWorkspace" disabled>Create Foundry Workspace</button>
           <button id="previewMockFactory">Preview Mock Factory</button>
           <button id="startMockFactory">Launch Mock Factory Test</button>
           <span id="factoryStatus" class="muted">Attach a manifesto or fill the fields manually.</span>
@@ -1989,6 +1990,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     };
     const state = { jobs: [], workers: [], projects: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, serverReadiness: null, infrastructureChoices: null, context: null, sources: {} };
     let loadedManifestDocument = null;
+    let lastFactoryProject = null;
     let selectedMovementNode = "manifesto";
     let selectedExecutionNode = "factory";
     let orientationIndex = 0;
@@ -3046,6 +3048,130 @@ DASHBOARD_HTML = r"""<!doctype html>
       };
     }
 
+    function foundryIntakeFromProject(project, projectInput) {
+      const sourceManifest = projectInput.manifest || {};
+      const projectDescription = project.description
+        || projectInput.description
+        || sourceManifest.description
+        || "Create a governed project workspace with visible execution proof.";
+      const projectType = sourceManifest.project_type || selectedCapability || "enterprise_project";
+      return {
+        project: {
+          name: project.name || projectInput.name,
+          description: projectDescription,
+          business_objective: sourceManifest.expected_outcome || "Create a governed product with visible execution proof.",
+          target_users: sourceManifest.target_users || ["operator", "client owner"],
+          project_type: projectType,
+          expected_outcomes: [
+            sourceManifest.expected_outcome || "A working project route with traceable proof.",
+            "Reusable blueprint for future projects"
+          ]
+        },
+        scope: {
+          included: sourceManifest.included_scope || ["manifesto intake", "governed planning", "workspace generation"],
+          excluded: sourceManifest.excluded_scope || ["production deployment without human approval"],
+          assumptions: sourceManifest.assumptions || ["human approval before protected actions"],
+          dependencies: sourceManifest.dependencies || [projectInput.repository_url || "GitHub repository to be connected"]
+        },
+        functional_requirements: sourceManifest.functional_requirements || [{
+          id: "FR-001",
+          description: "Create a governed project workspace with source-of-truth files.",
+          priority: "critical",
+          acceptance_criteria: ["PROJECT.yaml exists", "AGENTS.md exists", "Traceability file exists"]
+        }],
+        non_functional_requirements: sourceManifest.non_functional_requirements || {
+          performance: "workspace generation completes quickly for operator use",
+          scalability: "structure can be reused across parallel projects",
+          availability: "local-first with GitHub collaboration",
+          security: "human approval and path boundary are enforced",
+          privacy: "no production secrets are written into generated files",
+          accessibility: "plain-language files can be reviewed by operators and clients",
+          maintainability: "deterministic files support repeatable project setup"
+        },
+        technical_constraints: sourceManifest.technical_constraints || {
+          languages: sourceManifest.languages || ["Python"],
+          frameworks: sourceManifest.frameworks || ["FastAPI"],
+          operating_systems: ["Linux"],
+          cloud_or_local: "local first, server ready later",
+          existing_systems: sourceManifest.known_systems || [projectInput.repository_path],
+          prohibited_technologies: ["unapproved production secrets"]
+        },
+        delivery: sourceManifest.delivery || {
+          target_environment: "local development first",
+          milestones: ["intake", "workspace", "requirements", "architecture", "implementation", "verification"],
+          deployment_method: "GitHub collaboration after review",
+          documentation_required: ["README", "PROJECT.yaml", "requirements traceability"],
+          support_model: "human supervised AI Enterprise factory"
+        },
+        authority: sourceManifest.authority || {
+          allowed_actions: ["create workspace files", "prepare project plans"],
+          approval_required: ["repository push", "production deployment", "secret access"],
+          prohibited_actions: ["delete production data", "publish without approval"],
+          secret_access_policy: "no secrets in generated workspace",
+          production_access_policy: "human approval required"
+        }
+      };
+    }
+
+    async function createFoundryWorkspaceFromDashboard() {
+      const project = lastFactoryProject;
+      const projectInput = currentFactoryProjectInput();
+      if (!project || !project.id) {
+        byId("factoryStatus").textContent = "Create or load a project first, then generate the Foundry workspace.";
+        coach(
+          "Foundry Needs Project",
+          "Start Process creates the project record. After that, Create Foundry Workspace prepares the repository blueprint.",
+          ["Start Process", "factory"],
+          ["Open Projects", "projects"]
+        );
+        return;
+      }
+      byId("factoryStatus").textContent = "Creating Project Foundry workspace...";
+      const response = await json(`/api/v1/project-formation/projects/${project.id}/foundry-workspace`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...actorHeaders },
+        body: JSON.stringify({
+          intake: foundryIntakeFromProject(project, projectInput),
+          workspace_path: project.repository_path || projectInput.repository_path,
+          github_repository_url: projectInput.repository_url || project.repository_url || null
+        })
+      });
+      byId("factoryStatus").textContent = `Foundry workspace ready: ${response.created_files.length} files created, ${response.reused_files.length} reused.`;
+      renderLaunchContract({
+        status: response.status,
+        summary: "Project Foundry created the repository blueprint and source-of-truth files for this project.",
+        started: 1,
+        created: response.created_files.length,
+        reused: response.reused_files.length,
+        blocked: 0,
+        failed: 0,
+        recommendedName: project.name,
+        recommendedUrl: `/dashboard?project=${project.id}`,
+        nextAction: response.next_action,
+        proof: `Workspace: ${response.workspace_path}. Intake hash: ${response.proof.intake_hash}.`,
+        items: [
+          {
+            name: "Project workspace",
+            status: "ready",
+            detail: response.workspace_path,
+            action: "Open the generated files locally and connect the GitHub repository."
+          },
+          {
+            name: "Source of truth",
+            status: "created",
+            detail: "PROJECT.yaml, AGENTS.md, governance, intake, requirements, planning, and architecture files.",
+            action: "Review PROJECT.yaml before execution work starts."
+          }
+        ]
+      });
+      coach(
+        "Foundry Workspace Ready",
+        "The project now has a governed repository blueprint. Review PROJECT.yaml, connect GitHub, then continue through execution gates.",
+        ["Open Projects", "projects"],
+        ["Open Execution", "execution"]
+      );
+    }
+
     function previewFactoryLaunch() {
       const document = loadedManifestDocument;
       if (document && Array.isArray(document.projects) && document.projects.length) {
@@ -3149,6 +3275,8 @@ DASHBOARD_HTML = r"""<!doctype html>
       }
       byId("factoryStatus").textContent = "Creating project...";
       const project = await createAndStartProject(projectInput);
+      lastFactoryProject = project;
+      byId("createFoundryWorkspace").disabled = false;
       byId("factoryStatus").textContent = "Formation pack created. Opening execution graph...";
       renderLaunchContract({
         status: "started",
@@ -3207,6 +3335,10 @@ DASHBOARD_HTML = r"""<!doctype html>
         createAndStartProject({ ...defaults, ...project })
       ));
       const started = results.filter(result => result.status === "fulfilled").map(result => result.value);
+      if (started[0]) {
+        lastFactoryProject = started[0];
+        byId("createFoundryWorkspace").disabled = false;
+      }
       const failed = results.length - started.length;
       const launchItems = results.map((result, index) => {
         const sourceProject = { ...defaults, ...document.projects[index] };
@@ -3461,6 +3593,16 @@ DASHBOARD_HTML = r"""<!doctype html>
       );
       await refresh();
       if (result.projects && result.projects[0]) selectedExecutionNode = `project:${result.projects[0].project_id}`;
+      if (result.projects && result.projects[0]) {
+        lastFactoryProject = {
+          id: result.projects[0].project_id,
+          name: result.projects[0].name,
+          repository_path: result.projects[0].repository_path,
+          description: result.projects[0].next_action || "Mock factory project workspace.",
+          repository_url: byId("factoryGithub").value.trim() || null
+        };
+        byId("createFoundryWorkspace").disabled = false;
+      }
       document.querySelector('[data-view="execution"]').click();
       renderExecutionDashboard();
     }
@@ -4211,6 +4353,17 @@ DASHBOARD_HTML = r"""<!doctype html>
           "Factory Launch Stopped",
           friendlyLaunchError(error),
           ["Fix Details", "factory"],
+          ["Open Projects", "projects"]
+        );
+      });
+    });
+    byId("createFoundryWorkspace").addEventListener("click", () => {
+      createFoundryWorkspaceFromDashboard().catch(error => {
+        byId("factoryStatus").textContent = friendlyLaunchError(error);
+        coach(
+          "Foundry Workspace Stopped",
+          friendlyLaunchError(error),
+          ["Review Factory", "factory"],
           ["Open Projects", "projects"]
         );
       });
