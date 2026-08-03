@@ -167,8 +167,18 @@ def test_auto_approval_skips_are_explicit_policy_decisions() -> None:
 def test_terminal_and_failure_transitions_are_classified_fail_closed() -> None:
     policy = WorkflowPhasePolicy()
 
+    standard = policy.classify(
+        WorkflowState.PROJECT_CREATED, WorkflowState.REQUIREMENTS_RUNNING
+    )
+    completed = policy.classify(WorkflowState.INTEGRATING, WorkflowState.COMPLETED)
     failure = policy.classify(WorkflowState.EXECUTION_RUNNING, WorkflowState.FAILED)
     cancellation = policy.classify(WorkflowState.EXECUTION_RUNNING, WorkflowState.CANCELLING)
+    cancelled = policy.classify(WorkflowState.CANCELLING, WorkflowState.CANCELLED)
+    assert standard.event_name() is WorkflowEventName.TRANSITIONED
+    assert completed.event_name() is WorkflowEventName.COMPLETED
+    assert failure.event_name() is WorkflowEventName.FAILED
+    assert cancellation.event_name() is WorkflowEventName.TRANSITIONED
+    assert cancelled.event_name() is WorkflowEventName.CANCELLED
     assert failure.kind is WorkflowTransitionKind.FAILURE
     assert cancellation.kind is WorkflowTransitionKind.CANCELLATION
     with pytest.raises(IllegalWorkflowTransition):
@@ -192,6 +202,7 @@ async def test_repository_persists_auto_approval_policy_evidence() -> None:
 
     transition = next(item for item in session.added if isinstance(item, WorkflowTransitionModel))
     evidence = transition.policy_evidence
+    assert evidence["event_name"] == WorkflowEventName.TRANSITIONED
     assert evidence["transition_kind"] == WorkflowTransitionKind.VERSIONED_AUTO_APPROVAL
     assert evidence["requires_policy_evidence"] is True
     assert evidence["auto_approval"]["policy_version"] == "1.0"

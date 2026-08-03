@@ -3,7 +3,11 @@ from enum import StrEnum
 from typing import Any
 
 from ai_enterprise.domain.hashing import hash_json
-from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
+from ai_enterprise.domain.workflow.enums import (
+    WorkflowEventName,
+    WorkflowState,
+    WorkflowStepName,
+)
 
 
 class IllegalWorkflowTransition(ValueError):
@@ -24,8 +28,18 @@ class WorkflowTransitionDecision:
     kind: WorkflowTransitionKind
     requires_policy_evidence: bool = False
 
+    def event_name(self) -> WorkflowEventName:
+        if self.current is WorkflowState.COMPLETED:
+            return WorkflowEventName.COMPLETED
+        if self.current is WorkflowState.FAILED:
+            return WorkflowEventName.FAILED
+        if self.current is WorkflowState.CANCELLED:
+            return WorkflowEventName.CANCELLED
+        return WorkflowEventName.TRANSITIONED
+
     def policy_evidence(self, step: WorkflowStepName | None) -> dict[str, Any]:
         evidence = {
+            "event_name": self.event_name(),
             "transition_kind": self.kind,
             "requires_policy_evidence": self.requires_policy_evidence,
             "from_state": self.previous,
