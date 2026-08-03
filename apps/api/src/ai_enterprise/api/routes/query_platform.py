@@ -518,6 +518,23 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
     return proposals
 
 
+def _catalog_review_criteria(evidence_sources: dict[str, int]) -> list[dict[str, Any]]:
+    criteria = [
+        ("at least two succeeded jobs", "succeeded_jobs", 2),
+        ("at least one succeeded crew run", "succeeded_crew_runs", 1),
+        ("at least one work package", "work_packages", 1),
+    ]
+    return [
+        {
+            "criterion": criterion,
+            "actual": evidence_sources.get(source, 0),
+            "required": required,
+            "passed": evidence_sources.get(source, 0) >= required,
+        }
+        for criterion, source, required in criteria
+    ]
+
+
 def _reuse_learning_summary(
     projects: list[ProjectModel],
     jobs: list[JobModel],
@@ -550,13 +567,17 @@ def _reuse_learning_summary(
             if isinstance(project.manifest, dict)
             else "enterprise_project"
         )
-        promotion_blockers: list[str] = []
-        if len(completed_jobs) < 2:
-            promotion_blockers.append("at least two succeeded jobs")
-        if len(completed_runs) < 1:
-            promotion_blockers.append("at least one succeeded crew run")
-        if len(project_packages) < 1:
-            promotion_blockers.append("at least one work package")
+        evidence_sources = {
+            "succeeded_jobs": len(completed_jobs),
+            "succeeded_crew_runs": len(completed_runs),
+            "work_packages": len(project_packages),
+        }
+        criteria_status = _catalog_review_criteria(evidence_sources)
+        promotion_blockers = [
+            str(criterion["criterion"])
+            for criterion in criteria_status
+            if not criterion["passed"]
+        ]
         lifecycle = "reviewed" if not promotion_blockers else "candidate"
         readiness_level = "catalog_review_ready" if lifecycle == "reviewed" else "needs_more_proof"
         blueprint_candidates.append(
@@ -568,11 +589,8 @@ def _reuse_learning_summary(
                 "lifecycle": lifecycle,
                 "readiness_level": readiness_level,
                 "evidence_count": evidence_count,
-                "evidence_sources": {
-                    "succeeded_jobs": len(completed_jobs),
-                    "succeeded_crew_runs": len(completed_runs),
-                    "work_packages": len(project_packages),
-                },
+                "evidence_sources": evidence_sources,
+                "criteria_status": criteria_status,
                 "promotion_blockers": promotion_blockers,
                 "readiness_detail": {
                     "label": (
@@ -645,32 +663,7 @@ def _reuse_learning_summary(
                     "at least one succeeded crew run",
                     "at least one work package",
                 ],
-                "criteria_status": [
-                    {
-                        "criterion": "at least two succeeded jobs",
-                        "actual": ready_blueprints[0]["evidence_sources"][
-                            "succeeded_jobs"
-                        ],
-                        "required": 2,
-                        "passed": True,
-                    },
-                    {
-                        "criterion": "at least one succeeded crew run",
-                        "actual": ready_blueprints[0]["evidence_sources"][
-                            "succeeded_crew_runs"
-                        ],
-                        "required": 1,
-                        "passed": True,
-                    },
-                    {
-                        "criterion": "at least one work package",
-                        "actual": ready_blueprints[0]["evidence_sources"][
-                            "work_packages"
-                        ],
-                        "required": 1,
-                        "passed": True,
-                    },
-                ],
+                "criteria_status": ready_blueprints[0]["criteria_status"],
             },
             "operator_action": ready_blueprints[0]["readiness_detail"]["next_action"],
         },

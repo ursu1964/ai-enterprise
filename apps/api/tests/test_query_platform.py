@@ -282,6 +282,26 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
         "at least two succeeded jobs",
         "at least one work package",
     ]
+    assert response["reuse"]["blueprint_candidates"][0]["criteria_status"] == [
+        {
+            "criterion": "at least two succeeded jobs",
+            "actual": 1,
+            "required": 2,
+            "passed": False,
+        },
+        {
+            "criterion": "at least one succeeded crew run",
+            "actual": 1,
+            "required": 1,
+            "passed": True,
+        },
+        {
+            "criterion": "at least one work package",
+            "actual": 0,
+            "required": 1,
+            "passed": False,
+        },
+    ]
     assert response["reuse"]["blueprint_candidates"][0]["readiness_detail"]["label"] == (
         "Needs more proof"
     )
