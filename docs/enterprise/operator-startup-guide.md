@@ -205,6 +205,8 @@ The central visual manager is:
 Use the Demo Story when you need to explain the system before running a real project. The
 Step-by-Step Live Demo starts with the story map, then opens the exact working panels for Factory,
 Execution, Projects, Metrics, and Documentation.
+Use Demo Operator Console inside the Demo Story before opening another panel. It explains where to
+go, what to verify, and why the step matters in business language.
 
 Direct dashboard panel links:
 

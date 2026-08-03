@@ -2732,7 +2732,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       const online = state.workers.filter(worker => worker.status === "online").length;
       const requestCount = state.metrics.ai_enterprise_http_requests_total || 0;
       const dashboardHits = state.metrics.ai_enterprise_http_route_dashboard_total || 0;
-      const improvementProposals = failureImprovementProposals();
+      const improvementProposals = dashboardRecoveryProposals();
       renderSurfaceNodes("factoryGraph", [
         { title: "Attach Manifesto", detail: "Load the business goal, repository path, default branch, project type, and reusable operating rules.", idea: "Treat the manifesto as the contract between the human operator and the AI factory.", effect: "Cuts setup ambiguity before work starts.", signal: loadedManifestDocument ? "loaded" : "input", kind: loadedManifestDocument ? "ok" : "info", action: "manifest" },
         { title: "Select Factory Type", detail: `Current template: ${selectedCapability.replace(/_/g, " ")}. This controls which specialist path the project follows.`, idea: "Match the project type to the economic outcome you want to prove.", effect: "Improves crew routing and reusable blueprint quality.", signal: "template", kind: "info", action: "name" },
@@ -3527,6 +3527,22 @@ DASHBOARD_HTML = r"""<!doctype html>
         }));
     }
 
+    function dashboardRecoveryProposals() {
+      const proposals = state.dashboardManager?.recovery?.improvement_proposals;
+      if (proposals && proposals.length) {
+        return proposals.map(proposal => ({
+          title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
+          detail: `${proposal.current_failure_count || 0} current failure(s) share this class.`,
+          idea: proposal.recommendation || "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
+          effect: proposal.operator_action || "Reduces repeat failures before more work is queued.",
+          signal: proposal.status || "proposed",
+          kind: "warn",
+          action: "projects"
+        }));
+      }
+      return failureImprovementProposals();
+    }
+
     function jobGroup(job) {
       if (isProblemJob(job) && !isAcknowledgedJob(job)) return "current";
       if (["queued", "running", "leased", "retry_wait"].includes(job.status)) return "current";
@@ -4217,6 +4233,8 @@ DEMO_HTML = r"""<!doctype html>
       --green: #56e39f;
       --blue: #5db8ff;
       --amber: #ffd166;
+      --cyan: #5db8ff;
+      --gold: #ffd166;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
@@ -4331,6 +4349,40 @@ DEMO_HTML = r"""<!doctype html>
       padding: 8px 12px;
       font-size: 0.82rem;
     }
+    .operator-console {
+      display: grid;
+      gap: 10px;
+      border-color: rgba(93, 184, 255, 0.36);
+    }
+    .console-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .console-cell {
+      border: 1px solid rgba(143, 166, 190, 0.18);
+      border-radius: 8px;
+      background: rgba(5, 10, 15, 0.72);
+      padding: 10px;
+      min-height: 86px;
+    }
+    .console-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .console-cell strong {
+      display: block;
+      line-height: 1.24;
+      overflow-wrap: anywhere;
+    }
+    .console-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .demo-action {
+      border-color: rgba(93, 184, 255, 0.42);
+    }
     @media (max-width: 900px) {
       header { flex-direction: column; align-items: flex-start; }
       .span-4, .span-6 { grid-column: span 12; }
@@ -4361,14 +4413,28 @@ DEMO_HTML = r"""<!doctype html>
       <article class="panel span-12">
         <h2>Step-by-Step Live Demo</h2>
         <div class="walkthrough">
-          <div class="step-card"><div class="step-number">1</div><div><strong>Understand the story</strong><span>Start here. Touch each phase in the map and explain how an idea becomes governed work.</span><a href="/dashboard/demo">Stay Here</a></div></div>
-          <div class="step-card"><div class="step-number">2</div><div><strong>Open the factory</strong><span>Go to the Manifesto Launcher. This is where a client document becomes a project.</span><a href="/dashboard#factory">Open Factory</a></div></div>
-          <div class="step-card"><div class="step-number">3</div><div><strong>Preview a mock project</strong><span>Use Preview Mock Factory Test to see the prepared manifesto, project type, and launch path.</span><a href="/dashboard#factory">Preview Mock Factory</a></div></div>
-          <div class="step-card"><div class="step-number">4</div><div><strong>Start the process</strong><span>Use Start Manifesto Batch when you want the factory to create and start governed work.</span><a href="/dashboard#factory">Start Process</a></div></div>
-          <div class="step-card"><div class="step-number">5</div><div><strong>Watch execution</strong><span>Open the live graph to see projects, tasks, crews, events, and current movement.</span><a href="/dashboard#execution">Open Execution</a></div></div>
-          <div class="step-card"><div class="step-number">6</div><div><strong>Inspect a project</strong><span>Open Projects to see phase status, artifacts, remaining work, proof, and risks.</span><a href="/dashboard#projects">Open Projects</a></div></div>
-          <div class="step-card"><div class="step-number">7</div><div><strong>Check telemetry</strong><span>Open Metrics to verify health, runtime signals, queue pressure, and evidence.</span><a href="/dashboard#metrics">Open Metrics</a></div></div>
-          <div class="step-card"><div class="step-number">8</div><div><strong>Save the proof</strong><span>Open the Documentation Hub to read, preview, and download the operating documents.</span><a href="/dashboard/documentation-hub">Open Docs</a></div></div>
+          <div class="step-card"><div class="step-number">1</div><div><strong>Understand the story</strong><span>Start here. Touch each phase in the map and explain how an idea becomes governed work.</span><button class="demo-action" data-demo-step="0">Explain</button></div></div>
+          <div class="step-card"><div class="step-number">2</div><div><strong>Open the factory</strong><span>Go to the Manifesto Launcher. This is where a client document becomes a project.</span><button class="demo-action" data-demo-step="1">Explain Factory</button></div></div>
+          <div class="step-card"><div class="step-number">3</div><div><strong>Preview a mock project</strong><span>Use Preview Mock Factory Test to see the prepared manifesto, project type, and launch path.</span><button class="demo-action" data-demo-step="2">Explain Preview</button></div></div>
+          <div class="step-card"><div class="step-number">4</div><div><strong>Start the process</strong><span>Use Start Manifesto Batch when you want the factory to create and start governed work.</span><button class="demo-action" data-demo-step="3">Explain Start</button></div></div>
+          <div class="step-card"><div class="step-number">5</div><div><strong>Watch execution</strong><span>Open the live graph to see projects, tasks, crews, events, and current movement.</span><button class="demo-action" data-demo-step="4">Explain Execution</button></div></div>
+          <div class="step-card"><div class="step-number">6</div><div><strong>Inspect a project</strong><span>Open Projects to see phase status, artifacts, remaining work, proof, and risks.</span><button class="demo-action" data-demo-step="5">Explain Project</button></div></div>
+          <div class="step-card"><div class="step-number">7</div><div><strong>Check telemetry</strong><span>Open Metrics to verify health, runtime signals, queue pressure, and evidence.</span><button class="demo-action" data-demo-step="6">Explain Metrics</button></div></div>
+          <div class="step-card"><div class="step-number">8</div><div><strong>Save the proof</strong><span>Open the Documentation Hub to read, preview, and download the operating documents.</span><button class="demo-action" data-demo-step="7">Explain Docs</button></div></div>
+        </div>
+      </article>
+      <article class="panel span-12 operator-console">
+        <h2>Demo Operator Console</h2>
+        <p id="consoleMessage">Start with the story map, then use the guided buttons. This console explains the next action before you open another dashboard.</p>
+        <div class="console-grid">
+          <div class="console-cell"><span>Where to go</span><strong id="consoleTarget">Stay on Demo Story</strong></div>
+          <div class="console-cell"><span>What to verify</span><strong id="consoleProof">The idea-to-reality route is clear.</strong></div>
+          <div class="console-cell"><span>Business meaning</span><strong id="consoleMeaning">The client can see how an idea becomes controlled work.</strong></div>
+        </div>
+        <div class="console-actions">
+          <a id="consoleOpen" href="/dashboard/demo">Open Selected Step</a>
+          <a href="/dashboard#factory">Open Factory</a>
+          <a href="/dashboard#execution">Open Execution</a>
         </div>
       </article>
       <article class="panel span-6 output">
@@ -4401,9 +4467,33 @@ DEMO_HTML = r"""<!doctype html>
       ["Market Story", "Turn proof into a clear offer that clients understand.", "sell"],
       ["Evolution", "Capture blueprints so the next project starts stronger.", "evolve"]
     ];
+    const demoActions = [
+      ["Stay on Demo Story", "Use the map to explain the factory concept before touching live work.", "The person understands the full route from idea to reusable proof.", "The demo is a business story, not only a technical screen.", "/dashboard/demo"],
+      ["Open Factory", "Open Manifesto Launcher, then use Preview Launch before creating records.", "Launch Result shows readiness, missing data, and Project Readiness.", "The operator can start work without guessing what will happen.", "/dashboard#factory"],
+      ["Preview Mock Factory", "Press Preview Mock Factory or Preview Launch for a no-risk check.", "No records are created during preview; readiness is visible first.", "Supervised launch prevents accidental or unclear project creation.", "/dashboard#factory"],
+      ["Start Process", "Use Start Process for one project or Start Manifesto Batch for portfolio work.", "The Launch Result shows created, reused, blocked, failed, and inspect-first signals.", "The enterprise starts production work with a clear proof path.", "/dashboard#factory"],
+      ["Open Execution", "Watch the live project graph, task counts, crew signals, events, and telemetry.", "Project movement appears as graph nodes and human-readable status.", "The factory proves it is working, not only storing records.", "/dashboard#execution"],
+      ["Open Projects", "Select a project and inspect phases, evidence, remaining work, risks, and blueprints.", "Phase confidence, owner crew, completed work, and remaining work are visible.", "A client can understand where the product is and what comes next.", "/dashboard#projects"],
+      ["Open Metrics", "Check Server Readiness, Real Infrastructure Choices, and telemetry health.", "Health, migration readiness, and operating signals are visible.", "The system can prepare for server migration and production operation.", "/dashboard#metrics"],
+      ["Open Docs", "Open the Documentation Hub and preview or download the working documents.", "Operator guides, manifest templates, and proof documents are available.", "The result can be shared, repeated, and improved.", "/dashboard/documentation-hub"]
+    ];
     const map = document.getElementById("storyMap");
     const title = document.getElementById("storyTitle");
     const text = document.getElementById("storyText");
+    const consoleMessage = document.getElementById("consoleMessage");
+    const consoleTarget = document.getElementById("consoleTarget");
+    const consoleProof = document.getElementById("consoleProof");
+    const consoleMeaning = document.getElementById("consoleMeaning");
+    const consoleOpen = document.getElementById("consoleOpen");
+    function showDemoAction(index = 0) {
+      const action = demoActions[index] || demoActions[0];
+      consoleTarget.textContent = action[0];
+      consoleMessage.textContent = action[1];
+      consoleProof.textContent = action[2];
+      consoleMeaning.textContent = action[3];
+      consoleOpen.href = action[4];
+      consoleOpen.textContent = action[0];
+    }
     function render(selected = 0) {
       map.innerHTML = steps.map((step, index) => `
         <button class="node" aria-pressed="${index === selected}" data-index="${index}">
@@ -4418,6 +4508,10 @@ DEMO_HTML = r"""<!doctype html>
         node.addEventListener("click", () => render(Number(node.dataset.index)));
       });
     }
+    document.querySelectorAll(".demo-action").forEach(button => {
+      button.addEventListener("click", () => showDemoAction(Number(button.dataset.demoStep)));
+    });
+    showDemoAction(0);
     render();
   </script>
 </body>

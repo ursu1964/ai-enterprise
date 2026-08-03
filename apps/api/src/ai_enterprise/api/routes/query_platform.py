@@ -430,6 +430,34 @@ def _phase_detail(
     }
 
 
+def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]:
+    counts = Counter(
+        str(job.last_failure_class or "unknown")
+        for job in unresolved_problem_jobs(jobs)
+    )
+    proposals: list[dict[str, Any]] = []
+    for failure_class, count in counts.most_common(4):
+        if count < 2:
+            continue
+        proposals.append(
+            {
+                "title": f"Guardrail proposal: {failure_class.replace('_', ' ')}",
+                "failure_class": failure_class,
+                "current_failure_count": count,
+                "status": "proposed",
+                "recommendation": (
+                    "Convert this repeated failure class into a recovery checklist, "
+                    "test guardrail, or project template improvement."
+                ),
+                "operator_action": (
+                    "Open Problems, inspect attempts for this failure class, then "
+                    "record the reusable guardrail before queuing more work."
+                ),
+            }
+        )
+    return proposals
+
+
 def _crew_summary(runs: list[CrewRunModel], jobs: list[JobModel]) -> list[dict[str, object]]:
     completed: list[dict[str, object]] = [
         {
@@ -810,6 +838,12 @@ async def dashboard_manager(
             "worker_signals": len(workers),
             "events": len(audits),
             "governed_metrics": len(metrics),
+        },
+        "recovery": {
+            "improvement_proposals": _failure_improvement_proposals(jobs),
+            "proposal_basis": (
+                "Repeated unresolved failure classes across dashboard-manager jobs."
+            ),
         },
         "sections": {
             "projects": source_contract(

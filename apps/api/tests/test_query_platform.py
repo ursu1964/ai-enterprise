@@ -296,6 +296,36 @@ async def test_dashboard_manager_splits_current_and_historical_project_issues() 
 
 
 @pytest.mark.asyncio
+async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classes() -> None:
+    now = datetime.now(UTC)
+    row = project(now)
+    first = job(now, row.id, "dead_letter")
+    second = job(now, row.id, "failed")
+    first.last_failure_class = "runtime"
+    second.last_failure_class = "runtime"
+    rows = [
+        [row],
+        [workflow(now, row.id)],
+        [first, second],
+        [],
+        [],
+        [],
+        [],
+        [],
+    ]
+
+    response = await dashboard_manager(QuerySession(rows), actor())  # type: ignore[arg-type]
+
+    proposal = response["recovery"]["improvement_proposals"][0]
+    assert proposal["title"] == "Guardrail proposal: runtime"
+    assert proposal["failure_class"] == "runtime"
+    assert proposal["current_failure_count"] == 2
+    assert proposal["status"] == "proposed"
+    assert "recovery checklist" in proposal["recommendation"]
+    assert "inspect attempts" in proposal["operator_action"]
+
+
+@pytest.mark.asyncio
 async def test_dashboard_manager_explains_empty_source_sections() -> None:
     response = await dashboard_manager(
         QuerySession([[], [], [], [], [], [], [], []]), actor()
