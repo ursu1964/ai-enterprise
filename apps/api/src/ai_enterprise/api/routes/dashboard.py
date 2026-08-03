@@ -3906,7 +3906,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             ["Project ID", payload.project.id]
           ], statusClass(payload.project.status))}
           ${infoCard("Workflow", workflowStatus, [
-            ["Current step", workflow.current_step || "No active step"],
+            ["Current step", workflow.current_step || "Workflow is waiting for the first governed step."],
             ["Next action", workflow.recommended_operator_action || "Continue with the guided route."]
           ], statusClass(workflow.state || "not_started"))}
           ${infoCard("Link Health", workflowLinkStatus, [
@@ -3961,19 +3961,19 @@ DASHBOARD_HTML = r"""<!doctype html>
                 ["Owner crew", phase.owner_crew || "workflow-engine"],
                 ["Next action", phase.next_action || "Continue the guided workflow."]
               ], statusClass(phase.status))}
-              ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? `${phase.completed_evidence.length} proof item(s)` : "No proof yet", [
-                ["Evidence", (phase.completed_evidence || []).join(", ") || "No evidence recorded for this phase yet."],
-                ["Last transition", phase.last_transition_at || "No transition recorded"]
+              ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? `${phase.completed_evidence.length} proof item(s)` : "Waiting for phase proof", [
+                ["Evidence", (phase.completed_evidence || []).join(", ") || "Evidence will appear after the workflow records a phase transition or artifact."],
+                ["Last transition", phase.last_transition_at || "No phase movement recorded yet."]
               ], phase.completed_evidence && phase.completed_evidence.length ? "ok" : "warn")}
               ${infoCard("Remaining Work", phase.remaining_work || "Continue the guided workflow.", [
                 ["Current issues", `${(phase.current_issues || []).length}`],
                 ["Reviewed history", `${(phase.historical_issues || []).length}`]
               ], (phase.current_issues || []).length ? "bad" : "info")}
-              ${infoCard("Executed Steps", payload.executed_steps.length ? `${payload.executed_steps.length} done` : "None yet", [
-                ["Steps", payload.executed_steps.join(" -> ") || "No transitions recorded"]
+              ${infoCard("Executed Steps", payload.executed_steps.length ? `${payload.executed_steps.length} done` : "Waiting for execution proof", [
+                ["Steps", payload.executed_steps.join(" -> ") || "Executed steps will appear after workflow movement is recorded."]
               ], payload.executed_steps.length ? "ok" : "warn")}
               ${infoCard("Remaining Steps", payload.remaining_steps.length ? `${payload.remaining_steps.length} left` : "Complete", [
-                ["Steps", payload.remaining_steps.join(" -> ") || "No remaining phases"]
+                ["Steps", payload.remaining_steps.join(" -> ") || "All governed phases are complete or no remaining phase plan is registered."]
               ], payload.remaining_steps.length ? "info" : "ok")}
               ${infoCard("Project Life", `${payload.life.transition_count} transitions`, [
                 ["Jobs", `${payload.life.job_count}`],
@@ -4182,7 +4182,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           json(`/api/v1/workflows/${workflowId}`),
           json(`/api/v1/workflows/${workflowId}/history`)
         ]);
-        byId("workflowDetail").innerHTML = `<div class="cards"><div class="mini"><strong>${esc(workflow.state)}</strong><div>${esc(workflow.current_step || "No active step")}</div><div class="muted">${esc(workflow.recommended_operator_action || "")}</div></div></div>` +
+        byId("workflowDetail").innerHTML = `<div class="cards"><div class="mini"><strong>${esc(workflow.state)}</strong><div>${esc(workflow.current_step || "Workflow is waiting for the first governed step.")}</div><div class="muted">${esc(workflow.recommended_operator_action || "")}</div></div></div>` +
           table(history, [
             { label: "From", value: row => row.previous_state },
             { label: "To", value: row => row.current_state },

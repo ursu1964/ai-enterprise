@@ -33,6 +33,9 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
     assert {gate["name"] for gate in document["gates"]} >= {
         "compose-check",
         "migration-check",
+        "lint",
+        "typecheck",
+        "test",
         "docker-smoke",
         "engineering-full",
         "etra-check",

@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-artifact
+.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-artifact
 
 build:
 	docker compose build
@@ -113,13 +113,16 @@ engineering-full:
 	python tools/engineering_verify.py --full --json
 
 release-artifact:
-	python tools/release_artifact.py --output artifacts/release-verification.json
+	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --output artifacts/release-verification.json
+
+release-gate-evidence-fast:
+	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q'
 
 check-fast: lint typecheck test
 
 check-ci: engineering-static evolution-check federation-check intelligence-check engineering-full etra-check
 
-check-release: compose-check migration-check secret-scan docker-smoke check-ci release-artifact
+check-release: compose-check migration-check check-fast secret-scan docker-smoke check-ci release-artifact
 
 check: compose-check migration-check lint typecheck test
 

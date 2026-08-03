@@ -326,6 +326,8 @@ Operating discipline for every project:
 - Errors are followed as first-class project signals, not hidden logs.
 - Expand Proof detail when you need the worker diagnostic behind a problem, without making the main
   dashboard read like raw logs.
+- Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
+  appear after workflow movement, phase transitions, or artifacts are recorded.
 - Improvements and solutions are proposed from telemetry and job failures.
 - Reusable artifacts, work packages, phase structure, agent crew, and checks become future template
   material.
@@ -398,6 +400,17 @@ rtk make lint
 rtk make typecheck
 rtk make test
 ```
+
+Release evidence:
+
+```bash
+rtk make release-gate-evidence-fast
+rtk make release-artifact
+```
+
+`release-gate-evidence-fast` captures lint, typecheck, and test command output under
+`artifacts/release-gates/` and writes `artifacts/gate-evidence.json`. `release-artifact`
+merges that evidence into `artifacts/release-verification.json`.
 
 Alembic must have one head:
 

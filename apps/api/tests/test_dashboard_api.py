@@ -312,6 +312,18 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Needs review" in response.text
     assert "Completed Evidence" in response.text
     assert "Remaining Work" in response.text
+    assert "Workflow is waiting for the first governed step." in response.text
+    assert "Waiting for phase proof" in response.text
+    assert (
+        "Evidence will appear after the workflow records a phase transition or artifact."
+        in response.text
+    )
+    assert "No phase movement recorded yet." in response.text
+    assert "Waiting for execution proof" in response.text
+    assert "Executed steps will appear after workflow movement is recorded." in response.text
+    assert "No proof yet" not in response.text
+    assert "No transition recorded" not in response.text
+    assert "No active step" not in response.text
     assert "Current Issues" in response.text
     assert "Used to show active blockers for the selected phase" in response.text
     assert "This phase has no active blockers" in response.text

@@ -14,6 +14,9 @@ import migration_verify
 DEFAULT_GATES = (
     ("compose-check", "docker compose config --quiet"),
     ("migration-check", "alembic heads, upgrade SQL, migration graph verification"),
+    ("lint", "cd apps/api && .venv/bin/ruff check src tests ../../migrations"),
+    ("typecheck", "cd apps/api && .venv/bin/mypy src"),
+    ("test", "cd apps/api && .venv/bin/pytest -q"),
     ("secret-scan", "python tools/secret_scan.py --all"),
     ("docker-smoke", "python tools/docker_smoke.py --require-worker"),
     ("engineering-static", "python tools/engineering_verify.py --static --json"),
