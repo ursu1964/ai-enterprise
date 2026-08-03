@@ -195,6 +195,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Needs action" in response.text
     assert "Being retried" in response.text
     assert "Healthy history" in response.text
+    assert "Open Attempts" in response.text
+    assert "Acknowledge Reviewed Failure" in response.text
+    assert "jobActionStatus" in response.text
+    assert "/api/v1/operator/jobs/by-id/" in response.text
+    assert "loadJobAttempts" in response.text
+    assert "acknowledgeProblemJob" in response.text
     assert "groupedJobs" in response.text
     assert "jobRecoveryGroup" in response.text
     assert "Business Telemetry" in response.text

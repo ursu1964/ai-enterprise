@@ -1899,6 +1899,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       </article>
       <article class="panel span-12">
         <div class="toolbar"><h2>Recovery and Work History</h2><select id="jobFilter"><option value="current">Current action</option><option value="history">Reviewed history</option><option value="">All records</option><option value="queued">Queued</option><option value="running">Running</option><option value="failed">Failed</option><option value="dead_letter">Dead Letter</option><option value="succeeded">Succeeded</option></select></div>
+        <div id="jobActionStatus" class="mini muted">Select a recovery action to inspect attempts or acknowledge reviewed failures.</div>
         <div id="jobsTable"></div>
       </article>
       <article class="panel span-12">
@@ -3564,6 +3565,38 @@ DASHBOARD_HTML = r"""<!doctype html>
         .filter(group => group.jobs.length);
     }
 
+    async function loadJobAttempts(jobId) {
+      byId("jobActionStatus").innerHTML = `<strong>Loading attempts</strong><div class="muted">Reading worker attempts for this job.</div>`;
+      const attempts = await json(`/api/v1/operator/jobs/by-id/${encodeURIComponent(jobId)}/attempts`, { headers: actorHeaders });
+      byId("jobActionStatus").innerHTML = `
+        <strong>Job Attempts</strong>
+        ${listbox(attempts, attempt => `
+          <div class="list-item">
+            <div>
+              <div class="list-title">Attempt ${esc(attempt.attempt_number)}</div>
+              <div class="list-meta">Worker ${esc(attempt.worker_id || "not assigned")} · ${esc(attempt.status || "not reported")}</div>
+              <div class="list-meta">Failure: ${esc(attempt.failure_class || attempt.failure_code || "none recorded")}</div>
+            </div>
+            <span class="pill ${statusClass(attempt.status)}">${esc(humanStatus(attempt.status))}</span>
+          </div>
+        `, "No worker attempts are recorded for this job yet.")}
+      `;
+    }
+
+    async function acknowledgeProblemJob(jobId) {
+      byId("jobActionStatus").innerHTML = `<strong>Acknowledging job</strong><div class="muted">Recording operator review and preserving evidence.</div>`;
+      await json(`/api/v1/operator/jobs/by-id/${encodeURIComponent(jobId)}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...actorHeaders },
+        body: JSON.stringify({
+          reason: "Reviewed from dashboard recovery board.",
+          action_taken: "Preserved as historical evidence after operator review."
+        })
+      });
+      byId("jobActionStatus").innerHTML = `<strong class="ok">Job acknowledged</strong><div class="muted">The failure remains visible as reviewed history and no longer counts as current risk.</div>`;
+      await refresh();
+    }
+
     function readableTime(value) {
       if (!value) return "Not reported yet";
       return new Date(value).toLocaleString();
@@ -3661,6 +3694,10 @@ DASHBOARD_HTML = r"""<!doctype html>
                 <div class="list-meta">${esc(jobBusinessSummary(job))}</div>
                 <div class="list-meta">Attempt ${esc(job.attempt_count)} of ${esc(job.max_attempts)}${isAcknowledgedJob(job) ? " · acknowledged by operator" : ""}</div>
                 <details><summary>Technical detail</summary><div class="list-meta">${esc(job.last_error || "No raw diagnostic reported.")}</div></details>
+                <div class="toolbar" style="justify-content: flex-start; margin-top: 8px;">
+                  <button class="job-attempts" data-job-id="${esc(job.id)}">Open Attempts</button>
+                  ${isProblemJob(job) && !isAcknowledgedJob(job) ? `<button class="job-acknowledge" data-job-id="${esc(job.id)}">Acknowledge Reviewed Failure</button>` : ""}
+                </div>
               </div>
               <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
             </div>
@@ -3669,6 +3706,20 @@ DASHBOARD_HTML = r"""<!doctype html>
       `).join("") || listbox([], job => job, filter === "history"
         ? "No reviewed history is visible yet. Resolved jobs will appear here after completion or acknowledgment."
         : "No current work needs action. The factory is clear to inspect projects or create new work.");
+      document.querySelectorAll(".job-attempts").forEach(button => {
+        button.addEventListener("click", () => {
+          loadJobAttempts(button.dataset.jobId).catch(error => {
+            byId("jobActionStatus").innerHTML = `<strong class="bad">Attempts unavailable</strong><div class="muted">${esc(error.message)}</div>`;
+          });
+        });
+      });
+      document.querySelectorAll(".job-acknowledge").forEach(button => {
+        button.addEventListener("click", () => {
+          acknowledgeProblemJob(button.dataset.jobId).catch(error => {
+            byId("jobActionStatus").innerHTML = `<strong class="bad">Acknowledge failed</strong><div class="muted">${esc(error.message)}</div>`;
+          });
+        });
+      });
       const workerFilter = byId("workerFilter").value;
       const workerRows = state.workers.filter(worker => {
         if (workerFilter === "all") return true;
