@@ -27,13 +27,14 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     assert "release-gate-evidence-ci" in makefile
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
     assert (
-        "--require-evidence-for lint,typecheck,test,engineering-static,"
+        "--require-evidence-for lint,typecheck,test,docker-smoke,engineering-static,"
         "evolution-check,federation-check,intelligence-check,engineering-full,etra-check"
         in makefile
     )
     assert "tools/release_gate_evidence.py" in makefile
     ci_commands = {
         "engineering-static=python tools/engineering_verify.py --static --json",
+        "docker-smoke=python tools/docker_smoke.py --require-worker",
         "evolution-check=python tools/evolution_verify.py --json",
         "federation-check=python tools/federation_verify.py --json",
         "intelligence-check=python tools/intelligence_verify.py --json",

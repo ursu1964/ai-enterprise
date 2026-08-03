@@ -163,6 +163,7 @@ def test_release_artifact_passes_when_all_fast_and_ci_evidence_is_present(
         "lint",
         "typecheck",
         "test",
+        "docker-smoke",
         "engineering-static",
         "evolution-check",
         "federation-check",
