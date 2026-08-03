@@ -1015,8 +1015,8 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
         preview.textContent = await response.text();
         status.textContent = `${title} loaded. Use the scrollbar to read, or download the document.`;
       } catch (error) {
-        preview.textContent = "The document could not be loaded. Check API readiness and the document path.";
-        status.textContent = `${title} is unavailable.`;
+        preview.textContent = "Document preview needs attention. Check API readiness, confirm the document is registered in the Documentation Hub, then retry the preview or download action.";
+        status.textContent = `${title} preview needs attention.`;
       }
     }
     document.querySelectorAll(".doc-open").forEach(button => {
@@ -2096,7 +2096,13 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (result.status === "fulfilled") {
         return { label, target, status: "fresh", className: "ok", detail: `${summary}. Updated ${new Date().toLocaleTimeString()}` };
       }
-      return { label, target, status: "needs review", className: "bad", detail: `${summary}. Open this panel and refresh; if it repeats, check API logs.` };
+      return {
+        label,
+        target,
+        status: "connection needs attention",
+        className: "bad",
+        detail: `${summary}. Open this panel, refresh, and verify API readiness before making delivery decisions.`,
+      };
     }
 
     function managerSectionSource(section, target) {
@@ -2118,7 +2124,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             ? "info"
             : "ok";
       const age = section.freshness_age_seconds == null
-        ? "No source timestamp yet"
+        ? "Waiting for the first source timestamp"
         : `${Math.round(section.freshness_age_seconds)}s old`;
       const staleWindow = section.stale_after_seconds == null
         ? ""
@@ -2208,7 +2214,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       const risk = failed
         ? `${failed} issue(s) need review. Open Problems and follow the recommended recovery path.`
         : staleSources
-          ? `${staleSources} data source(s) are unavailable. Refresh before making delivery decisions.`
+          ? `${staleSources} data source(s) need attention. Refresh and confirm readiness before making delivery decisions.`
           : "No urgent delivery risk is visible. Continue creating or inspecting projects.";
       const next = failed
         ? ["Resolve Issues", "problems", "Review failed work first."]
@@ -2779,13 +2785,14 @@ DASHBOARD_HTML = r"""<!doctype html>
       const nextCatalogReview = reuse.next_catalog_review;
       const nextReviewEvidence = nextCatalogReview?.evidence_bundle?.sources || {};
       const nextReviewEvidenceCount = Object.values(nextReviewEvidence).reduce((total, value) => total + Number(value || 0), 0);
+      const nextReviewCriteriaPassed = (nextCatalogReview?.evidence_bundle?.criteria_status || []).filter(item => item.passed).length;
       renderSurfaceNodes("blueprintGraph", [
         { title: "Code Graph", detail: "Graphify architecture map for the repository.", idea: "Use it to understand what code areas a change touches.", effect: "Reduces blind edits and improves architecture navigation.", signal: "open", kind: "info", action: "graphify" },
         { title: "Project Foundry Core", detail: "AEOS project factory specification, schemas, prompt contracts, gates, and repository template.", idea: "Use it as the standard operating contract for every governed project.", effect: "Turns the Corel manifest into reusable enterprise factory rules.", signal: "download", kind: "ok", action: "foundry" },
         { title: "Ecosystem Graph", detail: "Shows enterprise relationships after governed records are linked.", idea: "Inspect enterprise relationships before broad changes.", effect: "Improves cross-object governance.", signal: "check map", kind: "info", action: "ecosystem" },
         { title: "Evidence Graph", detail: "Shows project proof after requirements, decisions, and evidence are recorded.", idea: "Trace decisions back to requirements and proof.", effect: "Improves audit readiness.", signal: "check proof", kind: "info", action: "evidence" },
         { title: "Project Blueprints", detail: "Workflow, specialist-crew, and economic-proof patterns produced by project intelligence.", idea: "Promote repeated successful structures into templates.", effect: "Increases reuse across future projects.", signal: "reuse", kind: "ok", action: "projects" },
-        { title: "Blueprint Learning Queue", detail: `${reuse.summary || "No reusable learning candidates have been observed yet."} Review-ready: ${reuseReadiness.catalog_review_ready || 0}; needs proof: ${reuseReadiness.needs_more_proof || 0}. Next review: ${nextCatalogReview ? nextCatalogReview.project_name : "none ready"} with ${nextReviewEvidenceCount} proof item(s).`, idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: (reuseReadiness.catalog_review_ready || 0) ? "ok" : blueprintLearning.length ? "warn" : "info", action: "projects" },
+        { title: "Blueprint Learning Queue", detail: `${reuse.summary || "No reusable learning candidates have been observed yet."} Review-ready: ${reuseReadiness.catalog_review_ready || 0}; needs proof: ${reuseReadiness.needs_more_proof || 0}. Next review: ${nextCatalogReview ? nextCatalogReview.project_name : "none ready"} with ${nextReviewEvidenceCount} proof item(s) and ${nextReviewCriteriaPassed} passed criterion/criteria.`, idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: (reuseReadiness.catalog_review_ready || 0) ? "ok" : blueprintLearning.length ? "warn" : "info", action: "projects" },
         { title: "Guardrail Learning Queue", detail: `${guardrailLearning.length} repeated-failure guardrail candidate(s). Evidence required: ${reuseReadiness.guardrails_evidence_required || 0}.`, idea: "Repeated failures should become recovery checklists, tests, or template guardrails.", effect: "Keeps the factory from repeating known failure classes.", signal: `${guardrailLearning.length} guardrail`, kind: guardrailLearning.length ? "warn" : "ok", action: "problems" },
         { title: "Future Templates", detail: "Reusable patterns become stronger starting points for later manifestos.", idea: "Feed lessons back into the next project creation cycle.", effect: "Compounds delivery speed and quality over time.", signal: "evolve", kind: "ok", action: "factory" }
       ]);
@@ -4077,10 +4084,10 @@ DASHBOARD_HTML = r"""<!doctype html>
         workers: sourceStatus(workers, "Crew", "problems", `${state.workers.length} worker signal(s)`),
         projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
         metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} raw signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
-        query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Read model is unavailable"),
-        manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Project execution manager is unavailable"),
-        server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness is unavailable"),
-        infrastructure: sourceStatus(infrastructureChoices, "Infrastructure Choices", "metrics", state.infrastructureChoices ? state.infrastructureChoices.summary : "Infrastructure choices are unavailable")
+        query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Operating picture connection needs attention"),
+        manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Execution manager connection needs attention"),
+        server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness connection needs attention"),
+        infrastructure: sourceStatus(infrastructureChoices, "Infrastructure Choices", "metrics", state.infrastructureChoices ? state.infrastructureChoices.summary : "Infrastructure choices connection needs attention")
       };
       state.sources = dashboardManagerSources(state.sources);
       render();

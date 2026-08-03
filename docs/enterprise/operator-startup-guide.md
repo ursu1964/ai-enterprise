@@ -222,6 +222,11 @@ Direct dashboard panel links:
 - Telemetry and metrics: `http://localhost:8000/dashboard#metrics`
 - Documentation Hub: `http://localhost:8000/dashboard/documentation-hub`
 
+Use the Documentation Hub when you need operator guides, the manifest template, foundry core, graph
+links, and verification commands in one place. If a document preview cannot load, the hub explains
+the recovery path: check API readiness, confirm document registration, then retry preview or
+download.
+
 In Factory, press Preview Launch before Start Process when you want a no-risk check. Preview creates
 no records. It only explains whether the project or manifesto batch is ready and what is missing.
 After preview or start, use Launch Result as the operating checkpoint: it explains status, created
@@ -238,7 +243,9 @@ manage operating problems, Telemetry for live metrics, and Blueprints or Evoluti
 patterns and future factory material.
 
 Before acting, check the data-source freshness strip. It confirms whether API readiness, jobs,
-workers, projects, and metrics were updated successfully during the latest refresh.
+workers, projects, and metrics were updated successfully during the latest refresh. If a source
+needs attention, open that panel, refresh, and verify API readiness before making delivery
+decisions. The dashboard describes this as source readiness work, not as a raw log problem.
 
 Read the Business Decision Board next. It explains the current state, value in motion, visible risk,
 and recommended next move in short business language.

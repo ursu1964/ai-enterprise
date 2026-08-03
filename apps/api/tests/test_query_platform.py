@@ -367,6 +367,28 @@ async def test_dashboard_manager_marks_reuse_candidate_ready_for_catalog_review(
         "at least one succeeded crew run",
         "at least one work package",
     ]
+    assert response["reuse"]["next_catalog_review"]["evidence_bundle"][
+        "criteria_status"
+    ] == [
+        {
+            "criterion": "at least two succeeded jobs",
+            "actual": 2,
+            "required": 2,
+            "passed": True,
+        },
+        {
+            "criterion": "at least one succeeded crew run",
+            "actual": 1,
+            "required": 1,
+            "passed": True,
+        },
+        {
+            "criterion": "at least one work package",
+            "actual": 1,
+            "required": 1,
+            "passed": True,
+        },
+    ]
 
 
 @pytest.mark.asyncio

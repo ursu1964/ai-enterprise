@@ -103,6 +103,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Data source freshness" in response.text
     assert "managerSectionSource" in response.text
     assert "dashboardManagerSources" in response.text
+    assert "connection needs attention" in response.text
+    assert "verify API readiness before making delivery decisions" in response.text
+    assert "Waiting for the first source timestamp" in response.text
+    assert "check API logs" not in response.text
+    assert "data source(s) need attention" in response.text
     assert "freshness_age_seconds" in response.text
     assert "stale_after_seconds" in response.text
     assert "stale after" in response.text
@@ -234,12 +239,15 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "nextCatalogReview" in response.text
     assert "evidence_bundle" in response.text
     assert "nextReviewEvidenceCount" in response.text
+    assert "nextReviewCriteriaPassed" in response.text
+    assert "criteria_status" in response.text
     assert "catalog_review_ready" in response.text
     assert "needs_more_proof" in response.text
     assert "guardrails_evidence_required" in response.text
     assert "Review-ready:" in response.text
     assert "Next review:" in response.text
     assert "proof item(s)" in response.text
+    assert "passed criterion/criteria" in response.text
     assert "needs proof:" in response.text
     assert "Evidence required:" in response.text
     assert "No reusable learning candidates have been observed yet." in response.text
@@ -407,6 +415,10 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Commands" in response.text
     assert "docs/enterprise/working-method.md" in response.text
     assert "/dashboard/graphify" in response.text
+    assert "Document preview needs attention" in response.text
+    assert "confirm the document is registered in the Documentation Hub" in response.text
+    assert "preview needs attention" in response.text
+    assert "is unavailable" not in response.text
 
 
 def test_project_foundry_core_downloads_aeos_foundation() -> None:

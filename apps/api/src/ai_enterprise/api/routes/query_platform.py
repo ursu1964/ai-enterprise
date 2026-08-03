@@ -645,6 +645,32 @@ def _reuse_learning_summary(
                     "at least one succeeded crew run",
                     "at least one work package",
                 ],
+                "criteria_status": [
+                    {
+                        "criterion": "at least two succeeded jobs",
+                        "actual": ready_blueprints[0]["evidence_sources"][
+                            "succeeded_jobs"
+                        ],
+                        "required": 2,
+                        "passed": True,
+                    },
+                    {
+                        "criterion": "at least one succeeded crew run",
+                        "actual": ready_blueprints[0]["evidence_sources"][
+                            "succeeded_crew_runs"
+                        ],
+                        "required": 1,
+                        "passed": True,
+                    },
+                    {
+                        "criterion": "at least one work package",
+                        "actual": ready_blueprints[0]["evidence_sources"][
+                            "work_packages"
+                        ],
+                        "required": 1,
+                        "passed": True,
+                    },
+                ],
             },
             "operator_action": ready_blueprints[0]["readiness_detail"]["next_action"],
         },
