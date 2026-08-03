@@ -24,9 +24,23 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     makefile = (root / "Makefile").read_text(encoding="utf-8")
 
     assert "release-gate-evidence-fast" in makefile
+    assert "release-gate-evidence-ci" in makefile
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
-    assert "--require-evidence-for lint,typecheck,test" in makefile
+    assert (
+        "--require-evidence-for lint,typecheck,test,engineering-static,"
+        "evolution-check,federation-check,intelligence-check,engineering-full,etra-check"
+        in makefile
+    )
     assert "tools/release_gate_evidence.py" in makefile
+    ci_commands = {
+        "engineering-static=python tools/engineering_verify.py --static --json",
+        "evolution-check=python tools/evolution_verify.py --json",
+        "federation-check=python tools/federation_verify.py --json",
+        "intelligence-check=python tools/intelligence_verify.py --json",
+        "engineering-full=python tools/engineering_verify.py --full --json",
+        "etra-check=python tools/etra_conformance.py --root . --json",
+    }
+    assert all(f"--gate-command '{command}'" in makefile for command in ci_commands)
     assert "check-release: compose-check migration-check check-fast" in makefile
 
 

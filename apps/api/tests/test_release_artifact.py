@@ -153,6 +153,52 @@ def test_release_artifact_fails_when_required_captured_evidence_is_missing(
     assert gates["typecheck"]["evidence"]["missing_required_evidence"] is True
 
 
+def test_release_artifact_passes_when_all_fast_and_ci_evidence_is_present(
+    tmp_path: Path,
+) -> None:
+    root = _release_root(tmp_path)
+    evidence_file = root / "artifacts" / "gate-evidence.json"
+    evidence_file.parent.mkdir()
+    required = (
+        "lint",
+        "typecheck",
+        "test",
+        "engineering-static",
+        "evolution-check",
+        "federation-check",
+        "intelligence-check",
+        "engineering-full",
+        "etra-check",
+    )
+    evidence_file.write_text(
+        json_document(
+            {
+                "gates": {
+                    name: {"status": "passed", "return_code": 0}
+                    for name in required
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    document = release_artifact.build_artifact(
+        root,
+        evidence_file=evidence_file,
+        require_evidence_for=required,
+    )
+    gates = {gate["name"]: gate for gate in document["gates"]}
+
+    assert document["status"] == "passed"
+    assert document["gate_summary"]["captured_evidence_missing"] == []
+    assert document["gate_summary"]["captured_evidence_required"] == sorted(required)
+    assert all(gates[name]["evidence_required"] is True for name in required)
+    assert all(
+        gates[name]["evidence"]["missing_required_evidence"] is False
+        for name in required
+    )
+
+
 def test_release_artifact_writes_json_file(tmp_path: Path) -> None:
     root = _release_root(tmp_path)
     output = Path("artifacts/release-verification.json")
@@ -163,6 +209,12 @@ def test_release_artifact_writes_json_file(tmp_path: Path) -> None:
     assert written.exists()
     assert document["artifact_policy"]["archive_path"] == str(output)
     assert "release-verification" in written.name
+
+
+def json_document(value: object) -> str:
+    import json
+
+    return json.dumps(value, indent=2, sort_keys=True)
 
 
 def _release_root(tmp_path: Path) -> Path:

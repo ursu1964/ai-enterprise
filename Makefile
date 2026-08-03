@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-artifact
+.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-artifact
 
 build:
 	docker compose build
@@ -113,10 +113,13 @@ engineering-full:
 	python tools/engineering_verify.py --full --json
 
 release-artifact:
-	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for lint,typecheck,test --output artifacts/release-verification.json
+	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for lint,typecheck,test,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json
 
 release-gate-evidence-fast:
 	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q'
+
+release-gate-evidence-ci:
+	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --gate-command 'lint=cd apps/api && .venv/bin/ruff check src tests ../../migrations' --gate-command 'typecheck=cd apps/api && .venv/bin/mypy src' --gate-command 'test=cd apps/api && .venv/bin/pytest -q' --gate-command 'engineering-static=python tools/engineering_verify.py --static --json' --gate-command 'evolution-check=python tools/evolution_verify.py --json' --gate-command 'federation-check=python tools/federation_verify.py --json' --gate-command 'intelligence-check=python tools/intelligence_verify.py --json' --gate-command 'engineering-full=python tools/engineering_verify.py --full --json' --gate-command 'etra-check=python tools/etra_conformance.py --root . --json'
 
 check-fast: lint typecheck test
 
