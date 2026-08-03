@@ -302,9 +302,11 @@ Factory workflow:
 6. Use Launch Mock Factory Test when you want a safe demo portfolio that starts real governed
    projects, formation packs, workflows, worker jobs, and telemetry links without waiting for a
    client manifesto.
-7. The Projects tab becomes the switchboard. It shows every project in a compact scrollable
+7. If a batch item needs review, open Execution for started work first, then open Problems for the
+   recovery path before retrying review-needed launches.
+8. The Projects tab becomes the switchboard. It shows every project in a compact scrollable
    listbox with status.
-8. Click a project to open its execution graph and inspect lifecycle phase information, crew
+9. Click a project to open its execution graph and inspect lifecycle phase information, crew
    activity, jobs/problems, reusable artifacts, remaining work, and estimate information.
 
 Mock autonomy API:

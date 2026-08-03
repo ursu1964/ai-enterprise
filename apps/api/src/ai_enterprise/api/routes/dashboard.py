@@ -2760,7 +2760,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "HTTP Flow", detail: "Request and route counters prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
         { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${dashboardHits} dashboard hit(s).`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
         { title: "Worker Health", detail: "Worker counts calibrate enterprise operating capacity.", idea: "Capacity should match project parallelism.", effect: `${online} worker(s) available.`, signal: `${online}`, kind: online ? "ok" : "warn", action: "problems" },
-        { title: "Problem Pressure", detail: "Failed work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${failed} followed issue(s).`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Problem Pressure", detail: "Blocked work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${failed} followed issue(s).`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Calibration Feed", detail: "Telemetry supports phase completion, errors followed, and economic proof.", idea: "Use metrics to decide, not to decorate.", effect: "Improves estimate quality and future automation design.", signal: "active", kind: "ok", action: "projects" }
       ]);
       if (state.operatingPicture) {
@@ -3009,7 +3009,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (message.includes("JSON")) return "The manifesto format is not valid JSON. Check the file, then load it again.";
       if (message.includes("409")) return "The factory found an existing record or workflow conflict. Open Projects and inspect the existing work before retrying.";
       if (message.includes("422")) return "The factory could not start this project. Check project name, repository path, branch, and manifesto format.";
-      if (message.includes("500")) return "The factory service failed during launch. Refresh, check source freshness, and inspect API logs before retrying.";
+      if (message.includes("500")) return "The factory needs operator review before retry. Refresh the dashboard, check source freshness, and open Problems for the recovery path.";
       return "The factory could not start this project. Check project details, manifesto format, and source freshness before retrying.";
     }
 
@@ -3198,12 +3198,12 @@ DASHBOARD_HTML = r"""<!doctype html>
         }
         return {
           name: sourceProject.name || `Project ${index + 1}`,
-          status: "failed",
+          status: "needs review",
           detail: friendlyLaunchError(result.reason),
-          action: "Correct the manifesto or inspect API logs before retrying."
+          action: "Correct the manifesto or open Problems for the recovery path before retrying."
         };
       });
-      byId("factoryStatus").textContent = `Started ${started.length}; failed ${failed}. Opening execution control...`;
+      byId("factoryStatus").textContent = `Started ${started.length}; ${failed} need review. Opening execution control...`;
       renderLaunchContract({
         status: failed ? "partial" : "started",
         summary: failed
@@ -3217,7 +3217,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         recommendedName: started[0]?.name || "No project ready yet",
         recommendedUrl: started[0] ? `/dashboard?project=${started[0].id}` : "/dashboard#factory",
         nextAction: failed
-          ? "Open Execution for started work, then inspect Problems or correct the manifesto before retrying failed launches."
+          ? "Open Execution for started work, then open Problems or correct the manifesto before retrying review-needed launches."
           : "Open Execution and inspect the first project while the portfolio continues in parallel.",
         proof: "Manifesto batch, project records, formation packs, workflow starts, and execution graph.",
         items: launchItems
@@ -3225,7 +3225,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       setOrientation(3, `Manifesto batch started: ${countSentence(started.length, "project")}, ${countSentence(failed, "launch issue")}. Inspect Execution first.`);
       coach(
         "Manifesto Batch Started",
-        `The factory started ${countSentence(started.length, "project")} and detected ${countSentence(failed, "launch failure")}. Inspect Execution first, then Problems if any launch failed.`,
+        `The factory started ${countSentence(started.length, "project")} and detected ${countSentence(failed, "launch issue")}. Inspect Execution first, then Problems if any launch needs review.`,
         ["Open Execution", "execution"],
         ["Review Problems", "problems"]
       );
@@ -3631,16 +3631,16 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     async function loadJobAttempts(jobId) {
-      byId("jobActionStatus").innerHTML = `<strong>Loading attempts</strong><div class="muted">Reading worker attempts for this job.</div>`;
+      byId("jobActionStatus").innerHTML = `<strong>Loading attempt proof</strong><div class="muted">Reading worker evidence for this work item.</div>`;
       const attempts = await json(`/api/v1/operator/jobs/by-id/${encodeURIComponent(jobId)}/attempts`, { headers: actorHeaders });
       byId("jobActionStatus").innerHTML = `
-        <strong>Job Attempts</strong>
+        <strong>Attempt Proof</strong>
         ${listbox(attempts, attempt => `
           <div class="list-item">
             <div>
               <div class="list-title">Attempt ${esc(attempt.attempt_number)}</div>
               <div class="list-meta">Worker ${esc(attempt.worker_id || "not assigned")} · ${esc(attempt.status || "not reported")}</div>
-              <div class="list-meta">Failure: ${esc(attempt.failure_class || attempt.failure_code || "none recorded")}</div>
+              <div class="list-meta">Recovery signal: ${esc(attempt.failure_class || attempt.failure_code || "No recovery signal recorded")}</div>
             </div>
             <span class="pill ${statusClass(attempt.status)}">${esc(humanStatus(attempt.status))}</span>
           </div>
@@ -3649,7 +3649,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     async function acknowledgeProblemJob(jobId) {
-      byId("jobActionStatus").innerHTML = `<strong>Acknowledging job</strong><div class="muted">Recording operator review and preserving evidence.</div>`;
+      byId("jobActionStatus").innerHTML = `<strong>Recording review</strong><div class="muted">Saving operator review and preserving evidence.</div>`;
       await json(`/api/v1/operator/jobs/by-id/${encodeURIComponent(jobId)}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...actorHeaders },
@@ -3731,7 +3731,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         ["factory", "Create work", "Attach a manifesto and start one project or a batch."],
         ["execution", "Watch execution", "See project advancement, task counts, crews, events, and telemetry."],
         ["projects", "Inspect projects", "Open the execution graph for a selected project."],
-        ["problems", "Resolve issues", "Review failed or blocked work in human terms."],
+        ["problems", "Resolve issues", "Review blocked work in human terms."],
         ["metrics", "Check telemetry", "Confirm live signals and source freshness."]
       ].map(([view, label, detail]) => `
         <button class="list-item quick-open" data-view-target="${view}">
@@ -3761,7 +3761,7 @@ DASHBOARD_HTML = r"""<!doctype html>
                 <details><summary>Proof detail</summary><div class="list-meta">${esc(job.last_error || "Worker proof has not been attached to this record yet.")}</div></details>
                 <div class="toolbar" style="justify-content: flex-start; margin-top: 8px;">
                   <button class="job-attempts" data-job-id="${esc(job.id)}">Open Attempts</button>
-                  ${isProblemJob(job) && !isAcknowledgedJob(job) ? `<button class="job-acknowledge" data-job-id="${esc(job.id)}">Acknowledge Reviewed Failure</button>` : ""}
+                  ${isProblemJob(job) && !isAcknowledgedJob(job) ? `<button class="job-acknowledge" data-job-id="${esc(job.id)}">Record Reviewed Recovery</button>` : ""}
                 </div>
               </div>
               <span class="pill ${isAcknowledgedJob(job) ? "info" : statusClass(job.status)}">${esc(isAcknowledgedJob(job) ? "reviewed history" : humanStatus(job.status))}</span>
@@ -3774,14 +3774,14 @@ DASHBOARD_HTML = r"""<!doctype html>
       document.querySelectorAll(".job-attempts").forEach(button => {
         button.addEventListener("click", () => {
           loadJobAttempts(button.dataset.jobId).catch(error => {
-            byId("jobActionStatus").innerHTML = `<strong class="bad">Attempts unavailable</strong><div class="muted">${esc(error.message)}</div>`;
+            byId("jobActionStatus").innerHTML = `<strong class="bad">Attempt proof needs attention</strong><div class="muted">${esc(error.message)}</div>`;
           });
         });
       });
       document.querySelectorAll(".job-acknowledge").forEach(button => {
         button.addEventListener("click", () => {
           acknowledgeProblemJob(button.dataset.jobId).catch(error => {
-            byId("jobActionStatus").innerHTML = `<strong class="bad">Acknowledge failed</strong><div class="muted">${esc(error.message)}</div>`;
+            byId("jobActionStatus").innerHTML = `<strong class="bad">Review could not be recorded</strong><div class="muted">${esc(error.message)}</div>`;
           });
         });
       });

@@ -216,7 +216,14 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Being retried" in response.text
     assert "Healthy history" in response.text
     assert "Open Attempts" in response.text
-    assert "Acknowledge Reviewed Failure" in response.text
+    assert "Record Reviewed Recovery" in response.text
+    assert "Acknowledge Reviewed Failure" not in response.text
+    assert "Attempt Proof" in response.text
+    assert "Recovery signal:" in response.text
+    assert "Attempt proof needs attention" in response.text
+    assert "Review could not be recorded" in response.text
+    assert "Failed work changes the operating picture" not in response.text
+    assert "Review failed or blocked work" not in response.text
     assert "jobActionStatus" in response.text
     assert "/api/v1/operator/jobs/by-id/" in response.text
     assert "loadJobAttempts" in response.text
@@ -310,6 +317,13 @@ def test_dashboard_page_links_operator_surfaces() -> None:
         in response.text
     )
     assert "friendlyLaunchError" in response.text
+    assert "The factory needs operator review before retry." in response.text
+    assert "open Problems for the recovery path before retrying" in response.text
+    assert "review-needed launches" in response.text
+    assert "need review. Opening execution control" in response.text
+    assert "inspect API logs" not in response.text
+    assert "launch failure" not in response.text
+    assert "failed launches" not in response.text
     assert "Technical detail" not in response.text
     assert "Worker proof has not been attached to this record yet." in response.text
     assert "No worker diagnostic was reported" not in response.text
