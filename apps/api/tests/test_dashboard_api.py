@@ -879,7 +879,8 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["phases"][2]["proof_status"]["evidence_count"] == 1
     assert response["phases"][2]["owner_crew"] == "architecture"
     assert response["phases"][2]["next_action"] == "Approve architecture."
-    assert response["phases"][2]["completed_evidence"] == ["1 workflow transition(s)"]
+    assert response["phases"][2]["completed_evidence"] == ["1 workflow transition"]
+    assert "workflow transition(s)" not in str(response)
     assert response["phases"][2]["remaining_work"] == (
         "Finish the current gate and record the next transition."
     )

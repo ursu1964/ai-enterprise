@@ -488,11 +488,30 @@ async def test_dashboard_manager_marks_reuse_candidate_ready_for_catalog_review(
 
     candidate = response["reuse"]["blueprint_candidates"][0]
     assert candidate["lifecycle"] == "reviewed"
+    assert candidate["next_lifecycle"] == "reusable"
+    assert candidate["lifecycle_path"] == [
+        "candidate",
+        "reviewed",
+        "reusable",
+        "improved",
+        "deprecated",
+    ]
     assert candidate["readiness_level"] == "catalog_review_ready"
     assert candidate["promotion_blockers"] == []
     assert candidate["evidence_count"] == 4
+    assert candidate["reuse_proof"] == {
+        "source_project_id": str(project_id),
+        "source_project_name": row.name,
+        "source_project_type": "dashboards_reporting",
+        "evidence_count": 4,
+        "reusable_asset_count": 3,
+        "reuse_multiplier": 1.32,
+        "economic_proof_status": "measurable",
+        "business_proof": "4 evidence items across 3 asset classes.",
+    }
     assert candidate["readiness_detail"]["label"] == "Ready for catalog review"
     assert "enough operational proof" in candidate["readiness_detail"]["meaning"]
+    assert candidate["readiness_detail"]["promotion_target"] == "reusable"
     assert response["reuse"]["readiness"]["catalog_review_ready"] == 1
     assert response["reuse"]["readiness"]["needs_more_proof"] == 0
     assert response["reuse"]["next_catalog_review"]["project_id"] == str(project_id)
@@ -503,6 +522,9 @@ async def test_dashboard_manager_marks_reuse_candidate_ready_for_catalog_review(
         "succeeded_crew_runs": 1,
         "work_packages": 1,
     }
+    assert response["reuse"]["next_catalog_review"]["evidence_bundle"][
+        "reuse_proof"
+    ] == candidate["reuse_proof"]
     assert response["reuse"]["next_catalog_review"]["evidence_bundle"][
         "promotion_blockers"
     ] == []

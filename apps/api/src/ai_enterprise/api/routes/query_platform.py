@@ -661,6 +661,9 @@ def _reuse_learning_summary(
         ]
         lifecycle = "reviewed" if not promotion_blockers else "candidate"
         readiness_level = "catalog_review_ready" if lifecycle == "reviewed" else "needs_more_proof"
+        next_lifecycle = "reusable" if readiness_level == "catalog_review_ready" else "reviewed"
+        reuse_multiplier = round(1.0 + evidence_count * 0.08, 2)
+        reusable_asset_count = len([value for value in evidence_sources.values() if value > 0])
         blueprint_candidates.append(
             {
                 "blueprint_key": f"{project_type}.{project.id}.learning_candidate",
@@ -668,11 +671,36 @@ def _reuse_learning_summary(
                 "project_name": project.name,
                 "project_type": project_type,
                 "lifecycle": lifecycle,
+                "next_lifecycle": next_lifecycle,
+                "lifecycle_path": [
+                    "candidate",
+                    "reviewed",
+                    "reusable",
+                    "improved",
+                    "deprecated",
+                ],
                 "readiness_level": readiness_level,
                 "evidence_count": evidence_count,
                 "evidence_sources": evidence_sources,
                 "criteria_status": criteria_status,
                 "promotion_blockers": promotion_blockers,
+                "reuse_proof": {
+                    "source_project_id": str(project.id),
+                    "source_project_name": project.name,
+                    "source_project_type": project_type,
+                    "evidence_count": evidence_count,
+                    "reusable_asset_count": reusable_asset_count,
+                    "reuse_multiplier": reuse_multiplier,
+                    "economic_proof_status": (
+                        "measurable"
+                        if readiness_level == "catalog_review_ready"
+                        else "needs_more_evidence"
+                    ),
+                    "business_proof": (
+                        f"{_count_phrase(evidence_count, 'evidence item')} across "
+                        f"{_count_phrase(reusable_asset_count, 'asset class', 'asset classes')}."
+                    ),
+                },
                 "readiness_detail": {
                     "label": (
                         "Ready for catalog review"
@@ -689,6 +717,7 @@ def _reuse_learning_summary(
                         if readiness_level == "catalog_review_ready"
                         else "Collect the missing proof before catalog review."
                     ),
+                    "promotion_target": next_lifecycle,
                 },
                 "reuse_readiness": (
                     "review evidence for catalog promotion"
@@ -739,6 +768,7 @@ def _reuse_learning_summary(
             "evidence_bundle": {
                 "sources": ready_blueprints[0]["evidence_sources"],
                 "promotion_blockers": ready_blueprints[0]["promotion_blockers"],
+                "reuse_proof": ready_blueprints[0]["reuse_proof"],
                 "review_criteria": [
                     "at least two succeeded jobs",
                     "at least one succeeded crew run",

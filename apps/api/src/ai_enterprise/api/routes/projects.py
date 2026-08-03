@@ -47,6 +47,11 @@ from ai_enterprise.infrastructure.database.workflow_models import (
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    label = singular if count == 1 else plural or f"{singular}s"
+    return f"{count} {label}"
+
+
 def _require_project_read(actor: Actor, project_id: uuid.UUID | None = None) -> None:
     if actor.actor_type != "human":
         raise HTTPException(status_code=403, detail="Human project authority is required")
@@ -948,7 +953,7 @@ def _phase_evidence(
 ) -> list[str]:
     evidence: list[str] = []
     if transitions:
-        evidence.append(f"{len(transitions)} workflow transition(s)")
+        evidence.append(_count_phrase(len(transitions), "workflow transition"))
     if _artifact_proves_phase(name, artifacts):
         evidence.append("phase artifact")
     if _job_proves_phase(name, jobs):
