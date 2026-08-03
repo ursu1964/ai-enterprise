@@ -445,6 +445,25 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
                 "failure_class": failure_class,
                 "current_failure_count": count,
                 "status": "proposed",
+                "evolution_endpoint": "/api/v1/enterprise-evolution/improvements",
+                "improvement_draft": {
+                    "improvement_key": f"operations.failure.{failure_class}_guardrail",
+                    "category": "operations",
+                    "origin": "dashboard-manager.recovery",
+                    "title": f"Reduce repeated {failure_class} failures",
+                    "expected_benefit": (
+                        f"Prevent repeated {failure_class} failures from blocking "
+                        "future project execution."
+                    ),
+                    "risk_document": {
+                        "risk_class": "operational_recovery",
+                        "failure_class": failure_class,
+                        "current_failure_count": count,
+                        "requires_human_review": True,
+                    },
+                    "dependencies": [],
+                    "evidence_required": True,
+                },
                 "recommendation": (
                     "Convert this repeated failure class into a recovery checklist, "
                     "test guardrail, or project template improvement."

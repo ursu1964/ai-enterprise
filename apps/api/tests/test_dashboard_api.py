@@ -206,6 +206,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "failureImprovementProposals" in response.text
     assert "dashboardRecoveryProposals" in response.text
     assert "recovery?.improvement_proposals" in response.text
+    assert "improvement_draft?.evidence_required" in response.text
+    assert "Draft target:" in response.text
+    assert "Evidence required." in response.text
     assert "Guardrail proposal:" in response.text
     assert "Repeated failure classes should become a recovery checklist" in response.text
     assert "Business Telemetry" in response.text
@@ -441,9 +444,15 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert "Production Route" in response.text
     assert "Step-by-Step Live Demo" in response.text
     assert "Demo Operator Console" in response.text
-    assert "This console explains the next action before you open another dashboard." in response.text
+    assert (
+        "This console explains the next action before you open another dashboard."
+        in response.text
+    )
     assert "Launch Result shows readiness, missing data, and Project Readiness." in response.text
-    assert "Phase confidence, owner crew, completed work, and remaining work are visible." in response.text
+    assert (
+        "Phase confidence, owner crew, completed work, and remaining work are visible."
+        in response.text
+    )
     assert "/dashboard#factory" in response.text
     assert "/dashboard#execution" in response.text
     assert "/dashboard#projects" in response.text
