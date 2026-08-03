@@ -358,9 +358,15 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "open Problems for the recovery path before retrying" in response.text
     assert "review-needed launches" in response.text
     assert "need review. Opening execution control" in response.text
+    assert "needs review:" in response.text
+    assert "Launch needs operator review." in response.text
+    assert "Open Problems and retry after correction." in response.text
+    assert "Reviewed recovery needed" in response.text
     assert "inspect API logs" not in response.text
     assert "launch failure" not in response.text
     assert "failed launches" not in response.text
+    assert "Launch failed." not in response.text
+    assert "Reviewed failure or recovery needed" not in response.text
     assert "Technical detail" not in response.text
     assert "Worker proof has not been attached to this record yet." in response.text
     assert "No worker diagnostic was reported" not in response.text

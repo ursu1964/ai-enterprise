@@ -3328,7 +3328,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         {
           title: mode === "preview" ? "Launch Preview" : "Launch Result",
           detail: payload.human_summary,
-          idea: `Created: ${summaryContract.created_count ?? payload.created_count ?? payload.would_create_count ?? 0}; reused: ${summaryContract.reused_count ?? payload.reused_count ?? 0}; blocked: ${summaryContract.blocked_count ?? payload.blocked_count ?? payload.would_block_count ?? 0}; failed: ${summaryContract.failed_count ?? payload.failed_count ?? 0}`,
+          idea: `Created: ${summaryContract.created_count ?? payload.created_count ?? payload.would_create_count ?? 0}; reused: ${summaryContract.reused_count ?? payload.reused_count ?? 0}; blocked: ${summaryContract.blocked_count ?? payload.blocked_count ?? payload.would_block_count ?? 0}; needs review: ${summaryContract.failed_count ?? payload.failed_count ?? 0}`,
           effect: recommended
             ? `Inspect first: ${recommended.name}`
             : summaryContract.recommended_first_project_name
@@ -3412,7 +3412,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         body: JSON.stringify({})
       });
       const contract = launchContractFromFactoryResult(result, "launch");
-      byId("factoryStatus").textContent = `${contract.started} demo project(s) ready; ${contract.blocked} blocked; ${contract.failed} failed. ${contract.nextAction}`;
+      byId("factoryStatus").textContent = `${contract.started} demo project(s) ready; ${contract.blocked} blocked; ${contract.failed} need review. ${contract.nextAction}`;
       renderLaunchContract({
         ...contract,
         items: (result.projects || []).map(project => ({
@@ -3427,9 +3427,9 @@ DASHBOARD_HTML = r"""<!doctype html>
           action: item.operator_action || "Fix blocked launch information."
         }))).concat((result.failed || []).map(item => ({
           name: item.name,
-          status: "failed",
-          detail: (item.issues || []).join("; ") || "Launch failed.",
-          action: item.operator_action || "Inspect logs and retry after correction."
+          status: "needs review",
+          detail: (item.issues || []).join("; ") || "Launch needs operator review.",
+          action: item.operator_action || "Open Problems and retry after correction."
         })))
       });
       renderMockFactoryProjects(result, "launch");
@@ -3488,7 +3488,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         manual_intervention: "Needs human review before work can continue",
         attention_required: "Needs operator decision",
         context_required: "Choose an organization to see governed metrics",
-        dead_letter: "Reviewed failure or recovery needed",
+        dead_letter: "Reviewed recovery needed",
         failed: "Needs recovery action",
         abandoned: "Stopped and needs review",
         queued: "Waiting for worker capacity",
