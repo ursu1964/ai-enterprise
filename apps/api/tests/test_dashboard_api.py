@@ -179,7 +179,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Preview Mock Factory" in response.text
     assert "would create" in response.text
     assert "would reuse" in response.text
-    assert "Preview contract, would-create projects, would-reuse projects" in response.text
+    assert "launchContractFromFactoryResult" in response.text
+    assert "launch_plan" in response.text
+    assert "launch_result" in response.text
+    assert "Preview contract, launch plan summary" in response.text
+    assert "Launch result summary" in response.text
 
     assert "Launch Mock Factory Test" in response.text
     assert "Mock Autonomy" in response.text

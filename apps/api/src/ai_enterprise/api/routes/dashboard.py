@@ -3297,6 +3297,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       const blocked = payload.blocked || [];
       const failed = payload.failed || [];
       const recommended = payload.recommended_first_project;
+      const summaryContract = mode === "preview"
+        ? payload.launch_plan || {}
+        : payload.launch_result || {};
       const projectNodes = projects.map(project => ({
         title: project.name,
         detail: project.dashboard_url || project.repository_path,
@@ -3325,10 +3328,12 @@ DASHBOARD_HTML = r"""<!doctype html>
         {
           title: mode === "preview" ? "Launch Preview" : "Launch Result",
           detail: payload.human_summary,
-          idea: `Ready: ${payload.ready_count ?? payload.started_count ?? 0}; reused: ${payload.reused_count ?? 0}; blocked: ${payload.blocked_count ?? 0}; failed: ${payload.failed_count ?? 0}`,
+          idea: `Created: ${summaryContract.created_count ?? payload.created_count ?? payload.would_create_count ?? 0}; reused: ${summaryContract.reused_count ?? payload.reused_count ?? 0}; blocked: ${summaryContract.blocked_count ?? payload.blocked_count ?? payload.would_block_count ?? 0}; failed: ${summaryContract.failed_count ?? payload.failed_count ?? 0}`,
           effect: recommended
             ? `Inspect first: ${recommended.name}`
-            : "No recommended project is available yet.",
+            : summaryContract.recommended_first_project_name
+              ? `Inspect first: ${summaryContract.recommended_first_project_name}`
+              : "No recommended project is available yet.",
           signal: payload.status,
           kind: payload.status === "ready" || payload.status === "started" ? "ok" : "warn",
           action: recommended && recommended.dashboard_url ? "execution" : "factory"
@@ -3340,26 +3345,47 @@ DASHBOARD_HTML = r"""<!doctype html>
       renderSurfaceNodes("factoryGraph", summary.concat(projectNodes, issueNodes));
     }
 
+    function launchContractFromFactoryResult(result, mode) {
+      const summary = mode === "preview" ? result.launch_plan || {} : result.launch_result || {};
+      const recommended = result.recommended_first_project || {};
+      const created = summary.created_count
+        ?? result.created_count
+        ?? result.would_create_count
+        ?? Math.max(0, (result.ready_count || 0) - (result.reused_count || 0));
+      const reused = summary.reused_count ?? result.would_reuse_count ?? result.reused_count ?? 0;
+      const blocked = summary.blocked_count ?? result.would_block_count ?? result.blocked_count ?? 0;
+      const failed = summary.failed_count ?? result.failed_count ?? 0;
+      const started = mode === "preview" ? 0 : result.started_count ?? (created + reused);
+      return {
+        status: result.status,
+        summary: result.human_summary,
+        started,
+        created,
+        reused,
+        blocked,
+        failed,
+        recommendedName: recommended.name || summary.recommended_first_project_name || (mode === "preview" ? "No ready project yet" : "No project ready yet"),
+        recommendedUrl: recommended.dashboard_url || "/dashboard#factory",
+        nextAction: summary.operator_action || result.next_action || (
+          blocked || failed
+            ? "Correct blocked launch information before starting the mock factory."
+            : "Launch the mock factory when you are ready to create or reuse the portfolio projects."
+        ),
+        proof: mode === "preview"
+          ? "Preview contract, launch plan summary, would-create projects, would-reuse projects, blocked projects, and recommended first inspection target."
+          : "Launch result summary, created or reused projects, formation packs, workflows, jobs, telemetry links, and recommended dashboard path.",
+      };
+    }
+
     async function previewMockFactoryTest() {
       byId("factoryStatus").textContent = "Previewing controlled mock autonomy...";
       const result = await json("/api/v1/project-formation/mock-factory/preview", {
         headers: actorHeaders
       });
-      byId("factoryStatus").textContent = `${result.ready_count} ready; ${result.would_create_count ?? Math.max(0, (result.ready_count || 0) - (result.reused_count || 0))} would create; ${result.would_reuse_count ?? result.reused_count ?? 0} would reuse; ${result.would_block_count ?? result.blocked_count ?? 0} blocked.`;
+      const contract = launchContractFromFactoryResult(result, "preview");
+      byId("factoryStatus").textContent = `${result.ready_count} ready; ${contract.created} would create; ${contract.reused} would reuse; ${contract.blocked} blocked. ${contract.nextAction}`;
       renderLaunchContract({
-        status: result.status,
-        summary: result.human_summary,
-        started: 0,
-        created: result.would_create_count ?? result.ready_count - result.reused_count,
-        reused: result.would_reuse_count ?? result.reused_count,
-        blocked: result.would_block_count ?? result.blocked_count,
-        failed: 0,
-        recommendedName: result.recommended_first_project?.name || "No ready project yet",
-        recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
-        nextAction: (result.would_block_count ?? result.blocked_count)
-          ? "Correct blocked launch information before starting the mock factory."
-          : "Launch the mock factory when you are ready to create or reuse the portfolio projects.",
-        proof: "Preview contract, would-create projects, would-reuse projects, blocked projects, and recommended first inspection target.",
+        ...contract,
         items: (result.projects || []).map(project => ({
           name: project.name,
           status: project.ready ? (project.action || "ready") : "blocked",
@@ -3385,19 +3411,10 @@ DASHBOARD_HTML = r"""<!doctype html>
         headers: { "Content-Type": "application/json", ...actorHeaders },
         body: JSON.stringify({})
       });
-      byId("factoryStatus").textContent = `${result.started_count} demo project(s) ready; ${result.blocked_count || 0} blocked; ${result.failed_count || 0} failed. ${result.next_action}`;
+      const contract = launchContractFromFactoryResult(result, "launch");
+      byId("factoryStatus").textContent = `${contract.started} demo project(s) ready; ${contract.blocked} blocked; ${contract.failed} failed. ${contract.nextAction}`;
       renderLaunchContract({
-        status: result.status,
-        summary: result.human_summary,
-        started: result.started_count,
-        created: result.created_count,
-        reused: result.reused_count,
-        blocked: result.blocked_count,
-        failed: result.failed_count,
-        recommendedName: result.recommended_first_project?.name || "No project ready yet",
-        recommendedUrl: result.recommended_first_project?.dashboard_url || "/dashboard#factory",
-        nextAction: result.next_action,
-        proof: "Created or reused projects, formation packs, workflows, jobs, telemetry links, and recommended dashboard path.",
+        ...contract,
         items: (result.projects || []).map(project => ({
           name: project.name,
           status: project.workflow || project.project_record || "started",
