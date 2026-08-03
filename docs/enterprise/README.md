@@ -21,6 +21,8 @@ use the operator guides when starting or running the system.
    - Guide: [Operator Startup Guide](operator-startup-guide.md).
    - Dashboard quality roadmap:
      [Dashboard Polish and Factory Operating Plan](dashboard-polish-and-factory-plan.md).
+   - Current improvement roadmap:
+     [AI Enterprise Application Improvement Plan](application-improvement-plan-2026-08-03.md).
 
 3. Enterprise Preparation
    - Runtime directory bootstrap.
