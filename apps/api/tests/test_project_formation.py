@@ -88,6 +88,15 @@ async def test_mock_factory_preview_reports_ready_reuse_without_writes() -> None
 
     assert response.status == "ready"
     assert response.ready_count == 4
+    assert response.launch_plan.mode == "preview"
+    assert response.launch_plan.created_count == 3
+    assert response.launch_plan.reused_count == 1
+    assert response.launch_plan.blocked_count == 0
+    assert response.launch_plan.failed_count == 0
+    assert response.launch_plan.recommended_first_project_name == (
+        "AI Enterprise Product Factory Demo"
+    )
+    assert "Start the mock factory" in response.launch_plan.operator_action
     assert response.would_create_count == 3
     assert response.would_reuse_count == 1
     assert response.would_block_count == 0
@@ -127,6 +136,12 @@ async def test_mock_factory_preview_groups_blocked_launch_items_without_writes(
 
     assert response.status == "blocked"
     assert response.ready_count == 0
+    assert response.launch_plan.mode == "preview"
+    assert response.launch_plan.created_count == 0
+    assert response.launch_plan.reused_count == 0
+    assert response.launch_plan.blocked_count == 1
+    assert response.launch_plan.recommended_first_project_name is None
+    assert "Fix blocked launch information" in response.launch_plan.operator_action
     assert response.would_create_count == 0
     assert response.would_reuse_count == 0
     assert response.would_block_count == 1

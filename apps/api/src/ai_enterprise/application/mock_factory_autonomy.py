@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai_enterprise.api.project_formation_schemas import (
     FormationRequest,
     MockFactoryLaunchIssueResponse,
+    MockFactoryLaunchSummaryResponse,
     MockFactoryPreviewProjectResponse,
     MockFactoryPreviewResponse,
     MockFactoryProjectResponse,
@@ -188,6 +189,23 @@ class MockEnterpriseAutonomyService:
                 if blocked_count == 0
                 else "Mock factory preview found projects that need launch information."
             ),
+            launch_plan=MockFactoryLaunchSummaryResponse(
+                mode="preview",
+                created_count=len(would_create),
+                reused_count=len(would_reuse),
+                blocked_count=len(would_block),
+                failed_count=0,
+                workflows_started_count=0,
+                workflows_waiting_count=0,
+                recommended_first_project_name=(
+                    recommended.name if recommended is not None else None
+                ),
+                operator_action=(
+                    "Start the mock factory to create or reuse the ready portfolio projects."
+                    if recommended is not None
+                    else "Fix blocked launch information, then run preview again."
+                ),
+            ),
             ready_count=len(projects) - blocked_count,
             would_create_count=len(would_create),
             would_reuse_count=len(would_reuse),
@@ -275,12 +293,31 @@ class MockEnterpriseAutonomyService:
                     await self._session.rollback()
                 failed.append(self._launch_issue(spec, "failed", [str(exc)]))
 
+        recommended = results[0] if results else None
+        next_action = (
+            "Open the recommended project dashboard and verify the graph begins to move."
+            if results
+            else "Fix blocked or failed launch items, then start the mock factory again."
+        )
         return MockFactoryStartResponse(
             status="started" if results and not failed and not blocked else "partial",
             human_summary=(
                 "Mock autonomy started every ready portfolio project."
                 if not failed and not blocked
                 else "Mock autonomy started ready projects and reported blocked or failed work."
+            ),
+            launch_result=MockFactoryLaunchSummaryResponse(
+                mode="start",
+                created_count=len(created),
+                reused_count=len(reused),
+                blocked_count=len(blocked),
+                failed_count=len(failed),
+                workflows_started_count=len(workflows_started),
+                workflows_waiting_count=len(workflows_waiting),
+                recommended_first_project_name=(
+                    recommended.name if recommended is not None else None
+                ),
+                operator_action=next_action,
             ),
             started_count=len(results),
             reused_count=reused_count,
@@ -295,12 +332,8 @@ class MockEnterpriseAutonomyService:
             reused=reused,
             blocked=blocked,
             failed=failed,
-            recommended_first_project=results[0] if results else None,
-            next_action=(
-                "Open the recommended project dashboard and verify the graph begins to move."
-                if results
-                else "Fix blocked or failed launch items, then start the mock factory again."
-            ),
+            recommended_first_project=recommended,
+            next_action=next_action,
             projects=results,
         )
 

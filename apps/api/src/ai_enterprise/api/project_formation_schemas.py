@@ -71,9 +71,22 @@ class MockFactoryLaunchIssueResponse(BaseModel):
     operator_action: str
 
 
+class MockFactoryLaunchSummaryResponse(BaseModel):
+    mode: str
+    created_count: int = 0
+    reused_count: int = 0
+    blocked_count: int = 0
+    failed_count: int = 0
+    workflows_started_count: int = 0
+    workflows_waiting_count: int = 0
+    recommended_first_project_name: str | None = None
+    operator_action: str
+
+
 class MockFactoryPreviewResponse(BaseModel):
     status: str
     human_summary: str
+    launch_plan: MockFactoryLaunchSummaryResponse
     ready_count: int
     would_create_count: int = 0
     would_reuse_count: int = 0
@@ -90,6 +103,7 @@ class MockFactoryPreviewResponse(BaseModel):
 class MockFactoryStartResponse(BaseModel):
     status: str
     human_summary: str
+    launch_result: MockFactoryLaunchSummaryResponse
     started_count: int
     reused_count: int
     formation_pack_count: int
