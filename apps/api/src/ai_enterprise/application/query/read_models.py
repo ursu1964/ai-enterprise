@@ -47,10 +47,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Check worker capacity if this state persists.",
     ),
     "requirements_failed": Meaning(
-        "Requirements need repair",
+        "Requirements need recovery",
         "bad",
-        "Requirements work failed before producing trusted evidence.",
-        "Review failed job evidence and repair the requirements input or crew path.",
+        "Requirements work needs recovery before it can become trusted evidence.",
+        "Review recovery evidence and improve the requirements input or crew path.",
     ),
     "awaiting_requirements_approval": Meaning(
         "Ready for requirements review",
@@ -89,10 +89,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Check worker capacity if this state persists.",
     ),
     "architecture_failed": Meaning(
-        "Architecture needs repair",
+        "Architecture needs recovery",
         "bad",
-        "Architecture work failed before producing trusted evidence.",
-        "Review failed job evidence and repair the architecture input or crew path.",
+        "Architecture work needs recovery before it can become trusted evidence.",
+        "Review recovery evidence and improve the architecture input or crew path.",
     ),
     "awaiting_architecture_approval": Meaning(
         "Ready for architecture review",
@@ -137,10 +137,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Monitor planning output and prepare for approval.",
     ),
     "work_package_failed": Meaning(
-        "Work-package planning needs repair",
+        "Work-package planning needs recovery",
         "bad",
-        "Planning failed before producing trusted work-package evidence.",
-        "Review failed job evidence and repair the planning inputs.",
+        "Planning needs recovery before producing trusted work-package evidence.",
+        "Review recovery evidence and improve the planning inputs.",
     ),
     "awaiting_work_package_approval": Meaning(
         "Ready for work-package review",
@@ -193,8 +193,8 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
     "execution_failed": Meaning(
         "Execution needs recovery",
         "bad",
-        "Implementation work failed before trusted completion.",
-        "Review execution logs and repair or retry through governance.",
+        "Implementation work needs recovery before trusted completion.",
+        "Review execution proof and improve or retry through governance.",
     ),
     "patch_review_running": Meaning(
         "Patch review running",
@@ -413,10 +413,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Review findings and approve or request changes.",
     ),
     "validation_failed": Meaning(
-        "Validation failed",
+        "Validation needs recovery",
         "bad",
         "Validation found issues that block trusted use.",
-        "Inspect validation findings and repair the source artifact.",
+        "Review validation findings and improve the source artifact.",
     ),
     "started": Meaning(
         "Started",
@@ -503,10 +503,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Apply the requested changes and resubmit through the governed path.",
     ),
     "failed_validation": Meaning(
-        "Validation needs repair",
+        "Validation needs recovery",
         "bad",
-        "Validation failed before the artifact or run could become trusted evidence.",
-        "Inspect validation findings and repair the source before retrying.",
+        "Validation needs recovery before the artifact or run becomes trusted evidence.",
+        "Review validation findings and improve the source before retrying.",
     ),
     "run_created": Meaning(
         "Follow-up run created",
@@ -547,8 +547,8 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
     "integration_failed": Meaning(
         "Integration needs recovery",
         "bad",
-        "The integration path failed before producing trusted merge evidence.",
-        "Inspect the integration attempt and choose retry or recovery.",
+        "The integration path needs recovery before producing trusted merge evidence.",
+        "Review the integration attempt and choose retry or recovery.",
     ),
     "integrated": Meaning(
         "Integrated",
@@ -563,10 +563,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Wait for verification result before making the next decision.",
     ),
     "verification_failed": Meaning(
-        "Verification failed",
+        "Verification needs recovery",
         "bad",
-        "A required verification check failed.",
-        "Inspect verification evidence and repair the source or environment.",
+        "A required verification check needs recovery.",
+        "Review verification evidence and improve the source or environment.",
     ),
     "snapshot_ready": Meaning(
         "Snapshot ready",
@@ -581,10 +581,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Monitor patch application and test evidence.",
     ),
     "patch_apply_failed": Meaning(
-        "Patch apply failed",
+        "Patch apply needs recovery",
         "bad",
-        "The candidate patch could not be applied to the verified base.",
-        "Review conflicts and regenerate or revise the patch.",
+        "The candidate patch needs recovery before it can apply to the verified base.",
+        "Review conflicts and regenerate or improve the patch.",
     ),
     "patch_applied": Meaning(
         "Patch applied",
@@ -599,10 +599,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Wait for test results before approval or promotion.",
     ),
     "tests_failed": Meaning(
-        "Tests failed",
+        "Tests need recovery",
         "bad",
-        "Required tests failed and block trusted advancement.",
-        "Inspect test output and repair the patch before retrying.",
+        "Required tests need recovery before trusted advancement.",
+        "Review test proof and improve the patch before retrying.",
     ),
     "commit_creating": Meaning(
         "Creating commit",
@@ -611,10 +611,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Wait for commit identity and tree proof.",
     ),
     "commit_failed": Meaning(
-        "Commit failed",
+        "Commit needs recovery",
         "bad",
-        "The system could not create trusted commit evidence.",
-        "Inspect workspace state and retry only after the cause is clear.",
+        "Commit evidence needs recovery before the work can advance.",
+        "Review workspace proof and retry only after the cause is clear.",
     ),
     "commit_created": Meaning(
         "Commit created",
@@ -629,10 +629,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Wait for remote verification before closing the work.",
     ),
     "push_failed": Meaning(
-        "Push failed",
+        "Push needs recovery",
         "bad",
-        "The remote update failed or was refused.",
-        "Inspect remote state before retrying or recovering.",
+        "The remote update needs recovery before publication can be trusted.",
+        "Review remote state before retrying or recovering.",
     ),
     "revoked": Meaning(
         "Revoked",
@@ -725,10 +725,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Use manual recovery or compensating change review.",
     ),
     "test_failed": Meaning(
-        "Test failed",
+        "Test needs recovery",
         "bad",
-        "A required recovery or verification test failed.",
-        "Inspect test evidence and repair before retrying.",
+        "A required recovery or verification test needs attention.",
+        "Review test evidence and improve before retrying.",
     ),
     "push_uncertain": Meaning(
         "Push result uncertain",
@@ -737,10 +737,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Verify remote state manually before any retry.",
     ),
     "remote_verification_failed": Meaning(
-        "Remote verification failed",
+        "Remote verification needs recovery",
         "bad",
         "The remote state does not match expected proof.",
-        "Stop and inspect remote evidence before closing recovery.",
+        "Pause and review remote evidence before closing recovery.",
     ),
     "recoverable": Meaning(
         "Recoverable",

@@ -70,7 +70,7 @@ def test_runtime_statuses_have_friendly_read_models() -> None:
     assert status_read_model("running")["status_label"] == "Work is running"
     assert status_read_model("draft")["status_label"] == "Draft"
     assert status_read_model("registered")["status_label"] == "Registered"
-    assert status_read_model("validation_failed")["status_label"] == "Validation failed"
+    assert status_read_model("validation_failed")["status_label"] == "Validation needs recovery"
 
 
 def test_core_read_model_states_have_specialized_operator_meaning() -> None:

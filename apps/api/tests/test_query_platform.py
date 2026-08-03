@@ -11,6 +11,7 @@ from ai_enterprise.api.routes.query_platform import (
     project_operating_picture,
     router,
 )
+from ai_enterprise.application.query.read_models import meaning_for
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.infrastructure.database.models import (
     ArtifactModel,
@@ -68,6 +69,62 @@ def test_dashboard_read_model_compatibility_route_is_mounted() -> None:
     paths = {route.path for route in router.routes}
     assert "/query/dashboard-manager" in paths
     assert "/query/dashboard-read-model" in paths
+
+
+def test_recoverable_statuses_use_plain_recovery_language() -> None:
+    statuses = [
+        "requirements_failed",
+        "architecture_failed",
+        "work_package_failed",
+        "execution_failed",
+        "validation_failed",
+        "failed_validation",
+        "integration_failed",
+        "verification_failed",
+        "patch_apply_failed",
+        "tests_failed",
+        "test_failed",
+        "commit_failed",
+        "push_failed",
+        "remote_verification_failed",
+    ]
+
+    meanings = [meaning_for(status) for status in statuses]
+    combined = " ".join(
+        value
+        for meaning in meanings
+        for value in (
+            meaning["label"],
+            meaning["meaning"],
+            meaning["operator_action"],
+        )
+    )
+
+    assert meaning_for("requirements_failed")["label"] == "Requirements need recovery"
+    assert meaning_for("execution_failed")["operator_action"] == (
+        "Review execution proof and improve or retry through governance."
+    )
+    assert meaning_for("patch_apply_failed")["label"] == "Patch apply needs recovery"
+    assert "needs recovery" in combined
+    for forbidden in (
+        "failed before",
+        "Review failed",
+        "execution logs",
+        "Validation failed",
+        "Patch apply failed",
+        "Tests failed",
+        "Test failed",
+        "Commit failed",
+        "Push failed",
+        "Remote verification failed",
+        "needs repair",
+        "Inspect validation",
+        "Inspect test",
+        "Inspect workspace",
+        "could not create",
+        "could not be applied",
+    ):
+        assert forbidden not in combined
 
 
 def project(now: datetime, project_id: uuid.UUID | None = None) -> ProjectModel:
