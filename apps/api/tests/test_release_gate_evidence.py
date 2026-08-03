@@ -41,7 +41,13 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
         "etra-check=python tools/etra_conformance.py --root . --json",
     }
     assert all(f"--gate-command '{command}'" in makefile for command in ci_commands)
-    assert "check-release: compose-check migration-check check-fast" in makefile
+    check_release = next(
+        line for line in makefile.splitlines() if line.startswith("check-release:")
+    )
+    assert "release-gate-evidence-ci release-artifact" in check_release
+    assert check_release.index("release-gate-evidence-ci") < check_release.index(
+        "release-artifact"
+    )
 
 
 def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> None:

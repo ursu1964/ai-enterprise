@@ -125,7 +125,7 @@ check-fast: lint typecheck test
 
 check-ci: engineering-static evolution-check federation-check intelligence-check engineering-full etra-check
 
-check-release: compose-check migration-check check-fast secret-scan docker-smoke check-ci release-artifact
+check-release: compose-check migration-check check-fast secret-scan docker-smoke check-ci release-gate-evidence-ci release-artifact
 
 check: compose-check migration-check lint typecheck test
 
