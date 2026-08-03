@@ -326,7 +326,7 @@ curl -X POST http://localhost:8000/api/v1/project-formation/mock-factory/start \
 Preview lists what would be created, what would be reused, what would be blocked, and the first
 project to inspect before any records are written. Start then returns each demo project, whether it
 was created or reused, whether the formation pack was prepared, workflow start or waiting state,
-blocked/failed launch items, and the dashboard link for live inspection.
+blocked or review-needed launch items, and the dashboard link for live inspection.
 
 Operating discipline for every project:
 

@@ -194,8 +194,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Blocked until missing details are fixed" in response.text
     assert "/api/v1/project-formation/mock-factory/preview" in response.text
     assert "/api/v1/project-formation/mock-factory/start" in response.text
-    assert "created, reused, blocked, and failed work" in response.text
+    assert "created, reused, blocked, and review-needed work" in response.text
     assert "Problem Resolution Graph" in response.text
+    assert "Blocked work links to worker state" in response.text
+    assert "Needs review" in response.text
+    assert "Dead Letter" not in response.text
+    assert "Review blocked work first." in response.text
     assert "#problemGraph.surface-graph" in response.text
     assert "grid-template-rows: auto auto minmax(0, 1fr) auto" in response.text
     assert "overflow-wrap: anywhere" in response.text

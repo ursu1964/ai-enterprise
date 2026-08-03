@@ -242,7 +242,7 @@ async def dashboard_telemetry_summary(
         "operator_summary": (
             "Telemetry is nominal."
             if not problem_jobs
-            else "Telemetry shows failed or dead-letter work that needs operator attention."
+            else "Telemetry shows blocked work that needs operator review."
         ),
     }
 
@@ -1893,12 +1893,12 @@ DASHBOARD_HTML = r"""<!doctype html>
       <article class="panel span-12">
         <div class="toolbar">
           <h2>Problem Resolution Graph</h2>
-          <span class="muted">Failures link to worker state, retry pressure, recovery, and improvement proposals.</span>
+          <span class="muted">Blocked work links to worker state, retry pressure, recovery, and improvement proposals.</span>
         </div>
         <div id="problemGraph" class="surface-graph"></div>
       </article>
       <article class="panel span-12">
-        <div class="toolbar"><h2>Recovery and Work History</h2><select id="jobFilter"><option value="current">Current action</option><option value="history">Reviewed history</option><option value="">All records</option><option value="queued">Queued</option><option value="running">Running</option><option value="failed">Failed</option><option value="dead_letter">Dead Letter</option><option value="succeeded">Succeeded</option></select></div>
+        <div class="toolbar"><h2>Recovery and Work History</h2><select id="jobFilter"><option value="current">Current action</option><option value="history">Reviewed history</option><option value="">All records</option><option value="queued">Waiting for capacity</option><option value="running">Running now</option><option value="failed">Needs recovery</option><option value="dead_letter">Needs review</option><option value="succeeded">Completed</option></select></div>
         <div id="jobActionStatus" class="mini muted">Select a recovery action to inspect attempts or acknowledge reviewed failures.</div>
         <div id="jobsTable"></div>
       </article>
@@ -2217,7 +2217,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           ? `${staleSources} data source(s) need attention. Refresh and confirm readiness before making delivery decisions.`
           : "No urgent delivery risk is visible. Continue creating or inspecting projects.";
       const next = failed
-        ? ["Resolve Issues", "problems", "Review failed work first."]
+        ? ["Resolve Issues", "problems", "Review blocked work first."]
         : state.projects.length
           ? ["Inspect Projects", "projects", "Open a project graph and check phase, crew, proof, and remaining work."]
           : ["Create Project", "factory", "Attach a manifesto and start the first governed workflow."];
@@ -2752,9 +2752,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       renderSurfaceNodes("problemGraph", [
         { title: "Queued Work", detail: "Work waiting for a worker lease.", idea: "If this grows, add capacity or inspect blocked workers.", effect: `${queued} job(s) waiting.`, signal: `${queued}`, kind: queued ? "warn" : "ok", action: "problems" },
         { title: "Running Work", detail: "Active jobs connected to projects and crews.", idea: "Use this to confirm the factory is moving, not idle.", effect: `${running} job(s) currently active.`, signal: `${running}`, kind: running ? "info" : "ok", action: "problems" },
-        { title: "Followed Errors", detail: "Failed and dead-letter jobs are visible improvement inputs.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Followed Errors", detail: "Blocked jobs are visible improvement inputs until they are recovered or reviewed.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${online} worker(s) online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
-        { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting failed work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
+        { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting blocked work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
       ].concat(improvementProposals));
       renderSurfaceNodes("telemetryGraph", [
         { title: "HTTP Flow", detail: "Request and route counters prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
@@ -3323,7 +3323,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       ];
       byId("factoryGraphStatus").textContent = mode === "preview"
         ? "Preview complete: review readiness before launch."
-        : "Launch complete: inspect created, reused, blocked, and failed work.";
+        : "Launch complete: inspect created, reused, blocked, and review-needed work.";
       renderSurfaceNodes("factoryGraph", summary.concat(projectNodes, issueNodes));
     }
 
@@ -3595,7 +3595,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           key: "needs_action",
           label: "Needs action",
           className: "bad",
-          summary: "Failed work that needs operator recovery before retry.",
+          summary: "Blocked work that needs operator recovery before retry.",
         },
         being_retried: {
           key: "being_retried",
@@ -3607,7 +3607,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           key: "reviewed_history",
           label: "Reviewed history",
           className: "info",
-          summary: "Acknowledged failures preserved as evidence, not current blockers.",
+          summary: "Reviewed recoveries preserved as evidence, not current blockers.",
         },
         healthy_history: {
           key: "healthy_history",
@@ -3658,7 +3658,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           action_taken: "Preserved as historical evidence after operator review."
         })
       });
-      byId("jobActionStatus").innerHTML = `<strong class="ok">Job acknowledged</strong><div class="muted">The failure remains visible as reviewed history and no longer counts as current risk.</div>`;
+      byId("jobActionStatus").innerHTML = `<strong class="ok">Review recorded</strong><div class="muted">The evidence remains visible as reviewed history and no longer counts as current risk.</div>`;
       await refresh();
     }
 
@@ -3718,7 +3718,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       `).join("") || `
         <div class="mini">
           <strong class="ok">No urgent action</strong>
-          <div>The factory has no failed work right now.</div>
+          <div>The factory has no blocked work right now.</div>
           <div class="muted">Continue from Factory to create work, or Projects to inspect delivery.</div>
         </div>
         <div class="mini">
