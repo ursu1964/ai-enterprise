@@ -69,6 +69,8 @@ def _runtime_session_response(row: AgentRuntimeSessionModel) -> RuntimeSessionRe
 def _require_runtime_registry_read(
     actor: Actor, organization_id: uuid.UUID | None = None
 ) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(403, "Human runtime read authority is required")
     if organization_id is not None:
         try:
             require_capability(actor, "runtime.read", f"organization:{organization_id}")

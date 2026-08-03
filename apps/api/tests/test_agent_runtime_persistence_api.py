@@ -321,6 +321,26 @@ async def test_runtime_registry_lists_require_global_read_scope() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_registry_lists_require_human_actor() -> None:
+    denied = Actor(
+        "runtime-service",
+        "service",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({"global"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await list_model_deployments(
+            RuntimeListSession([]),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human runtime read authority is required"
+
+
+@pytest.mark.asyncio
 async def test_runtime_registry_object_reads_accept_only_matching_scope() -> None:
     organization_id = uuid.uuid4()
     skill = SkillModel(
@@ -351,6 +371,35 @@ async def test_runtime_registry_object_reads_accept_only_matching_scope() -> Non
 
     assert exc.value.status_code == 403
     assert (await get_skill(skill.id, session, allowed)).id == skill.id  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_runtime_registry_object_reads_require_human_actor() -> None:
+    organization_id = uuid.uuid4()
+    skill = SkillModel(
+        id=uuid.uuid4(),
+        organization_id=organization_id,
+        skill_key="requirements-analysis-v1",
+        name="Requirements Analysis",
+        status="active",
+    )
+    denied = Actor(
+        "runtime-service",
+        "service",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_skill(
+            skill.id,
+            RuntimeRegistrySession([], {(SkillModel, skill.id): skill}),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human runtime read authority is required"
 
 
 @pytest.mark.asyncio
