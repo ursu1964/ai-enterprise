@@ -349,7 +349,8 @@ Operating discipline for every project:
   event stream does not look like missing data.
 - Metrics keeps advanced metric names available, but presents them as system pulse proof instead of
   raw infrastructure counters.
-- Improvements and solutions are proposed from telemetry and job failures.
+- Improvements and solutions are proposed from telemetry, blocked work, and recurring problem
+  patterns.
 - Reusable artifacts, work packages, phase structure, agent crew, and checks become future template
   material.
 - Specialist agents are grouped by specialty and shown as the cooperating crew for the project.
@@ -368,7 +369,7 @@ Use these supporting surfaces:
 - Architecture graph: `http://localhost:8000/dashboard/graphify`
 - Operator jobs API: `/api/v1/operator/jobs`
 - Worker instances API: `/api/v1/operator/jobs/worker-instances`
-- Historical failure acknowledgment: `POST /api/v1/operator/jobs/by-id/{job_id}/acknowledge`
+- Reviewed recovery recording: `POST /api/v1/operator/jobs/by-id/{job_id}/acknowledge`
 - Project lifecycle API: `/api/v1/projects`
 
 Useful logs:

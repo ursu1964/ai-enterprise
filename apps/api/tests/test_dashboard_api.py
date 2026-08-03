@@ -247,9 +247,16 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Prevents repeated problems later." in response.text
     assert "recurring-problem guardrail candidate" in response.text
     assert "Recurring problems should become recovery checklists" in response.text
+    assert "Recurring problem classes should become a recovery checklist" in response.text
+    assert "current problem(s) share this class" in response.text
+    assert "Reduces repeat problems across future projects." in response.text
+    assert "Reduces repeat problems before more work is queued." in response.text
     assert "known problem classes" in response.text
     assert "quality or failures are blocking progress" not in response.text
     assert "repeated-failure guardrail candidate" not in response.text
+    assert "current failure(s) share this class" not in response.text
+    assert "Repeated failure classes should become" not in response.text
+    assert "Reduces repeat failures" not in response.text
     assert "jobActionStatus" in response.text
     assert "/api/v1/operator/jobs/by-id/" in response.text
     assert "loadJobAttempts" in response.text

@@ -2767,7 +2767,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Running Work", detail: "Active jobs connected to projects and crews.", idea: "Use this to confirm the factory is moving, not idle.", effect: `${running} job(s) currently active.`, signal: `${running}`, kind: running ? "info" : "ok", action: "problems" },
         { title: "Followed Errors", detail: "Blocked jobs are visible improvement inputs until they are recovered or reviewed.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${online} worker(s) online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
-        { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting blocked work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
+        { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting blocked work.", effect: "Reduces repeat problems across future projects.", signal: "improve", kind: "info", action: "projects" }
       ].concat(improvementProposals));
       renderSurfaceNodes("telemetryGraph", [
         { title: "Service Pulse", detail: "Dashboard and API activity prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
@@ -3548,9 +3548,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         .slice(0, 4)
         .map(([failureClass, count]) => ({
           title: `Guardrail proposal: ${failureClass.replace(/_/g, " ")}`,
-          detail: `${count} current failure(s) share this class.`,
-          idea: "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
-          effect: "Reduces repeat failures before more work is queued.",
+          detail: `${count} current problem(s) share this class.`,
+          idea: "Recurring problem classes should become a recovery checklist, test guardrail, or project template improvement.",
+          effect: "Reduces repeat problems before more work is queued.",
           signal: "proposed",
           kind: "warn",
           action: "projects"
@@ -3568,11 +3568,11 @@ DASHBOARD_HTML = r"""<!doctype html>
             : `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required from job attempts.`;
           return {
             title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
-            detail: `${proposal.current_failure_count || 0} current failure(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
-            idea: proposal.recommendation || "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
+            detail: `${proposal.current_failure_count || 0} current problem(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
+            idea: proposal.recommendation || "Recurring problem classes should become a recovery checklist, test guardrail, or project template improvement.",
             effect: proposal.improvement_draft?.evidence_required
               ? evidenceEffect
-              : proposal.operator_action || "Reduces repeat failures before more work is queued.",
+              : proposal.operator_action || "Reduces repeat problems before more work is queued.",
             signal: evidence.ready_to_submit === false ? "evidence required" : proposal.status || "proposed",
             kind: "warn",
             action: "projects"
