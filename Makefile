@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact
+.PHONY: build up down restart logs ps migrate migration enterprise-start test docker-test lint format typecheck secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke dashboard-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact
 
 build:
 	docker compose build
@@ -52,6 +52,9 @@ compose-check:
 docker-smoke:
 	docker compose up --build -d api worker
 	python tools/docker_smoke.py --require-worker
+
+dashboard-verify:
+	python tools/dashboard_verify.py --base-url "$${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"
 
 migration-check:
 	cd apps/api && .venv/bin/alembic heads
@@ -113,7 +116,7 @@ engineering-full:
 	python tools/engineering_verify.py --full --json
 
 release-artifact:
-	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json
+	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,dashboard-verify,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json
 
 release-gate-evidence-fast:
 	python tools/release_gate_evidence.py --output artifacts/gate-evidence.json --profile fast

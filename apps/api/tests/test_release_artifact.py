@@ -46,6 +46,7 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
         "typecheck",
         "test",
         "docker-smoke",
+        "dashboard-verify",
         "engineering-full",
         "etra-check",
     }
@@ -174,6 +175,7 @@ def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
         "test",
         "secret-scan",
         "docker-smoke",
+        "dashboard-verify",
         "engineering-static",
         "evolution-check",
         "federation-check",

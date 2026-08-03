@@ -36,10 +36,12 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
     assert (
         "--require-evidence-for compose-check,migration-check,lint,typecheck,test,"
-        "secret-scan,docker-smoke,engineering-static,evolution-check,federation-check,"
-        "intelligence-check,engineering-full,etra-check"
+        "secret-scan,docker-smoke,dashboard-verify,engineering-static,evolution-check,"
+        "federation-check,intelligence-check,engineering-full,etra-check"
         in makefile
     )
+    assert "dashboard-verify:" in makefile
+    assert "tools/dashboard_verify.py" in makefile
     assert "tools/release_gate_evidence.py" in makefile
     assert "--profile fast" in makefile
     assert "--profile ci" in makefile
@@ -95,6 +97,9 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     )
     assert release_gate_evidence.RELEASE_GATE_COMMANDS["secret-scan"] == (
         "python tools/secret_scan.py --all"
+    )
+    assert release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-verify"] == (
+        'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
     )
     assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
         "python tools/docker_smoke.py --require-worker"

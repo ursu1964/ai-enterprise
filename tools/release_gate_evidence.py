@@ -36,6 +36,9 @@ RELEASE_GATE_COMMANDS: dict[str, str] = {
     **FAST_GATE_COMMANDS,
     "secret-scan": "python tools/secret_scan.py --all",
     "docker-smoke": "python tools/docker_smoke.py --require-worker",
+    "dashboard-verify": (
+        'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
+    ),
     "engineering-static": "python tools/engineering_verify.py --static --json",
     "evolution-check": "python tools/evolution_verify.py --json",
     "federation-check": "python tools/federation_verify.py --json",
