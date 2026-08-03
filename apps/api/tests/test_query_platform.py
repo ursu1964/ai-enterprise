@@ -474,9 +474,7 @@ async def test_dashboard_manager_splits_current_and_historical_project_issues() 
     assert phase_detail["issue_summary"]["current_count"] == 1
     assert phase_detail["issue_summary"]["historical_count"] == 1
     assert phase_detail["issue_summary"]["state"] == "needs_action"
-    assert phase_detail["current_issues"][0]["label"] == (
-        "Reviewed failure or recovery needed"
-    )
+    assert phase_detail["current_issues"][0]["label"] == "Recovery review needed"
     assert phase_detail["historical_issues"][0]["label"] == "Reviewed history"
     assert phase_detail["historical_issues"][0]["resolution"]["state"] == "acknowledged"
 
@@ -531,8 +529,14 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
         proposal["improvement_draft"]["evidence_collection"][0]["endpoint"]
     )
     assert proposal["improvement_draft"]["risk_document"]["requires_human_review"] is True
+    assert proposal["improvement_draft"]["title"] == "Reduce repeated runtime problems"
+    assert "runtime problems" in proposal["improvement_draft"]["expected_benefit"]
+    assert "runtime failures" not in proposal["improvement_draft"]["expected_benefit"]
     assert "recovery checklist" in proposal["recommendation"]
+    assert "recurring problem class" in proposal["recommendation"]
     assert "inspect attempts" in proposal["operator_action"]
+    assert "problem class" in proposal["operator_action"]
+    assert "failure class" not in proposal["operator_action"]
     guardrail = response["reuse"]["guardrail_candidates"][0]
     assert guardrail["proposal_key"] == "operations.failure.runtime_guardrail"
     assert guardrail["failure_class"] == "runtime"
@@ -542,6 +546,8 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     assert "immutable evidence reference" in guardrail["promotion_blockers"][0]
     assert response["reuse"]["readiness"]["guardrails_evidence_required"] == 1
     assert "1 guardrail candidate" in response["reuse"]["summary"]
+    assert "recurring problems into guarded templates" in response["reuse"]["operator_action"]
+    assert "repeated failures" not in response["reuse"]["operator_action"]
 
 
 @pytest.mark.asyncio
@@ -647,7 +653,7 @@ async def test_operating_picture_graph_exposes_friendly_status_labels() -> None:
 
     job_node = next(node for node in response["graph"]["nodes"] if node["kind"] == "job")
     assert job_node["status"] == "dead_letter"
-    assert job_node["status_label"] == "Reviewed failure or recovery needed"
+    assert job_node["status_label"] == "Recovery review needed"
     assert "dead_letter" not in job_node["human_summary"]
     assert job_node["status_meaning"]["operator_action"]
 

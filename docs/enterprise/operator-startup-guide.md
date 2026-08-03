@@ -349,6 +349,8 @@ Operating discipline for every project:
   waiting for heartbeat so the operator knows the system is expecting future evidence.
 - Empty listboxes and document previews explain the next useful action, such as selecting a document
   or waiting for the first governed record, so quiet panels do not look like broken data sources.
+- Dashboard manager recovery signals use recovery review, proof detail, and recurring problem
+  language so API data and visual panels explain the same operator action.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
 - Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty

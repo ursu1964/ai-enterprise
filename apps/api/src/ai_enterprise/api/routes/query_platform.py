@@ -104,7 +104,7 @@ def _recommendations(
                 "priority": "urgent",
                 "title": "Resolve blocked work",
                 "message": (
-                    f"{len(failed_jobs)} work item(s) did not finish. Open Problems, "
+                    f"{len(failed_jobs)} work item(s) need recovery review. Open Problems, "
                     "review the human explanation, then retry only after the cause is clear."
                 ),
                 "next_action": "Open the Problems dashboard.",
@@ -556,9 +556,9 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
                     "improvement_key": f"operations.failure.{failure_class}_guardrail",
                     "category": "operations",
                     "origin": "dashboard-manager.recovery",
-                    "title": f"Reduce repeated {failure_class} failures",
+                    "title": f"Reduce repeated {failure_class} problems",
                     "expected_benefit": (
-                        f"Prevent repeated {failure_class} failures from blocking "
+                        f"Prevent repeated {failure_class} problems from blocking "
                         "future project execution."
                     ),
                     "risk_document": {
@@ -581,11 +581,11 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
                     ],
                 },
                 "recommendation": (
-                    "Convert this repeated failure class into a recovery checklist, "
+                    "Convert this recurring problem class into a recovery checklist, "
                     "test guardrail, or project template improvement."
                 ),
                 "operator_action": (
-                    "Open Problems, inspect attempts for this failure class, then "
+                    "Open Problems, inspect attempts for this problem class, then "
                     "record the reusable guardrail before queuing more work."
                 ),
             }
@@ -757,7 +757,7 @@ def _reuse_learning_summary(
         ),
         "operator_action": (
             "Promote reusable project patterns only after proof review, and convert "
-            "repeated failures into guarded templates."
+            "recurring problems into guarded templates."
         ),
     }
 
@@ -1147,7 +1147,7 @@ async def dashboard_manager(
         "recovery": {
             "improvement_proposals": recovery_proposals,
             "proposal_basis": (
-                "Repeated unresolved failure classes across dashboard-manager jobs."
+                "Recurring unresolved problem classes across dashboard-manager jobs."
             ),
         },
         "reuse": _reuse_learning_summary(

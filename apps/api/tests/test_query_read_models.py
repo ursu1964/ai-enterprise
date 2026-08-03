@@ -10,6 +10,12 @@ from ai_enterprise.domain.agent_runtime.enums import (
     RegistryStatus,
     ToolInvocationStatus,
 )
+from ai_enterprise.domain.architecture.enums import (
+    ArchitectureArtifactStatus,
+    ArchitectureReviewStatus,
+    ArchitectureRevisionStatus,
+    ArchitectureRunStatus,
+)
 from ai_enterprise.domain.enterprise_kernel.enums import (
     EnterpriseModuleState,
     EnterpriseResourceState,
@@ -21,6 +27,33 @@ from ai_enterprise.domain.enums import (
     ProjectStatus,
     RunStatus,
     WorkPackageStatus,
+)
+from ai_enterprise.domain.evolution.enums import (
+    ControlEffectiveness,
+    LifecycleStatus,
+    RolloutStatus,
+)
+from ai_enterprise.domain.execution.enums import ExecutionStatus
+from ai_enterprise.domain.execution.enums import TestStatus as ExecutionTestStatus
+from ai_enterprise.domain.integration.enums import (
+    IntegrationApprovalDecision,
+    IntegrationAttemptStatus,
+    PatchStatus,
+)
+from ai_enterprise.domain.knowledge.enums import (
+    CandidateStatus,
+    ContradictionStatus,
+    TemporalStatus,
+)
+from ai_enterprise.domain.recovery.enums import (
+    RecoveryAssessmentStatus,
+    RecoveryAttemptStatus,
+    RollbackApprovalStatus,
+)
+from ai_enterprise.domain.resilience.enums import (
+    BackupStatus,
+    DisasterRecoveryStatus,
+    RestoreStatus,
 )
 from ai_enterprise.domain.workflow.enums import WorkflowState
 
@@ -61,6 +94,40 @@ def test_core_read_model_states_have_specialized_operator_meaning() -> None:
 
             assert "no specialized explanation" not in meaning["meaning"]
             assert meaning["operator_action"]
+
+
+def test_delivery_recovery_and_learning_states_have_specialized_operator_meaning() -> None:
+    enum_groups = (
+        ArchitectureRunStatus,
+        ArchitectureArtifactStatus,
+        ArchitectureReviewStatus,
+        ArchitectureRevisionStatus,
+        ExecutionStatus,
+        ExecutionTestStatus,
+        PatchStatus,
+        IntegrationApprovalDecision,
+        IntegrationAttemptStatus,
+        RecoveryAssessmentStatus,
+        RollbackApprovalStatus,
+        RecoveryAttemptStatus,
+        BackupStatus,
+        RestoreStatus,
+        DisasterRecoveryStatus,
+        CandidateStatus,
+        TemporalStatus,
+        ContradictionStatus,
+        LifecycleStatus,
+        RolloutStatus,
+        ControlEffectiveness,
+    )
+
+    for enum_group in enum_groups:
+        for state in enum_group:
+            meaning = meaning_for(state)
+
+            assert "no specialized explanation" not in meaning["meaning"]
+            assert meaning["operator_action"]
+            assert meaning["label"] != str(state)
 
 
 def test_source_contract_reports_fresh_stale_empty_and_unavailable_states() -> None:
