@@ -48,6 +48,8 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 def _require_project_read(actor: Actor, project_id: uuid.UUID | None = None) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human project authority is required")
     require_capability(
         actor,
         "project.read",

@@ -91,6 +91,16 @@ def global_project_reader() -> Actor:
     )
 
 
+def service_project_reader(scope: str) -> Actor:
+    return Actor(
+        "project-service",
+        "service",
+        "operator",
+        frozenset({"project.read"}),
+        scopes=frozenset({scope}),
+    )
+
+
 def test_dashboard_page_links_operator_surfaces() -> None:
     client = TestClient(app)
 
@@ -663,6 +673,18 @@ async def test_list_projects_requires_global_project_read_scope() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_projects_requires_human_actor() -> None:
+    with pytest.raises(HTTPException) as exc:
+        await list_projects(
+            Session([]),  # type: ignore[arg-type]
+            service_project_reader("global"),
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human project authority is required"
+
+
+@pytest.mark.asyncio
 async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     now = datetime.now(UTC)
     project_id = uuid.uuid4()
@@ -853,6 +875,32 @@ async def test_project_intelligence_rejects_wrong_project_scope() -> None:
         )
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_project_intelligence_requires_human_actor() -> None:
+    project_id = uuid.uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Service Blocked Intelligence Project",
+        description="A project protected from service actor project intelligence reads.",
+        repository_path="/home/user/projects/service-blocked-intelligence-project",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await project_intelligence(
+            project_id,
+            Session([project]),  # type: ignore[arg-type]
+            service_project_reader(f"project:{project_id}"),
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human project authority is required"
 
 
 @pytest.mark.asyncio

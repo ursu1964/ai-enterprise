@@ -71,6 +71,16 @@ def project_reader(project_id: uuid.UUID) -> Actor:
     )
 
 
+def service_project_reader(project_id: uuid.UUID) -> Actor:
+    return Actor(
+        "project-service",
+        "service",
+        "operator",
+        frozenset({"project.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+
 @pytest.mark.asyncio
 async def test_get_project_returns_current_p0_lifecycle_state() -> None:
     now = datetime.now(UTC)
@@ -140,6 +150,32 @@ async def test_get_project_rejects_wrong_project_scope() -> None:
         await get_project(project_id, Session(project), denied)  # type: ignore[arg-type]
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_get_project_requires_human_actor() -> None:
+    project_id = uuid.uuid4()
+    project = ProjectModel(
+        id=project_id,
+        name="Human Project Read",
+        description="Project protected from service actor reads.",
+        repository_path="/home/user/projects/human-project-read",
+        repository_url=None,
+        default_branch="main",
+        status=ProjectStatus.CREATED,
+        manifest_hash="0" * 64,
+        manifest={},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_project(
+            project_id,
+            Session(project),  # type: ignore[arg-type]
+            service_project_reader(project_id),
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human project authority is required"
 
 
 def test_p0_manifest_content_is_canonical_json_not_python_repr() -> None:
