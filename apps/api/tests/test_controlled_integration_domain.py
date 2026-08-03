@@ -184,3 +184,22 @@ async def test_integration_attempt_read_requires_project_scope() -> None:
     assert (
         await get_integration_attempt(row.id, IntegrationReadSession(row), allowed)  # type: ignore[arg-type]
     ).id == row.id
+
+
+@pytest.mark.asyncio
+async def test_integration_attempt_read_requires_human_actor() -> None:
+    project_id = uuid4()
+    row = integration_attempt(project_id)
+    denied = Actor(
+        "integration-service",
+        "service",
+        "operator",
+        frozenset({"integration.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_integration_attempt(row.id, IntegrationReadSession(row), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human integration authority is required"

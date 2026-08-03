@@ -38,6 +38,8 @@ def _require_integration_attempt_create(actor: Actor) -> None:
 
 
 def _require_integration_read(actor: Actor, project_id: uuid.UUID) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human integration authority is required")
     require_capability(actor, "integration.read", f"project:{project_id}")
 
 

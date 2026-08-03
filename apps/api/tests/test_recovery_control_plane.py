@@ -118,6 +118,16 @@ def _wrong_recovery_reader() -> Actor:
     return _recovery_reader(uuid4())
 
 
+def _service_recovery_reader(project_id) -> Actor:
+    return Actor(
+        "reader-service",
+        "service",
+        "recovery_operator",
+        frozenset({"recovery.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+
 def test_recovery_action_requires_human_global_capability() -> None:
     with pytest.raises(HTTPException, match="Recovery authority"):
         _require_recovery_action(Actor("operator", "human", "incident_reporter"), "incident.create")
@@ -237,6 +247,32 @@ async def test_recovery_read_routes_reject_wrong_project_scope() -> None:
         with pytest.raises(HTTPException) as exc:
             await route(identity, session, denied)  # type: ignore[arg-type, misc]
         assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_recovery_read_routes_reject_non_human_actor() -> None:
+    project_id = uuid4()
+    incident = _incident(project_id)
+    assessment = _assessment(incident)
+    attempt = _attempt(project_id, assessment)
+    session = RecoveryReadSession(
+        {
+            (RecoveryIncidentModel, incident.id): incident,
+            (RecoveryAssessmentModel, assessment.id): assessment,
+            (RecoveryAttemptModel, attempt.id): attempt,
+        }
+    )
+    denied = _service_recovery_reader(project_id)
+
+    for route, identity in (
+        (get_incident, incident.id),
+        (get_assessment, assessment.id),
+        (get_attempt, attempt.id),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await route(identity, session, denied)  # type: ignore[arg-type, misc]
+        assert exc.value.status_code == 403
+        assert exc.value.detail == "Human recovery authority is required"
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,8 @@ def _error(exc: RecoveryError) -> HTTPException:
 
 
 def _require_recovery_read(actor: Actor, project_id: uuid.UUID) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human recovery authority is required")
     require_capability(actor, "recovery.read", f"project:{project_id}")
 
 
