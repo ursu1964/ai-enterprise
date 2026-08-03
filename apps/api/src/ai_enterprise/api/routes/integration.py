@@ -21,7 +21,10 @@ from ai_enterprise.application.integration.service import (
 from ai_enterprise.application.workflow.service import WorkflowService
 from ai_enterprise.config import get_settings
 from ai_enterprise.domain.integration.exceptions import IntegrationError
-from ai_enterprise.infrastructure.database.models import IntegrationAttemptModel
+from ai_enterprise.infrastructure.database.models import (
+    ExecutionRunModel,
+    IntegrationAttemptModel,
+)
 
 router = APIRouter(tags=["controlled-integration"])
 
@@ -48,8 +51,12 @@ def _require_integration_read(actor: Actor, project_id: uuid.UUID) -> None:
     response_model=IntegrationEligibilityResponse,
 )
 async def get_eligibility(
-    execution_run_id: uuid.UUID, session: SessionDependency
+    execution_run_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> IntegrationEligibilityResponse:
+    execution = await session.get(ExecutionRunModel, execution_run_id)
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Candidate patch not found")
+    _require_integration_read(actor, execution.project_id)
     try:
         value = await ControlledIntegrationService(session).evaluate_eligibility(execution_run_id)
     except IntegrationNotFoundError as exc:

@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from ai_enterprise.api.dependencies import Actor, get_actor
 from ai_enterprise.api.routes.integration import (
     _require_integration_attempt_create,
+    get_eligibility,
     get_integration_attempt,
 )
 from ai_enterprise.domain.execution.lineage import RevisionLineagePolicy
@@ -17,7 +18,7 @@ from ai_enterprise.domain.integration.policies import (
     IntegrationAuthorizationPolicy,
     PatchEligibilityPolicy,
 )
-from ai_enterprise.infrastructure.database.models import IntegrationAttemptModel
+from ai_enterprise.infrastructure.database.models import ExecutionRunModel, IntegrationAttemptModel
 
 
 def test_eligible_patch_requires_every_protected_fact() -> None:
@@ -134,6 +135,16 @@ class IntegrationReadSession:
         return self.row
 
 
+class EligibilityReadSession:
+    def __init__(self, row: ExecutionRunModel | None) -> None:
+        self.row = row
+
+    async def get(self, model: type, identity: object) -> object | None:
+        if model is ExecutionRunModel and self.row is not None and identity == self.row.id:
+            return self.row
+        return None
+
+
 def integration_attempt(project_id) -> IntegrationAttemptModel:
     return IntegrationAttemptModel(
         id=uuid4(),
@@ -155,6 +166,40 @@ def integration_attempt(project_id) -> IntegrationAttemptModel:
         correlation_id=uuid4(),
         started_at=None,
         completed_at=None,
+    )
+
+
+def execution_run(project_id: UUID) -> ExecutionRunModel:
+    return ExecutionRunModel(
+        id=uuid4(),
+        project_id=project_id,
+        work_package_id=uuid4(),
+        approval_id=uuid4(),
+        status="succeeded",
+        base_commit="b" * 40,
+        base_tree_sha="c" * 40,
+        patch_status="generated",
+        container_image="python:3.12",
+        container_image_digest=None,
+        implementation_exit_code=0,
+        failure_code=None,
+        failure_message=None,
+        started_at=None,
+        finished_at=None,
+        timeout_seconds=300,
+        cpu_limit=1.0,
+        memory_limit_bytes=536870912,
+        pids_limit=128,
+        network_disabled=True,
+        runtime_policy={},
+        changed_files=[],
+        changed_file_count=0,
+        insertions=0,
+        deletions=0,
+        patch_artifact_id=uuid4(),
+        log_artifact_id=None,
+        patch_sha256="a" * 64,
+        idempotency_key="test-run",
     )
 
 
@@ -200,6 +245,43 @@ async def test_integration_attempt_read_requires_human_actor() -> None:
 
     with pytest.raises(HTTPException) as exc:
         await get_integration_attempt(row.id, IntegrationReadSession(row), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human integration authority is required"
+
+
+@pytest.mark.asyncio
+async def test_integration_eligibility_requires_project_scope() -> None:
+    project_id = uuid4()
+    row = execution_run(project_id)
+    denied = Actor(
+        "reader",
+        "human",
+        "operator",
+        frozenset({"integration.read"}),
+        scopes=frozenset({f"project:{uuid4()}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_eligibility(row.id, EligibilityReadSession(row), denied)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_integration_eligibility_requires_human_actor() -> None:
+    project_id = uuid4()
+    row = execution_run(project_id)
+    denied = Actor(
+        "integration-service",
+        "service",
+        "operator",
+        frozenset({"integration.read"}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_eligibility(row.id, EligibilityReadSession(row), denied)  # type: ignore[arg-type]
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "Human integration authority is required"
