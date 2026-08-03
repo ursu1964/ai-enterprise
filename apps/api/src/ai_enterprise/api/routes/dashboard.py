@@ -3974,7 +3974,11 @@ DASHBOARD_HTML = r"""<!doctype html>
               <div class="mini span-6"><strong>Errors Followed</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Diagnostic detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "No raw diagnostic")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active errors are attached to this project. Reviewed history remains preserved in job records.")}</div>
               <div class="mini span-6"><strong>Specialist Agents</strong>${listbox(payload.specialist_agents, item => `<div class="list-item"><div><div class="list-title">${esc(item.agent_key)}</div><div class="list-meta">${esc(item.specialty)} · ${esc(item.mission)}</div></div><span class="pill ok">${esc(humanStatus(item.status))}</span></div>`, "No specialist agents are suggested for this project type yet.")}</div>
               <div class="mini span-6"><strong>Economic Effects</strong>${listbox(Object.entries(payload.economic_effects).map(([name, value]) => ({ name, value })), item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.value)}</div></div><span class="pill info">proof</span></div>`, "Economic proof will appear after project evidence is collected.")}</div>
-              <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => `<div class="list-item"><div><div class="list-title">${esc(item.blueprint_key)}</div><div class="list-meta">${esc(item.title)} · ${esc(item.kind)} · lifecycle ${esc(humanStatus(item.lifecycle))}</div><div class="list-meta">Source phase: ${esc(item.source_phase || "project")} · reuse x${esc(item.reuse_proof?.reuse_multiplier || "1")} · assets ${esc(item.reuse_proof?.reusable_asset_count || 0)}</div><details><summary>Improvement proposals</summary><div class="list-meta">${esc((item.improvement_proposals || []).map(proposal => `${proposal.phase}: ${proposal.proposal}`).join(" | ") || "No guardrail or template improvements proposed yet.")}</div></details></div><span class="pill ${statusClass(item.lifecycle)}">${esc(humanStatus(item.lifecycle))}</span></div>`, "Reusable blueprints will appear when the project produces enough evidence.")}</div>
+              <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => {
+                const lifecycle = item.lifecycle_detail || {};
+                const blockers = (lifecycle.promotion_blockers || []).join(", ") || "No promotion blockers";
+                return `<div class="list-item"><div><div class="list-title">${esc(item.blueprint_key)}</div><div class="list-meta">${esc(item.title)} · ${esc(item.kind)} · ${esc(lifecycle.label || humanStatus(item.lifecycle))} · trust ${esc(lifecycle.trust_level || item.lifecycle)}</div><div class="list-meta">${esc(lifecycle.meaning || "Blueprint lifecycle is waiting for project proof.")}</div><div class="list-meta">Next action: ${esc(lifecycle.next_action || "Collect governed evidence before reuse.")}</div><div class="list-meta">Promotion blockers: ${esc(blockers)}</div><div class="list-meta">Source phase: ${esc(item.source_phase || "project")} · reuse x${esc(item.reuse_proof?.reuse_multiplier || "1")} · assets ${esc(item.reuse_proof?.reusable_asset_count || 0)}</div><details><summary>Improvement proposals</summary><div class="list-meta">${esc((item.improvement_proposals || []).map(proposal => `${proposal.phase}: ${proposal.proposal}`).join(" | ") || "No guardrail or template improvements proposed yet.")}</div></details></div><span class="pill ${statusClass(item.lifecycle)}">${esc(lifecycle.label || humanStatus(item.lifecycle))}</span></div>`;
+              }, "Reusable blueprints will appear when the project produces enough evidence.")}</div>
             </div>
           `;
           renderProjectIntelligence(payload);
@@ -4375,7 +4379,12 @@ DEMO_HTML = r"""<!doctype html>
       background: rgba(5, 10, 15, 0.76);
       padding: 12px;
       min-height: 94px;
+      color: var(--text);
+      text-align: left;
+      text-decoration: none;
+      display: block;
     }
+    .proof-card:hover { border-color: rgba(93, 184, 255, 0.72); }
     .proof-card.ok { border-color: rgba(86, 227, 159, 0.48); }
     .proof-card.warn { border-color: rgba(255, 209, 102, 0.54); }
     .proof-card.bad { border-color: rgba(255, 107, 107, 0.58); }
@@ -4465,10 +4474,10 @@ DEMO_HTML = r"""<!doctype html>
         <button id="refreshProof">Refresh Live Proof</button>
       </div>
       <div class="live-proof">
-        <div id="proofHealthCard" class="proof-card"><span>API health</span><strong id="proofHealth">Checking</strong><small id="proofHealthDetail">Verifying the enterprise service.</small></div>
-        <div id="proofProjectsCard" class="proof-card"><span>Visible projects</span><strong id="proofProjects">Checking</strong><small id="proofProjectsDetail">Counting governed project records.</small></div>
-        <div id="proofTelemetryCard" class="proof-card"><span>Telemetry</span><strong id="proofTelemetry">Checking</strong><small id="proofTelemetryDetail">Reading runtime proof signals.</small></div>
-        <div id="proofNextCard" class="proof-card"><span>Next live step</span><strong id="proofNext">Open Factory</strong><small id="proofNextDetail">Preview before creating records.</small></div>
+        <a id="proofHealthCard" class="proof-card" href="/dashboard"><span>API health</span><strong id="proofHealth">Checking</strong><small id="proofHealthDetail">Verifying the enterprise service.</small></a>
+        <a id="proofProjectsCard" class="proof-card" href="/dashboard#projects"><span>Visible projects</span><strong id="proofProjects">Checking</strong><small id="proofProjectsDetail">Counting governed project records.</small></a>
+        <a id="proofTelemetryCard" class="proof-card" href="/dashboard#metrics"><span>Telemetry</span><strong id="proofTelemetry">Checking</strong><small id="proofTelemetryDetail">Reading runtime proof signals.</small></a>
+        <a id="proofNextCard" class="proof-card" href="/dashboard#factory"><span>Next live step</span><strong id="proofNext">Open Factory</strong><small id="proofNextDetail">Preview before creating records.</small></a>
       </div>
     </section>
 
@@ -4562,13 +4571,14 @@ DEMO_HTML = r"""<!doctype html>
       if (!response.ok) throw new Error(`${response.status}`);
       return response.json();
     }
-    function setProof(id, value, detail, state = "warn") {
+    function setProof(id, value, detail, state = "warn", href = "") {
       document.getElementById(id).textContent = value;
       document.getElementById(`${id}Detail`).textContent = detail;
       const card = document.getElementById(`${id}Card`);
       if (card) {
         card.classList.remove("ok", "warn", "bad");
         card.classList.add(state);
+        if (href) card.href = href;
       }
     }
     async function loadLiveProof() {
@@ -4576,24 +4586,24 @@ DEMO_HTML = r"""<!doctype html>
       try {
         const ready = await fetchJson("/health/ready");
         const ok = ready.status === "ok" && ready.database === "reachable";
-        setProof("proofHealth", ok ? "Ready" : "Needs attention", ok ? "Database is reachable." : "Database readiness is not confirmed.", ok ? "ok" : "bad");
+        setProof("proofHealth", ok ? "Ready" : "Needs attention", ok ? "Database is reachable. Click to open Command Center." : "Database readiness is not confirmed. Click to inspect Command Center.", ok ? "ok" : "bad", "/dashboard");
       } catch (error) {
-        setProof("proofHealth", "Not confirmed", "Refresh after the API finishes starting. If it stays unavailable, open Command Center and check health.", "bad");
+        setProof("proofHealth", "Not confirmed", "Refresh after the API finishes starting. If it stays unavailable, click to open Command Center.", "bad", "/dashboard");
       }
       try {
         const projects = await fetchJson("/api/v1/projects");
-        setProof("proofProjects", `${projects.length} project(s)`, projects.length ? "Open Execution or Projects to inspect movement." : "Use Factory to create the first project.", projects.length ? "ok" : "warn");
-        setProof("proofNext", projects.length ? "Open Execution" : "Open Factory", projects.length ? "Watch live project movement." : "Preview Launch before creating records.", "ok");
+        setProof("proofProjects", `${projects.length} project(s)`, projects.length ? "Click to open Projects and inspect movement." : "Click to open Factory and create the first project.", projects.length ? "ok" : "warn", projects.length ? "/dashboard#projects" : "/dashboard#factory");
+        setProof("proofNext", projects.length ? "Open Execution" : "Open Factory", projects.length ? "Click to watch live project movement." : "Click to preview before creating records.", "ok", projects.length ? "/dashboard#execution" : "/dashboard#factory");
       } catch (error) {
-        setProof("proofProjects", "Not confirmed", "Project source is not reachable yet. Refresh, then open Command Center if it remains unavailable.", "bad");
-        setProof("proofNext", "Open Command Center", "Check source freshness and API health before demonstrating project movement.", "warn");
+        setProof("proofProjects", "Not confirmed", "Project source is not reachable yet. Click to open Command Center if it remains unavailable.", "bad", "/dashboard");
+        setProof("proofNext", "Open Command Center", "Click to check source freshness and API health before demonstrating project movement.", "warn", "/dashboard");
       }
       try {
         const metrics = await fetchText("/metrics");
         const count = metrics.split("\n").filter(line => line && !line.startsWith("#")).length;
-        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is available." : "No runtime signal has been emitted yet.", count ? "ok" : "warn");
+        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is available. Click to open Metrics." : "No runtime signal has been emitted yet. Click to open Metrics.", count ? "ok" : "warn", "/dashboard#metrics");
       } catch (error) {
-        setProof("proofTelemetry", "Not confirmed", "Metrics source is not reachable yet. Open Metrics after the API settles.", "bad");
+        setProof("proofTelemetry", "Not confirmed", "Metrics source is not reachable yet. Click to open Metrics after the API settles.", "bad", "/dashboard#metrics");
       }
       document.getElementById("proofChecked").textContent = `Live proof checked ${new Date().toLocaleTimeString()}.`;
     }

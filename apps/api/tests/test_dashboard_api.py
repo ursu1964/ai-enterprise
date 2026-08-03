@@ -224,6 +224,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "infrastructureChoicesTable" in response.text
     assert "Advanced raw metrics" in response.text
     assert "Blueprint Graph Hub" in response.text
+    assert "lifecycle_detail" in response.text
+    assert "promotion_blockers" in response.text
+    assert "Promotion blockers:" in response.text
+    assert "trust_level" in response.text
+    assert "Collect governed evidence before reuse." in response.text
     assert "Project Foundry Core" in response.text
     assert "/dashboard/project-foundry-core" in response.text
     assert "Authenticated Graph Context" in response.text
