@@ -63,6 +63,43 @@ def test_release_artifact_fails_when_migration_verification_fails(tmp_path: Path
     )
 
 
+def test_release_artifact_merges_supplied_gate_evidence(tmp_path: Path) -> None:
+    root = _release_root(tmp_path)
+    evidence_file = root / "artifacts" / "gate-evidence.json"
+    evidence_file.parent.mkdir()
+    evidence_file.write_text(
+        """
+{
+  "gates": {
+    "docker-smoke": {
+      "status": "passed",
+      "duration_seconds": 12.5,
+      "output_path": "artifacts/docker-smoke.json"
+    },
+    "engineering-full": {
+      "status": "failed",
+      "duration_seconds": 1.2,
+      "output_path": "artifacts/engineering-full.json"
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    document = release_artifact.build_artifact(root, evidence_file=evidence_file)
+    gates = {gate["name"]: gate for gate in document["gates"]}
+
+    assert document["status"] == "failed"
+    assert document["gate_summary"]["failed"] == 1
+    assert gates["docker-smoke"]["status"] == "passed"
+    assert gates["docker-smoke"]["evidence"]["duration_seconds"] == 12.5
+    assert gates["docker-smoke"]["evidence"]["output_path"] == (
+        "artifacts/docker-smoke.json"
+    )
+    assert gates["engineering-full"]["status"] == "failed"
+
+
 def test_release_artifact_writes_json_file(tmp_path: Path) -> None:
     root = _release_root(tmp_path)
     output = Path("artifacts/release-verification.json")
