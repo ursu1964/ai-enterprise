@@ -170,7 +170,7 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Execution running",
         "info",
         "Approved implementation work is running and producing change evidence.",
-        "Monitor execution evidence, tests, and failure signals.",
+        "Monitor execution evidence, tests, and recovery signals.",
     ),
     "execution_queued": Meaning(
         "Execution queued",
@@ -182,7 +182,7 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Execution running",
         "info",
         "Approved implementation work is actively producing change evidence.",
-        "Monitor execution evidence, tests, and failure signals.",
+        "Monitor execution evidence, tests, and recovery signals.",
     ),
     "execution_succeeded": Meaning(
         "Execution completed",

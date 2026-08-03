@@ -1073,6 +1073,7 @@ async def dashboard_manager(
                 else {
                     "id": project_workflow.id,
                     "state": project_workflow.state,
+                    **status_read_model(project_workflow.state),
                     "current_step": project_workflow.current_step,
                     "recommended_operator_action": (
                         project_workflow.recommended_operator_action
@@ -1084,6 +1085,9 @@ async def dashboard_manager(
                 "recent_events": recent_events,
                 "telemetry": {
                     "signal": "attention_required" if tasks["problems"] else "nominal",
+                    "signal_meaning": meaning_for(
+                        "attention_required" if tasks["problems"] else "nominal"
+                    ),
                     "event_count": len(audits_by_project.get(project.id, [])),
                     "crew_signal_count": len(crew_by_project.get(project.id, [])),
                     "job_signal_count": len(project_jobs),

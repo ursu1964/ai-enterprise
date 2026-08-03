@@ -2433,9 +2433,9 @@ DASHBOARD_HTML = r"""<!doctype html>
           {
             id: workflowId,
             label: phaseDetail.label || project.phase,
-            subtitle: project.workflow ? humanStatus(project.workflow.state) : "Not started",
+            subtitle: project.workflow ? humanStatus(project.workflow) : "Not started",
             kind: "workflow",
-            status: project.workflow ? project.workflow.state : "not_started",
+            status: project.workflow || "not_started",
             x: 406,
             y,
             project
@@ -2523,11 +2523,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         <strong>${esc(project.name)}</strong>
         <div class="muted">${esc(project.human_summary)}</div>
         <div class="signal">
-          <div class="list-item"><div><div class="list-title">Where we are</div><div class="list-meta">${esc(project.phase)} · ${esc(project.next_action)}</div></div><span class="pill ${statusClass(project.state)}">${esc(humanStatus(project.state))}</span></div>
+          <div class="list-item"><div><div class="list-title">Where we are</div><div class="list-meta">${esc(project.phase)} · ${esc(project.next_action)}</div></div><span class="pill ${statusClass(project.state_meaning || project.state)}">${esc(humanStatus(project.state_meaning || project.state))}</span></div>
           ${renderPhaseDetailRows(project)}
           <div class="list-item"><div><div class="list-title">Tasks</div><div class="list-meta">${esc(project.tasks.done)} done, ${esc(project.tasks.active)} active, ${esc(project.tasks.standby)} standby, ${esc(project.tasks.problems)} problem.</div></div><span class="pill info">${esc(project.tasks.total)} total</span></div>
           <div class="list-item"><div><div class="list-title">Crew</div><div class="list-meta">${esc(project.crews[0]?.assignment || "No active crew signal yet.")}</div></div><span class="pill ${project.crews.length ? "ok" : "info"}">${esc(project.crews.length)} signal(s)</span></div>
-          <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(project.telemetry.job_signal_count)} job signal(s), ${esc(project.telemetry.event_count)} event(s), ${esc(project.telemetry.work_package_count)} work package(s).</div></div><span class="pill ${statusClass(project.telemetry.signal)}">${esc(humanStatus(project.telemetry.signal))}</span></div>
+          <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(project.telemetry.job_signal_count)} job signal(s), ${esc(project.telemetry.event_count)} event(s), ${esc(project.telemetry.work_package_count)} work package(s).</div></div><span class="pill ${statusClass(project.telemetry)}">${esc(humanStatus(project.telemetry))}</span></div>
         </div>
         <button data-project-id="${esc(project.id)}">Open Full Project Graph</button>
       `;
@@ -2611,7 +2611,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       byId("executionTelemetry").innerHTML = listbox(telemetryRows, row => `
         <div class="list-item">
           <div><div class="list-title">${esc(row.project.name)}</div><div class="list-meta">${esc(row.event.summary)}</div><div class="list-meta">${esc(row.event.created_at || "Waiting for the first event timestamp.")}</div></div>
-          <span class="pill ${statusClass(row.project.telemetry.signal)}">${esc(humanStatus(row.project.telemetry.signal))}</span>
+          <span class="pill ${statusClass(row.project.telemetry)}">${esc(humanStatus(row.project.telemetry))}</span>
         </div>
       `, "No event telemetry is visible yet. Project events will appear as workflow and crew activity progresses.");
     }
@@ -3478,8 +3478,26 @@ DASHBOARD_HTML = r"""<!doctype html>
       }
     }
 
+    function statusMeaning(source) {
+      if (source && typeof source === "object") {
+        if (source.label && source.severity && source.operator_action) return source;
+        return source.status_meaning || source.state_meaning || source.signal_meaning || source.meaning || source.confidence_detail || null;
+      }
+      return null;
+    }
+
+    function severityClass(severity) {
+      const value = String(severity || "").toLowerCase();
+      if (["ok", "good", "healthy"].includes(value)) return "ok";
+      if (["bad", "error", "critical"].includes(value)) return "bad";
+      if (["warn", "warning"].includes(value)) return "warn";
+      return "info";
+    }
+
     function statusClass(status) {
-      const value = String(status || "").toLowerCase();
+      const meaning = statusMeaning(status);
+      if (meaning?.severity) return severityClass(meaning.severity);
+      const value = String(status?.status || status?.state || status?.signal || status || "").toLowerCase();
       if (["online", "ok", "succeeded", "completed", "active", "nominal", "complete", "calibrated", "ready", "started", "live workflow", "evidence backed"].includes(value)) return "ok";
       if (["queued", "running", "leased", "retry_wait", "degraded", "standby", "not_started", "waiting_for_manifesto", "candidate", "reviewed", "early", "early estimate", "observed", "needs_setup", "partial", "blocked"].includes(value)) return "warn";
       if (["failed", "dead_letter", "abandoned", "offline", "attention_required", "needs review"].includes(value)) return "bad";
@@ -3487,6 +3505,11 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     function humanStatus(status) {
+      const meaning = statusMeaning(status);
+      if (status && typeof status === "object") {
+        if (status.status_label) return status.status_label;
+        if (meaning?.label) return meaning.label;
+      }
       const labels = {
         created: "Ready to start",
         reuse: "Will reuse existing work",
@@ -3497,7 +3520,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         manual_intervention: "Needs human review before work can continue",
         attention_required: "Needs operator decision",
         context_required: "Choose an organization to see governed metrics",
-        dead_letter: "Reviewed recovery needed",
+        dead_letter: "Recovery review needed",
         failed: "Needs recovery action",
         abandoned: "Stopped and needs review",
         queued: "Waiting for worker capacity",
@@ -3507,9 +3530,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         succeeded: "Completed",
         nominal: "Healthy",
         ready: "Ready",
-        started: "Started and ready to inspect",
-        partial: "Partly started, needs review",
-        blocked: "Blocked until missing details are fixed",
+        started: "Started",
+        partial: "Partially started",
+        blocked: "Blocked",
         needs_setup: "Needs setup",
         viable: "Viable",
         active: "Active",

@@ -217,9 +217,12 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     )
     assert "Start Manifesto Batch when you want to create this project." in response.text
     assert "Will reuse existing work" in response.text
-    assert "Partly started, needs review" in response.text
-    assert "Started and ready to inspect" in response.text
-    assert "Blocked until missing details are fixed" in response.text
+    assert "Partially started" in response.text
+    assert "Started" in response.text
+    assert "Blocked" in response.text
+    assert "Partly started, needs review" not in response.text
+    assert "Started and ready to inspect" not in response.text
+    assert "Blocked until missing details are fixed" not in response.text
     assert "/api/v1/project-formation/mock-factory/preview" in response.text
     assert "/api/v1/project-formation/mock-factory/start" in response.text
     assert "created, reused, blocked, and review-needed work" in response.text
@@ -378,7 +381,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "needs review:" in response.text
     assert "Launch needs operator review." in response.text
     assert "Open Problems and retry after correction." in response.text
-    assert "Reviewed recovery needed" in response.text
+    assert "Recovery review needed" in response.text
+    assert "Reviewed recovery needed" not in response.text
     assert "inspect API logs" not in response.text
     assert "launch failure" not in response.text
     assert "failed launches" not in response.text

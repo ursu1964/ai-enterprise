@@ -194,6 +194,10 @@ async def test_operating_picture_returns_human_readable_graph() -> None:
     assert response["recommendations"][0]["next_action"]
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "executes" for edge in response["graph"]["edges"])
+    operator_actions = [
+        node["status_meaning"]["operator_action"] for node in response["graph"]["nodes"]
+    ]
+    assert all("failure signals" not in action for action in operator_actions)
 
 
 @pytest.mark.asyncio
@@ -282,6 +286,13 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["state_meaning"]["label"] == "Active"
     assert response["projects"][0]["status_label"] == "Ready to start"
     assert response["projects"][0]["status_meaning"]["label"] == "Ready to start"
+    assert response["projects"][0]["workflow"]["status_label"] == (
+        "Requirements work running"
+    )
+    assert response["projects"][0]["workflow"]["status_meaning"]["label"] == (
+        "Requirements work running"
+    )
+    assert response["projects"][0]["telemetry"]["signal_meaning"]["label"] == "Healthy"
     assert response["projects"][0]["tasks"]["done"] == 1
     assert response["reuse"]["blueprint_candidates"][0]["project_id"] == str(project_id)
     assert response["reuse"]["blueprint_candidates"][0]["project_type"] == (
