@@ -227,6 +227,17 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Acknowledge Reviewed Failure" not in response.text
     assert "Attempt Proof" in response.text
     assert "Recovery signal:" in response.text
+    assert "waiting for worker" in response.text
+    assert "Waiting for recovery signal" in response.text
+    assert "waiting for proof" in response.text
+    assert "Waiting for heartbeat" in response.text
+    assert "Telemetry summary is waiting for the first governed signal." in response.text
+    assert "Server readiness is waiting for verifier output." in response.text
+    assert "Infrastructure choices are waiting for saved decisions." in response.text
+    assert "not assigned" not in response.text
+    assert "not reported" not in response.text
+    assert "Not reported" not in response.text
+    assert "not available yet" not in response.text
     assert "Attempt proof needs attention" in response.text
     assert "Review could not be recorded" in response.text
     assert "Failed work changes the operating picture" not in response.text

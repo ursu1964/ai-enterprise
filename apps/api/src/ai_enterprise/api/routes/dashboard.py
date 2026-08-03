@@ -3401,7 +3401,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         items: (result.projects || []).map(project => ({
           name: project.name,
           status: project.workflow || project.project_record || "started",
-          detail: `${project.project_record || "Project"}; formation pack ${project.formation_pack || "not reported"}; workflow ${project.workflow || "not reported"}.`,
+          detail: `${project.project_record || "Project"}; formation pack ${project.formation_pack || "waiting for proof"}; workflow ${project.workflow || "waiting for proof"}.`,
           action: project.next_action || "Open this project dashboard for inspection."
         })).concat((result.blocked || []).map(item => ({
           name: item.name,
@@ -3507,7 +3507,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         offline: "Offline",
         degraded: "Degraded"
       };
-      return labels[String(status || "").toLowerCase()] || String(status || "Not reported").replace(/_/g, " ");
+      return labels[String(status || "").toLowerCase()] || String(status || "Waiting for status").replace(/_/g, " ");
     }
 
     function workerBusinessSummary(worker) {
@@ -3652,8 +3652,8 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div class="list-item">
             <div>
               <div class="list-title">Attempt ${esc(attempt.attempt_number)}</div>
-              <div class="list-meta">Worker ${esc(attempt.worker_id || "not assigned")} · ${esc(attempt.status || "not reported")}</div>
-              <div class="list-meta">Recovery signal: ${esc(attempt.failure_class || attempt.failure_code || "No recovery signal recorded")}</div>
+              <div class="list-meta">Worker ${esc(attempt.worker_id || "waiting for worker")} · ${esc(attempt.status || "waiting for status")}</div>
+              <div class="list-meta">Recovery signal: ${esc(attempt.failure_class || attempt.failure_code || "Waiting for recovery signal")}</div>
             </div>
             <span class="pill ${statusClass(attempt.status)}">${esc(humanStatus(attempt.status))}</span>
           </div>
@@ -3676,7 +3676,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     function readableTime(value) {
-      if (!value) return "Not reported yet";
+      if (!value) return "Waiting for heartbeat";
       return new Date(value).toLocaleString();
     }
 
@@ -3831,7 +3831,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div><div class="list-title">${esc(metric.name)}</div><div class="list-meta">${esc(metric.detail)}</div></div>
           <span class="pill ${statusClass(metric.value)}">${esc(metric.value)}</span>
         </div>
-      `, "Telemetry summary is not available yet. Refresh the dashboard or check API readiness.") + `
+      `, "Telemetry summary is waiting for the first governed signal. Refresh the dashboard or check API readiness.") + `
         <details class="mini" style="margin-top: 10px;">
           <summary>Advanced metric names</summary>
           ${listbox(Object.entries(state.metrics).map(([name, value]) => ({ name, value })), metric => `
@@ -3859,7 +3859,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <summary>Deployment commands</summary>
           ${listbox(readiness.commands || [], command => `<div class="list-item"><div class="list-title mono">${esc(command)}</div><span class="pill info">run</span></div>`, "No deployment commands are registered.")}
         </details>
-      ` : listbox([], item => item, "Server readiness is not available yet. Refresh the dashboard or check API readiness.");
+      ` : listbox([], item => item, "Server readiness is waiting for verifier output. Refresh the dashboard or check API readiness.");
       const choices = state.infrastructureChoices;
       byId("infrastructureChoicesTable").innerHTML = choices ? `
         <div class="mini">
@@ -3877,7 +3877,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <summary>Current findings</summary>
           ${listbox(choices.findings || [], finding => `<div class="list-item"><div class="list-title">${esc(finding)}</div><span class="pill warn">action</span></div>`, "No findings. Real infrastructure choices are recorded.")}
         </details>
-      ` : listbox([], item => item, "Infrastructure choices are not available yet. Refresh the dashboard or check API readiness.");
+      ` : listbox([], item => item, "Infrastructure choices are waiting for saved decisions. Refresh the dashboard or check API readiness.");
       byId("projectsTable").innerHTML = listbox(state.projects, project => `
         <button class="list-item project-open" data-project-id="${esc(project.id)}">
           <div><div class="list-title">${esc(project.name)}</div><div class="list-meta">${esc(project.repository_path)}</div><div class="list-meta">Updated ${esc(project.updated_at)}</div></div>

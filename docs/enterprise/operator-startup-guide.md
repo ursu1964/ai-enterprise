@@ -341,6 +341,8 @@ Operating discipline for every project:
   dashboard read like internal logs.
 - Use Open Attempts to inspect attempt proof, and Record Reviewed Recovery when the operator has
   reviewed a blocked work item and wants to preserve it as history.
+- Empty runtime fields use waiting language such as waiting for proof, waiting for worker, and
+  waiting for heartbeat so the operator knows the system is expecting future evidence.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
 - Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty
