@@ -470,8 +470,8 @@ rtk make check-release
 ```
 
 `check-release` captures compose, migration, lint, typecheck, test, secret scan, Docker smoke,
-engineering, evolution, federation, intelligence, and ETRA evidence under `artifacts/release-gates/`,
-writes `artifacts/gate-evidence.json`, then merges it into
+dashboard verification, engineering, evolution, federation, intelligence, and ETRA evidence under
+`artifacts/release-gates/`, writes `artifacts/gate-evidence.json`, then merges it into
 `artifacts/release-verification.json`.
 
 Docker smoke uses the local dashboard-admin operator headers by default. When

@@ -401,6 +401,7 @@ async def dashboard_server_readiness() -> dict[str, Any]:
     secret_generator = root / "tools/generate_server_secrets.py"
     proxy_signer = root / "tools/sign_proxy_assertion.py"
     model_verifier = root / "tools/model_endpoint_verify.py"
+    dashboard_verifier = root / "tools/dashboard_verify.py"
     deployment_blueprint = root / "tools/deployment_blueprint.py"
     deployment_blueprint_doc = root / "docs/enterprise/deployment-blueprint-module.md"
     infrastructure_choices = root / "tools/infrastructure_choices.py"
@@ -490,6 +491,12 @@ async def dashboard_server_readiness() -> dict[str, Any]:
             model_verifier.exists(),
             "Production model endpoint checker is available.",
             "Set OLLAMA_BASE_URL and OLLAMA_MODEL, then run make model-verify.",
+        ),
+        _readiness_item(
+            "Dashboard verification gate",
+            dashboard_verifier.exists(),
+            "Live dashboard verifier is available.",
+            "Start the API, then run make dashboard-verify before release.",
         ),
         _readiness_item(
             "GitHub access hooks",
@@ -588,6 +595,7 @@ async def dashboard_server_readiness() -> dict[str, Any]:
             "make server-readiness",
             "OLLAMA_BASE_URL=http://model-service:11434 OLLAMA_MODEL=llama3.1:8b make model-verify",
             "make backup-verify",
+            "DASHBOARD_BASE_URL=http://127.0.0.1:8000 make dashboard-verify",
             "make deployment-blueprint",
             "make infrastructure-choices-template",
             "make infrastructure-choices-verify",

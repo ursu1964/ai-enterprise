@@ -560,6 +560,7 @@ async def test_dashboard_server_readiness_reports_human_actions() -> None:
     assert any(item["name"] == "Server secret generator" for item in payload["checks"])
     assert any(item["name"] == "Proxy signature helper" for item in payload["checks"])
     assert any(item["name"] == "Model endpoint verifier" for item in payload["checks"])
+    assert any(item["name"] == "Dashboard verification gate" for item in payload["checks"])
     assert any(item["name"] == "GitHub access hooks" for item in payload["checks"])
     assert any(item["name"] == "Scheduled backup templates" for item in payload["checks"])
     assert any(item["name"] == "Managed storage hooks" for item in payload["checks"])
@@ -568,6 +569,9 @@ async def test_dashboard_server_readiness_reports_human_actions() -> None:
     assert any(item["name"] == "Production alert rules" for item in payload["checks"])
     assert any(item["name"] == "Reverse proxy and TLS" for item in payload["checks"])
     assert any(item["name"] == "Deployment blueprint" for item in payload["checks"])
+    assert "DASHBOARD_BASE_URL=http://127.0.0.1:8000 make dashboard-verify" in payload[
+        "commands"
+    ]
     assert any(item["name"] == "Infrastructure choices gate" for item in payload["checks"])
     assert "make server-secrets" in payload["commands"]
     assert "make deployment-blueprint" in payload["commands"]
