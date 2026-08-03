@@ -1496,24 +1496,29 @@ async def project_operating_picture(
         if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
     ]
     state = "attention_required" if problem_jobs else "active" if jobs or workflows else "intake"
+    project_status = status_read_model(project.status)
     nodes = [
         {
             "id": f"project:{project.id}",
             "label": project.name,
             "kind": "project",
-            "status": project.status,
-            "human_summary": "The project identity, manifesto, and repository are registered.",
+            **project_status,
+            "human_summary": (
+                "The project identity, manifesto, and repository are registered. "
+                f"Current state: {project_status['status_label']}."
+            ),
         }
     ]
     edges: list[dict[str, str]] = []
     for workflow in workflows:
         node_id = f"workflow:{workflow.id}"
+        workflow_status = status_read_model(workflow.state)
         nodes.append(
             {
                 "id": node_id,
                 "label": workflow.current_step or workflow.state,
                 "kind": "workflow",
-                "status": workflow.state,
+                **workflow_status,
                 "human_summary": (
                     workflow.recommended_operator_action or "Monitor workflow progress."
                 ),
@@ -1522,13 +1527,17 @@ async def project_operating_picture(
         edges.append({"from": f"project:{project.id}", "to": node_id, "label": "controls"})
     for job in jobs:
         node_id = f"job:{job.id}"
+        job_status = status_read_model(job.status)
         nodes.append(
             {
                 "id": node_id,
                 "label": job.job_type.replace("_", " ").title(),
                 "kind": "job",
-                "status": job.status,
-                "human_summary": f"Attempt {job.attempt_count} of {job.max_attempts}.",
+                **job_status,
+                "human_summary": (
+                    f"{job_status['status_label']}; attempt {job.attempt_count} "
+                    f"of {job.max_attempts}."
+                ),
             }
         )
         edges.append({"from": f"project:{project.id}", "to": node_id, "label": "executes"})

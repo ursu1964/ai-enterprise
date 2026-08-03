@@ -705,7 +705,12 @@ async def test_project_operating_picture_links_project_evidence() -> None:
     assert response["headline"]["state"] == "active"
     assert response["status_counts"]["artifacts"]["project_manifest"] == 1
     assert response["latest_audit_events"][0]["human_summary"]
-    assert any(node["kind"] == "job" for node in response["graph"]["nodes"])
+    assert all("status_label" in node for node in response["graph"]["nodes"])
+    assert all("status_meaning" in node for node in response["graph"]["nodes"])
+    job_node = next(node for node in response["graph"]["nodes"] if node["kind"] == "job")
+    assert job_node["status"] == "queued"
+    assert job_node["status_label"] == "Waiting for worker capacity"
+    assert "queued" not in job_node["human_summary"].lower()
 
 
 @pytest.mark.asyncio
