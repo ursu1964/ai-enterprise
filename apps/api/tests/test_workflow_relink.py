@@ -181,7 +181,7 @@ def test_workflow_relink_maps_created_project_to_startable_state() -> None:
             ProjectStatus.REQUIREMENTS_FAILED,
             WorkflowState.FAILED,
             WorkflowStepName.REQUIREMENTS,
-            "Requirements work failed",
+            "Requirements work needs recovery",
         ),
         (
             ProjectStatus.ARCHITECTURE_QUEUED,
@@ -217,7 +217,7 @@ def test_workflow_relink_maps_created_project_to_startable_state() -> None:
             ProjectStatus.ARCHITECTURE_FAILED,
             WorkflowState.FAILED,
             WorkflowStepName.ARCHITECTURE,
-            "Architecture work failed",
+            "Architecture work needs recovery",
         ),
         (
             ProjectStatus.WORK_PACKAGE_QUEUED,
@@ -253,7 +253,7 @@ def test_workflow_relink_maps_created_project_to_startable_state() -> None:
             ProjectStatus.WORK_PACKAGE_FAILED,
             WorkflowState.FAILED,
             WorkflowStepName.PLANNING,
-            "Work-package planning failed",
+            "Work-package planning needs recovery",
         ),
     ],
 )
