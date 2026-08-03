@@ -2732,6 +2732,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       const online = state.workers.filter(worker => worker.status === "online").length;
       const requestCount = state.metrics.ai_enterprise_http_requests_total || 0;
       const dashboardHits = state.metrics.ai_enterprise_http_route_dashboard_total || 0;
+      const improvementProposals = failureImprovementProposals();
       renderSurfaceNodes("factoryGraph", [
         { title: "Attach Manifesto", detail: "Load the business goal, repository path, default branch, project type, and reusable operating rules.", idea: "Treat the manifesto as the contract between the human operator and the AI factory.", effect: "Cuts setup ambiguity before work starts.", signal: loadedManifestDocument ? "loaded" : "input", kind: loadedManifestDocument ? "ok" : "info", action: "manifest" },
         { title: "Select Factory Type", detail: `Current template: ${selectedCapability.replace(/_/g, " ")}. This controls which specialist path the project follows.`, idea: "Match the project type to the economic outcome you want to prove.", effect: "Improves crew routing and reusable blueprint quality.", signal: "template", kind: "info", action: "name" },
@@ -2747,7 +2748,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Followed Errors", detail: "Failed and dead-letter jobs are visible improvement inputs.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${online} worker(s) online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
         { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting failed work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
-      ]);
+      ].concat(improvementProposals));
       renderSurfaceNodes("telemetryGraph", [
         { title: "HTTP Flow", detail: "Request and route counters prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
         { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${dashboardHits} dashboard hit(s).`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
@@ -3502,6 +3503,28 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (["running", "leased"].includes(job.status)) return `${humanJobType(job.job_type)} is currently moving.`;
       if (job.status === "succeeded") return `${humanJobType(job.job_type)} completed successfully.`;
       return `${humanJobType(job.job_type)} is tracked by the factory.`;
+    }
+
+    function failureImprovementProposals() {
+      const counts = {};
+      state.jobs
+        .filter(job => isProblemJob(job) && !isAcknowledgedJob(job))
+        .forEach(job => {
+          const key = job.last_failure_class || "unknown";
+          counts[key] = (counts[key] || 0) + 1;
+        });
+      return Object.entries(counts)
+        .filter(([, count]) => count >= 2)
+        .slice(0, 4)
+        .map(([failureClass, count]) => ({
+          title: `Guardrail proposal: ${failureClass.replace(/_/g, " ")}`,
+          detail: `${count} current failure(s) share this class.`,
+          idea: "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
+          effect: "Reduces repeat failures before more work is queued.",
+          signal: "proposed",
+          kind: "warn",
+          action: "projects"
+        }));
     }
 
     function jobGroup(job) {

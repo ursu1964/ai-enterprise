@@ -203,6 +203,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "acknowledgeProblemJob" in response.text
     assert "groupedJobs" in response.text
     assert "jobRecoveryGroup" in response.text
+    assert "failureImprovementProposals" in response.text
+    assert "Guardrail proposal:" in response.text
+    assert "Repeated failure classes should become a recovery checklist" in response.text
     assert "Business Telemetry" in response.text
     assert "Server Readiness" in response.text
     assert "/dashboard/server-readiness" in response.text
