@@ -30,8 +30,10 @@ Live stack status:
 2. Browser-level regression coverage is still lighter than API coverage.
    - API tests now protect the main read models, dashboard HTML, graph setup action, wording
      contracts, and source states.
-   - A later slice should add Playwright checks for `/dashboard`, `/dashboard/demo`,
-     `/dashboard/documentation-hub`, and the graph/setup interactions.
+   - `tools/dashboard_verify.py` now checks the live dashboard pages and manager business-board
+     contract over HTTP.
+   - A later slice can upgrade this to Playwright for real click, layout, and graph interaction
+     checks.
 
 3. Production telemetry and migration proof still depend on real infrastructure.
    - Local dashboards expose readiness, metrics, graph proof, recovery, and server migration
@@ -236,3 +238,5 @@ Evidence:
   and raw-count wording slices so solved items are not presented as remaining defects.
 - Business Decision Board now prefers the official dashboard-manager `business_board` projection
   instead of deriving every primary card in browser JavaScript.
+- Added `tools/dashboard_verify.py` so local and server operators can verify the live dashboard,
+  demo story, documentation hub, and manager business-board contract with one command.

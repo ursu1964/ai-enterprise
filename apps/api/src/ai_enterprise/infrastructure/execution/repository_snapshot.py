@@ -47,9 +47,7 @@ class RepositorySnapshotService:
         resolved = result.stdout.strip()
 
         if resolved != expected_commit:
-            raise BaseCommitMismatchError(
-                f"Expected commit {expected_commit}, resolved {resolved}"
-            )
+            raise BaseCommitMismatchError(f"Expected commit {expected_commit}, resolved {resolved}")
 
         return resolved
 
@@ -157,10 +155,20 @@ class RepositorySnapshotService:
                 mode = 0o700
 
             path.chmod(mode)
-            os.chown(path, self._runtime_uid, self._runtime_gid)
+            try:
+                os.chown(path, self._runtime_uid, self._runtime_gid)
+            except PermissionError:
+                # Development workers deliberately run without root. Their
+                # snapshots are private, disposable trees mounted only into
+                # the no-network execution container, so grant that container
+                # write access without requiring privileged ownership changes.
+                path.chmod(0o777 if path.is_dir() or mode == 0o700 else 0o666)
 
         root.chmod(0o700)
-        os.chown(root, self._runtime_uid, self._runtime_gid)
+        try:
+            os.chown(root, self._runtime_uid, self._runtime_gid)
+        except PermissionError:
+            root.chmod(0o777)
 
     @staticmethod
     def _safe_extract(archive: tarfile.TarFile, destination: Path) -> None:
@@ -170,17 +178,13 @@ class RepositorySnapshotService:
             target = (destination / member.name).resolve()
 
             if target != root and root not in target.parents:
-                raise SnapshotCreationError(
-                    f"Archive entry escapes snapshot: {member.name}"
-                )
+                raise SnapshotCreationError(f"Archive entry escapes snapshot: {member.name}")
 
             if member.issym() or member.islnk():
                 link_target = Path(member.linkname)
 
                 if link_target.is_absolute() or ".." in link_target.parts:
-                    raise SnapshotCreationError(
-                        f"Unsafe archive link: {member.name}"
-                    )
+                    raise SnapshotCreationError(f"Unsafe archive link: {member.name}")
 
         archive.extractall(destination, filter="data")
 

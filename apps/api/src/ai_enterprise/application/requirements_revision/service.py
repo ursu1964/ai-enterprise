@@ -57,7 +57,10 @@ class RequirementsRevisionService:
             or artifact.run_id != requirements_run_id
         ):
             raise RequirementsRevisionError("Requirements artifact lineage was not found")
-        if project.status != ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL:
+        if project.status not in {
+            ProjectStatus.AWAITING_REQUIREMENTS_APPROVAL,
+            ProjectStatus.REQUIREMENTS_REJECTED,
+        }:
             raise RequirementsRevisionError("Project is not awaiting requirements review")
         active = await self._session.scalar(
             select(RequirementsRevisionCycleModel).where(
@@ -129,7 +132,12 @@ class RequirementsRevisionService:
             },
         )
         project.status = ProjectStatus.REQUIREMENTS_QUEUED
-        self._session.add_all([approval, request, cycle, attempt])
+        # Persist the review request before the cycle that references it. These
+        # models intentionally avoid an ORM relationship, so SQLAlchemy cannot
+        # infer the foreign-key insert order from add_all alone.
+        self._session.add_all([approval, request])
+        await self._session.flush()
+        self._session.add_all([cycle, attempt])
         await self._session.flush()
         await JobRepository(self._session).enqueue(
             project_id=project_id,

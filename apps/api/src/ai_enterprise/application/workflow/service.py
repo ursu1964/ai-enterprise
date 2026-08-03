@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_enterprise.application.audit.writer import AuditWriter
@@ -279,12 +279,140 @@ class WorkflowService:
         existing = await self.session.scalar(
             select(WorkflowInstanceModel).where(WorkflowInstanceModel.project_id == project_id)
         )
-        if existing is not None:
+        if existing is not None and existing.state not in {
+            WorkflowState.FAILED,
+            WorkflowState.EXECUTION_RUNNING,
+        }:
             return existing
         project = await self.session.get(ProjectModel, project_id)
         if project is None:
             raise WorkflowNotFoundError(f"Project {project_id} does not exist")
         decision = workflow_relink_decision_for_project(project)
+        if existing is not None:
+            previous_state = existing.state
+            recovered_execution = None
+            recovered_review = None
+            recovered_state = decision.workflow_state
+            recovered_step = decision.current_step
+            if project.status == ProjectStatus.WORK_PACKAGE_APPROVED:
+                recovered_execution = await self.session.scalar(
+                    select(ExecutionRunModel)
+                    .where(
+                        ExecutionRunModel.project_id == project_id,
+                        ExecutionRunModel.status == ExecutionStatus.SUCCEEDED,
+                    )
+                    .order_by(ExecutionRunModel.created_at.desc())
+                    .limit(1)
+                )
+                if recovered_execution is not None:
+                    recovered_state = WorkflowState.EXECUTION_RUNNING
+                    recovered_step = WorkflowStepName.EXECUTION
+                    recovered_review = await self.session.scalar(
+                        select(PatchReviewRunModel)
+                        .where(
+                            PatchReviewRunModel.execution_run_id == recovered_execution.id,
+                            PatchReviewRunModel.status == PatchReviewStatus.ACCEPTED,
+                        )
+                        .order_by(PatchReviewRunModel.created_at.desc())
+                        .limit(1)
+                    )
+                    if recovered_review is not None:
+                        recovered_state = WorkflowState.PATCH_REVIEW_RUNNING
+                        recovered_step = WorkflowStepName.REVIEW
+            existing.state = recovered_state
+            existing.current_step = recovered_step
+            existing.failure_code = None
+            existing.failure_message = None
+            existing.recommended_operator_action = decision.operator_action
+            existing.context_version += 1
+            existing.optimistic_version += 1
+            context = WorkflowContext(
+                workflow_id=existing.id,
+                project_id=project_id,
+                current_state=recovered_state,
+                correlation_id=existing.correlation_id,
+                actor_id=actor_id,
+                metadata={
+                    "relink": {
+                        "project_status": str(project.status),
+                        "relink_reason": decision.relink_reason,
+                        "advance_ready": decision.advance_ready,
+                        "decision_already_made": decision.decision_already_made,
+                        "recovered_from": str(previous_state),
+                        "recovered_execution_id": (
+                            str(recovered_execution.id) if recovered_execution else None
+                        ),
+                        "recovered_review_id": (
+                            str(recovered_review.id) if recovered_review else None
+                        ),
+                    }
+                },
+                execution_id=(recovered_execution.id if recovered_execution else None),
+                review_id=(recovered_review.id if recovered_review else None),
+            )
+            self.session.add(
+                WorkflowContextModel(
+                    id=uuid.uuid4(),
+                    workflow_id=existing.id,
+                    version=existing.context_version,
+                    state=recovered_state,
+                    context=context.model_dump(mode="json"),
+                    context_hash=context.content_hash(),
+                )
+            )
+            sequence = (
+                int(
+                    await self.session.scalar(
+                        select(func.count())
+                        .select_from(WorkflowTransitionModel)
+                        .where(WorkflowTransitionModel.workflow_id == existing.id)
+                    )
+                    or 0
+                )
+                + 1
+            )
+            self.session.add(
+                WorkflowTransitionModel(
+                    id=uuid.uuid4(),
+                    workflow_id=existing.id,
+                    sequence=sequence,
+                    previous_state=previous_state,
+                    current_state=recovered_state,
+                    step=recovered_step,
+                    actor_type="human",
+                    actor_id=actor_id,
+                    reason=reason,
+                    workflow_version=self.VERSION,
+                    correlation_id=existing.correlation_id,
+                )
+            )
+            await AuditWriter(self.session).append_project_event(
+                project_id=project_id,
+                event_type=WorkflowEventName.RELINKED,
+                actor_type="human",
+                actor_id=actor_id,
+                payload={
+                    "workflow_id": str(existing.id),
+                    "state": recovered_state,
+                    "reason": reason,
+                    "recovered_from": str(previous_state),
+                    "advance_ready": decision.advance_ready,
+                },
+            )
+            if decision.advance_ready or recovered_execution is not None:
+                await JobRepository(self.session).enqueue(
+                    project_id=project_id,
+                    run_id=None,
+                    job_type="advance_workflow",
+                    payload={
+                        "workflow_id": str(existing.id),
+                        "correlation_id": str(existing.correlation_id),
+                    },
+                    max_attempts=3,
+                )
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return existing
         workflow_id, correlation_id = uuid.uuid4(), uuid.uuid4()
         workflow = WorkflowInstanceModel(
             id=workflow_id,
@@ -726,9 +854,7 @@ class WorkflowService:
                             completed_execution.patch_artifact_id
                         )
                     if completed_execution.patch_sha256 is not None:
-                        evidence_links["execution:patch_sha256"] = (
-                            completed_execution.patch_sha256
-                        )
+                        evidence_links["execution:patch_sha256"] = completed_execution.patch_sha256
                 if completed_review is not None:
                     evidence_links.update(
                         {

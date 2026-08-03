@@ -152,6 +152,30 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Guided Route" in response.text
     assert 'data-view="execution"' in response.text
     assert "Project Execution Control" in response.text
+    assert "Requirements Review & Approval" in response.text
+    assert "Approve Requirements" in response.text
+    assert "Request Changes" in response.text
+    assert "submitRequirementsDecision" in response.text
+    assert 'decision === "rejected" && !comment' in response.text
+    assert "/artifacts/${panel.dataset.artifactId}/approval" in response.text
+    assert "Generate Revised Requirements" in response.text
+    assert "submitRequirementsRevision" in response.text
+    assert "/artifacts/${panel.dataset.artifactId}/changes" in response.text
+    assert "Architecture Review & Approval" in response.text
+    assert "Approve Architecture" in response.text
+    assert "Request Architecture Changes" in response.text
+    assert "submitArchitectureDecision" in response.text
+    assert "/architecture-artifacts/${panel.dataset.artifactId}/approval" in response.text
+    assert "Revise Architecture" in response.text
+    assert "Generate Revised Architecture" in response.text
+    assert "submitArchitectureRevision" in response.text
+    assert "/architecture-runs" in response.text
+    assert "Work Package Review & Approval" in response.text
+    assert "Request Work Package Changes" in response.text
+    assert "Revise Work Package" in response.text
+    assert "Generate Revised Work Package" in response.text
+    assert "submitWorkPackageRevision" in response.text
+    assert "/work-package-runs" in response.text
     assert "Parallel Projects" in response.text
     assert "Tasks and Crews" in response.text
     assert "Events and Telemetry" in response.text
@@ -174,7 +198,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "GitHub repository URL, optional" in response.text
     assert "parseClientManifestText" in response.text
     assert "fieldFromText" in response.text
-    assert "source_document_type: \"client_project_manifest\"" in response.text
+    assert 'source_document_type: "client_project_manifest"' in response.text
     assert "Project summary is waiting for the client objective." in response.text
     assert "Project base directory is required before launch." in response.text
     assert "GitHub connection can be added now or after local project creation." in response.text
@@ -182,8 +206,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No repository path" not in response.text
     assert "No GitHub repository URL yet" not in response.text
     assert (
-        "Download the client manifest, send it to the client or requesting service"
-        in response.text
+        "Download the client manifest, send it to the client or requesting service" in response.text
     )
     assert "Practical Version" in response.text
     assert "Growth Version" in response.text
@@ -250,8 +273,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No evidence has been recorded" not in response.text
     assert (
         "No project readiness items yet. Press Preview Launch or start the factory "
-        "to populate this list."
-        in response.text
+        "to populate this list." in response.text
     )
     assert "Start Manifesto Batch when you want to create this project." in response.text
     assert "Will reuse existing work" in response.text
@@ -357,8 +379,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "System pulse counter or gauge used for operator proof." in response.text
     assert "system pulse signal(s)" not in response.text
     assert (
-        'countSentence(Object.keys(state.metrics).length, "system pulse signal")'
-        in response.text
+        'countSentence(Object.keys(state.metrics).length, "system pulse signal")' in response.text
     )
     assert "Advanced raw metrics" not in response.text
     assert "raw signal(s)" not in response.text
@@ -424,8 +445,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert 'renderSurfaceNodes("operatingPictureSignals", important)' in response.text
     assert 'renderSurfaceNodes("movementGraph", important)' not in response.text
     assert (
-        "const unresolved = state.operatingPicture.counts?.unresolved_problem_jobs"
-        in response.text
+        "const unresolved = state.operatingPicture.counts?.unresolved_problem_jobs" in response.text
     )
     assert "Economic Proof" in response.text
     assert "humanStatus" in response.text
@@ -520,6 +540,7 @@ async def test_local_dashboard_context_actor_can_read_query_model() -> None:
         {
             "ecosystem.read",
             "operator.jobs.manage",
+            "project.read",
             "query.read",
             "specification.read",
         }
@@ -597,8 +618,7 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Open Raw Text" not in response.text
     assert "/dashboard/documentation/operator-startup-guide?download=true" in response.text
     assert (
-        "/dashboard/documentation/real-world-infrastructure-choices?download=true"
-        in response.text
+        "/dashboard/documentation/real-world-infrastructure-choices?download=true" in response.text
     )
     assert "Graphs and Images" in response.text
     assert "Commands" in response.text
@@ -682,8 +702,7 @@ def test_documentation_endpoint_explains_missing_registered_file(
 
     assert response.status_code == 404
     assert (
-        response.json()["detail"]
-        == "Operator document file needs setup in the Documentation Hub"
+        response.json()["detail"] == "Operator document file needs setup in the Documentation Hub"
     )
 
 
@@ -741,8 +760,7 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert "/health/ready" in response.text
     assert "/api/v1/projects" in response.text
     assert (
-        "This console explains the next action before you open another dashboard."
-        in response.text
+        "This console explains the next action before you open another dashboard." in response.text
     )
     assert "Launch Result shows readiness, missing data, and Project Readiness." in response.text
     assert (
@@ -912,9 +930,7 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
         "label": "Live workflow",
         "severity": "ok",
         "meaning": "A governed workflow is linked and actively explains this phase.",
-        "operator_action": (
-            "Use workflow events and phase proof when deciding the next action."
-        ),
+        "operator_action": ("Use workflow events and phase proof when deciding the next action."),
         "evidence_count": 1,
         "current_blocker_count": 0,
     }
@@ -952,19 +968,17 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["economic_effects"]["viability"] == "viable"
     assert response["blueprints"][0]["kind"] == "workflow_pattern"
     assert response["blueprints"][0]["lifecycle"] == "reviewed"
-    assert response["blueprints"][0]["lifecycle_detail"]["label"] == (
-        "Reviewed candidate"
-    )
+    assert response["blueprints"][0]["lifecycle_detail"]["label"] == ("Reviewed candidate")
     assert response["blueprints"][0]["lifecycle_detail"]["trust_level"] == "reviewed"
-    assert "needs proof before reuse" in response["blueprints"][0]["lifecycle_detail"][
-        "meaning"
-    ]
-    assert "Collect the remaining proof" in response["blueprints"][0][
-        "lifecycle_detail"
-    ]["next_action"]
-    assert "complete all delivery phases" in response["blueprints"][0][
-        "lifecycle_detail"
-    ]["promotion_blockers"]
+    assert "needs proof before reuse" in response["blueprints"][0]["lifecycle_detail"]["meaning"]
+    assert (
+        "Collect the remaining proof"
+        in response["blueprints"][0]["lifecycle_detail"]["next_action"]
+    )
+    assert (
+        "complete all delivery phases"
+        in response["blueprints"][0]["lifecycle_detail"]["promotion_blockers"]
+    )
     assert response["blueprints"][0]["source_phase"] == "workflow"
     assert response["blueprints"][0]["reuse_proof"]["economic_viability"] == "viable"
     assert response["blueprints"][0]["reuse_proof"]["reuse_multiplier"] == 1.0
@@ -1196,18 +1210,16 @@ async def test_project_intelligence_classifies_worker_errors_for_humans() -> Non
     assert response["errors"][0]["likely_cause"].startswith("The project path may be missing")
     assert response["errors"][0]["raw_diagnostic"] == "fatal: ambiguous argument HEAD"
     assert response["blueprints"][0]["lifecycle"] == "improved"
-    assert response["blueprints"][0]["lifecycle_detail"]["label"] == (
-        "Improvement needed"
+    assert response["blueprints"][0]["lifecycle_detail"]["label"] == ("Improvement needed")
+    assert response["blueprints"][0]["lifecycle_detail"]["trust_level"] == ("guardrail_required")
+    assert (
+        "guardrails before this pattern is reused"
+        in response["blueprints"][0]["lifecycle_detail"]["meaning"]
     )
-    assert response["blueprints"][0]["lifecycle_detail"]["trust_level"] == (
-        "guardrail_required"
+    assert (
+        "resolve current issues before reuse"
+        in response["blueprints"][0]["lifecycle_detail"]["promotion_blockers"]
     )
-    assert "guardrails before this pattern is reused" in response["blueprints"][0][
-        "lifecycle_detail"
-    ]["meaning"]
-    assert "resolve current issues before reuse" in response["blueprints"][0][
-        "lifecycle_detail"
-    ]["promotion_blockers"]
     proposal = response["blueprints"][0]["improvement_proposals"][0]
     assert proposal["proposal_key"] == "blueprint.intake.git.guardrail"
     assert proposal["proposal_type"] == "guardrail_or_template_update"
@@ -1373,9 +1385,7 @@ async def test_dashboard_graph_demo_setup_creates_local_graph_records() -> None:
     assert response["ecosystem"]["edges"] == 1
     assert response["evidence"]["nodes"] == 2
     assert response["evidence"]["edges"] == 1
-    assert response["next_action"] == (
-        "Open Graph, then check Ecosystem and Evidence again."
-    )
+    assert response["next_action"] == ("Open Graph, then check Ecosystem and Evidence again.")
     assert len(session.added) >= 6
     assert session.commit_count >= 6
 

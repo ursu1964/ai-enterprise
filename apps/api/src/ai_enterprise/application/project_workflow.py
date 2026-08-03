@@ -496,6 +496,31 @@ class ProjectWorkflowService:
         if approval is None:
             raise InvalidProjectStateError("The selected requirements artifact is not approved")
 
+        revision_context: dict[str, str] = {}
+        if project.status == ProjectStatus.ARCHITECTURE_REJECTED:
+            rejected_result = await self._session.execute(
+                select(ApprovalModel, ArtifactModel)
+                .join(ArtifactModel, ArtifactModel.id == ApprovalModel.artifact_id)
+                .where(
+                    ApprovalModel.project_id == project.id,
+                    ApprovalModel.decision == ApprovalDecision.REJECTED,
+                    ArtifactModel.artifact_type == ArtifactType.ARCHITECTURE_SPECIFICATION,
+                )
+                .order_by(ApprovalModel.created_at.desc())
+                .limit(1)
+            )
+            rejected = rejected_result.one_or_none()
+            if rejected is None:
+                raise InvalidProjectStateError(
+                    "Architecture revision requires recorded rejection feedback"
+                )
+            rejected_approval, rejected_artifact = rejected
+            revision_context = {
+                "revision_feedback": rejected_approval.comment or "Architecture changes requested.",
+                "source_architecture_artifact_id": str(rejected_artifact.id),
+                "source_architecture_artifact_hash": rejected_artifact.content_hash,
+            }
+
         run_id = uuid.uuid4()
 
         run = CrewRunModel(
@@ -506,6 +531,7 @@ class ProjectWorkflowService:
             input_payload={
                 "requirements_artifact_id": str(requirements_artifact.id),
                 "requirements_artifact_hash": (requirements_artifact.content_hash),
+                **revision_context,
             },
         )
 
@@ -524,6 +550,7 @@ class ProjectWorkflowService:
                 "run_id": str(run_id),
                 "requirements_artifact_id": str(requirements_artifact.id),
                 "requirements_artifact_hash": (requirements_artifact.content_hash),
+                **revision_context,
             },
             priority=100,
             max_attempts=3,
@@ -631,6 +658,7 @@ class ProjectWorkflowService:
                 project_manifest_hash=project.manifest_hash,
                 requirements_markdown=requirements_artifact.content,
                 requirements_artifact_hash=(requirements_artifact.content_hash),
+                revision_feedback=run.input_payload.get("revision_feedback"),
             )
 
             architecture_artifact_id = uuid.uuid4()
@@ -853,6 +881,62 @@ class ProjectWorkflowService:
         if architecture_hash != architecture_artifact.content_hash:
             raise RuntimeError("Architecture artifact integrity check failed")
 
+        revision_context: dict[str, str] = {}
+        if project.status == ProjectStatus.WORK_PACKAGE_REJECTED:
+            rejected_package = await self._session.scalar(
+                select(WorkPackageModel)
+                .where(
+                    WorkPackageModel.project_id == project.id,
+                    WorkPackageModel.status == WorkPackageStatus.REJECTED,
+                )
+                .order_by(WorkPackageModel.updated_at.desc())
+                .limit(1)
+            )
+            if rejected_package is None or rejected_package.artifact_id is None:
+                raise InvalidProjectStateError("Work-package revision requires a rejected package")
+            rejected_approval = await self._session.scalar(
+                select(ApprovalModel)
+                .where(
+                    ApprovalModel.artifact_id == rejected_package.artifact_id,
+                    ApprovalModel.decision == ApprovalDecision.REJECTED,
+                )
+                .order_by(ApprovalModel.created_at.desc())
+                .limit(1)
+            )
+            if rejected_approval is None:
+                raise InvalidProjectStateError(
+                    "Work-package revision requires recorded rejection feedback"
+                )
+            revision_context = {
+                "revision_feedback": rejected_approval.comment or "Work-package changes requested.",
+                "source_work_package_id": str(rejected_package.id),
+                "source_work_package_hash": rejected_package.contract_hash,
+            }
+        elif project.status == ProjectStatus.WORK_PACKAGE_FAILED:
+            failed_revision_run = await self._session.scalar(
+                select(CrewRunModel)
+                .where(
+                    CrewRunModel.project_id == project.id,
+                    CrewRunModel.crew_name == "work_package_planner_crew",
+                    CrewRunModel.status == RunStatus.FAILED,
+                )
+                .order_by(CrewRunModel.created_at.desc())
+                .limit(1)
+            )
+            if failed_revision_run is not None and failed_revision_run.input_payload.get(
+                "revision_feedback"
+            ):
+                revision_context = {
+                    key: value
+                    for key, value in failed_revision_run.input_payload.items()
+                    if key
+                    in {
+                        "revision_feedback",
+                        "source_work_package_id",
+                        "source_work_package_hash",
+                    }
+                }
+
         run_id = uuid.uuid4()
 
         run = CrewRunModel(
@@ -865,6 +949,7 @@ class ProjectWorkflowService:
                 "requirements_artifact_hash": (requirements_artifact.content_hash),
                 "architecture_artifact_id": str(architecture_artifact.id),
                 "architecture_artifact_hash": (architecture_artifact.content_hash),
+                **revision_context,
             },
         )
 
@@ -999,6 +1084,7 @@ class ProjectWorkflowService:
                 architecture_hash=(architecture_artifact.content_hash),
                 architecture_markdown=(architecture_artifact.content),
                 tracked_files=list(repository.tracked_files),
+                revision_feedback=run.input_payload.get("revision_feedback"),
             )
 
             parsed = parse_model_json(result.raw_json)

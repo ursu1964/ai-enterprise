@@ -50,12 +50,23 @@ class ContainerRunResult:
 
 class DockerExecutionRuntime:
     def __init__(self, docker_base_url: str | None = None) -> None:
+        self._runtime_uid = os.getuid()
+        self._runtime_gid = os.getgid()
         if docker_base_url:
             self._client = DockerClient(base_url=docker_base_url)
         else:
             self._client = from_env()
 
         self._client.ping()
+
+    def _grant_runtime_access(self, path: Path, *, fallback_mode: int) -> None:
+        try:
+            os.chown(path, self._runtime_uid, self._runtime_gid)
+        except PermissionError:
+            # The worker is intentionally unprivileged. These paths live in a
+            # private per-execution directory and are mounted only into the
+            # isolated runtime container.
+            path.chmod(fallback_mode)
 
     def run(
         self,
@@ -82,7 +93,7 @@ class DockerExecutionRuntime:
             encoding="utf-8",
         )
         input_path.chmod(0o400)
-        os.chown(input_path, RUNTIME_UID, RUNTIME_GID)
+        self._grant_runtime_access(input_path, fallback_mode=0o444)
 
         if edits is not None:
             edits_path = input_dir / "edits.json"
@@ -91,10 +102,10 @@ class DockerExecutionRuntime:
                 encoding="utf-8",
             )
             edits_path.chmod(0o400)
-            os.chown(edits_path, RUNTIME_UID, RUNTIME_GID)
+            self._grant_runtime_access(edits_path, fallback_mode=0o444)
 
-        os.chown(input_dir, RUNTIME_UID, RUNTIME_GID)
-        os.chown(output_dir, RUNTIME_UID, RUNTIME_GID)
+        self._grant_runtime_access(input_dir, fallback_mode=0o555)
+        self._grant_runtime_access(output_dir, fallback_mode=0o777)
 
         container = None
 
@@ -109,7 +120,7 @@ class DockerExecutionRuntime:
                 auto_remove=False,
                 network_disabled=True,
                 read_only=True,
-                user="10001:10001",
+                user=f"{self._runtime_uid}:{self._runtime_gid}",
                 working_dir="/workspace",
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
@@ -139,13 +150,9 @@ class DockerExecutionRuntime:
                     },
                 },
                 tmpfs={
-                    "/tmp": (
-                        f"rw,noexec,nosuid,nodev,"
-                        f"size={limits.tmpfs_size_bytes},mode=1777"
-                    ),
+                    "/tmp": (f"rw,noexec,nosuid,nodev,size={limits.tmpfs_size_bytes},mode=1777"),
                     "/home/runtime": (
-                        "rw,noexec,nosuid,nodev,size=16777216,mode=0700,"
-                        "uid=10001,gid=10001"
+                        "rw,noexec,nosuid,nodev,size=16777216,mode=0700,uid=10001,gid=10001"
                     ),
                 },
                 labels={
@@ -169,9 +176,7 @@ class DockerExecutionRuntime:
             result_path = output_dir / "result.json"
 
             if not result_path.is_file():
-                raise ContainerExecutionError(
-                    "Container produced no result.json"
-                )
+                raise ContainerExecutionError("Container produced no result.json")
 
             result_data = self._read_result(
                 result_path=result_path,
@@ -204,13 +209,9 @@ class DockerExecutionRuntime:
                 runtime_log=runtime_log,
             )
         except ImageNotFound as exc:
-            raise ContainerExecutionError(
-                f"Execution image not found: {image}"
-            ) from exc
+            raise ContainerExecutionError(f"Execution image not found: {image}") from exc
         except APIError as exc:
-            raise ContainerExecutionError(
-                f"Docker API error: {exc}"
-            ) from exc
+            raise ContainerExecutionError(f"Docker API error: {exc}") from exc
         finally:
             if container is not None:
                 try:
@@ -282,10 +283,7 @@ class DockerExecutionRuntime:
         if not isinstance(raw_tests, list):
             raise ContainerExecutionError("Container test results must be a list")
 
-        implementation_passed = (
-            not implementation["timed_out"]
-            and implementation["exit_code"] == 0
-        )
+        implementation_passed = not implementation["timed_out"] and implementation["exit_code"] == 0
 
         if implementation_passed and len(raw_tests) != len(expected_tests):
             raise ContainerExecutionError("Not every approved test was attempted")
@@ -355,9 +353,7 @@ class DockerExecutionRuntime:
         if not isinstance(timed_out, bool):
             raise ContainerExecutionError("Invalid command timeout status")
 
-        if isinstance(exit_code, bool) or not (
-            exit_code is None or isinstance(exit_code, int)
-        ):
+        if isinstance(exit_code, bool) or not (exit_code is None or isinstance(exit_code, int)):
             raise ContainerExecutionError("Invalid command exit code")
 
         if timed_out != (exit_code is None):
@@ -411,9 +407,7 @@ class DockerExecutionRuntime:
                 try:
                     container.kill(signal="SIGKILL")
                 finally:
-                    raise ExecutionTimeoutError(
-                        f"Execution exceeded {timeout_seconds} seconds"
-                    )
+                    raise ExecutionTimeoutError(f"Execution exceeded {timeout_seconds} seconds")
 
             time.sleep(0.5)
 

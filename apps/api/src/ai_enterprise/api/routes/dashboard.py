@@ -83,14 +83,8 @@ OPERATOR_DOCUMENT_FILES: dict[str, OperatorDocument] = {
 }
 
 
-def _markdown_response(
-    content: str, *, filename: str, download: bool = False
-) -> PlainTextResponse:
-    headers = (
-        {"Content-Disposition": f'attachment; filename="{filename}"'}
-        if download
-        else None
-    )
+def _markdown_response(content: str, *, filename: str, download: bool = False) -> PlainTextResponse:
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'} if download else None
     return PlainTextResponse(
         content,
         media_type="text/markdown; charset=utf-8",
@@ -265,9 +259,7 @@ async def dashboard_graph_demo_setup(session: SessionDependency) -> dict[str, ob
         project_id=project.id,
         node_type="requirement",
         reference_id=project.id,
-        reference_hash=canonical_hash(
-            {"project_id": str(project.id), "demo_node": "requirement"}
-        ),
+        reference_hash=canonical_hash({"project_id": str(project.id), "demo_node": "requirement"}),
         classification="internal",
         document={
             "title": "Demo requirement",
@@ -676,7 +668,9 @@ def _deployment_blueprint_payload() -> dict[str, Any]:
                 ],
             },
         ],
-        "artifacts": {name: {"path": str(path), "exists": path.exists()} for name, path in artifacts.items()},
+        "artifacts": {
+            name: {"path": str(path), "exists": path.exists()} for name, path in artifacts.items()
+        },
         "missing": missing,
     }
 
@@ -689,9 +683,7 @@ async def dashboard_deployment_blueprint() -> dict[str, Any]:
 @router.get("/dashboard/infrastructure-choices")
 async def dashboard_infrastructure_choices() -> dict[str, Any]:
     choices_path = _repo_path("docs/enterprise/real-world-infrastructure-decisions.json")
-    template_path = _repo_path(
-        "docs/enterprise/real-world-infrastructure-decisions.template.json"
-    )
+    template_path = _repo_path("docs/enterprise/real-world-infrastructure-decisions.template.json")
     verify = _load_tool_function("infrastructure_choices", "verify")
 
     if choices_path.exists():
@@ -1497,6 +1489,46 @@ DASHBOARD_HTML = r"""<!doctype html>
       min-height: 108px;
       padding: 10px;
       resize: vertical;
+    }
+
+    #projectSelect {
+      width: clamp(280px, 42vw, 620px);
+      min-height: 44px;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 720px) {
+      #projectSelect {
+        width: 100%;
+      }
+    }
+
+    .approval-panel {
+      margin: 12px 0;
+    }
+
+    .approval-panel pre {
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(3, 7, 11, 0.72);
+    }
+
+    .approval-fields {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 720px) {
+      .approval-fields {
+        grid-template-columns: 1fr;
+      }
     }
 
     .cards {
@@ -4398,6 +4430,356 @@ DASHBOARD_HTML = r"""<!doctype html>
       byId("updated").textContent = `Last synchronized ${new Date().toLocaleTimeString()}`;
     }
 
+    function requirementsApprovalPanel(payload) {
+      if (payload.project.status !== "awaiting_requirements_approval") return "";
+      const artifact = (payload.requirements_artifacts || [])
+        .filter(item => item.artifact_type === "requirements_specification")
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))[0];
+      if (!artifact) {
+        return `<div class="mini approval-panel warn"><strong>Requirements Approval</strong><div>The project is waiting for approval, but its requirements artifact could not be loaded. Refresh before making a decision.</div></div>`;
+      }
+      return `
+        <div class="mini approval-panel" id="requirementsApprovalPanel" data-artifact-id="${esc(artifact.id)}">
+          <div class="toolbar">
+            <div>
+              <strong>Requirements Review & Approval</strong>
+              <div class="muted">Review the complete requirements evidence before making the governed decision.</div>
+            </div>
+            <span class="pill warn">decision required</span>
+          </div>
+          <details open>
+            <summary>Requirements specification · ${esc(artifact.content_hash.slice(0, 12))}</summary>
+            <pre>${esc(artifact.content)}</pre>
+          </details>
+          <div class="approval-fields">
+            <input id="requirementsReviewer" value="local-dashboard-admin" placeholder="Reviewer name" aria-label="Requirements reviewer name">
+            <textarea id="requirementsComment" placeholder="Record why the requirements are approved, or explain the changes required." aria-label="Requirements review comment"></textarea>
+          </div>
+          <div class="toolbar" style="margin-top: 10px;">
+            <div>
+              <button id="approveRequirements">Approve Requirements</button>
+              <button id="rejectRequirements">Request Changes</button>
+            </div>
+            <span id="requirementsApprovalStatus" class="muted">No decision has been submitted.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function requirementsRevisionPanel(payload) {
+      if (payload.project.status !== "requirements_rejected") return "";
+      const artifact = (payload.requirements_artifacts || [])
+        .filter(item => item.artifact_type === "requirements_specification")
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))[0];
+      if (!artifact || !artifact.run_id) {
+        return `<div class="mini approval-panel warn"><strong>Revise Requirements</strong><div>The rejected requirements artifact could not be loaded. Refresh before starting a revision.</div></div>`;
+      }
+      return `
+        <div class="mini approval-panel" id="requirementsRevisionPanel" data-artifact-id="${esc(artifact.id)}" data-run-id="${esc(artifact.run_id)}">
+          <div class="toolbar">
+            <div>
+              <strong>Revise Requirements</strong>
+              <div class="muted">Create a new immutable requirements version from actionable review feedback.</div>
+            </div>
+            <span class="pill warn">revision required</span>
+          </div>
+          <details>
+            <summary>Rejected requirements specification · ${esc(artifact.content_hash.slice(0, 12))}</summary>
+            <pre>${esc(artifact.content)}</pre>
+          </details>
+          <div class="approval-fields">
+            <input id="requirementsRevisionReviewer" value="local-dashboard-admin" placeholder="Reviewer name" aria-label="Requirements revision reviewer">
+            <textarea id="requirementsRevisionFeedback" placeholder="Describe the missing capabilities and measurable acceptance criteria required in the replacement specification." aria-label="Requirements revision feedback"></textarea>
+          </div>
+          <div class="toolbar" style="margin-top: 10px;">
+            <button id="reviseRequirements">Generate Revised Requirements</button>
+            <span id="requirementsRevisionStatus" class="muted">No revision has been queued.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function architectureApprovalPanel(payload) {
+      if (payload.project.status !== "awaiting_architecture_approval") return "";
+      const artifact = (payload.requirements_artifacts || [])
+        .filter(item => item.artifact_type === "architecture_specification")
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))[0];
+      if (!artifact) {
+        return `<div class="mini approval-panel warn"><strong>Architecture Review & Approval</strong><div>The project is waiting for architecture approval, but its artifact could not be loaded. Refresh before deciding.</div></div>`;
+      }
+      return `
+        <div class="mini approval-panel" id="architectureApprovalPanel" data-artifact-id="${esc(artifact.id)}">
+          <div class="toolbar">
+            <div>
+              <strong>Architecture Review & Approval</strong>
+              <div class="muted">Review the newest architecture evidence against the approved requirements.</div>
+            </div>
+            <span class="pill warn">decision required</span>
+          </div>
+          <details open>
+            <summary>Architecture specification · ${esc(artifact.content_hash.slice(0, 12))}</summary>
+            <pre>${esc(artifact.content)}</pre>
+          </details>
+          <div class="approval-fields">
+            <input id="architectureReviewer" value="local-dashboard-admin" placeholder="Reviewer name" aria-label="Architecture reviewer name">
+            <textarea id="architectureComment" placeholder="Record why the architecture is approved, or explain the required changes." aria-label="Architecture review comment"></textarea>
+          </div>
+          <div class="toolbar" style="margin-top: 10px;">
+            <div>
+              <button id="approveArchitecture">Approve Architecture</button>
+              <button id="rejectArchitecture">Request Architecture Changes</button>
+            </div>
+            <span id="architectureApprovalStatus" class="muted">No decision has been submitted.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function architectureRevisionPanel(payload) {
+      if (payload.project.status !== "architecture_rejected") return "";
+      const artifact = (payload.requirements_artifacts || [])
+        .filter(item => item.artifact_type === "architecture_specification")
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))[0];
+      return `
+        <div class="mini approval-panel" id="architectureRevisionPanel">
+          <div class="toolbar">
+            <div>
+              <strong>Revise Architecture</strong>
+              <div class="muted">Generate a replacement using the recorded architecture review feedback.</div>
+            </div>
+            <span class="pill warn">revision required</span>
+          </div>
+          ${artifact ? `<details><summary>Rejected architecture · ${esc(artifact.content_hash.slice(0, 12))}</summary><pre>${esc(artifact.content)}</pre></details>` : ""}
+          <div class="toolbar" style="margin-top: 10px;">
+            <button id="reviseArchitecture">Generate Revised Architecture</button>
+            <span id="architectureRevisionStatus" class="muted">The recorded review feedback will be preserved.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function submitArchitectureRevision(payload) {
+      const button = byId("reviseArchitecture");
+      const status = byId("architectureRevisionStatus");
+      if (!button || !status) return;
+      button.disabled = true;
+      status.textContent = "Queuing a governed architecture revision...";
+      try {
+        await json(`/api/v1/projects/${payload.project.id}/architecture-runs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...actorHeaders }
+        });
+        status.textContent = "Revision queued. Refreshing project execution...";
+        await refresh();
+        await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Architecture revision failed: ${friendlyLaunchError(error)}`;
+        button.disabled = false;
+      }
+    }
+
+    function workPackageApprovalPanel(payload) {
+      if (payload.project.status !== "awaiting_work_package_approval") return "";
+      const workPackage = (payload.work_packages || [])
+        .filter(item => item.status === "awaiting_approval")
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))[0];
+      if (!workPackage) return `<div class="mini approval-panel warn"><strong>Work Package Review</strong><div>No pending package was loaded. Refresh before deciding.</div></div>`;
+      return `
+        <div class="mini approval-panel" id="workPackageApprovalPanel" data-work-package-id="${esc(workPackage.id)}">
+          <div class="toolbar"><div><strong>Work Package Review & Approval</strong><div class="muted">Approve only a bounded, valuable implementation increment.</div></div><span class="pill warn">decision required</span></div>
+          <details open><summary>${esc(workPackage.title)} · ${esc(workPackage.contract_hash.slice(0, 12))}</summary><pre>${esc(JSON.stringify(workPackage.contract, null, 2))}</pre></details>
+          <div class="approval-fields"><input id="workPackageReviewer" value="local-dashboard-admin" placeholder="Reviewer name"><textarea id="workPackageComment" placeholder="Record approval evidence or the required planning changes."></textarea></div>
+          <div class="toolbar" style="margin-top: 10px;"><div><button id="approveWorkPackage">Approve Work Package</button><button id="rejectWorkPackage">Request Work Package Changes</button></div><span id="workPackageApprovalStatus" class="muted">No decision has been submitted.</span></div>
+        </div>`;
+    }
+
+    function workPackageRevisionPanel(payload) {
+      if (payload.project.status !== "work_package_rejected") return "";
+      const workPackage = (payload.work_packages || []).filter(item => item.status === "rejected")
+        .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))[0];
+      return `<div class="mini approval-panel" id="workPackageRevisionPanel">
+        <div class="toolbar"><div><strong>Revise Work Package</strong><div class="muted">Generate a replacement plan using the recorded review feedback.</div></div><span class="pill warn">revision required</span></div>
+        ${workPackage ? `<details><summary>Rejected package · ${esc(workPackage.contract_hash.slice(0, 12))}</summary><pre>${esc(JSON.stringify(workPackage.contract, null, 2))}</pre></details>` : ""}
+        <div class="toolbar" style="margin-top: 10px;"><button id="reviseWorkPackage">Generate Revised Work Package</button><span id="workPackageRevisionStatus" class="muted">The rejection feedback will be preserved.</span></div>
+      </div>`;
+    }
+
+    async function submitWorkPackageDecision(payload, decision) {
+      const panel = byId("workPackageApprovalPanel");
+      if (!panel) return;
+      const reviewer = byId("workPackageReviewer").value.trim();
+      const comment = byId("workPackageComment").value.trim();
+      const status = byId("workPackageApprovalStatus");
+      if (reviewer.length < 2) { status.textContent = "Enter a reviewer name."; return; }
+      if (decision === "rejected" && !comment) { status.textContent = "Explain the required changes."; return; }
+      panel.querySelectorAll("button").forEach(button => { button.disabled = true; });
+      try {
+        await json(`/api/v1/projects/${payload.project.id}/work-packages/${panel.dataset.workPackageId}/approval`, {
+          method: "POST", headers: { "Content-Type": "application/json", ...actorHeaders },
+          body: JSON.stringify({ decision, reviewer, comment: comment || null })
+        });
+        await refresh(); await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Work-package decision failed: ${friendlyLaunchError(error)}`;
+        panel.querySelectorAll("button").forEach(button => { button.disabled = false; });
+      }
+    }
+
+    async function submitWorkPackageRevision(payload) {
+      const button = byId("reviseWorkPackage");
+      const status = byId("workPackageRevisionStatus");
+      if (!button || !status) return;
+      button.disabled = true; status.textContent = "Queuing governed replanning...";
+      try {
+        await json(`/api/v1/projects/${payload.project.id}/work-package-runs`, { method: "POST", headers: { "Content-Type": "application/json", ...actorHeaders } });
+        await refresh(); await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Work-package revision failed: ${friendlyLaunchError(error)}`; button.disabled = false;
+      }
+    }
+
+    async function submitArchitectureDecision(payload, decision) {
+      const panel = byId("architectureApprovalPanel");
+      if (!panel) return;
+      const reviewer = byId("architectureReviewer").value.trim();
+      const comment = byId("architectureComment").value.trim();
+      const status = byId("architectureApprovalStatus");
+      if (reviewer.length < 2) {
+        status.textContent = "Enter a reviewer name with at least two characters.";
+        return;
+      }
+      if (decision === "rejected" && !comment) {
+        status.textContent = "Explain the required architecture changes before requesting them.";
+        return;
+      }
+      const buttons = panel.querySelectorAll("button");
+      buttons.forEach(button => { button.disabled = true; });
+      status.textContent = decision === "approved" ? "Approving architecture..." : "Recording architecture changes...";
+      try {
+        await json(`/api/v1/projects/${payload.project.id}/architecture-artifacts/${panel.dataset.artifactId}/approval`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...actorHeaders },
+          body: JSON.stringify({ decision, reviewer, comment: comment || null })
+        });
+        status.textContent = decision === "approved"
+          ? "Architecture approved. Refreshing work-package planning..."
+          : "Architecture changes requested. Refreshing project status...";
+        await refresh();
+        await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Architecture decision failed: ${friendlyLaunchError(error)}`;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    }
+
+    async function submitRequirementsRevision(payload) {
+      const panel = byId("requirementsRevisionPanel");
+      if (!panel) return;
+      const reviewer = byId("requirementsRevisionReviewer").value.trim();
+      const feedback = byId("requirementsRevisionFeedback").value.trim();
+      const status = byId("requirementsRevisionStatus");
+      if (reviewer.length < 2) {
+        status.textContent = "Enter a reviewer name with at least two characters.";
+        return;
+      }
+      if (feedback.length < 3) {
+        status.textContent = "Enter actionable revision feedback before generating a replacement.";
+        return;
+      }
+      byId("reviseRequirements").disabled = true;
+      status.textContent = "Queuing a governed requirements revision...";
+      try {
+        await json(`/api/v1/requirements-runs/${panel.dataset.runId}/artifacts/${panel.dataset.artifactId}/changes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...actorHeaders },
+          body: JSON.stringify({
+            reviewer,
+            summary: "Revise the requirements specification using the actionable dashboard review.",
+            findings: [{
+              requirement_id: null,
+              category: "missing",
+              severity: "high",
+              description: "The rejected specification does not cover the required product scope.",
+              requested_change: feedback
+            }]
+          })
+        });
+        status.textContent = "Revision queued. Refreshing project execution...";
+        await refresh();
+        await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Revision failed: ${friendlyLaunchError(error)}`;
+        byId("reviseRequirements").disabled = false;
+      }
+    }
+
+    async function submitRequirementsDecision(payload, decision) {
+      const panel = byId("requirementsApprovalPanel");
+      if (!panel) return;
+      const reviewer = byId("requirementsReviewer").value.trim();
+      const comment = byId("requirementsComment").value.trim();
+      const status = byId("requirementsApprovalStatus");
+      if (reviewer.length < 2) {
+        status.textContent = "Enter a reviewer name with at least two characters.";
+        return;
+      }
+      if (decision === "rejected" && !comment) {
+        status.textContent = "Explain the required changes before requesting them.";
+        return;
+      }
+      const buttons = panel.querySelectorAll("button");
+      buttons.forEach(button => { button.disabled = true; });
+      status.textContent = decision === "approved" ? "Approving requirements..." : "Recording requested changes...";
+      try {
+        await json(`/api/v1/projects/${payload.project.id}/artifacts/${panel.dataset.artifactId}/approval`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...actorHeaders },
+          body: JSON.stringify({ decision, reviewer, comment: comment || null })
+        });
+        status.textContent = decision === "approved"
+          ? "Requirements approved. Refreshing the architecture transition..."
+          : "Changes requested. Refreshing project status...";
+        await refresh();
+        await loadProjectDashboard(payload.project.id);
+      } catch (error) {
+        status.textContent = `Decision failed: ${friendlyLaunchError(error)}`;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    }
+
+    function bindRequirementsApproval(payload) {
+      const approve = byId("approveRequirements");
+      const reject = byId("rejectRequirements");
+      if (approve) approve.addEventListener("click", () => submitRequirementsDecision(payload, "approved"));
+      if (reject) reject.addEventListener("click", () => submitRequirementsDecision(payload, "rejected"));
+    }
+
+    function bindRequirementsRevision(payload) {
+      const revise = byId("reviseRequirements");
+      if (revise) revise.addEventListener("click", () => submitRequirementsRevision(payload));
+    }
+
+    function bindArchitectureApproval(payload) {
+      const approve = byId("approveArchitecture");
+      const reject = byId("rejectArchitecture");
+      if (approve) approve.addEventListener("click", () => submitArchitectureDecision(payload, "approved"));
+      if (reject) reject.addEventListener("click", () => submitArchitectureDecision(payload, "rejected"));
+    }
+
+    function bindArchitectureRevision(payload) {
+      const revise = byId("reviseArchitecture");
+      if (revise) revise.addEventListener("click", () => submitArchitectureRevision(payload));
+    }
+
+    function bindWorkPackageControls(payload) {
+      const approve = byId("approveWorkPackage");
+      const reject = byId("rejectWorkPackage");
+      const revise = byId("reviseWorkPackage");
+      if (approve) approve.addEventListener("click", () => submitWorkPackageDecision(payload, "approved"));
+      if (reject) reject.addEventListener("click", () => submitWorkPackageDecision(payload, "rejected"));
+      if (revise) revise.addEventListener("click", () => submitWorkPackageRevision(payload));
+    }
+
     function renderProjectIntelligence(payload) {
       const workflow = payload.workflow || {};
       const selectedName = byId("phaseDetail").dataset.phase || "";
@@ -4445,6 +4827,12 @@ DASHBOARD_HTML = r"""<!doctype html>
             ["Reuse multiplier", `x${payload.economic_effects.reuse_multiplier}`]
           ], statusClass(payload.economic_effects.viability))}
         </div>
+        ${requirementsApprovalPanel(payload)}
+        ${requirementsRevisionPanel(payload)}
+        ${architectureApprovalPanel(payload)}
+        ${architectureRevisionPanel(payload)}
+        ${workPackageApprovalPanel(payload)}
+        ${workPackageRevisionPanel(payload)}
         <div class="phase-graph">
           ${payload.phases.map(phase => `
             <button class="phase-node ${esc(phase.status)} ${phase.name === selectedName ? "selected" : ""}" data-phase="${esc(phase.name)}">
@@ -4457,6 +4845,11 @@ DASHBOARD_HTML = r"""<!doctype html>
           `).join("")}
         </div>
       `;
+      bindRequirementsApproval(payload);
+      bindRequirementsRevision(payload);
+      bindArchitectureApproval(payload);
+      bindArchitectureRevision(payload);
+      bindWorkPackageControls(payload);
       document.querySelectorAll(".phase-node").forEach(node => {
         node.addEventListener("click", () => {
           const phase = payload.phases.find(item => item.name === node.dataset.phase);
@@ -4525,7 +4918,13 @@ DASHBOARD_HTML = r"""<!doctype html>
     async function loadProjectDashboard(projectId) {
       const id = projectId || byId("projectSelect").value;
       if (!id) return;
-      const payload = await json(`/api/v1/projects/${id}/intelligence`);
+      const [payload, artifacts, workPackages] = await Promise.all([
+        json(`/api/v1/projects/${id}/intelligence`, { headers: actorHeaders }),
+        json(`/api/v1/projects/${id}/artifacts`, { headers: actorHeaders }),
+        json(`/api/v1/projects/${id}/work-packages`, { headers: actorHeaders })
+      ]);
+      payload.requirements_artifacts = artifacts;
+      payload.work_packages = workPackages;
       const url = new URL(window.location.href);
       url.searchParams.set("project", id);
       history.replaceState(null, "", url);
@@ -4564,7 +4963,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         json("/health/ready"),
         json("/api/v1/operator/jobs", { headers: actorHeaders }),
         json("/api/v1/operator/jobs/worker-instances", { headers: actorHeaders }),
-        json("/api/v1/projects"),
+        json("/api/v1/projects", { headers: actorHeaders }),
         text("/metrics"),
         json(operatingPictureUrl, { headers: actorHeaders }),
         json(dashboardManagerUrl, { headers: actorHeaders }),

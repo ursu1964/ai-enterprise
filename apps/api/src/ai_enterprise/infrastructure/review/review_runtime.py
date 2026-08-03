@@ -17,6 +17,7 @@ from ai_enterprise.domain.review.exceptions import ReviewRuntimeError
 
 @dataclass(frozen=True, slots=True)
 class ReviewCheckResult:
+    check_type: str
     name: str
     argv: tuple[str, ...]
     exit_code: int | None
@@ -41,6 +42,8 @@ class ReviewContainerResult:
 
 class DockerReviewRuntime:
     def __init__(self, docker_base_url: str | None = None) -> None:
+        self._runtime_uid = os.getuid()
+        self._runtime_gid = os.getgid()
         if docker_base_url:
             self._client = DockerClient(base_url=docker_base_url)
         else:
@@ -86,7 +89,7 @@ class DockerReviewRuntime:
                 auto_remove=False,
                 network_disabled=True,
                 read_only=True,
-                user="10002:10002",
+                user=f"{self._runtime_uid}:{self._runtime_gid}",
                 working_dir="/workspace",
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges:true"],
@@ -116,13 +119,10 @@ class DockerReviewRuntime:
                     },
                 },
                 tmpfs={
-                    "/tmp": (
-                        f"rw,noexec,nosuid,nodev,"
-                        f"size={limits.tmpfs_size_bytes},mode=1777"
-                    ),
+                    "/tmp": (f"rw,noexec,nosuid,nodev,size={limits.tmpfs_size_bytes},mode=1777"),
                     "/home/reviewer": (
                         "rw,noexec,nosuid,nodev,size=16777216,mode=0700,"
-                        "uid=10002,gid=10002"
+                        f"uid={self._runtime_uid},gid={self._runtime_gid}"
                     ),
                 },
                 labels={
@@ -146,16 +146,13 @@ class DockerReviewRuntime:
             result_path = output_dir / "result.json"
 
             if not result_path.is_file():
-                raise ReviewRuntimeError(
-                    "Review container produced no result.json"
-                )
+                raise ReviewRuntimeError("Review container produced no result.json")
 
-            result_data = json.loads(
-                result_path.read_text(encoding="utf-8")
-            )
+            result_data = json.loads(result_path.read_text(encoding="utf-8"))
 
             approved_tests = tuple(
                 ReviewCheckResult(
+                    check_type="approved_test",
                     name=item["name"],
                     argv=tuple(item["argv"]),
                     exit_code=item["exit_code"],
@@ -170,6 +167,7 @@ class DockerReviewRuntime:
 
             review_checks = tuple(
                 ReviewCheckResult(
+                    check_type="review_check",
                     name=item["name"],
                     argv=tuple(item["argv"]),
                     exit_code=item["exit_code"],
@@ -193,13 +191,9 @@ class DockerReviewRuntime:
                 review_log=review_log,
             )
         except ImageNotFound as exc:
-            raise ReviewRuntimeError(
-                f"Review image not found: {image}"
-            ) from exc
+            raise ReviewRuntimeError(f"Review image not found: {image}") from exc
         except APIError as exc:
-            raise ReviewRuntimeError(
-                f"Docker API error: {exc}"
-            ) from exc
+            raise ReviewRuntimeError(f"Docker API error: {exc}") from exc
         finally:
             if container is not None:
                 try:
@@ -242,9 +236,7 @@ class DockerReviewRuntime:
                 try:
                     container.kill(signal="SIGKILL")
                 finally:
-                    raise ReviewRuntimeError(
-                        f"Review exceeded {timeout_seconds} seconds"
-                    )
+                    raise ReviewRuntimeError(f"Review exceeded {timeout_seconds} seconds")
 
             time.sleep(0.5)
 

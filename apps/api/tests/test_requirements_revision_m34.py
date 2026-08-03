@@ -7,11 +7,13 @@ import pytest
 from fastapi.routing import APIRoute
 
 from ai_enterprise.api.routes.requirements_revisions import router
+from ai_enterprise.config import Settings
 from ai_enterprise.domain.requirements_revision.models import (
     RequirementsArtifactDocument,
     RequirementsReviewDecision,
 )
 from ai_enterprise.domain.requirements_revision.policies import RevisionFeedbackPolicy
+from ai_enterprise.infrastructure.crews.requirements_crew import RequirementsCrewRunner
 from ai_enterprise.infrastructure.jobs.models import JobExecutionAttemptModel
 from ai_enterprise.infrastructure.requirements_llm.adapter import (
     RequirementsExecutionInput,
@@ -144,6 +146,21 @@ def test_revision_prompt_contains_previous_artifact_and_exact_feedback_hash() ->
     assert '"revision_cycle_number":2' in prompt
     assert "b" * 64 in prompt
     assert "Add recovery" in prompt
+
+
+def test_deterministic_revision_promotes_feedback_into_requirement_entries() -> None:
+    result = RequirementsCrewRunner(Settings(requirements_crew_adapter="deterministic")).run(
+        project_name="Restaurant",
+        project_description="Build ordering",
+        manifest_hash="a" * 64,
+        previous_artifact="FR-001",
+        revision_cycle_number=1,
+        revision_feedback_summary="Menu scope is missing",
+        revision_feedback=[{"requested_change": "Add bilingual menu management."}],
+        revision_feedback_hash="b" * 64,
+    )
+    assert "FR-002: Add bilingual menu management." in result.markdown
+    assert "verifiable coverage" in result.markdown
 
 
 @pytest.mark.asyncio

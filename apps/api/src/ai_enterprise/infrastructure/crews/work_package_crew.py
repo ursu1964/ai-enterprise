@@ -1,3 +1,5 @@
+# ruff: noqa: E501 -- scripted work-package contracts keep readable generated content.
+
 from __future__ import annotations
 
 import json
@@ -31,20 +33,24 @@ class WorkPackageCrewRunner:
         architecture_hash: str,
         architecture_markdown: str,
         tracked_files: list[str],
+        revision_feedback: str | None = None,
     ) -> WorkPackageCrewResult:
         if self._settings.architecture_provider.strip().lower() == "scripted":
-            allowed_file = (
-                ".ai-enterprise-initialized"
-                if ".ai-enterprise-initialized" in tracked_files
-                else "README.md"
-            )
+            allowed_files = [
+                "README.md",
+                "package.json",
+                "src/index.html",
+                "src/styles.css",
+                "src/app.js",
+                "tests/menu.test.js",
+            ]
             contract = {
                 "schema_version": "1.0",
                 "project_id": project_id,
-                "title": "Document governed factory start",
+                "title": "Build bilingual menu storefront foundation",
                 "objective": (
-                    "Record the first governed factory increment so the operator can verify "
-                    "that manifesto intake produced auditable project work."
+                    "Create the first customer-visible Romanian and English restaurant menu "
+                    "vertical slice with accessible category navigation and product cards."
                 ),
                 "base_commit_sha": base_commit_sha,
                 "source_requirements_artifact_id": requirements_artifact_id,
@@ -54,24 +60,30 @@ class WorkPackageCrewRunner:
                 "required_changes": [
                     {
                         "id": "CHG-001",
-                        "description": "Add visible local proof that the project was initialized.",
-                        "related_requirements": ["FR-001"],
-                        "target_paths": [allowed_file],
-                    }
+                        "description": "Create a responsive bilingual menu shell and representative product catalog.",
+                        "related_requirements": ["FR-002", "FR-010"],
+                        "target_paths": ["src/index.html", "src/styles.css", "src/app.js"],
+                    },
+                    {
+                        "id": "CHG-002",
+                        "description": "Add deterministic accessibility and localization tests.",
+                        "related_requirements": ["FR-002", "FR-009", "FR-010"],
+                        "target_paths": ["tests/menu.test.js", "package.json"],
+                    },
                 ],
                 "file_scope": {
-                    "allowed_files": [allowed_file],
-                    "allowed_directories": [],
+                    "allowed_files": allowed_files,
+                    "allowed_directories": [".", "src", "tests"],
                     "forbidden_files": [".env"],
                     "forbidden_directories": [".git"],
-                    "maximum_changed_files": 1,
-                    "maximum_added_lines": 200,
+                    "maximum_changed_files": 6,
+                    "maximum_added_lines": 1200,
                     "maximum_deleted_lines": 50,
                 },
                 "command_policy": {
                     "setup_commands": [],
                     "implementation_commands": [],
-                    "test_commands": [["git", "status", "--short"]],
+                    "test_commands": [["npm", "test"]],
                     "forbidden_executables": [
                         "sudo",
                         "su",
@@ -100,10 +112,16 @@ class WorkPackageCrewRunner:
                     {
                         "id": "AC-001",
                         "description": (
-                            "The initialized repository remains inside the approved path."
+                            "The menu renders Romanian and English labels, categories, prices, "
+                            "ingredients and allergens from structured data."
                         ),
-                        "verification": "Run git status --short inside the project repository.",
-                    }
+                        "verification": "Run npm test.",
+                    },
+                    {
+                        "id": "AC-002",
+                        "description": "The storefront is keyboard navigable, responsive, and exposes semantic landmarks.",
+                        "verification": "Run npm test and inspect src/index.html landmarks.",
+                    },
                 ],
                 "expected_artifacts": [
                     "implementation.patch",
@@ -121,6 +139,7 @@ class WorkPackageCrewRunner:
                     "Push commits or tags",
                     "Contact unapproved network destinations",
                 ],
+                "revision_feedback": revision_feedback,
             }
             return WorkPackageCrewResult(raw_json=json.dumps(contract, sort_keys=True))
         llm = LLM(
@@ -153,10 +172,7 @@ class WorkPackageCrewRunner:
 
         boundary_reviewer = Agent(
             role="Work Package Boundary Reviewer",
-            goal=(
-                "Prevent broad, ambiguous, unsafe or non-verifiable "
-                "implementation packages."
-            ),
+            goal=("Prevent broad, ambiguous, unsafe or non-verifiable implementation packages."),
             backstory=(
                 "You reject work that lacks precise file boundaries, "
                 "test commands, resource limits or traceability."
@@ -185,6 +201,8 @@ class WorkPackageCrewRunner:
                 "{requirements_markdown}\n\n"
                 "Approved architecture:\n"
                 "{architecture_markdown}\n\n"
+                "Recorded revision feedback:\n"
+                "{revision_feedback}\n\n"
                 "Choose the smallest valuable implementation increment. "
                 "Do not plan the entire platform. The package should normally "
                 "modify no more than 12 files.\n\n"
@@ -196,7 +214,7 @@ class WorkPackageCrewRunner:
                 "- Every NEW file path in file_scope.allowed_files MUST have "
                 "its parent directory listed in file_scope.allowed_directories. "
                 "For example, a new file src/main.py requires "
-                "allowed_directories = [\"src\"]. Never leave "
+                'allowed_directories = ["src"]. Never leave '
                 "allowed_directories empty when any new file is proposed.\n"
                 "- Never allow .git, .env, credentials, host configuration, "
                 "Docker socket access or system directories.\n"
@@ -208,9 +226,7 @@ class WorkPackageCrewRunner:
                 "IDs.\n"
                 "- Preserve the supplied artifact IDs and hashes exactly."
             ),
-            expected_output=(
-                "One valid JSON work-package contract and no Markdown."
-            ),
+            expected_output=("One valid JSON work-package contract and no Markdown."),
             agent=planner,
         )
 
@@ -233,11 +249,9 @@ class WorkPackageCrewRunner:
                 "- modifications to secrets, .git or host configuration.\n\n"
                 "You must ALWAYS return the complete corrected contract as a "
                 "single JSON object. Never return a rejection object, a "
-                "\"status\" field, lists, Markdown, or any other shape."
+                '"status" field, lists, Markdown, or any other shape.'
             ),
-            expected_output=(
-                "The complete corrected JSON work-package contract only."
-            ),
+            expected_output=("The complete corrected JSON work-package contract only."),
             agent=boundary_reviewer,
             context=[planning_task],
         )
@@ -272,9 +286,7 @@ class WorkPackageCrewRunner:
             "command_policy": {
                 "setup_commands": [],
                 "implementation_commands": [],
-                "test_commands": [
-                    ["pytest", "-q", "tests"]
-                ],
+                "test_commands": [["pytest", "-q", "tests"]],
                 "forbidden_executables": [
                     "sudo",
                     "su",
@@ -347,6 +359,7 @@ class WorkPackageCrewRunner:
                 "architecture_hash": architecture_hash,
                 "architecture_markdown": architecture_markdown,
                 "tracked_files": "\n".join(tracked_files),
+                "revision_feedback": revision_feedback or "No prior review feedback.",
                 "contract_schema": json.dumps(
                     contract_schema,
                     indent=2,
@@ -357,8 +370,6 @@ class WorkPackageCrewRunner:
         raw_json = str(output).strip()
 
         if not raw_json:
-            raise RuntimeError(
-                "Work Package Crew returned an empty result"
-            )
+            raise RuntimeError("Work Package Crew returned an empty result")
 
         return WorkPackageCrewResult(raw_json=raw_json)

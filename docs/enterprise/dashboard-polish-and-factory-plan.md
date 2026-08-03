@@ -372,3 +372,18 @@ Verified:
 
 - Focused dashboard tests passed.
 - Focused query-platform tests passed.
+
+### 2026-08-03 - Dashboard Surface Verification Gate
+
+Completed:
+
+- Added `tools/dashboard_verify.py` as a live dashboard verifier for `/dashboard`,
+  `/dashboard/demo`, `/dashboard/documentation-hub`, and `/api/v1/query/dashboard-manager`.
+- The verifier checks required human-facing dashboard text, rejects known cryptic primary phrases,
+  and validates the manager-backed four-card Business Decision Board contract.
+- The API Docker image now includes the verifier so the same gate can run during local and
+  server-style checks.
+
+Verification target:
+
+- `python tools/dashboard_verify.py --base-url http://localhost:8000`

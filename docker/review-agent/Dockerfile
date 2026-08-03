@@ -25,6 +25,8 @@ RUN groupadd \
       bash \
       ca-certificates \
       git \
+      nodejs \
+      npm \
       patch \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip install --upgrade pip \

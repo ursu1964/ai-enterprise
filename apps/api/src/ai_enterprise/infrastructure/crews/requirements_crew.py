@@ -1,3 +1,5 @@
+# ruff: noqa: E501 -- deterministic requirements evidence keeps readable generated content.
+
 from __future__ import annotations
 
 import json
@@ -33,6 +35,7 @@ class RequirementsCrewRunner:
         if self._settings.requirements_crew_adapter.strip().lower() == "deterministic":
             findings = revision_feedback or []
             revision_section = ""
+            revised_requirements = ""
             if revision_cycle_number is not None:
                 requested = "\n".join(
                     f"- {item.get('requested_change', 'Address reviewer finding')}"
@@ -43,6 +46,14 @@ class RequirementsCrewRunner:
                     f"Feedback hash: {revision_feedback_hash}\n"
                     f"Summary: {revision_feedback_summary}\n{requested}\n"
                 )
+                revised_requirements = "".join(
+                    (
+                        f"- FR-{index:03d}: {item.get('requested_change', 'Address reviewer finding')}\n"
+                        "  - Acceptance: The revised specification provides explicit, "
+                        "verifiable coverage for this reviewer finding.\n"
+                    )
+                    for index, item in enumerate(findings, start=2)
+                )
             markdown = (
                 f"# Requirements — {project_name}\n\n"
                 f"Manifest: `{manifest_hash}`\n\n"
@@ -51,6 +62,7 @@ class RequirementsCrewRunner:
                 "## Functional requirements\n"
                 "- FR-001: The platform shall preserve immutable workflow evidence.\n"
                 "  - Acceptance: Every decision and generated artifact has a stable hash.\n"
+                f"{revised_requirements}"
             )
             return RequirementsCrewResult(markdown=markdown, raw_output=markdown)
         if self._settings.requirements_crew_adapter.strip().lower() != "crewai":

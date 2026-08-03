@@ -23,6 +23,24 @@ class ReviewerAgent:
         deterministic_findings: tuple,
         check_results: tuple,
     ) -> ReviewerAgentOutput:
+        if self._settings.architecture_provider.strip().lower() == "scripted":
+            failed_checks = [
+                check.name
+                for check in check_results
+                if check.required and (check.timed_out or check.exit_code != 0)
+            ]
+            if failed_checks:
+                raise PatchReviewError(
+                    f"Deterministic review checks failed: {', '.join(failed_checks)}"
+                )
+            return ReviewerAgentOutput(
+                schema_version=1,
+                summary=(
+                    "Offline independent review completed: patch integrity matched, "
+                    "approved tests passed, and deterministic policy checks completed."
+                ),
+                findings=[],
+            )
         llm = LLM(
             model=self._settings.ollama_model,
             base_url=self._settings.ollama_base_url,
@@ -56,16 +74,12 @@ class ReviewerAgent:
                 ]
             )
         except Exception as exc:
-            raise PatchReviewError(
-                f"Reviewer agent LLM call failed: {exc}"
-            ) from exc
+            raise PatchReviewError(f"Reviewer agent LLM call failed: {exc}") from exc
 
         raw_json = str(raw).strip()
 
         if not raw_json:
-            raise PatchReviewError(
-                "Reviewer agent returned an empty result"
-            )
+            raise PatchReviewError("Reviewer agent returned an empty result")
 
         return self._parse_and_validate(raw_json)
 
@@ -87,16 +101,12 @@ class ReviewerAgent:
         try:
             payload = json.loads(text)
         except (json.JSONDecodeError, ValueError) as exc:
-            raise PatchReviewError(
-                f"Reviewer agent returned invalid JSON: {exc}"
-            ) from exc
+            raise PatchReviewError(f"Reviewer agent returned invalid JSON: {exc}") from exc
 
         try:
             return ReviewerAgentOutput.model_validate(payload)
         except Exception as exc:
-            raise PatchReviewError(
-                f"Reviewer agent output failed validation: {exc}"
-            ) from exc
+            raise PatchReviewError(f"Reviewer agent output failed validation: {exc}") from exc
 
     @staticmethod
     def _candidate_diff(
@@ -152,37 +162,39 @@ class ReviewerAgent:
         deterministic_findings: tuple,
         check_results: tuple,
     ) -> str:
-        deterministic_summary = "\n".join(
-            json.dumps(
-                {
-                    "rule_id": finding.rule_id,
-                    "category": finding.category,
-                    "severity": str(finding.severity),
-                    "title": finding.title,
-                    "blocking": finding.blocking,
-                },
-                sort_keys=True,
+        deterministic_summary = (
+            "\n".join(
+                json.dumps(
+                    {
+                        "rule_id": finding.rule_id,
+                        "category": finding.category,
+                        "severity": str(finding.severity),
+                        "title": finding.title,
+                        "blocking": finding.blocking,
+                    },
+                    sort_keys=True,
+                )
+                for finding in deterministic_findings
             )
-            for finding in deterministic_findings
-        ) or "(none)"
+            or "(none)"
+        )
 
-        check_summary = "\n".join(
-            json.dumps(
-                {
-                    "check_type": check.check_type,
-                    "name": check.name,
-                    "status": "passed"
-                    if check.exit_code == 0 and not check.timed_out
-                    else (
-                        "timed_out"
-                        if check.timed_out
-                        else "failed"
-                    ),
-                },
-                sort_keys=True,
+        check_summary = (
+            "\n".join(
+                json.dumps(
+                    {
+                        "check_type": check.check_type,
+                        "name": check.name,
+                        "status": "passed"
+                        if check.exit_code == 0 and not check.timed_out
+                        else ("timed_out" if check.timed_out else "failed"),
+                    },
+                    sort_keys=True,
+                )
+                for check in check_results
             )
-            for check in check_results
-        ) or "(none)"
+            or "(none)"
+        )
 
         return (
             "You are an independent code reviewer evaluating a candidate "

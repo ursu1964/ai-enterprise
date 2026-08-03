@@ -105,6 +105,7 @@ async def get_actor(
                 {
                     "ecosystem.read",
                     "operator.jobs.manage",
+                    "project.read",
                     "query.read",
                     "specification.read",
                 }
