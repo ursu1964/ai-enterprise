@@ -324,6 +324,8 @@ Operating discipline for every project:
 - Calibration gates check manifest integrity, workflow tracking, error follow-up, reuse capture,
   and phase alignment.
 - Errors are followed as first-class project signals, not hidden logs.
+- Expand Proof detail when you need the worker diagnostic behind a problem, without making the main
+  dashboard read like raw logs.
 - Improvements and solutions are proposed from telemetry and job failures.
 - Reusable artifacts, work packages, phase structure, agent crew, and checks become future template
   material.

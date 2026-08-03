@@ -274,7 +274,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "unresolvedProblemJobs" in response.text
     assert "acknowledged by operator" in response.text
     assert "Needs workflow link" in response.text
-    assert "Diagnostic detail" in response.text
+    assert "Proof detail" in response.text
+    assert "Diagnostic detail" not in response.text
     assert "movement-node" in response.text
     assert "surface-node" in response.text
     assert 'renderSurfaceNodes("operatingPictureSignals", important)' in response.text
@@ -290,7 +291,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
         in response.text
     )
     assert "friendlyLaunchError" in response.text
-    assert "Technical detail" in response.text
+    assert "Technical detail" not in response.text
+    assert "No worker diagnostic was reported" in response.text
     assert "reviewed history" in response.text
     assert "No current work needs action" in response.text
     assert "No current worker capacity is visible" in response.text
