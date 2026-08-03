@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 FAST_GATE_COMMANDS: dict[str, str] = {
     "lint": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
     "typecheck": "cd apps/api && .venv/bin/mypy src",
