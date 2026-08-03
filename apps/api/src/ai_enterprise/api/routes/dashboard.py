@@ -1216,6 +1216,9 @@ DASHBOARD_HTML = r"""<!doctype html>
     .source-card:hover { border-color: rgba(93, 184, 255, 0.72); }
     .source-card strong { display: block; margin-bottom: 4px; }
     .source-card span { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+    .source-card .source-meaning { color: var(--text); font-weight: 700; margin-top: 6px; }
+    .source-card .source-next { margin-top: 4px; }
+    .source-card .source-proof { color: rgba(143, 166, 190, 0.76); margin-top: 4px; }
 
     .business-board {
       display: grid;
@@ -2110,7 +2113,16 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     function sourceStatus(result, label, target, summary) {
       if (result.status === "fulfilled") {
-        return { label, target, status: "fresh", className: "ok", detail: `${summary}. Updated ${new Date().toLocaleTimeString()}` };
+        return {
+          label,
+          target,
+          status: "fresh",
+          className: "ok",
+          detail: `${summary}. Updated ${new Date().toLocaleTimeString()}`,
+          meaning: `${label} data is available for operator decisions.`,
+          nextAction: `Open ${label} when this source explains the current decision.`,
+          proofPath: target === "overview" ? "/health/ready" : `/dashboard#${target}`
+        };
       }
       return {
         label,
@@ -2118,6 +2130,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         status: "connection needs attention",
         className: "bad",
         detail: `${summary}. Open this panel, refresh, and verify API readiness before making delivery decisions.`,
+        meaning: `${label} data is not confirmed, so dashboard decisions should pause here.`,
+        nextAction: "Refresh, confirm API readiness, then open the linked panel for recovery.",
+        proofPath: "/health/ready"
       };
     }
 
@@ -2142,6 +2157,9 @@ DASHBOARD_HTML = r"""<!doctype html>
           status: "waiting for signal",
           className: "info",
           detail: "The dashboard manager has not published this signal yet. Refresh after factory activity starts.",
+          meaning: "This source has not produced the first governed signal yet.",
+          nextAction: "Create or start work, then refresh this dashboard.",
+          proofPath: `/dashboard#${target}`
         };
       }
       const status = section.freshness || section.state || "not_observed";
@@ -2164,6 +2182,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         status: sourceStateLabel(status),
         className,
         detail: `${section.operator_action || section.empty_reason || "Use this section for the current operating picture."} ${age}${staleWindow}`,
+        meaning: section.meaning || section.human_summary || "This source explains part of the operating picture.",
+        nextAction: section.operator_action || "Open the linked panel and inspect the current proof.",
+        proofPath: section.proof_path || `/dashboard#${target}`,
       };
     }
 
@@ -2199,6 +2220,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         <button class="source-card" data-source-target="${esc(source.target)}">
           <strong class="${esc(source.className)}">${esc(source.label)} · ${esc(source.status)}</strong>
           <span>${esc(source.detail)}</span>
+          <span class="source-meaning">${esc(source.meaning || "This source supports the current operating picture.")}</span>
+          <span class="source-next">Next: ${esc(source.nextAction || "Open the linked panel and inspect proof.")}</span>
+          <span class="source-proof">Proof: ${esc(source.proofPath || `/dashboard#${source.target}`)}</span>
         </button>
       `).join("");
       document.querySelectorAll(".source-card").forEach(item => {
@@ -2450,7 +2474,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           {
             id: crewId,
             label: "Crew",
-            subtitle: `${project.crews.length} signal(s)`,
+            subtitle: countSentence(project.crews.length, "signal"),
             kind: "crew",
             status: project.crews.length || project.tasks.active ? "active" : "standby",
             x: 594,
@@ -2460,7 +2484,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           {
             id: telemetryId,
             label: "Telemetry",
-            subtitle: `${project.telemetry.event_count} event(s)`,
+            subtitle: countSentence(project.telemetry.event_count, "event"),
             kind: "telemetry",
             status: project.telemetry.signal,
             x: 782,
@@ -2506,7 +2530,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           <span class="pill info">${esc(detail.owner_crew || "workflow engine")}</span>
         </div>
         <div class="list-item">
-          <div><div class="list-title">Issue split</div><div class="list-meta">${esc(detail.issue_summary?.operator_action || `${phaseIssueCount(project)} current issue(s), ${phaseHistoryCount(project)} reviewed history item(s).`)}</div></div>
+          <div><div class="list-title">Issue split</div><div class="list-meta">${esc(detail.issue_summary?.operator_action || `${countSentence(phaseIssueCount(project), "current issue")}, ${countSentence(phaseHistoryCount(project), "reviewed history item")}.`)}</div></div>
           <span class="pill ${phaseIssueCount(project) ? "bad" : "ok"}">${esc(detail.issue_summary?.state || (phaseIssueCount(project) ? "needs action" : "clear"))}</span>
         </div>
       `;
@@ -2533,8 +2557,8 @@ DASHBOARD_HTML = r"""<!doctype html>
           <div class="list-item"><div><div class="list-title">Where we are</div><div class="list-meta">${esc(project.phase)} · ${esc(project.next_action)}</div></div><span class="pill ${statusClass(project.state_meaning || project.state)}">${esc(humanStatus(project.state_meaning || project.state))}</span></div>
           ${renderPhaseDetailRows(project)}
           <div class="list-item"><div><div class="list-title">Tasks</div><div class="list-meta">${esc(project.tasks.done)} done, ${esc(project.tasks.active)} active, ${esc(project.tasks.standby)} standby, ${esc(project.tasks.problems)} problem.</div></div><span class="pill info">${esc(project.tasks.total)} total</span></div>
-          <div class="list-item"><div><div class="list-title">Crew</div><div class="list-meta">${esc(project.crews[0]?.assignment || "No active crew signal yet.")}</div></div><span class="pill ${project.crews.length ? "ok" : "info"}">${esc(project.crews.length)} signal(s)</span></div>
-          <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(project.telemetry.job_signal_count)} job signal(s), ${esc(project.telemetry.event_count)} event(s), ${esc(project.telemetry.work_package_count)} work package(s).</div></div><span class="pill ${statusClass(project.telemetry)}">${esc(humanStatus(project.telemetry))}</span></div>
+          <div class="list-item"><div><div class="list-title">Crew</div><div class="list-meta">${esc(project.crews[0]?.assignment || "No active crew signal yet.")}</div></div><span class="pill ${project.crews.length ? "ok" : "info"}">${esc(countSentence(project.crews.length, "signal"))}</span></div>
+          <div class="list-item"><div><div class="list-title">Telemetry</div><div class="list-meta">${esc(countSentence(project.telemetry.job_signal_count, "job signal"))}, ${esc(countSentence(project.telemetry.event_count, "event"))}, ${esc(countSentence(project.telemetry.work_package_count, "work package"))}.</div></div><span class="pill ${statusClass(project.telemetry)}">${esc(humanStatus(project.telemetry))}</span></div>
         </div>
         <button data-project-id="${esc(project.id)}">Open Full Project Graph</button>
       `;
@@ -2779,17 +2803,17 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Open Execution", detail: "Move directly to live execution control after launch.", idea: "Inspect the project life immediately after creation.", effect: `${countSentence(state.projects.length, "project")} visible in Execution.`, signal: `${state.projects.length} projects`, kind: "info", action: "execution" }
       ]);
       renderSurfaceNodes("problemGraph", [
-        { title: "Queued Work", detail: "Work waiting for a worker lease.", idea: "If this grows, add capacity or inspect blocked workers.", effect: `${queued} job(s) waiting.`, signal: `${queued}`, kind: queued ? "warn" : "ok", action: "problems" },
-        { title: "Running Work", detail: "Active jobs connected to projects and crews.", idea: "Use this to confirm the factory is moving, not idle.", effect: `${running} job(s) currently active.`, signal: `${running}`, kind: running ? "info" : "ok", action: "problems" },
-        { title: "Followed Errors", detail: "Blocked jobs are visible improvement inputs until they are recovered or reviewed.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${failed} problem(s) require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
-        { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${online} worker(s) online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
+        { title: "Queued Work", detail: "Work waiting for a worker lease.", idea: "If this grows, add capacity or inspect blocked workers.", effect: `${countSentence(queued, "job")} waiting.`, signal: `${queued}`, kind: queued ? "warn" : "ok", action: "problems" },
+        { title: "Running Work", detail: "Active jobs connected to projects and crews.", idea: "Use this to confirm the factory is moving, not idle.", effect: `${countSentence(running, "job")} currently active.`, signal: `${running}`, kind: running ? "info" : "ok", action: "problems" },
+        { title: "Followed Errors", detail: "Blocked jobs are visible improvement inputs until they are recovered or reviewed.", idea: "Every error should become a fix, guardrail, or reusable lesson.", effect: `${countSentence(failed, "problem")} require follow-up.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Worker Topology", detail: "Worker instances show profile, heartbeat, and operating readiness.", idea: "Healthy workers are the enterprise production capacity.", effect: `${countSentence(online, "worker")} online.`, signal: `${online} online`, kind: online ? "ok" : "warn", action: "problems" },
         { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting blocked work.", effect: "Reduces repeat problems across future projects.", signal: "improve", kind: "info", action: "projects" }
       ].concat(improvementProposals));
       renderSurfaceNodes("telemetryGraph", [
-        { title: "Service Pulse", detail: "Dashboard and API activity prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
-        { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${dashboardHits} dashboard hit(s).`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
-        { title: "Worker Health", detail: "Worker counts calibrate enterprise operating capacity.", idea: "Capacity should match project parallelism.", effect: `${online} worker(s) available.`, signal: `${online}`, kind: online ? "ok" : "warn", action: "problems" },
-        { title: "Problem Pressure", detail: "Blocked work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${failed} followed issue(s).`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
+        { title: "Service Pulse", detail: "Dashboard and API activity prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${countSentence(requestCount, "recorded request")}.`, signal: `${requestCount}`, kind: "info", action: "metrics" },
+        { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${countSentence(dashboardHits, "dashboard hit")}.`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
+        { title: "Worker Health", detail: "Worker counts calibrate enterprise operating capacity.", idea: "Capacity should match project parallelism.", effect: `${countSentence(online, "worker")} available.`, signal: `${online}`, kind: online ? "ok" : "warn", action: "problems" },
+        { title: "Problem Pressure", detail: "Blocked work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${countSentence(failed, "followed issue")}.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Calibration Feed", detail: "Telemetry supports phase completion, errors followed, and economic proof.", idea: "Use metrics to decide, not to decorate.", effect: "Improves estimate quality and future automation design.", signal: "active", kind: "ok", action: "projects" }
       ]);
       if (state.operatingPicture) {
@@ -2821,8 +2845,8 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Ecosystem Graph", detail: "Shows enterprise relationships after governed records are linked.", idea: "Inspect enterprise relationships before broad changes.", effect: "Improves cross-object governance.", signal: "check map", kind: "info", action: "ecosystem" },
         { title: "Evidence Graph", detail: "Shows project proof after requirements, decisions, and evidence are recorded.", idea: "Trace decisions back to requirements and proof.", effect: "Improves audit readiness.", signal: "check proof", kind: "info", action: "evidence" },
         { title: "Project Blueprints", detail: "Workflow, specialist-crew, and economic-proof patterns produced by project intelligence.", idea: "Promote repeated successful structures into templates.", effect: "Increases reuse across future projects.", signal: "reuse", kind: "ok", action: "projects" },
-        { title: "Blueprint Learning Queue", detail: `${reuse.summary || "No reusable learning candidates have been observed yet."} Review-ready: ${reuseReadiness.catalog_review_ready || 0}; needs proof: ${reuseReadiness.needs_more_proof || 0}. Next review: ${nextCatalogReview ? nextCatalogReview.project_name : "none ready"} with ${nextReviewEvidenceCount} proof item(s) and ${nextReviewCriteriaPassed} passed criterion/criteria.`, idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: (reuseReadiness.catalog_review_ready || 0) ? "ok" : blueprintLearning.length ? "warn" : "info", action: "projects" },
-        { title: "Guardrail Learning Queue", detail: `${guardrailLearning.length} recurring-problem guardrail candidate(s). Evidence required: ${reuseReadiness.guardrails_evidence_required || 0}.`, idea: "Recurring problems should become recovery checklists, tests, or template guardrails.", effect: "Keeps the factory from repeating known problem classes.", signal: `${guardrailLearning.length} guardrail`, kind: guardrailLearning.length ? "warn" : "ok", action: "problems" },
+        { title: "Blueprint Learning Queue", detail: `${reuse.summary || "No reusable learning candidates have been observed yet."} Review-ready: ${reuseReadiness.catalog_review_ready || 0}; needs proof: ${reuseReadiness.needs_more_proof || 0}. Next review: ${nextCatalogReview ? nextCatalogReview.project_name : "none ready"} with ${countSentence(nextReviewEvidenceCount, "proof item")} and ${nextReviewCriteriaPassed} passed criterion/criteria.`, idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: (reuseReadiness.catalog_review_ready || 0) ? "ok" : blueprintLearning.length ? "warn" : "info", action: "projects" },
+        { title: "Guardrail Learning Queue", detail: `${countSentence(guardrailLearning.length, "recurring-problem guardrail candidate")}. Evidence required: ${reuseReadiness.guardrails_evidence_required || 0}.`, idea: "Recurring problems should become recovery checklists, tests, or template guardrails.", effect: "Keeps the factory from repeating known problem classes.", signal: `${guardrailLearning.length} guardrail`, kind: guardrailLearning.length ? "warn" : "ok", action: "problems" },
         { title: "Future Templates", detail: "Reusable patterns become stronger starting points for later manifestos.", idea: "Feed lessons back into the next project creation cycle.", effect: "Compounds delivery speed and quality over time.", signal: "evolve", kind: "ok", action: "factory" }
       ]);
     }
@@ -2850,7 +2874,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           byId("authenticatedGraphStatus").innerHTML = `<strong class="warn">${esc(kind)} map is ready but empty</strong><div class="muted">The connection works. Link governed records during project execution, then refresh to see relationships here.</div>`;
           return;
         }
-        byId("authenticatedGraphStatus").innerHTML = `<strong class="ok">${esc(kind)} map available</strong><div class="muted">${esc(nodes)} node(s), ${esc(edges)} edge(s). The dashboard is reading linked records for this project or organization.</div>`;
+        byId("authenticatedGraphStatus").innerHTML = `<strong class="ok">${esc(kind)} map available</strong><div class="muted">${esc(countSentence(nodes, "node"))}, ${esc(countSentence(edges, "edge"))}. The dashboard is reading linked records for this project or organization.</div>`;
       } catch (error) {
         byId("authenticatedGraphStatus").innerHTML = `<strong class="bad">${esc(kind)} map needs attention</strong><div class="muted">The dashboard could not read this map. Refresh context first; if it repeats, inspect API readiness and permissions.</div>`;
       }
@@ -3568,7 +3592,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         body: JSON.stringify({})
       });
       const contract = launchContractFromFactoryResult(result, "launch");
-      byId("factoryStatus").textContent = `${contract.started} demo project(s) ready; ${contract.blocked} blocked; ${contract.failed} need review. ${contract.nextAction}`;
+      byId("factoryStatus").textContent = `${countSentence(contract.started, "demo project")} ready; ${contract.blocked} blocked; ${contract.failed} need review. ${contract.nextAction}`;
       renderLaunchContract({
         ...contract,
         items: (result.projects || []).map(project => ({
@@ -4145,7 +4169,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           ], "info")}
           ${infoCard("Telemetry", telemetryStatus, [
             ["Phase complete", `${payload.telemetry.phase_completion_percent}%`],
-            ["Problems", `${payload.telemetry.problem_count} current problem(s)`]
+            ["Problems", countSentence(payload.telemetry.problem_count, "current problem")]
           ], statusClass(payload.telemetry.signal))}
           ${infoCard("Reusable Template", payload.reuse.template.template_key, [
             ["Project type", payload.reuse.template.project_type],
@@ -4180,7 +4204,7 @@ DASHBOARD_HTML = r"""<!doctype html>
                 ["Owner crew", phase.owner_crew || "workflow-engine"],
                 ["Next action", phase.next_action || "Continue the guided workflow."]
               ], statusClass(phase.status))}
-              ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? `${phase.completed_evidence.length} proof item(s)` : "Waiting for phase proof", [
+              ${infoCard("Completed Evidence", phase.completed_evidence && phase.completed_evidence.length ? countSentence(phase.completed_evidence.length, "proof item") : "Waiting for phase proof", [
                 ["Evidence", (phase.completed_evidence || []).join(", ") || "Evidence will appear after the workflow records a phase transition or artifact."],
                 ["Proof status", phase.proof_status?.state || "waiting_for_phase_proof"],
                 ["Last transition", phase.last_transition_at || "No phase movement recorded yet."]
@@ -4301,10 +4325,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       state.infrastructureChoices = infrastructureChoices.status === "fulfilled" ? infrastructureChoices.value : null;
       state.sources = {
         ready: sourceStatus(ready, "API", "overview", ready.status === "fulfilled" && ready.value.status === "ok" ? "Service is ready" : "Service readiness is not confirmed"),
-        jobs: sourceStatus(jobs, "Work", "problems", `${state.jobs.length} tracked job(s)`),
-        workers: sourceStatus(workers, "Crew", "problems", `${state.workers.length} worker signal(s)`),
+        jobs: sourceStatus(jobs, "Work", "problems", countSentence(state.jobs.length, "tracked job")),
+        workers: sourceStatus(workers, "Crew", "problems", countSentence(state.workers.length, "worker signal")),
         projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
-        metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${Object.keys(state.metrics).length} system pulse signal(s), ${state.telemetrySummary?.governed_performance?.metric_count ?? 0} governed metric(s)`),
+        metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${countSentence(Object.keys(state.metrics).length, "system pulse signal")}, ${countSentence(state.telemetrySummary?.governed_performance?.metric_count ?? 0, "governed metric")}`),
         query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Operating picture connection needs attention"),
         manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Execution manager connection needs attention"),
         server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness connection needs attention"),
@@ -4846,7 +4870,7 @@ DEMO_HTML = r"""<!doctype html>
       }
       try {
         const projects = await fetchJson("/api/v1/projects");
-        setProof("proofProjects", `${projects.length} project(s)`, projects.length ? "Click to open Projects and inspect movement." : "Click to open Factory and create the first project.", projects.length ? "ok" : "warn", projects.length ? "/dashboard#projects" : "/dashboard#factory");
+        setProof("proofProjects", countSentence(projects.length, "project"), projects.length ? "Click to open Projects and inspect movement." : "Click to open Factory and create the first project.", projects.length ? "ok" : "warn", projects.length ? "/dashboard#projects" : "/dashboard#factory");
         setProof("proofNext", projects.length ? "Open Execution" : "Open Factory", projects.length ? "Click to watch live project movement." : "Click to preview before creating records.", "ok", projects.length ? "/dashboard#execution" : "/dashboard#factory");
       } catch (error) {
         setProof("proofProjects", "Not confirmed", "Project proof is waiting for source confirmation. Click to open Command Center if it still needs attention.", "bad", "/dashboard");
@@ -4855,7 +4879,7 @@ DEMO_HTML = r"""<!doctype html>
       try {
         const metrics = await fetchText("/metrics");
         const count = metrics.split("\n").filter(line => line && !line.startsWith("#")).length;
-        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is visible. Click to open Metrics." : "Runtime telemetry is waiting for the first signal. Click to open Metrics.", count ? "ok" : "warn", "/dashboard#metrics");
+        setProof("proofTelemetry", countSentence(count, "signal"), count ? "Runtime telemetry is visible. Click to open Metrics." : "Runtime telemetry is waiting for the first signal. Click to open Metrics.", count ? "ok" : "warn", "/dashboard#metrics");
       } catch (error) {
         setProof("proofTelemetry", "Not confirmed", "Metric proof is waiting for source confirmation. Click to open Metrics after the API settles.", "bad", "/dashboard#metrics");
       }

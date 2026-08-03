@@ -114,13 +114,19 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Data source freshness" in response.text
     assert "managerSectionSource" in response.text
     assert "dashboardManagerSources" in response.text
+    assert "source-meaning" in response.text
+    assert "source-next" in response.text
+    assert "source-proof" in response.text
+    assert "data is available for operator decisions" in response.text
+    assert "Proof:" in response.text
     assert "connection needs attention" in response.text
     assert "waiting for signal" in response.text
     assert "refresh recommended" in response.text
     assert "verify API readiness before making delivery decisions" in response.text
     assert "Waiting for the first source timestamp" in response.text
     assert "check API logs" not in response.text
-    assert "data source(s) need attention" in response.text
+    assert "data source(s) need attention" not in response.text
+    assert 'countSentence(staleSources, "data source")' in response.text
     assert "freshness_age_seconds" in response.text
     assert "stale_after_seconds" in response.text
     assert "refresh window" in response.text
@@ -285,7 +291,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "recurring-problem guardrail candidate" in response.text
     assert "Recurring problems should become recovery checklists" in response.text
     assert "Recurring problem classes should become a recovery checklist" in response.text
-    assert "current problem(s) share this class" in response.text
+    assert "current problem(s) share this class" not in response.text
+    assert 'countSentence(count, "current problem")' in response.text
     assert "Reduces repeat problems across future projects." in response.text
     assert "Reduces repeat problems before more work is queued." in response.text
     assert "known problem classes" in response.text
@@ -321,7 +328,11 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "infrastructureChoicesTable" in response.text
     assert "Advanced metric names" in response.text
     assert "System pulse counter or gauge used for operator proof." in response.text
-    assert "system pulse signal(s)" in response.text
+    assert "system pulse signal(s)" not in response.text
+    assert (
+        'countSentence(Object.keys(state.metrics).length, "system pulse signal")'
+        in response.text
+    )
     assert "Advanced raw metrics" not in response.text
     assert "raw signal(s)" not in response.text
     assert "Blueprint Graph Hub" in response.text
@@ -342,7 +353,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "guardrails_evidence_required" in response.text
     assert "Review-ready:" in response.text
     assert "Next review:" in response.text
-    assert "proof item(s)" in response.text
+    assert "proof item(s)" not in response.text
+    assert 'countSentence(nextReviewEvidenceCount, "proof item")' in response.text
     assert "passed criterion/criteria" in response.text
     assert "needs proof:" in response.text
     assert "Evidence required:" in response.text

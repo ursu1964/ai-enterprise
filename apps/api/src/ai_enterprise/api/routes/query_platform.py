@@ -49,6 +49,12 @@ from ai_enterprise.infrastructure.performance.models import (
 
 router = APIRouter(prefix="/query", tags=["query-platform"])
 
+
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    label = singular if count == 1 else plural or f"{singular}s"
+    return f"{count} {label}"
+
+
 def _require_query_read(actor: Actor, project_id: uuid.UUID | None = None) -> None:
     if actor.actor_type != "human":
         raise HTTPException(403, "Human query authority is required")
@@ -67,10 +73,6 @@ def _latest_time(rows: list[Any], field: str) -> datetime | None:
     values = [getattr(row, field, None) for row in rows]
     timestamps = [value for value in values if isinstance(value, datetime)]
     return max(timestamps) if timestamps else None
-
-
-def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
-    return f"{count} {singular if count == 1 else plural or singular + 's'}"
 
 
 def _resolution_counts(jobs: list[JobModel]) -> dict[str, int]:
@@ -104,7 +106,8 @@ def _recommendations(
                 "priority": "urgent",
                 "title": "Resolve blocked work",
                 "message": (
-                    f"{len(failed_jobs)} work item(s) need recovery review. Open Problems, "
+                    f"{_count_phrase(len(failed_jobs), 'work item')} need recovery review. "
+                    "Open Problems, "
                     "review the human explanation, then retry only after the cause is clear."
                 ),
                 "next_action": "Open the Problems dashboard.",
@@ -116,7 +119,8 @@ def _recommendations(
                 "priority": "high",
                 "title": "Unblock enterprise schedules",
                 "message": (
-                    f"{len(blocked_schedules)} governed schedule(s) cannot dispatch. "
+                    f"{_count_phrase(len(blocked_schedules), 'governed schedule')} "
+                    "cannot dispatch. "
                     "Check dependencies, approval gates, and resource claims."
                 ),
                 "next_action": "Open Enterprise Kernel schedules.",
@@ -128,8 +132,9 @@ def _recommendations(
                 "priority": "medium",
                 "title": "Link projects to workflows",
                 "message": (
-                    f"{len(missing_workflow_projects)} project(s) exist without a durable "
-                    "workflow. Start or relink the workflow before presenting execution proof."
+                    f"{_count_phrase(len(missing_workflow_projects), 'project')} "
+                    "need durable workflow links. Start or relink the workflow before "
+                    "presenting execution proof."
                 ),
                 "next_action": "Open Projects and start the governed workflow.",
             }
@@ -181,14 +186,14 @@ def _graph(
             "label": "Managed Resources",
             "kind": "resource-group",
             **status_read_model("active" if resource_count else "empty"),
-            "human_summary": f"{resource_count} enterprise resource(s) are registered.",
+            "human_summary": f"{_count_phrase(resource_count, 'enterprise resource')} registered.",
         },
         {
             "id": "modules",
             "label": "Enterprise Modules",
             "kind": "module-group",
             **status_read_model("active" if module_count else "empty"),
-            "human_summary": f"{module_count} governed module(s) are registered.",
+            "human_summary": f"{_count_phrase(module_count, 'governed module')} registered.",
         },
         {
             "id": "knowledge",
@@ -196,7 +201,8 @@ def _graph(
             "kind": "knowledge-group",
             **status_read_model("active" if knowledge_count else "empty"),
             "human_summary": (
-                f"{knowledge_count} approved knowledge item(s) can inform future projects."
+                f"{_count_phrase(knowledge_count, 'approved knowledge item')} can inform "
+                "future projects."
             ),
         },
     ]
@@ -351,12 +357,12 @@ def _phase_evidence(
         job for job in jobs if job.status == "succeeded" and phase in job.job_type
     ]
     if succeeded_jobs:
-        evidence.append(f"{len(succeeded_jobs)} completed worker job(s)")
+        evidence.append(_count_phrase(len(succeeded_jobs), "completed worker job"))
     matching_crews = [crew for crew in crews if phase in crew.crew_name.lower()]
     if matching_crews:
-        evidence.append(f"{len(matching_crews)} crew signal(s)")
+        evidence.append(_count_phrase(len(matching_crews), "crew signal"))
     if phase in {"planning", "execution"} and packages:
-        evidence.append(f"{len(packages)} work package record(s)")
+        evidence.append(_count_phrase(len(packages), "work package record"))
     return evidence
 
 
@@ -856,8 +862,8 @@ def _manager_graph(
                     "kind": "crew",
                     **status_read_model("active" if crews or summary["active"] else "standby"),
                     "human_summary": (
-                        f"{len(crews)} completed crew signal(s), "
-                        f"{summary['active']} active work signal(s)."
+                        f"{_count_phrase(len(crews), 'completed crew signal')}, "
+                        f"{_count_phrase(summary['active'], 'active work signal')}."
                     ),
                 },
                 {
@@ -1394,8 +1400,10 @@ async def operating_picture(
         "headline": {
             "state": state,
             "summary": (
-                f"{len(projects)} project(s), {len(moving_jobs)} moving work item(s), "
-                f"{len(problem_jobs)} problem(s), {len(online_workers)} online worker(s)."
+                f"{_count_phrase(len(projects), 'project')}, "
+                f"{_count_phrase(len(moving_jobs), 'moving work item')}, "
+                f"{_count_phrase(len(problem_jobs), 'problem')}, "
+                f"{_count_phrase(len(online_workers), 'online worker')}."
             ),
             "business_meaning": (
                 "The enterprise is ready to create and coordinate work."
@@ -1449,7 +1457,7 @@ async def operating_picture(
             "active_thread_count": maturity[0].active_thread_count,
             "human_summary": (
                 f"Maturity level {maturity[0].maturity_level} covers "
-                f"{len(maturity[0].covered_resource_types)} resource type(s)."
+                f"{_count_phrase(len(maturity[0].covered_resource_types), 'resource type')}."
             ),
         },
         "recommendations": _recommendations(
@@ -1590,8 +1598,10 @@ async def project_operating_picture(
         "headline": {
             "state": state,
             "summary": (
-                f"{len(workflows)} workflow(s), {len(jobs)} job(s), "
-                f"{len(artifacts)} artifact(s), {len(crew_runs)} crew run(s)."
+                f"{_count_phrase(len(workflows), 'workflow')}, "
+                f"{_count_phrase(len(jobs), 'job')}, "
+                f"{_count_phrase(len(artifacts), 'artifact')}, "
+                f"{_count_phrase(len(crew_runs), 'crew run')}."
             ),
             "business_meaning": (
                 "Resolve the visible failed work before presenting project proof."

@@ -282,7 +282,8 @@ async def test_operating_picture_returns_human_readable_graph() -> None:
 
     assert response["query_policy"]["mode"] == "read_only_projection"
     assert response["headline"]["state"] == "active"
-    assert "project(s)" in response["headline"]["summary"]
+    assert "project(s)" not in response["headline"]["summary"]
+    assert "1 project" in response["headline"]["summary"]
     assert response["recommendations"][0]["next_action"]
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "executes" for edge in response["graph"]["edges"])
@@ -360,8 +361,8 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["phase_detail"]["owner_crew"] == "requirements"
     assert response["projects"][0]["phase_detail"]["completed_evidence"] == [
         "linked workflow",
-        "1 completed worker job(s)",
-        "1 crew signal(s)",
+        "1 completed worker job",
+        "1 crew signal",
     ]
     assert response["projects"][0]["phase_detail"]["remaining_work"] == (
         "Continue the workflow and preserve proof for this phase."

@@ -215,3 +215,9 @@ Evidence:
 
 - Fixed Problem Resolution Graph surface-node layout so long text wraps inside each box.
 - Added regression coverage for problem graph card wrapping rules.
+- Replaced raw dashboard/read-model count phrases such as `project(s)`, `worker(s)`,
+  `problem(s)`, `signal(s)`, and `item(s)` with sentence-style singular/plural wording.
+- Added regression coverage so the main dashboard and query read model no longer preserve the raw
+  count-marker style in primary operator text.
+- Source freshness cards now show human meaning, next action, and proof path so operators know
+  whether to continue, refresh, or open a recovery surface.
