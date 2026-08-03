@@ -104,13 +104,20 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "managerSectionSource" in response.text
     assert "dashboardManagerSources" in response.text
     assert "connection needs attention" in response.text
+    assert "waiting for signal" in response.text
+    assert "refresh recommended" in response.text
     assert "verify API readiness before making delivery decisions" in response.text
     assert "Waiting for the first source timestamp" in response.text
     assert "check API logs" not in response.text
     assert "data source(s) need attention" in response.text
     assert "freshness_age_seconds" in response.text
     assert "stale_after_seconds" in response.text
-    assert "stale after" in response.text
+    assert "refresh window" in response.text
+    assert "stale after" not in response.text
+    assert "Data is incomplete" not in response.text
+    assert "Source refresh needed" in response.text
+    assert "Service Pulse" in response.text
+    assert "HTTP Flow" not in response.text
     assert "Business decision board" in response.text
     assert "Guided Route" in response.text
     assert 'data-view="execution"' in response.text

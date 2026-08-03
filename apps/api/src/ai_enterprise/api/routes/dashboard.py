@@ -2105,14 +2105,27 @@ DASHBOARD_HTML = r"""<!doctype html>
       };
     }
 
+    function sourceStateLabel(value) {
+      const labels = {
+        fresh: "fresh",
+        available: "fresh",
+        empty: "waiting for data",
+        stale: "refresh recommended",
+        unavailable: "connection needs attention",
+        not_observed: "waiting for signal",
+        needs_setup: "needs setup"
+      };
+      return labels[String(value || "not_observed").toLowerCase()] || String(value || "waiting for signal").replace(/_/g, " ");
+    }
+
     function managerSectionSource(section, target) {
       if (!section) {
         return {
           label: "Source",
           target,
-          status: "not_observed",
+          status: "waiting for signal",
           className: "info",
-          detail: "This source section is not reported by the dashboard manager yet.",
+          detail: "The dashboard manager has not published this signal yet. Refresh after factory activity starts.",
         };
       }
       const status = section.freshness || section.state || "not_observed";
@@ -2128,11 +2141,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         : `${Math.round(section.freshness_age_seconds)}s old`;
       const staleWindow = section.stale_after_seconds == null
         ? ""
-        : ` · stale after ${section.stale_after_seconds}s`;
+        : ` · refresh window ${section.stale_after_seconds}s`;
       return {
         label: section.source,
         target,
-        status,
+        status: sourceStateLabel(status),
         className,
         detail: `${section.operator_action || section.empty_reason || "Use this section for the current operating picture."} ${age}${staleWindow}`,
       };
@@ -2207,7 +2220,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       const failed = unresolvedProblemJobs().length;
       const moving = state.jobs.filter(job => ["queued", "running"].includes(job.status)).length;
       const staleSources = Object.values(state.sources).filter(source => source.status !== "fresh").length;
-      const health = staleSources ? "Data is incomplete" : failed ? "Action required" : "Factory is stable";
+      const health = staleSources ? "Source refresh needed" : failed ? "Action required" : "Factory is stable";
       const value = state.projects.length
         ? `${countSentence(state.projects.length, "project")} visible. ${countSentence(moving, "work item")} moving or waiting.`
         : "No active project is visible. Start with a manifesto to create business value.";
@@ -2757,7 +2770,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Solutions", detail: "Project intelligence converts problems into calibration and recommendations.", idea: "Review improvements before restarting blocked work.", effect: "Reduces repeat failures across future projects.", signal: "improve", kind: "info", action: "projects" }
       ].concat(improvementProposals));
       renderSurfaceNodes("telemetryGraph", [
-        { title: "HTTP Flow", detail: "Request and route counters prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
+        { title: "Service Pulse", detail: "Dashboard and API activity prove the service is receiving traffic.", idea: "Use traffic as a basic heartbeat for the operator system.", effect: `${requestCount} recorded request(s).`, signal: `${requestCount}`, kind: "info", action: "metrics" },
         { title: "Dashboard Pulse", detail: "Manager surface usage is tracked as a runtime signal.", idea: "The dashboard itself becomes part of operations telemetry.", effect: `${dashboardHits} dashboard hit(s).`, signal: `${dashboardHits}`, kind: "ok", action: "metrics" },
         { title: "Worker Health", detail: "Worker counts calibrate enterprise operating capacity.", idea: "Capacity should match project parallelism.", effect: `${online} worker(s) available.`, signal: `${online}`, kind: online ? "ok" : "warn", action: "problems" },
         { title: "Problem Pressure", detail: "Blocked work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${failed} followed issue(s).`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },

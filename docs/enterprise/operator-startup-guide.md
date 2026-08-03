@@ -248,7 +248,8 @@ patterns and future factory material.
 Before acting, check the data-source freshness strip. It confirms whether API readiness, jobs,
 workers, projects, and metrics were updated successfully during the latest refresh. If a source
 needs attention, open that panel, refresh, and verify API readiness before making delivery
-decisions. The dashboard describes this as source readiness work, not as a raw log problem.
+decisions. The dashboard describes source cards as fresh, waiting for signal, refresh recommended,
+or connection needs attention so the operator sees the next action instead of raw freshness terms.
 
 Read the Business Decision Board next. It explains the current state, value in motion, visible risk,
 and recommended next move in short business language.
@@ -338,6 +339,8 @@ Operating discipline for every project:
 - Errors are followed as first-class project signals, not hidden logs.
 - Expand Proof detail when you need the worker proof behind a problem, without making the main
   dashboard read like internal logs.
+- Use Open Attempts to inspect attempt proof, and Record Reviewed Recovery when the operator has
+  reviewed a blocked work item and wants to preserve it as history.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
 - Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty
