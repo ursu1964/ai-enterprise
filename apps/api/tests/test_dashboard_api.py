@@ -230,10 +230,13 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "blueprint_candidates" in response.text
     assert "guardrail_candidates" in response.text
     assert "reuseReadiness" in response.text
+    assert "next_catalog_review" in response.text
+    assert "nextCatalogReview" in response.text
     assert "catalog_review_ready" in response.text
     assert "needs_more_proof" in response.text
     assert "guardrails_evidence_required" in response.text
     assert "Review-ready:" in response.text
+    assert "Next review:" in response.text
     assert "needs proof:" in response.text
     assert "Evidence required:" in response.text
     assert "No reusable learning candidates have been observed yet." in response.text

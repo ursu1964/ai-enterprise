@@ -630,6 +630,15 @@ def _reuse_learning_summary(
     return {
         "blueprint_candidates": blueprint_candidates[:5],
         "guardrail_candidates": guardrail_candidates[:5],
+        "next_catalog_review": None
+        if not ready_blueprints
+        else {
+            "blueprint_key": ready_blueprints[0]["blueprint_key"],
+            "project_id": ready_blueprints[0]["project_id"],
+            "project_name": ready_blueprints[0]["project_name"],
+            "evidence_count": ready_blueprints[0]["evidence_count"],
+            "operator_action": ready_blueprints[0]["readiness_detail"]["next_action"],
+        },
         "readiness": {
             "catalog_review_ready": len(ready_blueprints),
             "needs_more_proof": blocked_blueprints,

@@ -18,6 +18,7 @@ from ai_enterprise.infrastructure.database.models import (
     CrewRunModel,
     JobModel,
     ProjectModel,
+    WorkPackageModel,
 )
 from ai_enterprise.infrastructure.database.workflow_models import WorkflowInstanceModel
 from ai_enterprise.infrastructure.jobs.models import WorkerInstanceModel
@@ -141,6 +142,28 @@ def worker(now: datetime) -> WorkerInstanceModel:
         last_heartbeat_at=now,
         stopped_at=None,
         created_at=now,
+    )
+
+
+def work_package(now: datetime, project_id: uuid.UUID, run_id: uuid.UUID) -> WorkPackageModel:
+    return WorkPackageModel(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        planning_run_id=run_id,
+        artifact_id=None,
+        status="approved",
+        title="Reusable implementation package",
+        objective="Preserve a proven implementation path for reuse.",
+        repository_url=None,
+        base_commit_sha="1" * 64,
+        source_requirements_artifact_id=uuid.uuid4(),
+        source_requirements_hash="2" * 64,
+        source_architecture_artifact_id=uuid.uuid4(),
+        source_architecture_hash="3" * 64,
+        contract={"scope": "reuse-ready"},
+        contract_hash="4" * 64,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -281,6 +304,54 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "assigns" for edge in response["graph"]["edges"])
     assert all("status_label" in node for node in response["graph"]["nodes"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_manager_marks_reuse_candidate_ready_for_catalog_review() -> None:
+    now = datetime.now(UTC)
+    project_id = uuid.uuid4()
+    row = project(now, project_id)
+    run_id = uuid.uuid4()
+    crew_run = CrewRunModel(
+        id=run_id,
+        project_id=project_id,
+        crew_name="planning",
+        status="succeeded",
+        input_payload={},
+        output_payload={},
+        error_message=None,
+        started_at=now,
+        completed_at=now,
+        created_at=now,
+    )
+    first_job = job(now, project_id, "succeeded")
+    second_job = job(now, project_id, "succeeded")
+    package = work_package(now, project_id, run_id)
+    rows = [
+        [row],
+        [workflow(now, project_id)],
+        [first_job, second_job],
+        [crew_run],
+        [package],
+        [],
+        [],
+        [],
+    ]
+
+    response = await dashboard_manager(QuerySession(rows), actor())  # type: ignore[arg-type]
+
+    candidate = response["reuse"]["blueprint_candidates"][0]
+    assert candidate["lifecycle"] == "reviewed"
+    assert candidate["readiness_level"] == "catalog_review_ready"
+    assert candidate["promotion_blockers"] == []
+    assert candidate["evidence_count"] == 4
+    assert candidate["readiness_detail"]["label"] == "Ready for catalog review"
+    assert "enough operational proof" in candidate["readiness_detail"]["meaning"]
+    assert response["reuse"]["readiness"]["catalog_review_ready"] == 1
+    assert response["reuse"]["readiness"]["needs_more_proof"] == 0
+    assert response["reuse"]["next_catalog_review"]["project_id"] == str(project_id)
+    assert response["reuse"]["next_catalog_review"]["project_name"] == row.name
+    assert response["reuse"]["next_catalog_review"]["evidence_count"] == 4
 
 
 @pytest.mark.asyncio
