@@ -355,6 +355,8 @@ async def _session(session_id: uuid.UUID, session: SessionDependency) -> AgentRu
 
 
 def _require_runtime_read(actor: Actor, row: AgentRuntimeSessionModel) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(403, "Human runtime read authority is required")
     try:
         require_capability(actor, "runtime.read", f"runtime_session:{row.id}")
         return

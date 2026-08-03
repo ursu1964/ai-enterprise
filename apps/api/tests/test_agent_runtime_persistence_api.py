@@ -173,6 +173,28 @@ async def test_runtime_read_requires_matching_capability_scope() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_read_requires_human_actor() -> None:
+    row = runtime_session()
+    denied = Actor(
+        "runtime-service",
+        "service",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"project:{row.scope_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_runtime_session(
+            row.id,
+            RuntimeReadSession(row),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human runtime read authority is required"
+
+
+@pytest.mark.asyncio
 async def test_model_deployment_list_exposes_friendly_status_labels() -> None:
     deployment = ModelDeploymentModel(
         id=uuid.uuid4(),
@@ -251,6 +273,32 @@ async def test_runtime_lineage_rejects_wrong_actor_scope(route) -> None:
         )
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "route",
+    [get_context, get_tool_invocations, get_model_invocations, get_validation],
+)
+async def test_runtime_lineage_rejects_non_human_actor(route) -> None:
+    row = runtime_session()
+    denied = Actor(
+        "runtime-service",
+        "service",
+        "operator",
+        frozenset({"runtime.read"}),
+        scopes=frozenset({f"runtime_session:{row.id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await route(
+            row.id,
+            RuntimeReadSession(row),  # type: ignore[arg-type]
+            denied,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human runtime read authority is required"
 
 
 @pytest.mark.asyncio
