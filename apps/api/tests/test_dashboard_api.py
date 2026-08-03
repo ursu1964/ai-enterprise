@@ -229,6 +229,10 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Promotion blockers:" in response.text
     assert "trust_level" in response.text
     assert "Collect governed evidence before reuse." in response.text
+    assert "proposal_type" in response.text
+    assert "evidence_sources" in response.text
+    assert "evidence required" in response.text
+    assert "Review before reuse." in response.text
     assert "Project Foundry Core" in response.text
     assert "/dashboard/project-foundry-core" in response.text
     assert "Authenticated Graph Context" in response.text
@@ -460,7 +464,14 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert "Refresh Live Proof" in response.text
     assert "Live proof checked" in response.text
     assert "proofHealthCard" in response.text
+    assert 'id="proofHealthCard" class="proof-card" href="/dashboard"' in response.text
+    assert 'id="proofProjectsCard" class="proof-card" href="/dashboard#projects"' in response.text
+    assert 'id="proofTelemetryCard" class="proof-card" href="/dashboard#metrics"' in response.text
+    assert 'id="proofNextCard" class="proof-card" href="/dashboard#factory"' in response.text
     assert "loadLiveProof" in response.text
+    assert "card.href = href" in response.text
+    assert "Click to open Projects" in response.text
+    assert "Click to watch live project movement." in response.text
     assert "/health/ready" in response.text
     assert "/api/v1/projects" in response.text
     assert (
@@ -872,6 +883,14 @@ async def test_project_intelligence_classifies_worker_errors_for_humans() -> Non
     assert "resolve current issues before reuse" in response["blueprints"][0][
         "lifecycle_detail"
     ]["promotion_blockers"]
+    proposal = response["blueprints"][0]["improvement_proposals"][0]
+    assert proposal["proposal_key"] == "blueprint.intake.git.guardrail"
+    assert proposal["proposal_type"] == "guardrail_or_template_update"
+    assert proposal["status"] == "proposed"
+    assert proposal["evidence_required"] is True
+    assert proposal["evidence_sources"][0]["type"] == "project_job_failure"
+    assert proposal["evidence_sources"][0]["job_type"] == "execute_work_package"
+    assert "update the reusable blueprint" in proposal["operator_action"]
     assert response["blueprints"][0]["improvement_proposals"][0]["phase"] == "intake"
     assert response["blueprints"][0]["improvement_proposals"][0]["failure_class"] == "git"
 

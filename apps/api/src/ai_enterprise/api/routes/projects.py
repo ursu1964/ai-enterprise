@@ -771,8 +771,10 @@ def _blueprint_lifecycle_detail(
     }
 
 
-def _blueprint_improvement_proposals(phases: list[dict[str, object]]) -> list[dict[str, str]]:
-    proposals: list[dict[str, str]] = []
+def _blueprint_improvement_proposals(
+    phases: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    proposals: list[dict[str, object]] = []
     for phase in phases:
         issues = phase.get("current_issues")
         if not isinstance(issues, list):
@@ -780,13 +782,35 @@ def _blueprint_improvement_proposals(phases: list[dict[str, object]]) -> list[di
         for issue in issues:
             if not isinstance(issue, dict):
                 continue
+            phase_name = str(phase["name"])
+            failure_class = str(issue.get("failure_class") or "unknown")
+            job_id = str(issue.get("job_id") or "")
             proposals.append(
                 {
-                    "phase": str(phase["name"]),
-                    "failure_class": str(issue.get("failure_class") or "unknown"),
+                    "proposal_key": (
+                        f"blueprint.{phase_name}.{failure_class}.guardrail"
+                    ),
+                    "phase": phase_name,
+                    "failure_class": failure_class,
+                    "proposal_type": "guardrail_or_template_update",
+                    "status": "proposed",
                     "proposal": str(
                         issue.get("next_action")
                         or "Convert this repeated failure into a guardrail or template."
+                    ),
+                    "evidence_required": True,
+                    "evidence_sources": [
+                        {
+                            "type": "project_job_failure",
+                            "job_id": job_id,
+                            "job_type": str(issue.get("job_type") or "unknown"),
+                            "status": str(issue.get("status") or "unknown"),
+                        }
+                    ],
+                    "operator_action": (
+                        "Review the failed job evidence, update the reusable "
+                        "blueprint, and keep the proposal in review until the "
+                        "guardrail is verified."
                     ),
                 }
             )

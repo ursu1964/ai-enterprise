@@ -211,6 +211,8 @@ The Demo Story also shows a Live Proof strip. It checks API health, visible proj
 availability, and the recommended next live step.
 Press Refresh Live Proof before a presentation or test run. The strip records the latest check time
 and marks each proof source as ready, needs setup, or not confirmed.
+Each proof card is clickable: health opens Command Center, projects open Projects or Factory,
+telemetry opens Metrics, and the next-step card opens Factory or Execution based on live state.
 
 Direct dashboard panel links:
 
