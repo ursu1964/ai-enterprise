@@ -223,6 +223,8 @@ Direct dashboard panel links:
 - Project inspection: `http://localhost:8000/dashboard#projects`
 - Telemetry and metrics: `http://localhost:8000/dashboard#metrics`
 - Documentation Hub: `http://localhost:8000/dashboard/documentation-hub`
+- Code graph: `http://localhost:8000/dashboard/graphify`; if it needs setup, run
+  `graphify update .` and reopen the page.
 
 Use the Documentation Hub when you need operator guides, the manifest template, foundry core, graph
 links, and verification commands in one place. If a document preview cannot load, the hub explains
@@ -345,6 +347,8 @@ Operating discipline for every project:
   reviewed a blocked work item and wants to preserve it as history.
 - Empty runtime fields use waiting language such as waiting for proof, waiting for worker, and
   waiting for heartbeat so the operator knows the system is expecting future evidence.
+- Empty listboxes and document previews explain the next useful action, such as selecting a document
+  or waiting for the first governed record, so quiet panels do not look like broken data sources.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
 - Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty

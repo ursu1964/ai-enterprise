@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from ai_enterprise.api.dependencies import Actor, get_actor
+from ai_enterprise.api.routes import dashboard as dashboard_routes
 from ai_enterprise.api.routes.dashboard import (
     dashboard_context,
     dashboard_deployment_blueprint,
@@ -198,11 +199,17 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Launch Mock Factory Test" in response.text
     assert "Mock Autonomy" in response.text
     assert "Launch Result" in response.text
+    assert "Launch is waiting for preview or start." in response.text
     assert "Project Readiness" in response.text
     assert "No project readiness items yet" in response.text
+    assert "Live evidence is waiting for the first governed record" in response.text
+    assert "Evidence is waiting for the first governed record" in response.text
     assert "launch-contract-list" in response.text
     assert "Open Recommended View" in response.text
     assert "Open Proof Path" in response.text
+    assert "No launch has started yet" not in response.text
+    assert "No live records are available" not in response.text
+    assert "No evidence has been recorded" not in response.text
     assert (
         "No project readiness items yet. Press Preview Launch or start the factory "
         "to populate this list."
@@ -508,6 +515,8 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Operator Documents" in response.text
     assert "Document Preview" in response.text
     assert "docPreview" in response.text
+    assert "Select a document from Operator Documents to preview it here." in response.text
+    assert "No document selected." not in response.text
     assert "doc-open" in response.text
     assert "Open Plain Text" in response.text
     assert "Open Raw Text" not in response.text
@@ -576,9 +585,45 @@ def test_documentation_endpoint_previews_and_downloads_registered_documents() ->
 def test_documentation_endpoint_rejects_unregistered_documents() -> None:
     client = TestClient(app)
 
-    response = client.get("/dashboard/documentation/../../.env")
+    traversal = client.get("/dashboard/documentation/../../.env")
+    response = client.get("/dashboard/documentation/not-registered-doc")
+
+    assert traversal.status_code == 404
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Operator document is not registered"
+
+
+def test_documentation_endpoint_explains_missing_registered_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    client = TestClient(app)
+    monkeypatch.setitem(
+        dashboard_routes.OPERATOR_DOCUMENT_FILES,
+        "missing-document",
+        {"path": tmp_path / "missing.md", "filename": "missing.md"},
+    )
+
+    response = client.get("/dashboard/documentation/missing-document")
 
     assert response.status_code == 404
+    assert (
+        response.json()["detail"]
+        == "Operator document file needs setup in the Documentation Hub"
+    )
+
+
+def test_graphify_dashboard_explains_missing_generated_graph(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    client = TestClient(app)
+    monkeypatch.setattr(dashboard_routes, "GRAPHIFY_HTML", tmp_path / "missing.html")
+
+    response = client.get("/dashboard/graphify")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == (
+        "Code graph needs generation. Run graphify update ., then reopen this page."
+    )
 
 
 def test_demo_story_page_explains_idea_to_reality() -> None:

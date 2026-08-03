@@ -46,7 +46,10 @@ def _load_tool_function(module_name: str, function_name: str) -> Any:
     module_path = _repo_path(f"tools/{module_name}.py")
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
-        raise HTTPException(status_code=503, detail=f"{module_name} tool is not available")
+        raise HTTPException(
+            status_code=503,
+            detail=f"{module_name} tool needs setup before this dashboard check can run",
+        )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return getattr(module, function_name)
@@ -141,7 +144,10 @@ async def dashboard_documentation_document(
         raise HTTPException(status_code=404, detail="Operator document is not registered")
     path = document["path"]
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Operator document is not available")
+        raise HTTPException(
+            status_code=404,
+            detail="Operator document file needs setup in the Documentation Hub",
+        )
     return _markdown_response(
         path.read_text(encoding="utf-8"),
         filename=document["filename"],
@@ -152,7 +158,10 @@ async def dashboard_documentation_document(
 @router.get("/dashboard/graphify", response_class=FileResponse)
 async def graphify_dashboard() -> FileResponse:
     if not GRAPHIFY_HTML.exists():
-        raise HTTPException(status_code=404, detail="Graphify dashboard is not mounted")
+        raise HTTPException(
+            status_code=404,
+            detail="Code graph needs generation. Run graphify update ., then reopen this page.",
+        )
     return FileResponse(GRAPHIFY_HTML, media_type="text/html")
 
 
@@ -580,8 +589,8 @@ async def dashboard_infrastructure_choices() -> dict[str, Any]:
 CLIENT_MANIFEST_TEMPLATE = """# AI-Enterprise Client Project Manifest
 
 This document collects the information AI Enterprise needs before creating a project.
-Complete what you know. If something is unknown, leave it blank and AI Enterprise will identify the
-gap during intake.
+Complete what you know. If something is not decided yet, leave it blank and AI Enterprise will
+identify the gap during intake.
 
 ## Chapter 1 - Project Identity
 
@@ -978,7 +987,7 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
       <article class="panel span-12">
         <h2>Document Preview</h2>
         <p id="docStatus" class="doc-status">Select a document. It will appear here in a large reading box with a vertical scrollbar and a download action.</p>
-        <pre id="docPreview" class="doc-preview">No document selected.</pre>
+        <pre id="docPreview" class="doc-preview">Select a document from Operator Documents to preview it here.</pre>
         <div class="doc-actions">
           <a id="docDownload" class="button" href="/dashboard/client-manifest-template">Download Selected Document</a>
           <a id="docOpenRaw" class="button" href="/dashboard/documentation/client-manifest-template" target="_blank" rel="noreferrer">Open Plain Text</a>
@@ -1884,7 +1893,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div id="manifestPreview" class="mini muted">Download the client manifest, send it to the client or requesting service, then upload the completed document here.</div>
         <div id="launchContract" class="mini launch-contract">
           <strong>Launch Result</strong>
-          <div class="muted">No launch has started yet. Preview or start a project to see what was created, what needs attention, and where to inspect first.</div>
+          <div class="muted">Launch is waiting for preview or start. The result will show what was created, what needs attention, and where to inspect first.</div>
         </div>
       </article>
     </section>
@@ -2032,14 +2041,14 @@ DASHBOARD_HTML = r"""<!doctype html>
       return response.text();
     }
 
-    function table(rows, columns, emptyMessage = "No evidence has been recorded for this section yet.") {
+    function table(rows, columns, emptyMessage = "Evidence is waiting for the first governed record in this section.") {
       if (!rows.length) return `<div class="mini muted">${esc(emptyMessage)}</div>`;
       return `<table><thead><tr>${columns.map(col => `<th>${esc(col.label)}</th>`).join("")}</tr></thead><tbody>` +
         rows.map(row => `<tr>${columns.map(col => `<td>${esc(col.value(row))}</td>`).join("")}</tr>`).join("") +
         `</tbody></table>`;
     }
 
-    function listbox(rows, renderItem, emptyMessage = "No live records are available for this section yet.") {
+    function listbox(rows, renderItem, emptyMessage = "Live evidence is waiting for the first governed record in this section.") {
       if (!rows.length) return `
         <div class="listbox">
           <div class="list-item empty-state">
