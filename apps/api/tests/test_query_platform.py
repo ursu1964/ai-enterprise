@@ -662,9 +662,28 @@ async def test_dashboard_manager_explains_empty_source_sections() -> None:
     assert response["headline"]["state"] == "waiting_for_manifesto"
     assert response["sections"]["projects"]["state"] == "empty"
     assert response["sections"]["projects"]["empty_reason"] == (
-        "No manifesto project has been created yet."
+        "Waiting for the first manifesto project to be created or ingested."
     )
-    assert response["sections"]["graph"]["meaning"]["label"] == "No records yet"
+    assert response["sections"]["workflows"]["empty_reason"] == (
+        "Waiting for durable workflow records to be linked to visible projects."
+    )
+    assert response["sections"]["jobs"]["empty_reason"] == (
+        "Waiting for the first worker job to be queued or executed for these projects."
+    )
+    assert response["sections"]["workers"]["empty_reason"] == (
+        "Waiting for the first worker heartbeat."
+    )
+    assert response["sections"]["telemetry"]["empty_reason"] == (
+        "Waiting for governed metrics or audit events for this view."
+    )
+    assert response["sections"]["graph"]["empty_reason"] == (
+        "Waiting for project nodes after the first visible project record."
+    )
+    assert response["sections"]["graph"]["meaning"]["label"] == "Waiting for first records"
+    assert response["sections"]["graph"]["operator_action"] == (
+        "Waiting for first governed records. Create or link records when this section "
+        "should begin showing live evidence."
+    )
     assert response["sections"]["workers"]["operator_action"] == (
         "Start worker services before scaling parallel work."
     )

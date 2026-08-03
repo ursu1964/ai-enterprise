@@ -349,6 +349,10 @@ Operating discipline for every project:
   waiting for heartbeat so the operator knows the system is expecting future evidence.
 - Empty listboxes and document previews explain the next useful action, such as selecting a document
   or waiting for the first governed record, so quiet panels do not look like broken data sources.
+- Empty dashboard source cards say they are waiting for first governed records and explain when to
+  create or link evidence, instead of saying that records are simply missing.
+- Source-card empty reasons name the expected first signal, such as manifesto project, workflow
+  record, worker job, heartbeat, telemetry event, or project graph node.
 - Dashboard manager recovery signals use recovery review, proof detail, and recurring problem
   language so API data and visual panels explain the same operator action.
 - Recoverable phase states use the same plain pattern: the work needs recovery, the proof explains

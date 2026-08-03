@@ -443,10 +443,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Continue the workflow until this phase becomes current.",
     ),
     "empty": Meaning(
-        "No records yet",
+        "Waiting for first records",
         "info",
-        "The source is reachable but has no records for this section.",
-        "Create or link records before expecting this section to show data.",
+        "The source is reachable and is waiting for the first governed records in this section.",
+        "Create or link governed records when this section should begin showing live evidence.",
     ),
     "available": Meaning(
         "Available",
@@ -1158,7 +1158,8 @@ def source_contract(
         "empty_reason": empty_reason if available and record_count == 0 else None,
         "operator_action": operator_action
         or (
-            "No records exist yet; create or link records for this section."
+            "Waiting for first governed records. Create or link records when this section "
+            "should begin showing live evidence."
             if record_count == 0
             else "Refresh this source before making delivery decisions."
             if is_stale

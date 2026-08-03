@@ -1168,7 +1168,7 @@ async def dashboard_manager(
                 record_count=len(projects),
                 latest_at=_latest_time(projects, "updated_at"),
                 stale_after=timedelta(hours=24),
-                empty_reason="No manifesto project has been created yet.",
+                empty_reason="Waiting for the first manifesto project to be created or ingested.",
                 operator_action="Open Factory and create or ingest a manifesto project.",
             ),
             "workflows": source_contract(
@@ -1177,7 +1177,9 @@ async def dashboard_manager(
                 record_count=len(workflows),
                 latest_at=_latest_time(workflows, "updated_at"),
                 stale_after=timedelta(hours=2),
-                empty_reason="Projects exist without durable workflow records.",
+                empty_reason=(
+                    "Waiting for durable workflow records to be linked to visible projects."
+                ),
                 operator_action="Start or relink workflows before presenting execution proof.",
             ),
             "jobs": source_contract(
@@ -1186,7 +1188,10 @@ async def dashboard_manager(
                 record_count=len(jobs),
                 latest_at=_latest_time(jobs, "created_at"),
                 stale_after=timedelta(minutes=30),
-                empty_reason="No worker jobs have been queued or executed for these projects.",
+                empty_reason=(
+                    "Waiting for the first worker job to be queued or executed for these "
+                    "projects."
+                ),
                 operator_action="Start workflow execution to create job evidence.",
             ),
             "workers": source_contract(
@@ -1195,7 +1200,7 @@ async def dashboard_manager(
                 record_count=len(workers),
                 latest_at=_latest_time(workers, "last_heartbeat_at"),
                 stale_after=timedelta(minutes=5),
-                empty_reason="No worker heartbeat is visible.",
+                empty_reason="Waiting for the first worker heartbeat.",
                 operator_action="Start worker services before scaling parallel work.",
             ),
             "telemetry": source_contract(
@@ -1205,7 +1210,7 @@ async def dashboard_manager(
                 latest_at=_latest_time(metrics, "calculated_at")
                 or _latest_time(audits, "created_at"),
                 stale_after=timedelta(minutes=15),
-                empty_reason="No governed metrics or audit events are visible for this view.",
+                empty_reason="Waiting for governed metrics or audit events for this view.",
                 operator_action="Run work and collect audit or performance evidence.",
             ),
             "graph": source_contract(
@@ -1215,9 +1220,8 @@ async def dashboard_manager(
                 latest_at=datetime.now(UTC) if summaries else None,
                 stale_after=timedelta(minutes=5),
                 empty_reason=(
-                    "The graph has no project nodes because no project records are visible."
+                    "Waiting for project nodes after the first visible project record."
                 ),
-                operator_action="Use this section for the current operating picture.",
             ),
         },
         "projects": summaries,
