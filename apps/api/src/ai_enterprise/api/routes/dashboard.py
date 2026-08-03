@@ -42,6 +42,11 @@ def _repo_path(path: str) -> Path:
     return _repo_root() / path
 
 
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    label = singular if count == 1 else plural or f"{singular}s"
+    return f"{count} {label}"
+
+
 def _load_tool_function(module_name: str, function_name: str) -> Any:
     module_path = _repo_path(f"tools/{module_name}.py")
     spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -463,7 +468,7 @@ async def dashboard_server_readiness() -> dict[str, Any]:
         "summary": (
             "Server migration checks are ready to run."
             if not failed
-            else f"{len(failed)} server readiness item(s) need setup."
+            else f"{_count_phrase(len(failed), 'server readiness item')} need setup."
         ),
         "checks": checks,
         "commands": [
@@ -2217,7 +2222,7 @@ DASHBOARD_HTML = r"""<!doctype html>
           health: headline.state.replace(/_/g, " "),
           value: headline.summary,
           risk: unresolved
-            ? `${unresolved} issue(s) need review before scaling parallel work.`
+            ? `${countSentence(unresolved, "issue")} need review before scaling parallel work.`
             : headline.business_meaning,
           next: [
             firstAction?.next_action || "Open Projects",
@@ -2236,9 +2241,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         ? `${countSentence(state.projects.length, "project")} visible. ${countSentence(moving, "work item")} moving or waiting.`
         : "No active project is visible. Start with a manifesto to create business value.";
       const risk = failed
-        ? `${failed} issue(s) need review. Open Problems and follow the recommended recovery path.`
+        ? `${countSentence(failed, "issue")} need review. Open Problems and follow the recommended recovery path.`
         : staleSources
-          ? `${staleSources} data source(s) need attention. Refresh and confirm readiness before making delivery decisions.`
+          ? `${countSentence(staleSources, "data source")} need attention. Refresh and confirm readiness before making delivery decisions.`
           : "No urgent delivery risk is visible. Continue creating or inspecting projects.";
       const next = failed
         ? ["Resolve Issues", "problems", "Review blocked work first."]
@@ -2251,7 +2256,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     function renderBusinessBoard() {
       const brief = businessBrief();
       const cards = [
-        ["Business State", brief.health, `${brief.online} worker(s) online. The board refreshes every 15 seconds.`, "overview"],
+        ["Business State", brief.health, `${countSentence(brief.online, "worker")} online. The board refreshes every 15 seconds.`, "overview"],
         ["Value in Motion", brief.value, "Use this to see whether delivery capacity is producing outcomes.", "projects"],
         ["Risk and Attention", brief.risk, "Fix risk before scaling parallel work.", brief.next[1]],
         ["Recommended Next Move", brief.next[2], "This is the best next action from the current live state.", brief.next[1]]
@@ -3749,7 +3754,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         .slice(0, 4)
         .map(([failureClass, count]) => ({
           title: `Guardrail proposal: ${failureClass.replace(/_/g, " ")}`,
-          detail: `${count} current problem(s) share this class.`,
+          detail: `${countSentence(count, "current problem")} share this class.`,
           idea: "Recurring problem classes should become a recovery checklist, test guardrail, or project template improvement.",
           effect: "Reduces repeat problems before more work is queued.",
           signal: "proposed",
@@ -3769,7 +3774,7 @@ DASHBOARD_HTML = r"""<!doctype html>
             : `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required from job attempts.`;
           return {
             title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
-            detail: `${proposal.current_failure_count || 0} current problem(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
+            detail: `${countSentence(proposal.current_failure_count || 0, "current problem")} share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
             idea: proposal.recommendation || "Recurring problem classes should become a recovery checklist, test guardrail, or project template improvement.",
             effect: proposal.improvement_draft?.evidence_required
               ? evidenceEffect
