@@ -9,7 +9,11 @@ from ai_enterprise.application.workflow.service import WorkflowService, workflow
 from ai_enterprise.domain.enums import ProjectStatus
 from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.workflow.context import WorkflowContext
-from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
+from ai_enterprise.domain.workflow.enums import (
+    WorkflowEventName,
+    WorkflowState,
+    WorkflowStepName,
+)
 from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records
 from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import AuditEventModel, JobModel, ProjectModel
@@ -321,12 +325,12 @@ async def test_workflow_start_writes_tamper_evident_audit_chain() -> None:
 
     assert session.committed is True
     assert workflow.project_id == row.id
-    assert audit.event_type == "workflow.started"
+    assert audit.event_type == WorkflowEventName.STARTED
     assert audit.payload["audit_chain"]["record_hash"] == chain.record_hash
-    assert chain.payload["event_type"] == "workflow.started"
+    assert chain.payload["event_type"] == WorkflowEventName.STARTED
     assert chain.payload["payload"]["workflow_id"] == str(workflow.id)
     assert job.job_type == "advance_workflow"
-    assert_single_valid_chain(session, "workflow.started")
+    assert_single_valid_chain(session, WorkflowEventName.STARTED)
 
 
 @pytest.mark.asyncio
@@ -348,10 +352,10 @@ async def test_workflow_relink_writes_tamper_evident_audit_chain() -> None:
     assert workflow.state == WorkflowState.WAITING_REQUIREMENTS_APPROVAL
     audit = next(item for item in session.added if isinstance(item, AuditEventModel))
     chain = next(item for item in session.added if isinstance(item, AuditChainRecordModel))
-    assert audit.event_type == "workflow.relinked"
-    assert chain.payload["event_type"] == "workflow.relinked"
+    assert audit.event_type == WorkflowEventName.RELINKED
+    assert chain.payload["event_type"] == WorkflowEventName.RELINKED
     assert chain.payload["payload"]["state"] == WorkflowState.WAITING_REQUIREMENTS_APPROVAL
-    assert_single_valid_chain(session, "workflow.relinked")
+    assert_single_valid_chain(session, WorkflowEventName.RELINKED)
 
 
 @pytest.mark.asyncio
@@ -380,10 +384,10 @@ async def test_workflow_cancel_writes_tamper_evident_audit_chain() -> None:
     )
 
     audit = next(item for item in session.added if isinstance(item, AuditEventModel))
-    chain = assert_single_valid_chain(session, "workflow.cancelled")
+    chain = assert_single_valid_chain(session, WorkflowEventName.CANCELLED)
     assert session.committed is True
     assert result.state == WorkflowState.CANCELLED
     assert repository.transitions == [WorkflowState.CANCELLING, WorkflowState.CANCELLED]
-    assert audit.event_type == "workflow.cancelled"
+    assert audit.event_type == WorkflowEventName.CANCELLED
     assert audit.payload["audit_chain"]["record_hash"] == chain.record_hash
     assert chain.payload["payload"]["reason"] == "Operator stopped the run."

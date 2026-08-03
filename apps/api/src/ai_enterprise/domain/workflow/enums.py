@@ -30,6 +30,15 @@ class WorkflowStepName(StrEnum):
     COMPLETENESS = "completeness"
 
 
+class WorkflowEventName(StrEnum):
+    STARTED = "workflow.started"
+    RELINKED = "workflow.relinked"
+    TRANSITIONED = "workflow.transitioned"
+    CANCELLED = "workflow.cancelled"
+    FAILED = "workflow.failed"
+    COMPLETED = "workflow.completed"
+
+
 TERMINAL_STATES = frozenset(
     {WorkflowState.COMPLETED, WorkflowState.CANCELLED, WorkflowState.FAILED}
 )

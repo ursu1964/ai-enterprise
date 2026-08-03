@@ -7,7 +7,11 @@ from ai_enterprise.application.workflow.completeness import verify_completeness
 from ai_enterprise.application.workflow.repository import WorkflowRepository
 from ai_enterprise.domain.workflow.context import WorkflowContext
 from ai_enterprise.domain.workflow.contracts import RequirementsContract
-from ai_enterprise.domain.workflow.enums import WorkflowState, WorkflowStepName
+from ai_enterprise.domain.workflow.enums import (
+    WorkflowEventName,
+    WorkflowState,
+    WorkflowStepName,
+)
 from ai_enterprise.domain.workflow.state_machine import (
     AUTO_APPROVAL_TRANSITIONS,
     LEGAL_TRANSITIONS,
@@ -132,6 +136,17 @@ def test_state_machine_accepts_documented_graph_and_rejects_shortcuts() -> None:
 
     with pytest.raises(IllegalWorkflowTransition):
         require_transition(WorkflowState.PROJECT_CREATED, WorkflowState.INTEGRATING)
+
+
+def test_workflow_event_names_are_canonical_audit_names() -> None:
+    assert {event.value for event in WorkflowEventName} == {
+        "workflow.started",
+        "workflow.relinked",
+        "workflow.transitioned",
+        "workflow.cancelled",
+        "workflow.failed",
+        "workflow.completed",
+    }
 
 
 def test_auto_approval_skips_are_explicit_policy_decisions() -> None:

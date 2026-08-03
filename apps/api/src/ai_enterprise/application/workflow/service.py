@@ -16,7 +16,12 @@ from ai_enterprise.domain.execution.enums import ExecutionStatus
 from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.review.enums import PatchReviewStatus
 from ai_enterprise.domain.workflow.context import WorkflowContext
-from ai_enterprise.domain.workflow.enums import TERMINAL_STATES, WorkflowState, WorkflowStepName
+from ai_enterprise.domain.workflow.enums import (
+    TERMINAL_STATES,
+    WorkflowEventName,
+    WorkflowState,
+    WorkflowStepName,
+)
 from ai_enterprise.infrastructure.database.models import (
     ApprovalModel,
     ArtifactModel,
@@ -209,7 +214,7 @@ class WorkflowService:
         )
         await AuditWriter(self.session).append_project_event(
             project_id=project_id,
-            event_type="workflow.started",
+            event_type=WorkflowEventName.STARTED,
             actor_type="human",
             actor_id=actor_id,
             payload={"workflow_id": str(workflow_id), "correlation_id": str(correlation_id)},
@@ -286,7 +291,7 @@ class WorkflowService:
         )
         await AuditWriter(self.session).append_project_event(
             project_id=project_id,
-            event_type="workflow.relinked",
+            event_type=WorkflowEventName.RELINKED,
             actor_type="human",
             actor_id=actor_id,
             payload={
@@ -336,7 +341,7 @@ class WorkflowService:
             )
             await AuditWriter(self.session).append_project_event(
                 project_id=workflow.project_id,
-                event_type="workflow.transitioned",
+                event_type=WorkflowEventName.TRANSITIONED,
                 actor_type="system",
                 actor_id="workflow-engine",
                 payload={
@@ -817,7 +822,7 @@ class WorkflowService:
         )
         await AuditWriter(self.session).append_project_event(
             project_id=workflow.project_id,
-            event_type="workflow.cancelled",
+            event_type=WorkflowEventName.CANCELLED,
             actor_type="human",
             actor_id=actor_id,
             payload={
