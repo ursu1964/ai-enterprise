@@ -127,6 +127,41 @@ def test_recoverable_statuses_use_plain_recovery_language() -> None:
         assert forbidden not in combined
 
 
+def test_attention_statuses_use_evidence_and_connection_language() -> None:
+    meanings = {
+        status: meaning_for(status)
+        for status in (
+            "unknown",
+            "partial",
+            "unavailable",
+        )
+    }
+    combined = " ".join(
+        value
+        for meaning in meanings.values()
+        for value in (
+            meaning["label"],
+            meaning["meaning"],
+            meaning["operator_action"],
+        )
+    )
+
+    assert meanings["unknown"]["label"] == "Needs evidence"
+    assert meanings["partial"]["operator_action"] == (
+        "Review created, reused, blocked, and review-needed launch items."
+    )
+    assert meanings["unavailable"]["label"] == "Source needs connection review"
+    assert "source freshness proof" in meanings["unavailable"]["operator_action"]
+    for forbidden in (
+        "Unknown",
+        "Source unavailable",
+        "API logs",
+        "failed launch items",
+        "blocked or failed",
+    ):
+        assert forbidden not in combined
+
+
 def project(now: datetime, project_id: uuid.UUID | None = None) -> ProjectModel:
     return ProjectModel(
         id=project_id or uuid.uuid4(),

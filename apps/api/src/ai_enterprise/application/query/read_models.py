@@ -833,7 +833,7 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Inspect rollback evidence before another rollout.",
     ),
     "unknown": Meaning(
-        "Unknown",
+        "Needs evidence",
         "warn",
         "The platform does not yet have enough evidence to classify this signal.",
         "Collect or verify evidence before relying on this state.",
@@ -883,8 +883,8 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
     "partial": Meaning(
         "Partially started",
         "warn",
-        "Some work started, but other related work is blocked or failed.",
-        "Inspect created, reused, blocked, and failed launch items.",
+        "Some work started, but related work still needs review before the launch is trusted.",
+        "Review created, reused, blocked, and review-needed launch items.",
     ),
     "ready_for_approval": Meaning(
         "Ready for approval",
@@ -1073,10 +1073,10 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "Resolve current blockers before scaling or presenting this phase as trusted.",
     ),
     "unavailable": Meaning(
-        "Source unavailable",
+        "Source needs connection review",
         "bad",
         "The dashboard cannot read this source right now.",
-        "Refresh and inspect API logs if the problem repeats.",
+        "Refresh the dashboard, then open source freshness proof if the problem repeats.",
     ),
 }
 

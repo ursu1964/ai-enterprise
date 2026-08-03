@@ -353,6 +353,10 @@ Operating discipline for every project:
   language so API data and visual panels explain the same operator action.
 - Recoverable phase states use the same plain pattern: the work needs recovery, the proof explains
   why, and the next action is to improve or retry through governance.
+- Project dashboards call current problems Recovery Items, so the operator sees an action path
+  instead of an unexplained error list.
+- Ambiguous source states point to evidence and source freshness proof, not internal API logs, so
+  the dashboard remains usable for business operators.
 - Project phase cards use waiting language when no proof exists yet. Evidence and executed steps
   appear after workflow movement, phase transitions, or artifacts are recorded.
 - Execution telemetry uses waiting language until the first event timestamp is recorded, so an empty

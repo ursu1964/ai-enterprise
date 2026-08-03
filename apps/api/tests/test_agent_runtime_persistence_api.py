@@ -225,7 +225,7 @@ async def test_model_deployment_list_exposes_friendly_status_labels() -> None:
     )
 
     assert response[0].status == "unavailable"
-    assert response[0].status_label == "Source unavailable"
+    assert response[0].status_label == "Source needs connection review"
     assert response[0].status_meaning is not None
     assert response[0].status_meaning["severity"] == "bad"
 

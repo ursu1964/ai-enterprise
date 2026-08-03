@@ -395,7 +395,10 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No current work needs action" in response.text
     assert "No current worker capacity is visible" in response.text
     assert "No projects are visible yet" in response.text
-    assert "No active errors are attached to this project" in response.text
+    assert "Recovery Items" in response.text
+    assert "No active recovery items are attached to this project" in response.text
+    assert "No active errors are attached to this project" not in response.text
+    assert "Worker proof has not been attached to this error yet" not in response.text
     assert "No records." not in response.text
     assert "Plan approved, execution not started" in response.text
     assert "Confidence:" in response.text
