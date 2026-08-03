@@ -320,6 +320,9 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     assert proposal["title"] == "Guardrail proposal: runtime"
     assert proposal["failure_class"] == "runtime"
     assert proposal["current_failure_count"] == 2
+    assert len(proposal["source_jobs"]) == 2
+    assert proposal["source_jobs"][0]["job_type"] == "run_requirements_crew"
+    assert proposal["source_jobs"][0]["attempt_count"] == 0
     assert proposal["status"] == "proposed"
     assert proposal["evolution_endpoint"] == "/api/v1/enterprise-evolution/improvements"
     assert proposal["improvement_draft"]["improvement_key"] == (
@@ -327,6 +330,12 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     )
     assert proposal["improvement_draft"]["category"] == "operations"
     assert proposal["improvement_draft"]["evidence_required"] is True
+    assert proposal["improvement_draft"]["evidence_collection"][0]["type"] == (
+        "operator_job_attempts"
+    )
+    assert "/api/v1/operator/jobs/by-id/" in (
+        proposal["improvement_draft"]["evidence_collection"][0]["endpoint"]
+    )
     assert proposal["improvement_draft"]["risk_document"]["requires_human_review"] is True
     assert "recovery checklist" in proposal["recommendation"]
     assert "inspect attempts" in proposal["operator_action"]

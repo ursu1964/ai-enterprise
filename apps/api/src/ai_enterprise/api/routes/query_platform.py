@@ -431,19 +431,36 @@ def _phase_detail(
 
 
 def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]:
+    jobs_by_failure_class: dict[str, list[JobModel]] = {}
+    for job in unresolved_problem_jobs(jobs):
+        jobs_by_failure_class.setdefault(str(job.last_failure_class or "unknown"), []).append(job)
     counts = Counter(
-        str(job.last_failure_class or "unknown")
-        for job in unresolved_problem_jobs(jobs)
+        {
+            failure_class: len(failure_jobs)
+            for failure_class, failure_jobs in jobs_by_failure_class.items()
+        }
     )
     proposals: list[dict[str, Any]] = []
     for failure_class, count in counts.most_common(4):
         if count < 2:
             continue
+        source_jobs = jobs_by_failure_class[failure_class][:5]
         proposals.append(
             {
                 "title": f"Guardrail proposal: {failure_class.replace('_', ' ')}",
                 "failure_class": failure_class,
                 "current_failure_count": count,
+                "source_jobs": [
+                    {
+                        "job_id": job.id,
+                        "project_id": job.project_id,
+                        "job_type": job.job_type,
+                        "status": job.status,
+                        "attempt_count": job.attempt_count,
+                        "max_attempts": job.max_attempts,
+                    }
+                    for job in source_jobs
+                ],
                 "status": "proposed",
                 "evolution_endpoint": "/api/v1/enterprise-evolution/improvements",
                 "improvement_draft": {
@@ -463,6 +480,16 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
                     },
                     "dependencies": [],
                     "evidence_required": True,
+                    "evidence_collection": [
+                        {
+                            "type": "operator_job_attempts",
+                            "endpoint": (
+                                f"/api/v1/operator/jobs/by-id/{job.id}/attempts"
+                            ),
+                            "job_id": str(job.id),
+                        }
+                        for job in source_jobs
+                    ],
                 },
                 "recommendation": (
                     "Convert this repeated failure class into a recovery checklist, "

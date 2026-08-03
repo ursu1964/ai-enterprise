@@ -208,7 +208,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "recovery?.improvement_proposals" in response.text
     assert "improvement_draft?.evidence_required" in response.text
     assert "Draft target:" in response.text
-    assert "Evidence required." in response.text
+    assert "Evidence required from job attempts." in response.text
+    assert "Source jobs:" in response.text
     assert "Guardrail proposal:" in response.text
     assert "Repeated failure classes should become a recovery checklist" in response.text
     assert "Business Telemetry" in response.text

@@ -3532,10 +3532,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (proposals && proposals.length) {
         return proposals.map(proposal => ({
           title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
-          detail: `${proposal.current_failure_count || 0} current failure(s) share this class.`,
+          detail: `${proposal.current_failure_count || 0} current failure(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
           idea: proposal.recommendation || "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
           effect: proposal.improvement_draft?.evidence_required
-            ? `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required.`
+            ? `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required from job attempts.`
             : proposal.operator_action || "Reduces repeat failures before more work is queued.",
           signal: proposal.status || "proposed",
           kind: "warn",
