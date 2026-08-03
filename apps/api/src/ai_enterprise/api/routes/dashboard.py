@@ -981,7 +981,7 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
         <pre id="docPreview" class="doc-preview">No document selected.</pre>
         <div class="doc-actions">
           <a id="docDownload" class="button" href="/dashboard/client-manifest-template">Download Selected Document</a>
-          <a id="docOpenRaw" class="button" href="/dashboard/documentation/client-manifest-template" target="_blank" rel="noreferrer">Open Raw Text</a>
+          <a id="docOpenRaw" class="button" href="/dashboard/documentation/client-manifest-template" target="_blank" rel="noreferrer">Open Plain Text</a>
         </div>
       </article>
       <article class="panel span-12">

@@ -225,7 +225,8 @@ Direct dashboard panel links:
 Use the Documentation Hub when you need operator guides, the manifest template, foundry core, graph
 links, and verification commands in one place. If a document preview cannot load, the hub explains
 the recovery path: check API readiness, confirm document registration, then retry preview or
-download.
+download. The same panel can preview the document, download it, or open the plain text version for
+copying into another workflow.
 
 In Factory, press Preview Launch before Start Process when you want a no-risk check. Preview creates
 no records. It only explains whether the project or manifesto batch is ready and what is missing.

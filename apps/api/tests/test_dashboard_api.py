@@ -438,6 +438,8 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Document Preview" in response.text
     assert "docPreview" in response.text
     assert "doc-open" in response.text
+    assert "Open Plain Text" in response.text
+    assert "Open Raw Text" not in response.text
     assert "/dashboard/documentation/operator-startup-guide?download=true" in response.text
     assert (
         "/dashboard/documentation/real-world-infrastructure-choices?download=true"
