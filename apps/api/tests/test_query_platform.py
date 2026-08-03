@@ -325,6 +325,14 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     assert proposal["source_jobs"][0]["attempt_count"] == 0
     assert proposal["status"] == "proposed"
     assert proposal["evolution_endpoint"] == "/api/v1/enterprise-evolution/improvements"
+    assert proposal["evidence_status"]["state"] == "evidence_required"
+    assert proposal["evidence_status"]["ready_to_submit"] is False
+    assert "operator_job_attempts" in proposal["evidence_status"]["required_sources"]
+    assert "immutable evidence reference" in proposal["evidence_status"]["missing"][0]
+    assert proposal["evidence_status"]["submission_endpoint"] == (
+        "/api/v1/enterprise-evolution/improvements"
+    )
+    assert "bind immutable evidence" in proposal["evidence_status"]["operator_action"]
     assert proposal["improvement_draft"]["improvement_key"] == (
         "operations.failure.runtime_guardrail"
     )

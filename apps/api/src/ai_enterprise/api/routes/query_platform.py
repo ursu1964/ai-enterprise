@@ -463,6 +463,20 @@ def _failure_improvement_proposals(jobs: list[JobModel]) -> list[dict[str, Any]]
                 ],
                 "status": "proposed",
                 "evolution_endpoint": "/api/v1/enterprise-evolution/improvements",
+                "evidence_status": {
+                    "state": "evidence_required",
+                    "ready_to_submit": False,
+                    "required_sources": ["operator_job_attempts"],
+                    "missing": [
+                        "immutable evidence reference for enterprise evolution"
+                    ],
+                    "submission_endpoint": "/api/v1/enterprise-evolution/improvements",
+                    "operator_action": (
+                        "Open the listed job attempts, bind immutable evidence, "
+                        "then submit the improvement draft through Enterprise "
+                        "Evolution."
+                    ),
+                },
                 "improvement_draft": {
                     "improvement_key": f"operations.failure.{failure_class}_guardrail",
                     "category": "operations",

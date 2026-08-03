@@ -206,6 +206,10 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "failureImprovementProposals" in response.text
     assert "dashboardRecoveryProposals" in response.text
     assert "recovery?.improvement_proposals" in response.text
+    assert "evidence_status" in response.text
+    assert "ready_to_submit" in response.text
+    assert "Missing:" in response.text
+    assert "immutable evidence reference" in response.text
     assert "improvement_draft?.evidence_required" in response.text
     assert "Draft target:" in response.text
     assert "Evidence required from job attempts." in response.text
@@ -445,6 +449,15 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert "Production Route" in response.text
     assert "Step-by-Step Live Demo" in response.text
     assert "Demo Operator Console" in response.text
+    assert "API health" in response.text
+    assert "Visible projects" in response.text
+    assert "Telemetry" in response.text
+    assert "Refresh Live Proof" in response.text
+    assert "Live proof checked" in response.text
+    assert "proofHealthCard" in response.text
+    assert "loadLiveProof" in response.text
+    assert "/health/ready" in response.text
+    assert "/api/v1/projects" in response.text
     assert (
         "This console explains the next action before you open another dashboard."
         in response.text

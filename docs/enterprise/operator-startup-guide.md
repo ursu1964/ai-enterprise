@@ -207,6 +207,10 @@ Step-by-Step Live Demo starts with the story map, then opens the exact working p
 Execution, Projects, Metrics, and Documentation.
 Use Demo Operator Console inside the Demo Story before opening another panel. It explains where to
 go, what to verify, and why the step matters in business language.
+The Demo Story also shows a Live Proof strip. It checks API health, visible project count, telemetry
+availability, and the recommended next live step.
+Press Refresh Live Proof before a presentation or test run. The strip records the latest check time
+and marks each proof source as ready, needs setup, or not confirmed.
 
 Direct dashboard panel links:
 

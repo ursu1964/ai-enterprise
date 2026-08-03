@@ -3530,17 +3530,24 @@ DASHBOARD_HTML = r"""<!doctype html>
     function dashboardRecoveryProposals() {
       const proposals = state.dashboardManager?.recovery?.improvement_proposals;
       if (proposals && proposals.length) {
-        return proposals.map(proposal => ({
-          title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
-          detail: `${proposal.current_failure_count || 0} current failure(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
-          idea: proposal.recommendation || "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
-          effect: proposal.improvement_draft?.evidence_required
-            ? `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required from job attempts.`
-            : proposal.operator_action || "Reduces repeat failures before more work is queued.",
-          signal: proposal.status || "proposed",
-          kind: "warn",
-          action: "projects"
-        }));
+        return proposals.map(proposal => {
+          const evidence = proposal.evidence_status || {};
+          const missingEvidence = (evidence.missing || []).join(", ") || "immutable evidence reference";
+          const evidenceEffect = evidence.ready_to_submit === false
+            ? `${evidence.operator_action || proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Missing: ${missingEvidence}. Draft target: ${evidence.submission_endpoint || proposal.evolution_endpoint}.`
+            : `${proposal.operator_action || "Record reusable guardrail evidence before queuing more work."} Draft target: ${proposal.evolution_endpoint}. Evidence required from job attempts.`;
+          return {
+            title: proposal.title || `Guardrail proposal: ${String(proposal.failure_class || "unknown").replace(/_/g, " ")}`,
+            detail: `${proposal.current_failure_count || 0} current failure(s) share this class. Source jobs: ${(proposal.source_jobs || []).map(job => job.job_type || job.job_id).join(", ") || "not listed"}.`,
+            idea: proposal.recommendation || "Repeated failure classes should become a recovery checklist, test guardrail, or project template improvement.",
+            effect: proposal.improvement_draft?.evidence_required
+              ? evidenceEffect
+              : proposal.operator_action || "Reduces repeat failures before more work is queued.",
+            signal: evidence.ready_to_submit === false ? "evidence required" : proposal.status || "proposed",
+            kind: "warn",
+            action: "projects"
+          };
+        });
       }
       return failureImprovementProposals();
     }
@@ -4356,6 +4363,51 @@ DEMO_HTML = r"""<!doctype html>
       gap: 10px;
       border-color: rgba(93, 184, 255, 0.36);
     }
+    .live-proof {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .proof-card {
+      border: 1px solid rgba(143, 166, 190, 0.2);
+      border-radius: 8px;
+      background: rgba(5, 10, 15, 0.76);
+      padding: 12px;
+      min-height: 94px;
+    }
+    .proof-card.ok { border-color: rgba(86, 227, 159, 0.48); }
+    .proof-card.warn { border-color: rgba(255, 209, 102, 0.54); }
+    .proof-card.bad { border-color: rgba(255, 107, 107, 0.58); }
+    .proof-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .proof-card strong {
+      display: block;
+      font-size: 1.05rem;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }
+    .proof-card small {
+      display: block;
+      color: var(--muted);
+      line-height: 1.35;
+      margin-top: 6px;
+    }
+    .proof-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .proof-toolbar p { margin: 0; }
     .console-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -4405,6 +4457,19 @@ DEMO_HTML = r"""<!doctype html>
     <section class="hero">
       <h2>One sentence</h2>
       <p><strong>AI Enterprise is a factory for ideas.</strong> It listens, creates options, lets the human choose, assigns specialist crews, verifies quality, and prepares the result for production and market presentation.</p>
+    </section>
+
+    <section aria-live="polite">
+      <div class="proof-toolbar">
+        <p id="proofChecked">Live proof not checked yet.</p>
+        <button id="refreshProof">Refresh Live Proof</button>
+      </div>
+      <div class="live-proof">
+        <div id="proofHealthCard" class="proof-card"><span>API health</span><strong id="proofHealth">Checking</strong><small id="proofHealthDetail">Verifying the enterprise service.</small></div>
+        <div id="proofProjectsCard" class="proof-card"><span>Visible projects</span><strong id="proofProjects">Checking</strong><small id="proofProjectsDetail">Counting governed project records.</small></div>
+        <div id="proofTelemetryCard" class="proof-card"><span>Telemetry</span><strong id="proofTelemetry">Checking</strong><small id="proofTelemetryDetail">Reading runtime proof signals.</small></div>
+        <div id="proofNextCard" class="proof-card"><span>Next live step</span><strong id="proofNext">Open Factory</strong><small id="proofNextDetail">Preview before creating records.</small></div>
+      </div>
     </section>
 
     <section class="grid">
@@ -4487,6 +4552,51 @@ DEMO_HTML = r"""<!doctype html>
     const consoleProof = document.getElementById("consoleProof");
     const consoleMeaning = document.getElementById("consoleMeaning");
     const consoleOpen = document.getElementById("consoleOpen");
+    async function fetchText(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${response.status}`);
+      return response.text();
+    }
+    async function fetchJson(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${response.status}`);
+      return response.json();
+    }
+    function setProof(id, value, detail, state = "warn") {
+      document.getElementById(id).textContent = value;
+      document.getElementById(`${id}Detail`).textContent = detail;
+      const card = document.getElementById(`${id}Card`);
+      if (card) {
+        card.classList.remove("ok", "warn", "bad");
+        card.classList.add(state);
+      }
+    }
+    async function loadLiveProof() {
+      document.getElementById("proofChecked").textContent = "Checking live proof now...";
+      try {
+        const ready = await fetchJson("/health/ready");
+        const ok = ready.status === "ok" && ready.database === "reachable";
+        setProof("proofHealth", ok ? "Ready" : "Needs attention", ok ? "Database is reachable." : "Database readiness is not confirmed.", ok ? "ok" : "bad");
+      } catch (error) {
+        setProof("proofHealth", "Not confirmed", "Refresh after the API finishes starting. If it stays unavailable, open Command Center and check health.", "bad");
+      }
+      try {
+        const projects = await fetchJson("/api/v1/projects");
+        setProof("proofProjects", `${projects.length} project(s)`, projects.length ? "Open Execution or Projects to inspect movement." : "Use Factory to create the first project.", projects.length ? "ok" : "warn");
+        setProof("proofNext", projects.length ? "Open Execution" : "Open Factory", projects.length ? "Watch live project movement." : "Preview Launch before creating records.", "ok");
+      } catch (error) {
+        setProof("proofProjects", "Not confirmed", "Project source is not reachable yet. Refresh, then open Command Center if it remains unavailable.", "bad");
+        setProof("proofNext", "Open Command Center", "Check source freshness and API health before demonstrating project movement.", "warn");
+      }
+      try {
+        const metrics = await fetchText("/metrics");
+        const count = metrics.split("\n").filter(line => line && !line.startsWith("#")).length;
+        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is available." : "No runtime signal has been emitted yet.", count ? "ok" : "warn");
+      } catch (error) {
+        setProof("proofTelemetry", "Not confirmed", "Metrics source is not reachable yet. Open Metrics after the API settles.", "bad");
+      }
+      document.getElementById("proofChecked").textContent = `Live proof checked ${new Date().toLocaleTimeString()}.`;
+    }
     function showDemoAction(index = 0) {
       const action = demoActions[index] || demoActions[0];
       consoleTarget.textContent = action[0];
@@ -4513,7 +4623,9 @@ DEMO_HTML = r"""<!doctype html>
     document.querySelectorAll(".demo-action").forEach(button => {
       button.addEventListener("click", () => showDemoAction(Number(button.dataset.demoStep)));
     });
+    document.getElementById("refreshProof").addEventListener("click", loadLiveProof);
     showDemoAction(0);
+    loadLiveProof();
     render();
   </script>
 </body>
