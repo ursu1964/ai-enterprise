@@ -122,7 +122,7 @@ def workflow_relink_decision_for_project(project: ProjectModel) -> WorkflowRelin
         return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.REQUIREMENTS,
-            "Requirements work failed. Review job evidence before retrying.",
+            "Requirements work needs recovery. Review proof before retrying.",
         )
     if status in {
         ProjectStatus.ARCHITECTURE_QUEUED,
@@ -157,7 +157,7 @@ def workflow_relink_decision_for_project(project: ProjectModel) -> WorkflowRelin
         return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.ARCHITECTURE,
-            "Architecture work failed. Review job evidence before retrying.",
+            "Architecture work needs recovery. Review proof before retrying.",
         )
     if status in {
         ProjectStatus.WORK_PACKAGE_QUEUED,
@@ -192,7 +192,7 @@ def workflow_relink_decision_for_project(project: ProjectModel) -> WorkflowRelin
         return _relink_decision(
             WorkflowState.FAILED,
             WorkflowStepName.PLANNING,
-            "Work-package planning failed. Review job evidence before retrying.",
+            "Work-package planning needs recovery. Review proof before retrying.",
         )
     return _relink_decision(
         WorkflowState.MANUAL_INTERVENTION,
@@ -718,14 +718,25 @@ class WorkflowService:
                         {
                             "execution:approval_id": str(completed_execution.approval_id),
                             "execution:work_package_id": str(completed_execution.work_package_id),
+                            "execution:status": str(completed_execution.status),
                         }
                     )
+                    if completed_execution.patch_artifact_id is not None:
+                        evidence_links["execution:patch_artifact_id"] = str(
+                            completed_execution.patch_artifact_id
+                        )
+                    if completed_execution.patch_sha256 is not None:
+                        evidence_links["execution:patch_sha256"] = (
+                            completed_execution.patch_sha256
+                        )
                 if completed_review is not None:
                     evidence_links.update(
                         {
                             "review:execution_id": str(completed_review.execution_run_id),
+                            "review:work_package_id": str(completed_review.work_package_id),
                             "review:patch_artifact_id": str(completed_review.patch_artifact_id),
                             "review:expected_patch_sha256": completed_review.expected_patch_sha256,
+                            "review:status": str(completed_review.status),
                         }
                     )
                     if completed_review.actual_patch_sha256 is not None:
@@ -743,6 +754,7 @@ class WorkflowService:
                             "integration:approval_id": str(
                                 completed_attempt.integration_approval_id
                             ),
+                            "integration:project_id": str(completed_attempt.project_id),
                             "integration:expected_patch_sha256": (
                                 completed_attempt.expected_patch_sha256
                             ),
@@ -752,6 +764,7 @@ class WorkflowService:
                             "integration:expected_base_tree_sha": (
                                 completed_attempt.expected_base_tree_sha
                             ),
+                            "integration:status": str(completed_attempt.status),
                         }
                     )
                     if completed_attempt.actual_base_commit_sha is not None:
@@ -769,6 +782,7 @@ class WorkflowService:
                 evidence_links.update(
                     {
                         "commit:integration_attempt_id": str(commit.integration_attempt_id),
+                        "commit:sha": commit.commit_sha,
                         "commit:tree_sha": commit.tree_sha,
                         "commit:parent_commit_sha": commit.parent_commit_sha,
                         "commit:remote_verified": str(commit.remote_verified).lower(),

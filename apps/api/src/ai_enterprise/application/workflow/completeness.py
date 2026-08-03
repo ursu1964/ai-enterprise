@@ -21,20 +21,28 @@ MANDATORY_APPROVALS = ("requirements", "architecture", "work_package", "integrat
 MANDATORY_EVIDENCE_LINKS = (
     "execution:approval_id",
     "execution:work_package_id",
+    "execution:patch_artifact_id",
+    "execution:patch_sha256",
+    "execution:status",
     "review:execution_id",
+    "review:work_package_id",
     "review:patch_artifact_id",
     "review:report_artifact_id",
     "review:expected_patch_sha256",
     "review:actual_patch_sha256",
+    "review:status",
     "integration:execution_id",
     "integration:approval_id",
+    "integration:project_id",
     "integration:expected_patch_sha256",
     "integration:expected_base_commit_sha",
     "integration:expected_base_tree_sha",
     "integration:actual_base_commit_sha",
     "integration:actual_base_tree_sha",
     "integration:resulting_tree_sha",
+    "integration:status",
     "commit:integration_attempt_id",
+    "commit:sha",
     "commit:tree_sha",
     "commit:parent_commit_sha",
     "commit:remote_verified",
@@ -73,6 +81,19 @@ def _expect_equal(
         missing.append(f"evidence_link:{left_key}:mismatch:{right_key}")
 
 
+def _expect_value(
+    missing: list[str],
+    context: WorkflowContext,
+    key: str,
+    expected: str,
+) -> None:
+    value = context.evidence_links.get(key)
+    if value is None:
+        return
+    if value != expected:
+        missing.append(f"evidence_link:{key}:mismatch")
+
+
 def verify_completeness(context: WorkflowContext) -> CompletenessResult:
     missing = [
         f"artifact:{name}" for name in MANDATORY_ARTIFACTS if name not in context.artifact_ids
@@ -99,9 +120,22 @@ def verify_completeness(context: WorkflowContext) -> CompletenessResult:
     if context.commit_id is None:
         missing.append("commit")
     _expect_link(missing, context, "review:execution_id", context.execution_id)
+    _expect_link(
+        missing,
+        context,
+        "execution:approval_id",
+        context.approval_ids.get("work_package"),
+    )
+    _expect_link(
+        missing,
+        context,
+        "execution:patch_artifact_id",
+        context.artifact_ids.get("patch"),
+    )
     _expect_link(missing, context, "review:patch_artifact_id", context.artifact_ids.get("patch"))
     _expect_link(missing, context, "review:report_artifact_id", context.artifact_ids.get("review"))
     _expect_link(missing, context, "integration:execution_id", context.execution_id)
+    _expect_link(missing, context, "integration:project_id", context.project_id)
     _expect_link(
         missing, context, "integration:approval_id", context.approval_ids.get("integration")
     )
@@ -110,6 +144,18 @@ def verify_completeness(context: WorkflowContext) -> CompletenessResult:
         context,
         "commit:integration_attempt_id",
         context.integration_attempt_id,
+    )
+    _expect_equal(
+        missing,
+        context,
+        "execution:work_package_id",
+        "review:work_package_id",
+    )
+    _expect_equal(
+        missing,
+        context,
+        "execution:patch_sha256",
+        "review:expected_patch_sha256",
     )
     _expect_equal(
         missing,
@@ -141,4 +187,8 @@ def verify_completeness(context: WorkflowContext) -> CompletenessResult:
     )
     if context.evidence_links.get("commit:remote_verified") != "true":
         missing.append("evidence_link:commit:remote_verified:mismatch")
+    _expect_link(missing, context, "commit:sha", context.commit_id)
+    _expect_value(missing, context, "execution:status", "succeeded")
+    _expect_value(missing, context, "review:status", "accepted")
+    _expect_value(missing, context, "integration:status", "integrated")
     return CompletenessResult(not missing, tuple(missing))

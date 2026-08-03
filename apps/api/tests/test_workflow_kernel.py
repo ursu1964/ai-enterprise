@@ -60,9 +60,11 @@ def context() -> WorkflowContext:
 
 
 def complete_context() -> WorkflowContext:
+    base = context()
     execution_id = uuid.uuid4()
     review_id = uuid.uuid4()
     integration_attempt_id = uuid.uuid4()
+    work_package_id = uuid.uuid4()
     ids = {
         "manifest": uuid.uuid4(),
         "requirements": uuid.uuid4(),
@@ -81,31 +83,40 @@ def complete_context() -> WorkflowContext:
     base_commit = "b" * 64
     base_tree = "c" * 64
     result_tree = "d" * 64
-    return context().evolved(
+    commit_sha = "e" * 64
+    return base.evolved(
         artifact_ids=ids,
         artifact_hashes={name: str(index) * 64 for index, name in enumerate(ids, start=1)},
         approval_ids=approval_ids,
         execution_id=execution_id,
         review_id=review_id,
         integration_attempt_id=integration_attempt_id,
-        commit_id="e" * 64,
+        commit_id=commit_sha,
         evidence_links={
-            "execution:approval_id": str(uuid.uuid4()),
-            "execution:work_package_id": str(uuid.uuid4()),
+            "execution:approval_id": str(approval_ids["work_package"]),
+            "execution:work_package_id": str(work_package_id),
+            "execution:patch_artifact_id": str(ids["patch"]),
+            "execution:patch_sha256": patch_sha,
+            "execution:status": "succeeded",
             "review:execution_id": str(execution_id),
+            "review:work_package_id": str(work_package_id),
             "review:patch_artifact_id": str(ids["patch"]),
             "review:report_artifact_id": str(ids["review"]),
             "review:expected_patch_sha256": patch_sha,
             "review:actual_patch_sha256": patch_sha,
+            "review:status": "accepted",
             "integration:execution_id": str(execution_id),
             "integration:approval_id": str(approval_ids["integration"]),
+            "integration:project_id": str(base.project_id),
             "integration:expected_patch_sha256": patch_sha,
             "integration:expected_base_commit_sha": base_commit,
             "integration:expected_base_tree_sha": base_tree,
             "integration:actual_base_commit_sha": base_commit,
             "integration:actual_base_tree_sha": base_tree,
             "integration:resulting_tree_sha": result_tree,
+            "integration:status": "integrated",
             "commit:integration_attempt_id": str(integration_attempt_id),
+            "commit:sha": commit_sha,
             "commit:tree_sha": result_tree,
             "commit:parent_commit_sha": base_commit,
             "commit:remote_verified": "true",
@@ -258,8 +269,44 @@ def test_completeness_accepts_hash_and_lineage_bound_evidence() -> None:
             "evidence_link:review:expected_patch_sha256:mismatch:review:actual_patch_sha256",
         ),
         (
+            {"evidence_links": {"execution:approval_id": str(uuid.uuid4())}},
+            "evidence_link:execution:approval_id:mismatch",
+        ),
+        (
+            {"evidence_links": {"execution:work_package_id": str(uuid.uuid4())}},
+            "evidence_link:execution:work_package_id:mismatch:review:work_package_id",
+        ),
+        (
+            {"evidence_links": {"execution:patch_artifact_id": str(uuid.uuid4())}},
+            "evidence_link:execution:patch_artifact_id:mismatch",
+        ),
+        (
+            {"evidence_links": {"execution:patch_sha256": "f" * 64}},
+            "evidence_link:execution:patch_sha256:mismatch:review:expected_patch_sha256",
+        ),
+        (
+            {"evidence_links": {"execution:status": "failed"}},
+            "evidence_link:execution:status:mismatch",
+        ),
+        (
+            {"evidence_links": {"review:status": "changes_requested"}},
+            "evidence_link:review:status:mismatch",
+        ),
+        (
+            {"evidence_links": {"integration:status": "push_failed"}},
+            "evidence_link:integration:status:mismatch",
+        ),
+        (
+            {"evidence_links": {"integration:project_id": str(uuid.uuid4())}},
+            "evidence_link:integration:project_id:mismatch",
+        ),
+        (
             {"evidence_links": {"commit:tree_sha": "f" * 64}},
             "evidence_link:integration:resulting_tree_sha:mismatch:commit:tree_sha",
+        ),
+        (
+            {"evidence_links": {"commit:sha": "f" * 64}},
+            "evidence_link:commit:sha:mismatch",
         ),
         (
             {"evidence_links": {"commit:remote_verified": "false"}},
