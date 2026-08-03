@@ -243,6 +243,9 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
         "dashboards_reporting"
     )
     assert response["reuse"]["blueprint_candidates"][0]["lifecycle"] == "candidate"
+    assert response["reuse"]["blueprint_candidates"][0]["readiness_level"] == (
+        "needs_more_proof"
+    )
     assert response["reuse"]["blueprint_candidates"][0]["evidence_count"] == 2
     assert response["reuse"]["blueprint_candidates"][0]["evidence_sources"] == {
         "succeeded_jobs": 1,
@@ -252,6 +255,18 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert "collect more proof" in response["reuse"]["blueprint_candidates"][0][
         "reuse_readiness"
     ]
+    assert response["reuse"]["blueprint_candidates"][0]["promotion_blockers"] == [
+        "at least two succeeded jobs",
+        "at least one work package",
+    ]
+    assert response["reuse"]["blueprint_candidates"][0]["readiness_detail"]["label"] == (
+        "Needs more proof"
+    )
+    assert "promotion would be premature" in response["reuse"]["blueprint_candidates"][0][
+        "readiness_detail"
+    ]["meaning"]
+    assert response["reuse"]["readiness"]["catalog_review_ready"] == 0
+    assert response["reuse"]["readiness"]["needs_more_proof"] == 1
     assert "proof review" in response["reuse"]["operator_action"]
     assert response["projects"][0]["tasks"]["active"] == 1
     assert response["projects"][0]["crews"][0]["name"] == "run requirements crew"
@@ -367,6 +382,9 @@ async def test_dashboard_manager_proposes_guardrails_for_repeated_failure_classe
     assert guardrail["failure_class"] == "runtime"
     assert guardrail["current_failure_count"] == 2
     assert guardrail["evidence_status"]["ready_to_submit"] is False
+    assert guardrail["readiness_level"] == "evidence_required"
+    assert "immutable evidence reference" in guardrail["promotion_blockers"][0]
+    assert response["reuse"]["readiness"]["guardrails_evidence_required"] == 1
     assert "1 guardrail candidate" in response["reuse"]["summary"]
 
 

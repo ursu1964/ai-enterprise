@@ -229,6 +229,13 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "dashboardManager?.reuse" in response.text
     assert "blueprint_candidates" in response.text
     assert "guardrail_candidates" in response.text
+    assert "reuseReadiness" in response.text
+    assert "catalog_review_ready" in response.text
+    assert "needs_more_proof" in response.text
+    assert "guardrails_evidence_required" in response.text
+    assert "Review-ready:" in response.text
+    assert "needs proof:" in response.text
+    assert "Evidence required:" in response.text
     assert "No reusable learning candidates have been observed yet." in response.text
     assert "lifecycle_detail" in response.text
     assert "promotion_blockers" in response.text
@@ -294,7 +301,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "This phase has no active blockers" in response.text
     assert "Used to preserve old problems after they are resolved or acknowledged" in response.text
     assert "Past problems will appear here after review" in response.text
-    assert "Nothing to show yet" in response.text
+    assert "Nothing to show yet" not in response.text
+    assert "Waiting for live evidence" in response.text
+    assert "When the factory creates data, it will appear here automatically." in response.text
     assert "Historical samples" in response.text
     assert "Average phase" in response.text
     assert "lifecycle" in response.text

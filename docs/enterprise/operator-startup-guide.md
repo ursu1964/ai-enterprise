@@ -263,6 +263,9 @@ production, these APIs still require trusted identity and durable authority gran
 Every major dashboard tab now starts with a visual control graph. Factory shows the creation path,
 Problems shows the recovery/improvement path, Metrics shows telemetry pulses, and Graph shows the
 blueprint/code/evidence hub. The listboxes below those graphs remain available for dense inspection.
+When a listbox has no records yet, it shows a live-evidence waiting card instead of a blank or
+technical message. Follow the panel guidance, refresh, and the factory data appears there
+automatically after projects, workflows, jobs, telemetry, or proof records are created.
 
 Dashboard-created projects use the same server-side repository preparation path as API-created
 projects. If a repository does not yet have a Git `HEAD`, AI Enterprise initializes a small governed

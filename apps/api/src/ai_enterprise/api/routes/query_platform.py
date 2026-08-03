@@ -550,7 +550,15 @@ def _reuse_learning_summary(
             if isinstance(project.manifest, dict)
             else "enterprise_project"
         )
-        lifecycle = "reviewed" if evidence_count >= 4 else "candidate"
+        promotion_blockers: list[str] = []
+        if len(completed_jobs) < 2:
+            promotion_blockers.append("at least two succeeded jobs")
+        if len(completed_runs) < 1:
+            promotion_blockers.append("at least one succeeded crew run")
+        if len(project_packages) < 1:
+            promotion_blockers.append("at least one work package")
+        lifecycle = "reviewed" if not promotion_blockers else "candidate"
+        readiness_level = "catalog_review_ready" if lifecycle == "reviewed" else "needs_more_proof"
         blueprint_candidates.append(
             {
                 "blueprint_key": f"{project_type}.{project.id}.learning_candidate",
@@ -558,11 +566,30 @@ def _reuse_learning_summary(
                 "project_name": project.name,
                 "project_type": project_type,
                 "lifecycle": lifecycle,
+                "readiness_level": readiness_level,
                 "evidence_count": evidence_count,
                 "evidence_sources": {
                     "succeeded_jobs": len(completed_jobs),
                     "succeeded_crew_runs": len(completed_runs),
                     "work_packages": len(project_packages),
+                },
+                "promotion_blockers": promotion_blockers,
+                "readiness_detail": {
+                    "label": (
+                        "Ready for catalog review"
+                        if readiness_level == "catalog_review_ready"
+                        else "Needs more proof"
+                    ),
+                    "meaning": (
+                        "The candidate has enough operational proof for human catalog review."
+                        if readiness_level == "catalog_review_ready"
+                        else "The candidate is visible, but promotion would be premature."
+                    ),
+                    "next_action": (
+                        "Review the evidence bundle and decide whether to promote it."
+                        if readiness_level == "catalog_review_ready"
+                        else "Collect the missing proof before catalog review."
+                    ),
                 },
                 "reuse_readiness": (
                     "review evidence for catalog promotion"
@@ -582,15 +609,36 @@ def _reuse_learning_summary(
             "failure_class": proposal["failure_class"],
             "current_failure_count": proposal["current_failure_count"],
             "evidence_status": proposal["evidence_status"],
+            "readiness_level": (
+                "ready_to_submit"
+                if proposal["evidence_status"].get("ready_to_submit")
+                else "evidence_required"
+            ),
+            "promotion_blockers": proposal["evidence_status"].get("missing", []),
             "operator_action": proposal["operator_action"],
         }
         for proposal in recovery_proposals
         if "improvement_draft" in proposal and "evidence_status" in proposal
     ]
+    ready_blueprints = [
+        candidate
+        for candidate in blueprint_candidates
+        if candidate["readiness_level"] == "catalog_review_ready"
+    ]
+    blocked_blueprints = len(blueprint_candidates) - len(ready_blueprints)
 
     return {
         "blueprint_candidates": blueprint_candidates[:5],
         "guardrail_candidates": guardrail_candidates[:5],
+        "readiness": {
+            "catalog_review_ready": len(ready_blueprints),
+            "needs_more_proof": blocked_blueprints,
+            "guardrails_evidence_required": sum(
+                1
+                for candidate in guardrail_candidates
+                if candidate["readiness_level"] == "evidence_required"
+            ),
+        },
         "summary": (
             f"{_count_phrase(len(blueprint_candidates), 'blueprint candidate')}, "
             f"{_count_phrase(len(guardrail_candidates), 'guardrail candidate')}."
