@@ -374,6 +374,32 @@ def _phase_confidence(
     return "early estimate"
 
 
+def _phase_confidence_detail(
+    confidence: str,
+    evidence: list[str],
+    current_issues: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if confidence == "needs review":
+        score = max(10, 45 - (len(current_issues) * 10))
+    elif confidence == "live workflow":
+        score = min(95, 70 + (len(evidence) * 5))
+    elif confidence == "evidence backed":
+        score = min(85, 55 + (len(evidence) * 10))
+    else:
+        score = 30
+    meaning = meaning_for(confidence)
+    return {
+        "state": confidence,
+        "score": score,
+        "label": meaning["label"],
+        "severity": meaning["severity"],
+        "meaning": meaning["meaning"],
+        "operator_action": meaning["operator_action"],
+        "evidence_count": len(evidence),
+        "current_blocker_count": len(current_issues),
+    }
+
+
 def _phase_proof_status(
     evidence: list[str], workflow: WorkflowInstanceModel | None
 ) -> dict[str, object]:
@@ -455,9 +481,13 @@ def _phase_detail(
         if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
     ]
     evidence = _phase_evidence(phase, workflow, jobs, crews, packages)
+    confidence = _phase_confidence(workflow, evidence, current_issues)
     return {
         "label": phase.replace("_", " ").title(),
-        "confidence": _phase_confidence(workflow, evidence, current_issues),
+        "confidence": confidence,
+        "confidence_detail": _phase_confidence_detail(
+            confidence, evidence, current_issues
+        ),
         "proof_status": _phase_proof_status(evidence, workflow),
         "owner_crew": _phase_owner(phase, crews, jobs),
         "completed_evidence": evidence,

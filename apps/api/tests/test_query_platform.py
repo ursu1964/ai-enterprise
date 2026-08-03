@@ -245,6 +245,18 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["projects"][0]["phase"] == "requirements"
     assert response["projects"][0]["phase_detail"]["label"] == "Requirements"
     assert response["projects"][0]["phase_detail"]["confidence"] == "live workflow"
+    assert response["projects"][0]["phase_detail"]["confidence_detail"] == {
+        "state": "live workflow",
+        "score": 85,
+        "label": "Live workflow",
+        "severity": "ok",
+        "meaning": "A governed workflow is linked and actively explains this phase.",
+        "operator_action": (
+            "Use workflow events and phase proof when deciding the next action."
+        ),
+        "evidence_count": 3,
+        "current_blocker_count": 0,
+    }
     assert response["projects"][0]["phase_detail"]["proof_status"]["state"] == (
         "evidence_backed"
     )
@@ -453,6 +465,9 @@ async def test_dashboard_manager_splits_current_and_historical_project_issues() 
     phase_detail = response["projects"][0]["phase_detail"]
     assert response["projects"][0]["tasks"]["problems"] == 1
     assert phase_detail["confidence"] == "needs review"
+    assert phase_detail["confidence_detail"]["label"] == "Needs review"
+    assert phase_detail["confidence_detail"]["score"] == 35
+    assert phase_detail["confidence_detail"]["current_blocker_count"] == 1
     assert phase_detail["remaining_work"] == (
         "Resolve current issues before scaling this project."
     )

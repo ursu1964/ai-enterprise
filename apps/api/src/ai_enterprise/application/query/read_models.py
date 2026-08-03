@@ -640,6 +640,30 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "The current data does not support this verification path.",
         "Use a newer evidence source or inspect diagnostic details.",
     ),
+    "live workflow": Meaning(
+        "Live workflow",
+        "ok",
+        "A governed workflow is linked and actively explains this phase.",
+        "Use workflow events and phase proof when deciding the next action.",
+    ),
+    "evidence backed": Meaning(
+        "Evidence backed",
+        "ok",
+        "This phase has direct proof from completed work, crew runs, or artifacts.",
+        "Use the listed evidence when reviewing or reporting this phase.",
+    ),
+    "early estimate": Meaning(
+        "Early estimate",
+        "info",
+        "This phase is inferred before direct workflow or evidence proof exists.",
+        "Start or relink the workflow before relying on this phase as live proof.",
+    ),
+    "needs review": Meaning(
+        "Needs review",
+        "bad",
+        "Current issues reduce confidence in this phase.",
+        "Resolve current blockers before scaling or presenting this phase as trusted.",
+    ),
     "unavailable": Meaning(
         "Source unavailable",
         "bad",

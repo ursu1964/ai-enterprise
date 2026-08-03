@@ -139,6 +139,10 @@ def test_factory_recovery_knowledge_and_evolution_states_have_friendly_meaning()
         "disputed",
         "verified",
         "unsupported",
+        "live workflow",
+        "evidence backed",
+        "early estimate",
+        "needs review",
     }
 
     for state in states:
