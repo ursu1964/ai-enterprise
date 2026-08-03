@@ -193,13 +193,21 @@ async def project_intelligence(
         historical_issues = [
             _historical_issue(job) for job in historical_problem_jobs
         ] if is_current else []
+        phase_confidence = _phase_confidence(
+            status_value, phase_evidence, workflow, current_issues
+        )
         phases.append(
             {
                 "name": name,
                 "label": name.replace("_", " ").title(),
                 "status": status_value,
                 "status_meaning": meaning_for(status_value),
-                "confidence": _phase_confidence(status_value, phase_evidence, workflow),
+                "confidence": phase_confidence,
+                "confidence_detail": _phase_confidence_detail(
+                    phase_confidence,
+                    phase_evidence,
+                    current_issues,
+                ),
                 "proof_status": _phase_proof_status(status_value, phase_evidence),
                 "states": sorted(states),
                 "transition_count": len(phase_transitions),
@@ -950,7 +958,10 @@ def _phase_confidence(
     status: str,
     evidence: list[str],
     workflow: WorkflowInstanceModel | None,
+    current_issues: list[dict[str, object]],
 ) -> str:
+    if current_issues:
+        return "needs review"
     if status == "current" and workflow is not None:
         return "live workflow"
     if evidence:
@@ -958,6 +969,34 @@ def _phase_confidence(
     if status == "remaining":
         return "planned"
     return "inferred"
+
+
+def _phase_confidence_detail(
+    confidence: str,
+    evidence: list[str],
+    current_issues: list[dict[str, object]],
+) -> dict[str, object]:
+    if confidence == "needs review":
+        score = max(10, 45 - (len(current_issues) * 10))
+    elif confidence == "live workflow":
+        score = min(95, 70 + (len(evidence) * 5))
+    elif confidence == "evidence backed":
+        score = min(85, 55 + (len(evidence) * 10))
+    elif confidence == "planned":
+        score = 25
+    else:
+        score = 35
+    meaning = meaning_for(confidence)
+    return {
+        "state": confidence,
+        "score": score,
+        "label": meaning["label"],
+        "severity": meaning["severity"],
+        "meaning": meaning["meaning"],
+        "operator_action": meaning["operator_action"],
+        "evidence_count": len(evidence),
+        "current_blocker_count": len(current_issues),
+    }
 
 
 def _phase_proof_status(status: str, evidence: list[str]) -> dict[str, object]:

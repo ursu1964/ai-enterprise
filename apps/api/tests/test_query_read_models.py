@@ -143,6 +143,11 @@ def test_factory_recovery_knowledge_and_evolution_states_have_friendly_meaning()
         "evidence backed",
         "early estimate",
         "needs review",
+        "planned",
+        "inferred",
+        "early",
+        "observed",
+        "calibrated",
     }
 
     for state in states:

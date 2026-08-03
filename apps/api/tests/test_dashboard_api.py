@@ -758,6 +758,18 @@ async def test_project_intelligence_exposes_lifecycle_graph_data() -> None:
     assert response["phases"][2]["status"] == "current"
     assert response["phases"][2]["label"] == "Architecture"
     assert response["phases"][2]["confidence"] == "live workflow"
+    assert response["phases"][2]["confidence_detail"] == {
+        "state": "live workflow",
+        "score": 75,
+        "label": "Live workflow",
+        "severity": "ok",
+        "meaning": "A governed workflow is linked and actively explains this phase.",
+        "operator_action": (
+            "Use workflow events and phase proof when deciding the next action."
+        ),
+        "evidence_count": 1,
+        "current_blocker_count": 0,
+    }
     assert response["phases"][2]["proof_status"]["state"] == "evidence_backed"
     assert response["phases"][2]["proof_status"]["evidence_count"] == 1
     assert response["phases"][2]["owner_crew"] == "architecture"

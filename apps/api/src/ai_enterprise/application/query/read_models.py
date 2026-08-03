@@ -658,6 +658,36 @@ _STATUS_MEANINGS: dict[str, Meaning] = {
         "This phase is inferred before direct workflow or evidence proof exists.",
         "Start or relink the workflow before relying on this phase as live proof.",
     ),
+    "early": Meaning(
+        "Early estimate",
+        "info",
+        "The estimate is heuristic because historical timing evidence is not available yet.",
+        "Use it for rough planning and replace it with observed telemetry when available.",
+    ),
+    "observed": Meaning(
+        "Observed estimate",
+        "info",
+        "The estimate uses observed transition timing from this project.",
+        "Treat it as directional until more phase history is available.",
+    ),
+    "calibrated": Meaning(
+        "Calibrated estimate",
+        "ok",
+        "The estimate has enough transition timing samples to be more reliable.",
+        "Use it for planning while continuing to collect duration telemetry.",
+    ),
+    "planned": Meaning(
+        "Planned",
+        "info",
+        "This phase is expected by the workflow but has not started yet.",
+        "Complete earlier gates before expecting proof for this phase.",
+    ),
+    "inferred": Meaning(
+        "Inferred",
+        "warn",
+        "This phase is inferred from surrounding project state without direct proof.",
+        "Inspect workflow history before relying on it for delivery decisions.",
+    ),
     "needs review": Meaning(
         "Needs review",
         "bad",
