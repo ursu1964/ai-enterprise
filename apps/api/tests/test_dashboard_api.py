@@ -588,6 +588,14 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert 'id="proofNextCard" class="proof-card" href="/dashboard#factory"' in response.text
     assert "loadLiveProof" in response.text
     assert "card.href = href" in response.text
+    assert "If the proof still needs attention" in response.text
+    assert "Project proof is waiting for source confirmation" in response.text
+    assert "Runtime telemetry is visible" in response.text
+    assert "Runtime telemetry is waiting for the first signal" in response.text
+    assert "Metric proof is waiting for source confirmation" in response.text
+    assert "not reachable yet" not in response.text
+    assert "stays unavailable" not in response.text
+    assert "remains unavailable" not in response.text
     assert "Click to open Projects" in response.text
     assert "Click to watch live project movement." in response.text
     assert "/health/ready" in response.text

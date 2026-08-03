@@ -4625,22 +4625,22 @@ DEMO_HTML = r"""<!doctype html>
         const ok = ready.status === "ok" && ready.database === "reachable";
         setProof("proofHealth", ok ? "Ready" : "Needs attention", ok ? "Database is reachable. Click to open Command Center." : "Database readiness is not confirmed. Click to inspect Command Center.", ok ? "ok" : "bad", "/dashboard");
       } catch (error) {
-        setProof("proofHealth", "Not confirmed", "Refresh after the API finishes starting. If it stays unavailable, click to open Command Center.", "bad", "/dashboard");
+        setProof("proofHealth", "Not confirmed", "Refresh after the API finishes starting. If the proof still needs attention, click to open Command Center.", "bad", "/dashboard");
       }
       try {
         const projects = await fetchJson("/api/v1/projects");
         setProof("proofProjects", `${projects.length} project(s)`, projects.length ? "Click to open Projects and inspect movement." : "Click to open Factory and create the first project.", projects.length ? "ok" : "warn", projects.length ? "/dashboard#projects" : "/dashboard#factory");
         setProof("proofNext", projects.length ? "Open Execution" : "Open Factory", projects.length ? "Click to watch live project movement." : "Click to preview before creating records.", "ok", projects.length ? "/dashboard#execution" : "/dashboard#factory");
       } catch (error) {
-        setProof("proofProjects", "Not confirmed", "Project source is not reachable yet. Click to open Command Center if it remains unavailable.", "bad", "/dashboard");
+        setProof("proofProjects", "Not confirmed", "Project proof is waiting for source confirmation. Click to open Command Center if it still needs attention.", "bad", "/dashboard");
         setProof("proofNext", "Open Command Center", "Click to check source freshness and API health before demonstrating project movement.", "warn", "/dashboard");
       }
       try {
         const metrics = await fetchText("/metrics");
         const count = metrics.split("\n").filter(line => line && !line.startsWith("#")).length;
-        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is available. Click to open Metrics." : "No runtime signal has been emitted yet. Click to open Metrics.", count ? "ok" : "warn", "/dashboard#metrics");
+        setProof("proofTelemetry", `${count} signal(s)`, count ? "Runtime telemetry is visible. Click to open Metrics." : "Runtime telemetry is waiting for the first signal. Click to open Metrics.", count ? "ok" : "warn", "/dashboard#metrics");
       } catch (error) {
-        setProof("proofTelemetry", "Not confirmed", "Metrics source is not reachable yet. Click to open Metrics after the API settles.", "bad", "/dashboard#metrics");
+        setProof("proofTelemetry", "Not confirmed", "Metric proof is waiting for source confirmation. Click to open Metrics after the API settles.", "bad", "/dashboard#metrics");
       }
       document.getElementById("proofChecked").textContent = `Live proof checked ${new Date().toLocaleTimeString()}.`;
     }
