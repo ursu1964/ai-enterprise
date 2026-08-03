@@ -49,12 +49,20 @@ def build_integration_worker_entry(
         patches=VerifiedPatchApplier(git=git),
         workspaces=WorkspaceVerifier(git=git),
         tests=ApprovedTestRunner(
-            allowed_executables={"pytest", "ruff", "mypy", "python", "python3"}
+            allowed_executables={
+                "mypy",
+                "node",
+                "npm",
+                "python",
+                "python3",
+                "pytest",
+                "ruff",
+            }
         ),
         commits=DeterministicCommitCreator(git=git),
         pusher=RestrictedPusher(credentials=credential_broker, git=git),
         remote_verifier=RemoteVerifier(git=git),
         rollback=rollback_hook,
-        runtime_temp_root=settings.integration_artifacts_root,
+        runtime_temp_root=settings.integration_work_root / "tmp",
     )
     return IntegrationWorkerEntry(processor, worker_id)

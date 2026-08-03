@@ -241,11 +241,16 @@ class ControlledIntegrationService:
             raise IntegrationBindingMismatchError(
                 "Approval binding no longer matches candidate patch"
             )
+        previous_attempt_number = await self._session.scalar(
+            select(func.max(IntegrationAttemptModel.attempt_number)).where(
+                IntegrationAttemptModel.execution_run_id == execution.id
+            )
+        )
         attempt = IntegrationAttemptModel(
             id=uuid.uuid4(),
             execution_run_id=execution.id,
             integration_approval_id=approval.id,
-            attempt_number=1,
+            attempt_number=(previous_attempt_number or 0) + 1,
             status=IntegrationAttemptStatus.QUEUED,
             project_id=approval.project_id,
             target_branch=approval.target_branch,
