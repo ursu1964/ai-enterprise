@@ -27,6 +27,9 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
     assert document["status"] == "passed"
     assert document["migration_verification"]["conformant"] is True
     assert document["migration_verification"]["rollback_feasible_count"] == 2
+    assert document["gate_summary"]["total"] == len(document["gates"])
+    assert document["gate_summary"]["failed"] == 0
+    assert "make check-release" in document["gate_summary"]["execution_model"]
     assert {gate["name"] for gate in document["gates"]} >= {
         "compose-check",
         "migration-check",
@@ -34,7 +37,30 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
         "engineering-full",
         "etra-check",
     }
+    assert all(gate["required"] is True for gate in document["gates"])
+    assert all(
+        gate["evidence"]["source"] == "make check-release dependency"
+        for gate in document["gates"]
+    )
+    assert document["artifact_policy"]["fails_when_migration_verification_fails"] is True
     assert len(document["artifact_hash"]) == 64
+
+
+def test_release_artifact_fails_when_migration_verification_fails(tmp_path: Path) -> None:
+    versions = tmp_path / "migrations" / "versions"
+    versions.mkdir(parents=True)
+    _migration(versions / "one.py", "one", None)
+    _migration(versions / "two.py", "two", "missing")
+
+    document = release_artifact.build_artifact(tmp_path)
+
+    assert document["status"] == "failed"
+    assert document["gate_summary"]["failed"] == len(document["gates"])
+    assert document["migration_verification"]["conformant"] is False
+    assert any(
+        "dangling down_revision" in finding
+        for finding in document["migration_verification"]["findings"]
+    )
 
 
 def test_release_artifact_writes_json_file(tmp_path: Path) -> None:

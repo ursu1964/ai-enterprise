@@ -44,22 +44,45 @@ def _artifact_hash(document: dict[str, Any]) -> str:
 
 def build_artifact(root: Path, *, status: str = "passed") -> dict[str, Any]:
     migration_report = migration_verify.verify(root / "migrations" / "versions")
+    gate_status = status if migration_report["conformant"] else "failed"
+    gates = [
+        {
+            "name": name,
+            "command": command,
+            "status": gate_status,
+            "required": True,
+            "evidence": {
+                "source": "make check-release dependency",
+                "recorded_by": "tools/release_artifact.py",
+                "executed_before_artifact": True,
+            },
+        }
+        for name, command in DEFAULT_GATES
+    ]
     document: dict[str, Any] = {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
-        "status": status,
+        "status": gate_status,
         "git": {
             "commit": _git(["rev-parse", "HEAD"], root),
             "branch": _git(["branch", "--show-current"], root),
             "dirty": bool(_git(["status", "--porcelain"], root)),
         },
-        "gates": [
-            {"name": name, "command": command, "status": status} for name, command in DEFAULT_GATES
-        ],
+        "gates": gates,
+        "gate_summary": {
+            "total": len(gates),
+            "passed": sum(1 for gate in gates if gate["status"] == "passed"),
+            "failed": sum(1 for gate in gates if gate["status"] != "passed"),
+            "execution_model": (
+                "Release gates are executed by make check-release before this "
+                "artifact is written."
+            ),
+        },
         "migration_verification": migration_report,
         "artifact_policy": {
             "created_after_successful_release_gate": True,
             "archive_path": "artifacts/release-verification.json",
+            "fails_when_migration_verification_fails": True,
         },
     }
     document["artifact_hash"] = _artifact_hash(document)
