@@ -240,8 +240,16 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "not available yet" not in response.text
     assert "Attempt proof needs attention" in response.text
     assert "Review could not be recorded" in response.text
+    assert "inspect attempt proof or record reviewed recoveries" in response.text
     assert "Failed work changes the operating picture" not in response.text
     assert "Review failed or blocked work" not in response.text
+    assert "quality or blocked work is slowing progress" in response.text
+    assert "Prevents repeated problems later." in response.text
+    assert "recurring-problem guardrail candidate" in response.text
+    assert "Recurring problems should become recovery checklists" in response.text
+    assert "known problem classes" in response.text
+    assert "quality or failures are blocking progress" not in response.text
+    assert "repeated-failure guardrail candidate" not in response.text
     assert "jobActionStatus" in response.text
     assert "/api/v1/operator/jobs/by-id/" in response.text
     assert "loadJobAttempts" in response.text
@@ -260,7 +268,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Evidence required from job attempts." in response.text
     assert "Source jobs:" in response.text
     assert "Guardrail proposal:" in response.text
-    assert "Repeated failure classes should become a recovery checklist" in response.text
+    assert "Recurring problems should become recovery checklists" in response.text
     assert "Business Telemetry" in response.text
     assert "Server Readiness" in response.text
     assert "/dashboard/server-readiness" in response.text
