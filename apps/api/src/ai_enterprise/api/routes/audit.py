@@ -2,7 +2,12 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from ai_enterprise.api.dependencies import ActorDependency, SessionDependency, require_capability
+from ai_enterprise.api.dependencies import (
+    Actor,
+    ActorDependency,
+    SessionDependency,
+    require_capability,
+)
 from ai_enterprise.application.audit.dto import (
     AuditTimelineResponse,
     IntegrityResponse,
@@ -23,13 +28,25 @@ def _not_found(exc: AuditProjectNotFoundError) -> HTTPException:
     return HTTPException(status_code=404, detail=str(exc))
 
 
+def _require_audit_read(actor: Actor, project_id: uuid.UUID) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human audit authority is required")
+    require_capability(actor, "audit.read", f"project:{project_id}")
+
+
+def _require_audit_export(actor: Actor, project_id: uuid.UUID) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(status_code=403, detail="Human audit authority is required")
+    require_capability(actor, "audit.export", f"project:{project_id}")
+
+
 @router.get("/{project_id}/audit/timeline", response_model=AuditTimelineResponse)
 async def timeline(
     project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
     limit: int = Query(default=100, ge=1, le=500), cursor: str | None = None,
     aggregate_type: str | None = None, event_type: str | None = None,
 ) -> AuditTimelineResponse:
-    require_capability(actor, "audit.read", f"project:{project_id}")
+    _require_audit_read(actor, project_id)
     try:
         return await AuditQueryService(session).timeline(
             project_id=project_id, limit=limit, cursor_value=cursor,
@@ -45,7 +62,7 @@ async def timeline(
 async def summary(
     project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> ProjectAuditSummaryResponse:
-    require_capability(actor, "audit.read", f"project:{project_id}")
+    _require_audit_read(actor, project_id)
     try:
         return await AuditQueryService(session).summary(project_id)
     except AuditProjectNotFoundError as exc:
@@ -56,7 +73,7 @@ async def summary(
 async def provenance(
     project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> ProjectProvenanceResponse:
-    require_capability(actor, "audit.read", f"project:{project_id}")
+    _require_audit_read(actor, project_id)
     try:
         return await AuditQueryService(session).provenance(project_id)
     except AuditProjectNotFoundError as exc:
@@ -67,7 +84,7 @@ async def provenance(
 async def integrity(
     project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency,
 ) -> IntegrityResponse:
-    require_capability(actor, "audit.read", f"project:{project_id}")
+    _require_audit_read(actor, project_id)
     try:
         return await AuditQueryService(session).integrity(project_id)
     except AuditProjectNotFoundError as exc:
@@ -78,7 +95,7 @@ async def integrity(
 async def export(
     project_id: uuid.UUID, session: SessionDependency, actor: ActorDependency
 ) -> Response:
-    require_capability(actor, "audit.export", f"project:{project_id}")
+    _require_audit_export(actor, project_id)
     try:
         files = await AuditQueryService(session).export_data(project_id)
     except AuditProjectNotFoundError as exc:

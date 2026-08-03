@@ -273,6 +273,34 @@ async def test_sensitive_audit_reads_reject_wrong_project_scope(route, capabilit
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "capability"),
+    [
+        (audit_timeline, "audit.read"),
+        (audit_summary, "audit.read"),
+        (audit_provenance, "audit.read"),
+        (audit_integrity, "audit.read"),
+        (export_audit, "audit.export"),
+    ],
+)
+async def test_sensitive_audit_reads_require_human_actor(route, capability: str) -> None:
+    project_id = uuid4()
+    denied = Actor(
+        "audit-service",
+        "service",
+        "auditor",
+        frozenset({capability}),
+        scopes=frozenset({f"project:{project_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await route(project_id, object(), denied)  # type: ignore[misc, arg-type]
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human audit authority is required"
+
+
+@pytest.mark.asyncio
 async def test_audit_integrity_route_reports_tampered_chain_record() -> None:
     project_id = uuid4()
     project = ProjectModel(
