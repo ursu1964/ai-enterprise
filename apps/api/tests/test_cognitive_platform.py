@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from ai_enterprise.api.dependencies import Actor
-from ai_enterprise.api.routes.cognitive import _authority, decide, router
+from ai_enterprise.api.routes.cognitive import _authority, decide, records, router
 from ai_enterprise.application.cognitive_service import (
     RECORD_TYPES,
     CognitiveError,
@@ -38,6 +38,9 @@ class Session:
 
     async def scalar(self, statement: object) -> Any:
         return self.scalar_values.pop(0) if self.scalar_values else None
+
+    async def scalars(self, statement: object) -> Rows:
+        return Rows([])
 
     def add(self, row: Any) -> None:
         self.added.append(row)
@@ -87,6 +90,28 @@ def test_cognitive_authority_requires_scoped_capability() -> None:
     _authority(global_scoped, organization_id, "read")
     with pytest.raises(HTTPException, match="cognitive authority"):
         _authority(scoped, uuid.uuid4(), "read")
+
+
+@pytest.mark.asyncio
+async def test_cognitive_record_reads_require_human_actor() -> None:
+    organization_id = uuid.uuid4()
+    denied = Actor(
+        "cognitive-service",
+        "service",
+        "analyst",
+        frozenset({"cognitive.read", "cognitive.classified.read"}),
+        scopes=frozenset({f"organization:{organization_id}"}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await records(
+            Session(),  # type: ignore[arg-type]
+            denied,
+            organization_id,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Human cognitive read authority is required"
 
 
 def test_p16_m1_m16_routes_types_and_append_only_migration() -> None:

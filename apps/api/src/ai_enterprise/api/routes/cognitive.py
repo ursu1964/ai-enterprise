@@ -36,6 +36,12 @@ def _authority(actor: Actor, organization_id: uuid.UUID, action: str) -> None:
         ) from exc
 
 
+def _read_authority(actor: Actor, organization_id: uuid.UUID) -> None:
+    if actor.actor_type != "human":
+        raise HTTPException(403, "Human cognitive read authority is required")
+    _authority(actor, organization_id, "read")
+
+
 def _error(exc: CognitiveError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
 
@@ -107,7 +113,7 @@ async def records(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> list[dict[str, object]]:
-    _authority(actor, organization_id, "read")
+    _read_authority(actor, organization_id)
     query = select(CognitiveRecordModel).where(
         CognitiveRecordModel.organization_id == organization_id
     )
