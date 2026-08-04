@@ -17,7 +17,7 @@ Status date: 2026-08-04
 | Step | State | Exit evidence |
 | --- | --- | --- |
 | 1 — AEPM v0.1 | **COMPLETE** | Narrow JSON manifest contract, example, documentation, and tests |
-| 2 — Canonical project model / AEIR | **BLOCKED** | Step 1 complete |
+| 2 — Canonical project model / AEIR | **COMPLETE** | Deterministic AEPM-to-AEIR compiler and integrity contract |
 | 3 — Deterministic validation engine | **BLOCKED** | Step 2 complete |
 | 4 — AI interpretation layer | **BLOCKED** | Step 3 complete |
 | 5 — Knowledge storage | **BLOCKED** | Step 4 complete |
@@ -45,3 +45,27 @@ Status date: 2026-08-04
 - 2026-08-04: AEPM v0.1 focused tests passed, followed by Ruff, MyPy over 413 source files,
   tooling invariants, all 826 tests, and a refreshed code graph. Step 1 is complete; Step 2 may begin
   only from this committed contract.
+- 2026-08-04: Started Step 2 with a generic, immutable AEIR object contract supporting every object
+  kind named by `r1.txt`. The deterministic compiler maps only facts present in AEPM, retains exact
+  source references and the manifest hash, marks client claims `unverified`, and keeps preferred
+  technologies `proposed`. It deliberately does not invent Risk or Artifact objects.
+
+## Step 2 acceptance
+
+- [x] AEIR supports Project, Intent, Outcome, Stakeholder, Capability, Process, Requirement, Rule,
+  Entity, Integration, Constraint, Risk, Decision, Artifact, and Relationship types.
+- [x] Every canonical object has id, type, name, description, status, source, confidence, version,
+  and relationship references.
+- [x] Identical AEPM input compiles to an identical canonical model and SHA-256 identity.
+- [x] Direct manifest facts remain unverified; technology preferences remain proposed.
+- [x] Ownership and containment relationships have explicit endpoints and back-references.
+- [x] Duplicate identities, missing endpoints, inconsistent references, and hash tampering fail
+  closed.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 2 completion evidence
+
+- 2026-08-04: Step 2 focused tests passed, followed by Ruff, MyPy over 414 source files,
+  tooling invariants, all 830 tests, and a refreshed code graph. Step 2 is complete; deterministic
+  validation is now the only authorized next step.
