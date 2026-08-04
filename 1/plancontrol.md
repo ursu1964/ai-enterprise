@@ -20,8 +20,8 @@ Status date: 2026-08-04
 
 | Phase | State | Current blockers | Advance rule |
 | --- | --- | --- | --- |
-| 0 — Reproducible baseline | **BLOCKED / ACTIVE** | Dirty tree; release provenance does not fail closed; deterministic demo lifecycle absent; blueprint tenant isolation incomplete; baseline artifacts absent | All Phase 0 exit criteria pass from a clean checkout |
-| 1 — Execution infrastructure | **BLOCKED** | Phase 0 is open; existing permission, executor, provider, lease, transition, and result-contract failures | Phase 0 complete |
+| 0 — Reproducible baseline | **COMPLETE** | None | Reopen if source/evidence provenance becomes dirty, mismatched, or unverifiable |
+| 1 — Execution infrastructure | **BLOCKED / ACTIVE** | Existing permission, executor, provider, lease, transition, and result-contract failures | Ten consecutive canary projects with zero infrastructure dead letters and classified result evidence |
 | 2 — Truthful readiness | **BLOCKED** | Phase 1 not proven | Phase 1 complete |
 | 3 — Full execution canary | **BLOCKED** | Phase 2 not proven | Phase 2 complete |
 | 4 — Structural concentration | **BLOCKED** | Phase 3 not proven | Phase 3 complete |
@@ -38,9 +38,9 @@ Status date: 2026-08-04
 - [x] Dead-letter and performance baselines are stored as hashed local evidence.
 - [x] Blueprint lifecycle is organization-scoped and persistence-focused endpoint behavior is tested.
 - [x] Changes are separated into coherent commits.
-- [ ] Fresh checkout uses locked dependencies and passes the complete release gate.
-- [ ] Release artifact identifies the exact commit, Git tree, and migration head.
-- [ ] Final working tree is clean.
+- [x] Fresh detached checkout uses `uv sync --frozen` and passes the complete release gate.
+- [x] Release artifact identifies the exact commit, Git tree, and migration head.
+- [x] Final Phase 0 implementation tree is clean.
 
 ## Phase 0 execution log
 
@@ -51,6 +51,12 @@ Status date: 2026-08-04
 - 2026-08-04: Captured `artifacts/runtime-baseline.json` with 17 current problem jobs, 15 failure
   patterns, the source commit/tree, manager timing, response size, and route metrics. The artifact
   correctly records that the source tree is still dirty.
+- 2026-08-04: First clean release gate stopped on an unused lint suppression in the baseline tool;
+  the defect was corrected before evidence was regenerated.
+- 2026-08-04: All 15 release gates passed from both the primary checkout and a fresh detached
+  checkout installed with `uv sync --frozen`. Evidence bound commit
+  `e4b3af1bd53d76a49ca51de9cb8e6cee30b715d1`, tree
+  `54580d49954c331cb6ae285de8e8861ca30c1296`, and migration head `f1b5c8d3e7a2`.
 
 ## Active blockers observed
 
