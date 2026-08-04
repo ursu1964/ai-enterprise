@@ -121,6 +121,43 @@ def test_test_compose_profile_installs_dev_dependencies() -> None:
     assert "docker-test:" in makefile
 
 
+def test_broker_agent_images_use_pinned_reproducible_inputs() -> None:
+    root = repo_root()
+    requirements = (root / "docker/agent-runtime-requirements.txt").read_text(
+        encoding="utf-8"
+    )
+    dockerfiles = [
+        root / "docker/execution-agent/Dockerfile",
+        root / "docker/review-agent/Dockerfile",
+    ]
+
+    for dockerfile_path in dockerfiles:
+        dockerfile = dockerfile_path.read_text(encoding="utf-8")
+        assert (
+            "FROM python:3.12.11-slim-bookworm@sha256:"
+            "519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
+        ) in dockerfile
+        assert "pip install --upgrade pip" not in dockerfile
+        assert "pip install pytest==" not in dockerfile
+        assert "python -m pip install --require-hashes --no-deps" in dockerfile
+        assert "COPY docker/agent-runtime-requirements.txt" in dockerfile
+        assert "ARG BASH_VERSION=5.2.15-2+b13" in dockerfile
+        assert "ARG CA_CERTIFICATES_VERSION=20230311+deb12u1" in dockerfile
+        assert "ARG GIT_VERSION=1:2.39.5-0+deb12u3" in dockerfile
+        assert "ARG NODEJS_VERSION=18.20.4+dfsg-1~deb12u2" in dockerfile
+        assert "ARG NPM_VERSION=9.2.0~ds1-1" in dockerfile
+        assert "ARG PATCH_VERSION=2.7.6-7" in dockerfile
+        assert '"bash=${BASH_VERSION}"' in dockerfile
+        assert '"ca-certificates=${CA_CERTIFICATES_VERSION}"' in dockerfile
+        assert '"git=${GIT_VERSION}"' in dockerfile
+        assert '"nodejs=${NODEJS_VERSION}"' in dockerfile
+        assert '"npm=${NPM_VERSION}"' in dockerfile
+        assert '"patch=${PATCH_VERSION}"' in dockerfile
+
+    assert "pytest==8.3.4" in requirements
+    assert requirements.count("--hash=sha256:") == 4
+
+
 def test_server_operations_artifacts_cover_later_phase_gaps() -> None:
     root = repo_root()
     makefile = (root / "Makefile").read_text(encoding="utf-8")

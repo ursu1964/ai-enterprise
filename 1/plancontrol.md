@@ -21,7 +21,7 @@ Status date: 2026-08-04
 | Phase | State | Current blockers | Advance rule |
 | --- | --- | --- | --- |
 | 0 — Reproducible baseline | **COMPLETE** | None | Reopen if source/evidence provenance becomes dirty, mismatched, or unverifiable |
-| 1 — Execution infrastructure | **BLOCKED / ACTIVE** | Existing permission, executor, provider, lease, transition, and result-contract failures | Ten consecutive canary projects with zero infrastructure dead letters and classified result evidence |
+| 1 — Execution infrastructure | **BLOCKED / ACTIVE** | Approved restricted executor connection and ten-project zero-dead-letter proof remain open | Ten consecutive canary projects with zero infrastructure dead letters and classified result evidence |
 | 2 — Truthful readiness | **BLOCKED** | Phase 1 not proven | Phase 1 complete |
 | 3 — Full execution canary | **BLOCKED** | Phase 2 not proven | Phase 2 complete |
 | 4 — Structural concentration | **BLOCKED** | Phase 3 not proven | Phase 3 complete |
@@ -69,6 +69,7 @@ Status date: 2026-08-04
 - [x] Review output is structurally validated before it enters the workflow.
 - [x] Lease timing is validated and heartbeat uncertainty fences execution output immediately.
 - [x] Repeated setup warnings are emitted only on blocker state changes.
+- [x] Local execution and review agent images use pinned base/runtime inputs and pass local broker preflight.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
 - [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
@@ -181,13 +182,21 @@ Status date: 2026-08-04
   succeeds. The local Docker canary now uses this replayer instead of manual volume removal.
   Activation remains blocked on approved executor connection, production-reproducible pinned images,
   and the required ten zero-dead-letter canary projects.
+- 2026-08-04: Pinned the local execution/review agent image inputs used by the inactive broker
+  path. Both Dockerfiles now use the immutable Python slim-bookworm base digest, exact requested
+  Debian package versions for bash, ca-certificates, git, nodejs, npm, and patch, and a shared
+  hash-checked Python runtime requirements file installed with `--require-hashes --no-deps`; pip is
+  no longer bootstrapped with an unpinned self-upgrade. Both local agent images rebuilt
+  successfully, the broker canary passed for execution and review, and the fast gate passed with
+  886 tests. Activation remains blocked on connecting an approved restricted executor and then
+  running ten consecutive zero-infrastructure-dead-letter canary projects.
 
 ## Active blockers observed
 
 - Runtime path ownership and result-contract protections are implemented and locally verified, but
   the historical failures remain preserved as recovery evidence.
-- No approved restricted container execution provider is connected, so execution and review jobs
-  remain capability-blocked before leasing.
+- No approved restricted container execution provider is connected, so production execution and
+  review jobs remain capability-blocked before leasing.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
@@ -195,8 +204,10 @@ Status date: 2026-08-04
   internal runner acknowledgement ordering are implemented inside the inactive broker path. Crash-
   replay cleanup/handoff for retained evidence volumes is implemented and covered by focused tests,
   but the approved executor still is not connected for production job leasing.
-- Current execution/review Dockerfiles are adequate for a local canary but are not production-
-  reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
+- Local execution/review Dockerfiles now pin the base image digest, requested Debian package
+  versions, and hash-checked Python runtime requirements. Deeper production reproducibility still
+  requires a connected approved executor with controlled image build/promotion and repository
+  snapshot policy for transitive Debian dependencies.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor
   capability is connected. The model capability is now connected. Phase 2 remains closed.
 
