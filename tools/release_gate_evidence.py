@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import time
@@ -38,6 +39,10 @@ RELEASE_GATE_COMMANDS: dict[str, str] = {
     "docker-smoke": "python tools/docker_smoke.py --require-worker",
     "dashboard-verify": (
         'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
+    ),
+    "dashboard-browser-verify": (
+        "apps/api/.venv/bin/python tools/dashboard_browser_verify.py "
+        + '--base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
     ),
     "engineering-static": "python tools/engineering_verify.py --static --json",
     "evolution-check": "python tools/evolution_verify.py --json",
@@ -80,16 +85,17 @@ def run_gate(
         check=False,
     )
     duration = round(time.monotonic() - started, 3)
-    output_path.write_text(
-        result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr,
-        encoding="utf-8",
-    )
+    output_content = result.stdout + (
+        "\n" if result.stdout and result.stderr else ""
+    ) + result.stderr
+    output_path.write_text(output_content, encoding="utf-8")
     return {
         "status": "passed" if result.returncode == 0 else "failed",
         "command": command,
         "return_code": result.returncode,
         "duration_seconds": duration,
         "output_path": str(output_path.relative_to(root)),
+        "output_sha256": hashlib.sha256(output_content.encode("utf-8")).hexdigest(),
         "recorded_at": datetime.now(UTC).isoformat(),
     }
 
@@ -102,6 +108,7 @@ def write_evidence(
     output_dir: Path,
     timeout: int,
 ) -> dict[str, Any]:
+    git_before = _git_identity(root)
     gates = {
         name: run_gate(
             root=root,
@@ -112,14 +119,24 @@ def write_evidence(
         )
         for name, command in gate_commands.items()
     }
+    git_after = _git_identity(root)
+    provenance_valid = (
+        _git_identity_valid(git_before)
+        and _git_identity_valid(git_after)
+        and git_before == git_after
+    )
     document = {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
-        "git": {
-            "commit": _git(["rev-parse", "HEAD"], root),
-            "branch": _git(["branch", "--show-current"], root),
-            "dirty": bool(_git(["status", "--porcelain"], root)),
-        },
+        "status": (
+            "passed"
+            if provenance_valid
+            and all(gate["status"] == "passed" for gate in gates.values())
+            else "failed"
+        ),
+        "git": git_after,
+        "git_before": git_before,
+        "provenance_valid": provenance_valid,
         "gates": gates,
     }
     target = output if output.is_absolute() else root / output
@@ -138,6 +155,24 @@ def _git(args: list[str], root: Path) -> str:
         ).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"
+
+
+def _git_identity(root: Path) -> dict[str, Any]:
+    status = _git(["status", "--porcelain", "--untracked-files=all"], root)
+    return {
+        "commit": _git(["rev-parse", "HEAD"], root),
+        "tree": _git(["rev-parse", "HEAD^{tree}"], root),
+        "branch": _git(["branch", "--show-current"], root),
+        "dirty": status == "unknown" or bool(status),
+    }
+
+
+def _git_identity_valid(identity: dict[str, Any]) -> bool:
+    return (
+        identity.get("commit") not in {None, "", "unknown"}
+        and identity.get("tree") not in {None, "", "unknown"}
+        and identity.get("dirty") is False
+    )
 
 
 def _parse_gate_command(value: str) -> tuple[str, str]:
@@ -198,7 +233,7 @@ def main() -> int:
         timeout=args.timeout,
     )
     print(json.dumps(document, sort_keys=True))
-    return 0 if all(gate["status"] == "passed" for gate in document["gates"].values()) else 1
+    return 0 if document["status"] == "passed" else 1
 
 
 if __name__ == "__main__":

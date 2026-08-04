@@ -23,6 +23,8 @@ use the operator guides when starting or running the system.
      [Dashboard Polish and Factory Operating Plan](dashboard-polish-and-factory-plan.md).
    - Current improvement roadmap:
      [AI Enterprise Application Improvement Plan](application-improvement-plan-2026-08-03.md).
+   - Production proof bundle:
+     [Production Readiness Evidence](production-readiness-evidence.md).
 
 3. Enterprise Preparation
    - Runtime directory bootstrap.
@@ -85,7 +87,14 @@ use the operator guides when starting or running the system.
     - Change proposals, change sets, transformation plans, impact assessments, validation plans,
       staged-release plans, rollback plans, decisions, observations, outcomes, and timeline.
     - Important rule: this API records governed change decisions and plans; activation authority is
-      deliberately not exposed.
+    deliberately not exposed.
+
+### Governed Blueprint Catalog
+
+Reusable delivery patterns are persisted under `/api/v1/blueprints`. Human reviewers move assets
+through proposed, reviewed, reusable, improved, and deprecated states. Each decision retains its
+rationale and evidence; deprecated assets remain available as history but are hidden from default
+catalog recommendations.
 
 12. Agent Runtime and Crew Governance
     - Skill registry.

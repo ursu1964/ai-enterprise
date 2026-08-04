@@ -222,7 +222,26 @@ Expected response shape:
 ```
 
 The endpoint is idempotent. Running it again should reuse the same demo projects and nudge their
-workflows instead of creating duplicate demo projects.
+workflows instead of creating duplicate demo projects. For routine demonstrations, use the guarded
+lifecycle command instead of calling the start endpoint directly:
+
+```bash
+python tools/demo_lifecycle.py
+```
+
+Preview is the default and performs no mutation. It verifies that the API is a loopback development
+instance, validates the exact four-project portfolio, and checks operator jobs and canonical
+workflows. Start only after preview reports `ready`:
+
+```bash
+python tools/demo_lifecycle.py --execute
+```
+
+Execution is fail-closed. Any unresolved failed, abandoned, or dead-letter job—or an unhealthy
+canonical workflow—stops the command before the factory start request. A blocker evidence document
+is written under `artifacts/demo-runs/`. The command never deletes records, resets the database, or
+bulk-acknowledges failures. Review and resolve the underlying cause through the normal operator
+workflow first; historical failure and acknowledgement audit evidence remains intact.
 
 ## 7. Verify Repositories Were Created
 

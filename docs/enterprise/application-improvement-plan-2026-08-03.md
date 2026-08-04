@@ -96,6 +96,18 @@ Acceptance:
 - Tool import formatting is checked with the same Ruff behavior as CI.
 - The Node runtime warning for GitHub actions does not return.
 
+Status: implemented on 2026-08-04.
+
+Evidence:
+
+- `tools/check_tooling_invariants.py` rejects shebang Python tools without executable bits and
+  outdated known GitHub action majors.
+- `make tooling-invariants` checks Ruff, repository invariants, and Python compilation locally.
+- Ruff is pinned to the lockfile version in development and CI.
+- Focused regression tests cover valid tooling, executable-bit drift, and outdated actions.
+- On case-insensitive Windows filesystems, use a case-sensitive clone or worktree because `P1.txt`
+  and `p1.txt` are distinct tracked files. Do not commit either file from a collapsed checkout.
+
 ### Phase 2 - Browser Journey Verification
 
 Objective: protect the dashboard as a real operator interface, not only an API contract.
@@ -118,6 +130,17 @@ Acceptance:
 - A blank dashboard panel fails CI.
 - A cryptic raw backend state in primary UI fails CI.
 - The demo story can be opened and followed without API console knowledge.
+
+Status: implemented on 2026-08-04.
+
+Evidence:
+
+- `tools/dashboard_browser_verify.py` drives Chromium through every primary dashboard tab, mock
+  factory preview, project inspection, demo story, documentation hub, and Graphify route.
+- Active views fail when an operator panel is blank, and browser console errors fail the journey.
+- Failure screenshots are written under `artifacts/browser/` for diagnosis.
+- Use `make dashboard-browser-install` once, then `make dashboard-browser-verify` against the live
+  stack. The existing HTTP verifier remains the fast release contract check.
 
 ### Phase 3 - Production Readiness Evidence
 
@@ -143,6 +166,19 @@ Acceptance:
 - Missing identity or monitoring configuration produces a clear blocker.
 - The operator has one command or document bundle that states ready/not ready.
 
+Status: implemented on 2026-08-04.
+
+Evidence:
+
+- `tools/production_readiness.py` validates real infrastructure choices and nine current,
+  category-specific operational proofs.
+- Backup readiness requires isolated database restore evidence; the existence of a dump is not
+  accepted as production proof.
+- Every proof has a check timestamp, expiry, durable evidence reference, and required details.
+- `make production-readiness` writes the auditable aggregate report.
+- `make production-release-artifact` fails closed when production evidence is missing, pending, or
+  expired, while normal release artifacts remain explicitly non-production.
+
 ### Phase 4 - Blueprint Lifecycle
 
 Objective: turn reusable ideas into governed enterprise assets.
@@ -165,6 +201,20 @@ Acceptance:
 - A finished project can produce reusable, reviewable patterns.
 - Operators can see why a blueprint is trustworthy.
 - Deprecated patterns remain visible as history but are not recommended.
+
+Status: implemented on 2026-08-04.
+
+Evidence:
+
+- Governed blueprint assets persist source project, phase, artifact, pattern, evidence, economic
+  proof, recommended use, version, supersession, and reuse count.
+- Lifecycle decisions persist reviewer, rationale, evidence, previous state, and target state.
+- The enforced lifecycle is proposed, reviewed, reusable, improved, and deprecated; direct
+  unreviewed promotion to reusable is rejected.
+- Deprecated assets remain queryable with `include_deprecated=true` but are excluded from default
+  catalog recommendations.
+- The Blueprint Graph Hub reads the governed catalog and displays origin, lifecycle, recommended
+  use, and reuse history alongside inferred learning candidates.
 
 ### Phase 5 - Real Project Controlled Integration
 
@@ -206,6 +256,40 @@ Acceptance:
 - Metrics explain what changed and why it matters.
 - Project estimates improve after enough history exists.
 - Missing governed metrics show setup guidance, not a failure-looking state.
+
+Status: in progress; runtime performance slice implemented on 2026-08-04.
+
+Evidence:
+
+- Dashboard telemetry uses database aggregate queries for project/job counts instead of loading
+  every project and job record into application memory every refresh.
+- Every HTTP route now records count, cumulative latency, and maximum latency without adding a
+  metrics dependency.
+- Responses expose `Server-Timing` so browser and operator tools can inspect application latency.
+- The existing Prometheus endpoint exports the new route performance signals for dashboarding and
+  alert thresholds.
+- Composite project/time indexes now support dashboard-manager and project-intelligence history
+  reads for jobs, crew runs, and work packages as those tables grow.
+- Large dashboard and JSON responses use gzip compression, reducing first-load transfer cost while
+  preserving the API-hosted dashboard architecture.
+- Dashboard refresh no longer requests the overlapping operating-picture projection. Business
+  status, source contracts, and graph signals reuse the authoritative dashboard-manager response,
+  removing a multi-query read model from every 15-second browser refresh.
+- Runtime and governed telemetry summaries now reuse rows already loaded by dashboard-manager,
+  removing the separate telemetry-summary request and its aggregate/metric queries from refresh.
+- Interactive project, problem-job, and worker-capacity records are now bounded projections inside
+  dashboard-manager, removing three more duplicate list requests while keeping command endpoints
+  separate.
+- Timed refresh pauses while the browser tab is hidden, resumes immediately when visible, and
+  coalesces concurrent refresh calls so slow networks cannot create overlapping manager queries.
+- Dashboard refresh requests the compact manager representation, avoiding a second serialization
+  of every project summary while the default compatibility representation remains available to
+  existing API clients.
+- Stable local actor and organization context is loaded once per dashboard session and reused on
+  later refreshes, removing one HTTP round trip and two database reads from every polling cycle.
+- Project Intelligence groups repeated job failures by recovery pattern instead of repeating the
+  same instruction per job; affected-job counts, identifiers, and diagnostics remain available as
+  proof while the Problems view retains individual recovery actions.
 
 ### Phase 7 - Operator Documentation and Training
 

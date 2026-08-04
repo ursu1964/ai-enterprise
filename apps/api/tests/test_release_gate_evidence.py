@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -36,11 +37,13 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
     assert (
         "--require-evidence-for compose-check,migration-check,lint,typecheck,test,"
-        "secret-scan,docker-smoke,dashboard-verify,engineering-static,evolution-check,"
-        "federation-check,intelligence-check,engineering-full,etra-check"
+        "secret-scan,docker-smoke,dashboard-verify,dashboard-browser-verify,"
+        "engineering-static,evolution-check,federation-check,intelligence-check,"
+        "engineering-full,etra-check"
         in makefile
     )
     assert "dashboard-verify:" in makefile
+    assert "dashboard-browser-verify:" in makefile
     assert "tools/dashboard_verify.py" in makefile
     assert "tools/release_gate_evidence.py" in makefile
     assert "--profile fast" in makefile
@@ -101,6 +104,9 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     assert release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-verify"] == (
         'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
     )
+    assert "tools/dashboard_browser_verify.py" in (
+        release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-browser-verify"]
+    )
     assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
         "python tools/docker_smoke.py --require-worker"
     )
@@ -130,7 +136,9 @@ def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> 
     )
 
     assert document["schema_version"] == "1.0"
-    assert {"commit", "branch", "dirty"} <= set(document["git"])
+    assert {"commit", "tree", "branch", "dirty"} <= set(document["git"])
+    assert document["status"] == "failed"
+    assert document["provenance_valid"] is False
     assert document["gates"]["passing-gate"]["status"] == "passed"
     assert document["gates"]["passing-gate"]["return_code"] == 0
     assert document["gates"]["failing-gate"]["status"] == "failed"
@@ -138,6 +146,7 @@ def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> 
     passing_output = tmp_path / document["gates"]["passing-gate"]["output_path"]
     failing_output = tmp_path / document["gates"]["failing-gate"]["output_path"]
     assert passing_output.read_text(encoding="utf-8").strip() == "ok gate"
+    assert len(document["gates"]["passing-gate"]["output_sha256"]) == 64
     assert failing_output.read_text(encoding="utf-8").strip() == "bad gate"
     assert (tmp_path / "artifacts/gate-evidence.json").exists()
 
@@ -146,6 +155,8 @@ def test_release_artifact_consumes_captured_gate_evidence(tmp_path: Path) -> Non
     versions = tmp_path / "migrations" / "versions"
     versions.mkdir(parents=True)
     _migration(versions / "one.py", "one", None)
+    (tmp_path / ".gitignore").write_text("artifacts/\n", encoding="utf-8")
+    _init_git(tmp_path)
     evidence = release_gate_evidence.write_evidence(
         root=tmp_path,
         gate_commands={"docker-smoke": "python -c \"print('smoke ok')\""},
@@ -163,6 +174,78 @@ def test_release_artifact_consumes_captured_gate_evidence(tmp_path: Path) -> Non
     assert evidence["gates"]["docker-smoke"]["status"] == "passed"
     assert gates["docker-smoke"]["evidence"]["return_code"] == 0
     assert gates["docker-smoke"]["evidence"]["output_path"].endswith("docker-smoke.log")
+    assert gates["docker-smoke"]["evidence"]["log_integrity"]["valid"] is True
+    assert document["gate_evidence_file"]["tree_matches_current"] is True
+    assert len(document["gate_evidence_file"]["sha256"]) == 64
+
+
+def test_release_artifact_rejects_tampered_gate_log(tmp_path: Path) -> None:
+    versions = tmp_path / "migrations" / "versions"
+    versions.mkdir(parents=True)
+    _migration(versions / "one.py", "one", None)
+    (tmp_path / ".gitignore").write_text("artifacts/\n", encoding="utf-8")
+    _init_git(tmp_path)
+    evidence = release_gate_evidence.write_evidence(
+        root=tmp_path,
+        gate_commands={"test": "python -c \"print('verified')\""},
+        output=Path("artifacts/gate-evidence.json"),
+        output_dir=Path("artifacts/release-gates"),
+        timeout=30,
+    )
+    (tmp_path / evidence["gates"]["test"]["output_path"]).write_text(
+        "tampered\n", encoding="utf-8"
+    )
+
+    document = release_artifact.build_artifact(
+        tmp_path,
+        evidence_file=Path("artifacts/gate-evidence.json"),
+        require_evidence_for=("test",),
+    )
+    gate = next(gate for gate in document["gates"] if gate["name"] == "test")
+
+    assert document["status"] == "failed"
+    assert gate["status"] == "failed"
+    assert gate["evidence"]["log_integrity"]["valid"] is False
+
+
+def test_release_gate_evidence_rejects_dirty_git_tree(tmp_path: Path) -> None:
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("clean\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("artifacts/\n", encoding="utf-8")
+    _init_git(tmp_path)
+    tracked.write_text("dirty\n", encoding="utf-8")
+
+    document = release_gate_evidence.write_evidence(
+        root=tmp_path,
+        gate_commands={"test": "python -c \"print('passed')\""},
+        output=Path("artifacts/gate-evidence.json"),
+        output_dir=Path("artifacts/release-gates"),
+        timeout=30,
+    )
+
+    assert document["gates"]["test"]["status"] == "passed"
+    assert document["git"]["dirty"] is True
+    assert document["provenance_valid"] is False
+    assert document["status"] == "failed"
+
+
+def _init_git(root: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Release Test",
+            "-c",
+            "user.email=release@example.test",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        cwd=root,
+        check=True,
+    )
 
 
 def _migration(path: Path, revision: str, down_revision: str | None) -> None:

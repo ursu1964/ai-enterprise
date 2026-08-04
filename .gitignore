@@ -18,7 +18,8 @@ apps/api/graphify-out/
 /corel_manifest.txt
 /manifest.txt
 /p*.txt
-/1/
+/1/*
+!/1/plancontrol.md
 /2/
 /execution manifestcode.yaml
 /executionmanifest.yaml

@@ -1,0 +1,15 @@
+{
+  "environment": "production",
+  "reviewed_by": "production-owner",
+  "proof": {
+    "tls": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "certificate-check-output", "endpoint": "https://service.example.com", "certificate_expires_at": "YYYY-MM-DDTHH:MM:SSZ"},
+    "proxy_identity": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "signed-request-test-output", "provider": "identity-provider", "signed_headers_verified": true},
+    "server_secrets": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "secret-manager-audit-record", "secret_manager": "secret-manager", "rotation_due_at": "YYYY-MM-DDTHH:MM:SSZ"},
+    "backup_restore": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "restore-drill-output", "restored_database": "isolated-restore-target", "restore_completed_at": "YYYY-MM-DDTHH:MM:SSZ"},
+    "object_storage": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "storage-probe-output", "bucket": "artifact-bucket", "read_write_delete_verified": true},
+    "model_endpoint": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "model-verify-output", "endpoint": "https://model.example.com", "model": "production-model"},
+    "prometheus": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "prometheus-target-output", "endpoint": "https://prometheus.example.com", "scrape_target": "ai-enterprise-api"},
+    "grafana": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "grafana-dashboard-screenshot", "endpoint": "https://grafana.example.com", "dashboard": "AI Enterprise Overview"},
+    "alert_routing": {"status": "pending", "checked_at": "YYYY-MM-DDTHH:MM:SSZ", "valid_until": "YYYY-MM-DDTHH:MM:SSZ", "evidence": "test-alert-ticket", "channel": "on-call-channel", "test_alert_id": "alert-id"}
+  }
+}

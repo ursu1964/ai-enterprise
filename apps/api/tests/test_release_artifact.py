@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,6 +15,8 @@ def _load(name: str):
     root = _repo_root()
     if name == "release_artifact":
         _load("migration_verify")
+        _load("infrastructure_choices")
+        _load("production_readiness")
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -32,6 +35,8 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
 
     assert document["schema_version"] == "1.0"
     assert document["status"] == "passed"
+    assert document["release_environment"] == "non-production"
+    assert document["production_readiness"] is None
     assert document["migration_verification"]["conformant"] is True
     assert document["migration_verification"]["rollback_feasible_count"] == 2
     assert document["gate_summary"]["total"] == len(document["gates"])
@@ -47,6 +52,7 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
         "test",
         "docker-smoke",
         "dashboard-verify",
+        "dashboard-browser-verify",
         "engineering-full",
         "etra-check",
     }
@@ -59,6 +65,46 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
     assert document["artifact_policy"]["fails_when_required_gate_evidence_missing"] is True
     assert document["artifact_policy"]["fails_when_gate_evidence_commit_mismatch"] is True
     assert len(document["artifact_hash"]) == 64
+
+
+def test_release_artifact_fails_closed_for_dirty_git_tree(tmp_path: Path) -> None:
+    root = _release_root(tmp_path)
+    (root / ".gitignore").write_text("artifacts/\n# dirty change\n", encoding="utf-8")
+
+    document = release_artifact.build_artifact(root)
+
+    assert document["status"] == "failed"
+    assert document["git"]["dirty"] is True
+    assert document["artifact_policy"]["fails_when_git_is_dirty_or_unknown"] is True
+
+
+def test_release_artifact_rejects_evidence_tree_mismatch(tmp_path: Path) -> None:
+    root = _release_root(tmp_path)
+    evidence_file = root / "artifacts" / "gate-evidence.json"
+    evidence_file.parent.mkdir()
+    evidence = _evidence_document(root, {"lint": {"status": "passed"}})
+    evidence_git = evidence["git"]
+    assert isinstance(evidence_git, dict)
+    evidence_git["tree"] = "0" * 40
+    evidence_file.write_text(json_document(evidence), encoding="utf-8")
+
+    document = release_artifact.build_artifact(
+        root, evidence_file=evidence_file, require_evidence_for=("lint",)
+    )
+
+    assert document["status"] == "failed"
+    assert document["gate_evidence_file"]["tree_matches_current"] is False
+
+
+def test_production_release_fails_closed_without_readiness_evidence(tmp_path: Path) -> None:
+    root = _release_root(tmp_path)
+
+    document = release_artifact.build_artifact(root, production=True)
+
+    assert document["status"] == "failed"
+    assert document["release_environment"] == "production"
+    assert document["production_readiness"]["production_allowed"] is False
+    assert document["artifact_policy"]["fails_when_production_readiness_is_blocked"] is True
 
 
 def test_release_artifact_fails_when_migration_verification_fails(tmp_path: Path) -> None:
@@ -83,22 +129,16 @@ def test_release_artifact_merges_supplied_gate_evidence(tmp_path: Path) -> None:
     evidence_file = root / "artifacts" / "gate-evidence.json"
     evidence_file.parent.mkdir()
     evidence_file.write_text(
-        """
-{
-  "gates": {
-    "docker-smoke": {
-      "status": "passed",
-      "duration_seconds": 12.5,
-      "output_path": "artifacts/docker-smoke.json"
-    },
-    "engineering-full": {
-      "status": "failed",
-      "duration_seconds": 1.2,
-      "output_path": "artifacts/engineering-full.json"
-    }
-  }
-}
-""",
+        json_document(
+            _evidence_document(
+                root,
+                {
+                    "docker-smoke": {"status": "passed", "duration_seconds": 12.5},
+                    "engineering-full": {"status": "failed", "duration_seconds": 1.2},
+                },
+                status="failed",
+            )
+        ),
         encoding="utf-8",
     )
 
@@ -109,9 +149,6 @@ def test_release_artifact_merges_supplied_gate_evidence(tmp_path: Path) -> None:
     assert document["gate_summary"]["failed"] == 1
     assert gates["docker-smoke"]["status"] == "passed"
     assert gates["docker-smoke"]["evidence"]["duration_seconds"] == 12.5
-    assert gates["docker-smoke"]["evidence"]["output_path"] == (
-        "artifacts/docker-smoke.json"
-    )
     assert gates["engineering-full"]["status"] == "failed"
 
 
@@ -122,16 +159,9 @@ def test_release_artifact_fails_when_required_captured_evidence_is_missing(
     evidence_file = root / "artifacts" / "gate-evidence.json"
     evidence_file.parent.mkdir()
     evidence_file.write_text(
-        """
-{
-  "gates": {
-    "lint": {
-      "status": "passed",
-      "return_code": 0
-    }
-  }
-}
-""",
+        json_document(
+            _evidence_document(root, {"lint": {"status": "passed", "return_code": 0}})
+        ),
         encoding="utf-8",
     )
 
@@ -185,12 +215,13 @@ def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
     )
     evidence_file.write_text(
         json_document(
-            {
-                "gates": {
+            _evidence_document(
+                root,
+                {
                     name: {"status": "passed", "return_code": 0}
                     for name in required
-                }
-            }
+                },
+            )
         ),
         encoding="utf-8",
     )
@@ -235,7 +266,43 @@ def _release_root(tmp_path: Path) -> Path:
     versions.mkdir(parents=True)
     _migration(versions / "one.py", "one", None)
     _migration(versions / "two.py", "two", "one")
+    (tmp_path / ".gitignore").write_text("artifacts/\n", encoding="utf-8")
+    _init_git(tmp_path)
     return tmp_path
+
+
+def _init_git(root: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Release Test",
+            "-c",
+            "user.email=release@example.test",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        cwd=root,
+        check=True,
+    )
+
+
+def _evidence_document(
+    root: Path, gates: dict[str, object], *, status: str = "passed"
+) -> dict[str, object]:
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True
+    ).strip()
+    return {
+        "status": status,
+        "provenance_valid": True,
+        "git": {"commit": commit, "tree": tree, "branch": "main", "dirty": False},
+        "gates": gates,
+    }
 
 
 def _migration(path: Path, revision: str, down_revision: str | None) -> None:
