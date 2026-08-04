@@ -82,6 +82,10 @@ def test_container_foundation_is_non_root_and_read_only() -> None:
         "COPY docs/enterprise/real-world-infrastructure-decisions.template.json "
         "/app/docs/enterprise/real-world-infrastructure-decisions.template.json"
     ) in dockerfile
+    assert (
+        "COPY examples/sample-project/aepm-0.1.json "
+        "/app/examples/sample-project/aepm-0.1.json"
+    ) in dockerfile
 
 
 def test_server_compose_profile_removes_laptop_only_runtime_assumptions() -> None:

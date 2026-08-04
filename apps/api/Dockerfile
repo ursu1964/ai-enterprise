@@ -41,6 +41,7 @@ COPY docs/enterprise/operator-startup-guide.md /app/docs/enterprise/operator-sta
 COPY docs/enterprise/project-execution-walkthrough.md /app/docs/enterprise/project-execution-walkthrough.md
 COPY docs/enterprise/working-method.md /app/docs/enterprise/working-method.md
 COPY docs/enterprise/real-world-infrastructure-choices.md /app/docs/enterprise/real-world-infrastructure-choices.md
+COPY examples/sample-project/aepm-0.1.json /app/examples/sample-project/aepm-0.1.json
 
 ARG UV_SYNC_ARGS="--no-dev"
 RUN uv sync --frozen ${UV_SYNC_ARGS}

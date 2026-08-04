@@ -548,6 +548,53 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "/dashboard/demo" in response.text
 
 
+def test_sample_project_blueprint_download_contains_traceable_artifacts() -> None:
+    client = TestClient(app)
+
+    response = client.get("/dashboard/sample-project-blueprint")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="sample-project-blueprint-traceable.md"'
+    )
+    assert "# Sample Project Blueprint with Traceability" in response.text
+    assert "# Executive Project Brief" in response.text
+    assert "# Software Requirements Specification" in response.text
+    assert "# Domain and Data Model" in response.text
+    assert "# Solution Architecture Blueprint" in response.text
+    assert "# Delivery Backlog" in response.text
+    assert "Traceability manifest SHA-256" in response.text
+    assert "Sources: CAP-001, INT-001, PROC-001, RULE-001" in response.text
+    assert "Client references: capabilities/CAP-001" in response.text
+
+
+def test_sample_project_blueprint_proof_exposes_hashes_and_trace_counts() -> None:
+    client = TestClient(app)
+
+    response = client.get("/dashboard/sample-project-blueprint/proof")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == "sample-project-blueprint-proof-0.1"
+    assert payload["source"] == "examples/sample-project/aepm-0.1.json"
+    assert payload["artifact_count"] == 5
+    assert payload["section_trace_count"] == 25
+    assert payload["entry_trace_count"] == 35
+    assert len(payload["source_model_sha256"]) == 64
+    assert len(payload["source_manifest_sha256"]) == 64
+    assert len(payload["artifact_bundle_sha256"]) == 64
+    assert len(payload["traceability_manifest_sha256"]) == 64
+    assert payload["artifact_types"] == [
+        "executive_project_brief",
+        "software_requirements_specification",
+        "domain_and_data_model",
+        "solution_architecture_blueprint",
+        "delivery_backlog",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_local_dashboard_context_actor_can_read_query_model() -> None:
     actor = await get_actor(
@@ -644,6 +691,9 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "doc-open" in response.text
     assert "Open Plain Text" in response.text
     assert "Open Raw Text" not in response.text
+    assert "Sample Traceable Blueprint" in response.text
+    assert "/dashboard/sample-project-blueprint" in response.text
+    assert 'data-doc="sample-project-blueprint"' in response.text
     assert "/dashboard/documentation/operator-startup-guide?download=true" in response.text
     assert (
         "/dashboard/documentation/real-world-infrastructure-choices?download=true" in response.text

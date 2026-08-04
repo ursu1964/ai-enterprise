@@ -3,6 +3,7 @@
 # ruff: noqa: E501
 
 import importlib.util
+import json
 import uuid
 from pathlib import Path
 from typing import Any, TypedDict
@@ -16,6 +17,13 @@ from ai_enterprise.application.ecosystem_service import EcosystemService
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.application.specification_platform_service import SpecificationPlatformService
 from ai_enterprise.config import get_settings
+from ai_enterprise.domain.aeir import compile_aepm
+from ai_enterprise.domain.aepm import AepmManifest
+from ai_enterprise.domain.artifact_compilers import ArtifactType, compile_artifact_bundle
+from ai_enterprise.domain.traceability import (
+    compile_traceability_manifest,
+    render_traceable_artifact_markdown,
+)
 from ai_enterprise.infrastructure.database.models import JobModel, ProjectModel
 from ai_enterprise.infrastructure.organization.models import OrganizationModel
 from ai_enterprise.infrastructure.performance.models import PerformanceMetricModel
@@ -39,6 +47,10 @@ def _repo_root() -> Path:
 
 def _repo_path(path: str) -> Path:
     return _repo_root() / path
+
+
+def _sample_aepm_path() -> Path:
+    return _repo_path("examples/sample-project/aepm-0.1.json")
 
 
 def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
@@ -121,6 +133,32 @@ async def project_foundry_core() -> PlainTextResponse:
     )
 
 
+@router.get("/dashboard/sample-project-blueprint", response_class=PlainTextResponse)
+async def sample_project_blueprint() -> PlainTextResponse:
+    return _markdown_response(
+        _sample_project_blueprint_markdown(),
+        filename="sample-project-blueprint-traceable.md",
+        download=True,
+    )
+
+
+@router.get("/dashboard/sample-project-blueprint/proof")
+async def sample_project_blueprint_proof() -> dict[str, object]:
+    model, bundle, manifest = _sample_project_blueprint()
+    return {
+        "schema_version": "sample-project-blueprint-proof-0.1",
+        "source": "examples/sample-project/aepm-0.1.json",
+        "source_model_sha256": model.model_sha256,
+        "source_manifest_sha256": model.source_manifest_sha256,
+        "artifact_bundle_sha256": bundle.bundle_sha256,
+        "traceability_manifest_sha256": manifest.manifest_sha256,
+        "artifact_count": len(bundle.artifacts),
+        "section_trace_count": len(manifest.section_traces),
+        "entry_trace_count": len(manifest.entry_traces),
+        "artifact_types": [artifact.artifact_type.value for artifact in bundle.artifacts],
+    }
+
+
 @router.get("/dashboard/documentation/{document_id}", response_class=PlainTextResponse)
 async def dashboard_documentation_document(
     document_id: str, download: bool = False
@@ -137,6 +175,12 @@ async def dashboard_documentation_document(
             filename="project-foundry-core-v0.1.md",
             download=download,
         )
+    if document_id == "sample-project-blueprint":
+        return _markdown_response(
+            _sample_project_blueprint_markdown(),
+            filename="sample-project-blueprint-traceable.md",
+            download=download,
+        )
     document = OPERATOR_DOCUMENT_FILES.get(document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Operator document is not registered")
@@ -151,6 +195,36 @@ async def dashboard_documentation_document(
         filename=document["filename"],
         download=download,
     )
+
+
+def _sample_project_blueprint():
+    path = _sample_aepm_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Sample AEPM project manifest is missing")
+    manifest = AepmManifest.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    model = compile_aepm(manifest)
+    bundle = compile_artifact_bundle(model)
+    traceability = compile_traceability_manifest(model, bundle)
+    return model, bundle, traceability
+
+
+def _sample_project_blueprint_markdown() -> str:
+    _, bundle, traceability = _sample_project_blueprint()
+    sections = [
+        "# Sample Project Blueprint with Traceability",
+        "",
+        "Source manifest: `examples/sample-project/aepm-0.1.json`",
+        f"AEIR model SHA-256: `{bundle.source_model_sha256}`",
+        f"Artifact bundle SHA-256: `{bundle.bundle_sha256}`",
+        f"Traceability manifest SHA-256: `{traceability.manifest_sha256}`",
+        "",
+    ]
+    for artifact_type in ArtifactType:
+        sections.append(
+            render_traceable_artifact_markdown(artifact_type, bundle, traceability).rstrip()
+        )
+        sections.append("")
+    return "\n".join(sections).rstrip() + "\n"
 
 
 @router.get("/dashboard/graphify", response_class=FileResponse)
@@ -1108,6 +1182,7 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
         <div class="listbox">
           <button class="item doc-open" data-doc="client-manifest-template" data-download="/dashboard/client-manifest-template"><strong>Client Manifest Template</strong><span>Download and send to a client or requesting service.</span></button>
           <button class="item doc-open" data-doc="project-foundry-core" data-download="/dashboard/project-foundry-core"><strong>Project Foundry Core</strong><span>AEOS project factory contracts, gates, and prompt rules.</span></button>
+          <button class="item doc-open" data-doc="sample-project-blueprint" data-download="/dashboard/sample-project-blueprint"><strong>Sample Traceable Blueprint</strong><span>Five generated artifacts with AEIR source traceability.</span></button>
           <button class="item doc-open" data-doc="operator-startup-guide" data-download="/dashboard/documentation/operator-startup-guide?download=true"><strong>Operator Startup Guide</strong><span><code>docs/enterprise/operator-startup-guide.md</code></span></button>
           <button class="item doc-open" data-doc="project-execution-walkthrough" data-download="/dashboard/documentation/project-execution-walkthrough?download=true"><strong>Project Execution Walkthrough</strong><span><code>docs/enterprise/project-execution-walkthrough.md</code></span></button>
           <button class="item doc-open" data-doc="working-method" data-download="/dashboard/documentation/working-method?download=true"><strong>Working Method</strong><span><code>docs/enterprise/working-method.md</code></span></button>
