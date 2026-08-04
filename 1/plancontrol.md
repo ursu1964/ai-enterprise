@@ -143,6 +143,14 @@ Status date: 2026-08-04
   volumes in a fixed, networkless, capability-minimal materializer before the non-root runtime sees
   workspace RW, input RO, and output RW. This remains unactivated pending trusted-root dirfd leases,
   real Docker UID/mode canaries, durable terminal-evidence volume retention, and dedicated images.
+- 2026-08-04: The first real Docker broker canary correctly failed even though mocked tests passed:
+  Docker tokenized the materializer shell program because it was supplied as a string, so only the
+  first `find` command ran and both non-root agents were denied their input. The command is now one
+  fixed argv element and ends with ownership/mode attestations. A repeatable canary against both
+  local immutable image IDs proves UID 10001 execution and UID 10002 review can read but not modify
+  governed input, can write private workspace/output volumes, leave the immutable source unchanged,
+  produce a valid result contract, and leave zero labeled containers or volumes. Activation remains
+  blocked until captured results survive broker crashes and cleanup through a durable handoff.
 
 ## Active blockers observed
 
@@ -152,8 +160,8 @@ Status date: 2026-08-04
   remain capability-blocked before leasing.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
-  private named-volume materialization are implemented, but still require real Docker UID/mode/hash
-  canaries and terminal-evidence-aware volume retention before activation.
+  private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries,
+  but terminal-evidence-aware volume retention remains required before activation.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

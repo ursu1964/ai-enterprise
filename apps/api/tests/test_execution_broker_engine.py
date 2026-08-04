@@ -102,6 +102,8 @@ def test_engine_constructs_exact_hardened_container_and_cleans_up(tmp_path: Path
     assert materializer_create["read_only"] is True
     assert materializer_create["cap_drop"] == ["ALL"]
     assert materializer_create["cap_add"] == ["CHOWN"]
+    assert len(materializer_create["command"]) == 1
+    assert "stat -c %u:%g" in materializer_create["command"][0]
     assert sorted(mount["mode"] for mount in materializer_create["volumes"].values()) == [
         "rw",
         "rw",

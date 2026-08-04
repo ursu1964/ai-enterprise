@@ -111,6 +111,7 @@ class DockerEngineAdapter:
                 )
             workspace_volume, input_volume, output_volume = volumes
             resources = resolved.resources
+            input_name = "execution.json" if request.kind == "execution" else "review.json"
             materializer = self._client.containers.create(
                 image=image.id,
                 name=f"ai-broker-materializer-{run_nonce}",
@@ -120,7 +121,11 @@ class DockerEngineAdapter:
                 read_only=True,
                 user="0:0",
                 entrypoint=["/bin/sh", "-c"],
-                command=_materializer_command(resolved.runtime_uid, resolved.runtime_gid),
+                command=[
+                    _materializer_command(
+                        resolved.runtime_uid, resolved.runtime_gid, input_name
+                    )
+                ],
                 cap_drop=["ALL"],
                 cap_add=["CHOWN"],
                 security_opt=["no-new-privileges:true"],
@@ -143,7 +148,6 @@ class DockerEngineAdapter:
                 },
             )
             materializer.put_archive("/seed/workspace", _archive_directory(snapshot.root))
-            input_name = "execution.json" if request.kind == "execution" else "review.json"
             materializer.put_archive(
                 "/seed/input",
                 _archive_bytes(input_name, runtime_input_encoded),
@@ -288,7 +292,7 @@ def _readiness_request(
     )
 
 
-def _materializer_command(runtime_uid: int, runtime_gid: int) -> str:
+def _materializer_command(runtime_uid: int, runtime_gid: int, input_name: str) -> str:
     identity = f"{runtime_uid}:{runtime_gid}"
     return (
         "find /seed/workspace -type d -exec chmod 0700 {} + && "
@@ -297,7 +301,15 @@ def _materializer_command(runtime_uid: int, runtime_gid: int) -> str:
         "find /seed/input -type d -exec chmod 0500 {} + && "
         "find /seed/input -type f -exec chmod 0400 {} + && "
         "chmod 0700 /seed/output && "
-        f"chown -R {identity} /seed/workspace /seed/input /seed/output"
+        f"find /seed/workspace /seed/input /seed/output -type f -exec chown {identity} {{}} + && "
+        f'test "$(stat -c %u:%g /seed/input/{input_name})" = "{identity}" && '
+        f'test "$(stat -c %a /seed/input/{input_name})" = "400" && '
+        f"find /seed/workspace /seed/input /seed/output -depth -type d "
+        f"-exec chown {identity} {{}} + && "
+        'test "$(stat -c %u:%g /seed/workspace /seed/input /seed/output)" = '
+        f'"{identity}\n{identity}\n{identity}" && '
+        'test "$(stat -c %a /seed/workspace /seed/input /seed/output)" = '
+        '"700\n500\n700"'
     )
 
 
