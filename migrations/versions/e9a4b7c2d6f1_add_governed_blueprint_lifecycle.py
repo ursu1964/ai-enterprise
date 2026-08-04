@@ -20,7 +20,6 @@ def upgrade() -> None:
     op.create_table(
         "blueprint_assets",
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("organization_id", sa.UUID(), nullable=False),
         sa.Column("blueprint_key", sa.String(200), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("title", sa.String(200), nullable=False),
@@ -57,9 +56,6 @@ def upgrade() -> None:
             "reuse_count >= 0", name="ck_blueprint_asset_reuse_count_nonnegative"
         ),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
             ["source_project_id"], ["projects.id"], ondelete="RESTRICT"
         ),
         sa.ForeignKeyConstraint(
@@ -70,16 +66,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "organization_id",
-            "blueprint_key",
-            "version",
-            name="uq_blueprint_asset_org_key_version",
+            "blueprint_key", "version", name="uq_blueprint_asset_key_version"
         ),
-    )
-    op.create_index(
-        "ix_blueprint_assets_organization_id",
-        "blueprint_assets",
-        ["organization_id"],
     )
     op.create_index(
         "ix_blueprint_assets_blueprint_key", "blueprint_assets", ["blueprint_key"]
@@ -123,7 +111,6 @@ def downgrade() -> None:
     op.drop_index(
         "ix_blueprint_assets_source_project_id", table_name="blueprint_assets"
     )
-    op.drop_index("ix_blueprint_assets_organization_id", table_name="blueprint_assets")
     op.drop_index("ix_blueprint_assets_lifecycle", table_name="blueprint_assets")
     op.drop_index("ix_blueprint_assets_blueprint_key", table_name="blueprint_assets")
     op.drop_table("blueprint_assets")

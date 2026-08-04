@@ -163,16 +163,24 @@ def test_reusable_blueprint_requires_meaningful_review_evidence() -> None:
 
 
 def test_blueprint_migration_preserves_deprecated_history() -> None:
-    migration = (
-        __import__("pathlib").Path(__file__).resolve().parents[3]
+    migration_root = __import__("pathlib").Path(__file__).resolve().parents[3]
+    lifecycle_migration = (
+        migration_root
         / "migrations/versions/e9a4b7c2d6f1_add_governed_blueprint_lifecycle.py"
     ).read_text(encoding="utf-8")
+    ownership_migration = (
+        migration_root
+        / "migrations/versions/f2c6a9e1b407_add_blueprint_organization_ownership.py"
+    ).read_text(encoding="utf-8")
 
-    assert "blueprint_assets" in migration
-    assert "blueprint_decisions" in migration
-    assert "deprecated" in migration
-    assert 'ondelete="RESTRICT"' in migration
-    assert 'sa.Column("organization_id", sa.UUID(), nullable=False)' in migration
+    assert "blueprint_assets" in lifecycle_migration
+    assert "blueprint_decisions" in lifecycle_migration
+    assert "deprecated" in lifecycle_migration
+    assert 'ondelete="RESTRICT"' in lifecycle_migration
+    assert "organization_id" not in lifecycle_migration
+    assert 'sa.Column("organization_id", sa.UUID(), nullable=True)' in ownership_migration
+    assert "Legacy blueprint ownership is ambiguous" in ownership_migration
+    assert "uq_blueprint_asset_org_key_version" in ownership_migration
 
 
 def test_blueprint_lifecycle_api_is_exposed() -> None:

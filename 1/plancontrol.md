@@ -89,6 +89,13 @@ Status date: 2026-08-04
   so no runtime attempts or retries were consumed.
 - 2026-08-04: Full local gate passed with 778 tests, Ruff, MyPy over 406 source files, tooling
   invariants, compose validation, and an updated code graph.
+- 2026-08-04: The first clean release attempt stopped on two browser-visible HTTP 500 responses.
+  Root cause was a historically edited blueprint migration: Alembic reported head while the
+  physical table lacked organization ownership. Restored the historical revision to its original
+  contract and added forward revision `f2c6a9e1b407` with fail-closed legacy ownership handling.
+- 2026-08-04: Upgraded the local database to `f2c6a9e1b407`; all blueprint rows have non-null
+  ownership, migration verification covers 40 reversible revisions, and the complete live Chromium
+  journey passes without console errors.
 
 ## Active blockers observed
 
