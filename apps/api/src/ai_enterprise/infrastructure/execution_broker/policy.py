@@ -142,5 +142,5 @@ def extract_snapshot_archive(
                         raise BrokerPolicyError("snapshot archive file is truncated")
                     handle.write(chunk)
                     remaining -= len(chunk)
-            target.chmod(0o600)
+            target.chmod(0o700 if member.mode & 0o111 else 0o600)
     return hashlib.sha256(encoded).hexdigest()

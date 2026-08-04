@@ -116,6 +116,13 @@ Status date: 2026-08-04
   15 minutes across broker restarts. Snapshot archives stream through a compressed-size limit into
   private atomic staging, and rejected archives leave no published snapshot. Liveness is separate
   from execution readiness; `/health/ready` remains 503 `engine_adapter_unconfigured` by design.
+- 2026-08-04: Added an unactivated Docker engine adapter behind the broker policy. It verifies both
+  immutable image IDs, constructs the hardened create request without caller option merging, uses
+  three broker-owned Docker volumes instead of host bind paths, disables networking, fixes the
+  non-root identity and resource ceilings, rechecks container image identity before start, bounds
+  returned archives/logs, kills on monotonic timeout, and treats unproven cleanup as a terminal
+  error. Activation remains prohibited until durable store immutability, the preparation/collection
+  path, broker API integration, dedicated/rootless engine, and live zero-orphan canaries pass.
 
 ## Active blockers observed
 
