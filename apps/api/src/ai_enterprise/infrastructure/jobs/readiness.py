@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from docker import from_env
@@ -43,6 +45,34 @@ class WorkerReadiness:
     @property
     def degraded(self) -> bool:
         return bool(self.blockers)
+
+
+class WorkerReadinessCache:
+    def __init__(
+        self,
+        interval_seconds: float,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._interval_seconds = interval_seconds
+        self._clock = clock
+        self._checked_at: float | None = None
+        self._result: WorkerReadiness | None = None
+
+    async def get(
+        self,
+        settings: Settings,
+        candidate_job_types: frozenset[JobType],
+    ) -> WorkerReadiness:
+        now = self._clock()
+        if (
+            self._result is None
+            or self._checked_at is None
+            or now - self._checked_at >= self._interval_seconds
+        ):
+            self._result = await assess_worker_readiness(settings, candidate_job_types)
+            self._checked_at = now
+        return self._result
 
 
 async def assess_worker_readiness(

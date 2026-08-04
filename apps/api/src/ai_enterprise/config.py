@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     artifact_root: Path = Field(default=Path("./artifacts"))
 
     worker_poll_interval_seconds: float = 2.0
+    worker_readiness_interval_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     worker_lease_seconds: int = Field(default=900, ge=3)
     worker_retry_delay_seconds: int = 30
     worker_heartbeat_seconds: int = Field(default=60, ge=1)

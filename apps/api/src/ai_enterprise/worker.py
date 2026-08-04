@@ -22,7 +22,10 @@ from ai_enterprise.infrastructure.jobs.profiles import (
     WorkerProfile,
     allowed_job_types,
 )
-from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
+from ai_enterprise.infrastructure.jobs.readiness import (
+    WorkerReadinessCache,
+    assess_worker_readiness,
+)
 from ai_enterprise.infrastructure.jobs.recovery import JobRecoveryService, WorkerRegistry
 from ai_enterprise.infrastructure.jobs.repository import JobRepository
 
@@ -104,10 +107,15 @@ async def process_one_job(
     recovery_entry: RecoveryWorkerEntry | None = None,
     recovery_entry_factory: RecoveryEntryFactory | None = None,
     reported_setup_blockers: set[str] | None = None,
+    readiness_cache: WorkerReadinessCache | None = None,
 ) -> bool:
     settings = get_settings()
     candidate_job_types = allowed_job_types(profile)
-    readiness = await assess_worker_readiness(settings, candidate_job_types)
+    readiness = (
+        await readiness_cache.get(settings, candidate_job_types)
+        if readiness_cache is not None
+        else await assess_worker_readiness(settings, candidate_job_types)
+    )
     current_blockers = {blocker.evidence for blocker in readiness.blockers}
     _report_setup_blocker_changes(current_blockers, reported_setup_blockers)
     blocker_evidence = {
@@ -343,6 +351,7 @@ async def run_worker(
             )
     maintenance = asyncio.create_task(_maintenance_loop(worker_id, selected_profile, settings))
     reported_setup_blockers: set[str] = set()
+    readiness_cache = WorkerReadinessCache(settings.worker_readiness_interval_seconds)
     try:
         while True:
             claimed = await process_one_job(
@@ -353,6 +362,7 @@ async def run_worker(
                 recovery_entry=recovery_entry,
                 recovery_entry_factory=recovery_entry_factory,
                 reported_setup_blockers=reported_setup_blockers,
+                readiness_cache=readiness_cache,
             )
 
             if not claimed:

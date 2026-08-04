@@ -100,6 +100,9 @@ Status date: 2026-08-04
   to host loopback. Added and activated an opt-in laptop worker overlay using host networking only
   for the hardened general worker. Model preflight now passes; no Docker socket or capability was
   granted, and `docker_runtime_unavailable` is the sole remaining general-worker setup blocker.
+- 2026-08-04: Live activation exposed successful Ollama preflight traffic on every two-second poll.
+  Added a bounded 30-second readiness cache with an injected monotonic clock, preserving fail-closed
+  leasing while reducing idle provider traffic by approximately 93%.
 
 ## Active blockers observed
 

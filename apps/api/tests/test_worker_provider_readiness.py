@@ -8,7 +8,10 @@ from ai_enterprise.config import Settings
 from ai_enterprise.domain.enums import JobStatus, JobType
 from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.jobs import readiness as readiness_module
-from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
+from ai_enterprise.infrastructure.jobs.readiness import (
+    WorkerReadinessCache,
+    assess_worker_readiness,
+)
 from ai_enterprise.infrastructure.jobs.repository import JobRepository
 from ai_enterprise.worker import _report_setup_blocker_changes
 
@@ -132,3 +135,27 @@ def test_setup_blocker_logging_reports_only_state_changes(
     assert messages.count(f"Worker {blocker}") == 1
     assert messages.count(f"Worker setup blocker cleared: {blocker}") == 1
     assert reported == set()
+
+
+@pytest.mark.asyncio
+async def test_readiness_cache_bounds_provider_preflight_frequency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = MagicMock(side_effect=[100.0, 101.0, 131.0])
+    preflight = AsyncMock(
+        return_value=readiness_module.WorkerReadiness(
+            permitted_job_types=frozenset({JobType.ADVANCE_WORKFLOW}), blockers=()
+        )
+    )
+    monkeypatch.setattr(readiness_module, "assess_worker_readiness", preflight)
+    cache = WorkerReadinessCache(interval_seconds=30.0, clock=clock)
+    settings = Settings(_env_file=None)
+    candidates = frozenset({JobType.ADVANCE_WORKFLOW})
+
+    first = await cache.get(settings, candidates)
+    second = await cache.get(settings, candidates)
+    third = await cache.get(settings, candidates)
+
+    assert first is second
+    assert third is first
+    assert preflight.await_count == 2
