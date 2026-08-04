@@ -23,7 +23,7 @@ Status date: 2026-08-04
 | 5 — Knowledge storage | **COMPLETE** | Versioned PostgreSQL AEIR and immutable event storage |
 | 6 — Question engine | **COMPLETE** | Hash-bound clarification and correction workflow |
 | 7 — Five artifact compilers | **COMPLETE** | Five deterministic AEIR-bound artifacts |
-| 8 — Traceability | **BLOCKED** | Step 7 complete |
+| 8 — Traceability | **COMPLETE** | Hash-bound section traceability manifest |
 
 ## Step 1 acceptance
 
@@ -168,3 +168,27 @@ Status date: 2026-08-04
 - 2026-08-04: Step 7 focused compiler, AEIR, and clarification tests passed, followed by Ruff,
   MyPy over 420 source files, tooling invariants, all 856 tests, and a refreshed code graph. Step 7
   is complete; formal section-level traceability is now the only authorized next step.
+
+## Step 8 acceptance
+
+- [x] Every generated artifact section has exactly one trace record.
+- [x] Every generated artifact entry has exactly one trace record.
+- [x] Every trace record binds artifact type, artifact hash, section key, and section hash.
+- [x] Every trace record retains explicit AEIR source object identifiers.
+- [x] Source object references retain type, authority status, source kind, source reference,
+  manifest hash, evidence references, and object hash.
+- [x] Relationship-derived sections retain explicit AEIR relationship identifiers.
+- [x] Empty sections retain the project object as the source of the model-bound absence claim.
+- [x] Traceability manifests reject unknown source objects and hash tampering.
+- [x] Verification rejects stale AEIR models, stale bundles, changed source catalogs, and changed
+  section mappings.
+- [x] Traceable Markdown rendering exposes deterministic `Sources:` lines without changing artifact
+  content hashes.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 8 completion evidence
+
+- 2026-08-04: Step 8 focused traceability tests passed, followed by Ruff, MyPy over 421 source
+  files, tooling invariants, all 863 tests, and a refreshed code graph. Step 8 completes the
+  numbered `r1.txt` first implementation sequence.
