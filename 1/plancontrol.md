@@ -123,6 +123,15 @@ Status date: 2026-08-04
   returned archives/logs, kills on monotonic timeout, and treats unproven cleanup as a terminal
   error. Activation remains prohibited until durable store immutability, the preparation/collection
   path, broker API integration, dedicated/rootless engine, and live zero-orphan canaries pass.
+- 2026-08-04: Replaced transport-addressed snapshot directories with durable, owner-bound opaque
+  registrations over a canonical content-addressed object store. Archive and tree identities are
+  separated; equivalent archives deduplicate, executable intent remains part of identity, files are
+  sealed read-only, metadata and content are fsynced before atomic no-replace publication, and every
+  resolve revalidates the stored tree and its registration-bound manifest. Canonical paths reject
+  traversal, links, non-NFC/control/backslash names, and case-fold collisions. Concurrent publish,
+  restart, owner isolation, metadata/content tamper, database rebind, and mode behavior are covered.
+  The broker remains intentionally unready: startup reconciliation/quarantine, dirfd-based root
+  hardening, private runtime materialization, and a dedicated/rootless engine are still required.
 
 ## Active blockers observed
 
@@ -130,6 +139,9 @@ Status date: 2026-08-04
   the historical failures remain preserved as recovery evidence.
 - No approved restricted container execution provider is connected, so execution and review jobs
   remain capability-blocked before leasing.
+- The snapshot store now publishes durable immutable objects, but activation remains blocked on
+  startup reconciliation/quarantine, trusted-root dirfd operations, and runtime-owned copy/reflink
+  materialization so shared content is never exposed as a writable runtime mount.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

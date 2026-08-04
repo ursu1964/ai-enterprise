@@ -67,10 +67,10 @@ def test_authenticated_snapshot_is_immutable_and_privately_stored(
 
     assert response.status_code == 201
     payload = response.json()
-    stored = tmp_path / "snapshots" / payload["snapshot_ref"]
-    assert (stored / "snapshot/src/app.py").read_bytes() == b"print('ok')\n"
-    assert (stored / "metadata.json").is_file()
-    assert not list((tmp_path / "snapshots").glob(".staging-*"))
+    stored = tmp_path / "snapshots" / "objects" / payload["tree_sha256"]
+    assert (stored / "tree/src/app.py").read_bytes() == b"print('ok')\n"
+    assert (stored / "READY.json").is_file()
+    assert not list((tmp_path / "snapshots" / ".staging").iterdir())
 
 
 def test_tamper_and_replay_are_rejected(tmp_path: Path) -> None:
@@ -106,4 +106,5 @@ def test_archive_policy_rejection_leaves_no_snapshot(tmp_path: Path) -> None:
     response = client(tmp_path).post("/v1/snapshots", content=body, headers=headers(body))
 
     assert response.status_code == 422
-    assert not [path for path in (tmp_path / "snapshots").iterdir()]
+    assert not list((tmp_path / "snapshots" / "objects").iterdir())
+    assert not list((tmp_path / "snapshots" / ".staging").iterdir())

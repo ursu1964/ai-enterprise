@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -87,10 +88,19 @@ def create_broker_app(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"code": "snapshot_policy_rejected", "message": str(exc)},
             ) from exc
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "snapshot_store_unavailable"},
+            ) from exc
         return {
             "schema_version": 1,
             "snapshot_ref": str(snapshot.snapshot_ref),
             "archive_sha256": snapshot.archive_sha256,
+            "tree_sha256": snapshot.tree_sha256,
+            "manifest_sha256": snapshot.manifest_sha256,
+            "file_count": snapshot.file_count,
+            "expanded_bytes": snapshot.expanded_bytes,
             "owner_worker_id": snapshot.owner_worker_id,
             "created_at": snapshot.created_at.isoformat(),
         }

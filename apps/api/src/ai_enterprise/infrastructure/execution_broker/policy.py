@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import tarfile
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -105,6 +106,7 @@ def extract_snapshot_archive(
     destination_root = destination.resolve()
     total_size = 0
     file_count = 0
+    portable_paths: set[str] = set()
     try:
         archive = tarfile.open(fileobj=io.BytesIO(encoded), mode="r:gz")
     except tarfile.TarError as exc:
@@ -117,6 +119,16 @@ def extract_snapshot_archive(
             relative = PurePosixPath(member.name)
             if relative.is_absolute() or ".." in relative.parts or not relative.parts:
                 raise BrokerPolicyError("snapshot archive contains an unsafe path")
+            if (
+                "\\" in member.name
+                or unicodedata.normalize("NFC", member.name) != member.name
+                or any(ord(character) < 32 or ord(character) == 127 for character in member.name)
+            ):
+                raise BrokerPolicyError("snapshot archive path is not portable")
+            portable_key = member.name.casefold()
+            if portable_key in portable_paths:
+                raise BrokerPolicyError("snapshot archive contains a path collision")
+            portable_paths.add(portable_key)
             if member.issym() or member.islnk() or member.isdev() or member.isfifo():
                 raise BrokerPolicyError("snapshot archive contains a forbidden entry type")
             target = destination.joinpath(*relative.parts)

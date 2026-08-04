@@ -108,3 +108,19 @@ def test_archive_rejects_compressed_and_expanded_size_excess(tmp_path: Path) -> 
         extract_snapshot_archive(encoded, tmp_path / "compressed", maximum_bytes=8)
     with pytest.raises(BrokerPolicyError, match="expanded snapshot"):
         extract_snapshot_archive(encoded, tmp_path / "expanded", maximum_bytes=512)
+
+
+@pytest.mark.parametrize("name", ["src\\app.py", "cafe\u0301.py", "bad\nname.py"])
+def test_archive_rejects_nonportable_paths(tmp_path: Path, name: str) -> None:
+    with pytest.raises(BrokerPolicyError, match="not portable"):
+        extract_snapshot_archive(
+            archive([(name, b"data", "file")]), tmp_path / "snapshot"
+        )
+
+
+def test_archive_rejects_casefold_path_collisions(tmp_path: Path) -> None:
+    with pytest.raises(BrokerPolicyError, match="path collision"):
+        extract_snapshot_archive(
+            archive([("Readme", b"a", "file"), ("README", b"b", "file")]),
+            tmp_path / "snapshot",
+        )
