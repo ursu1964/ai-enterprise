@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     execution_image: str = "ai-enterprise-execution-agent:local"
     execution_container_provider: str = "unconfigured"
     execution_image_id: str | None = None
+    execution_broker_snapshots_root: Path = Field(
+        default=Path("./runtime-data/execution-broker/snapshots")
+    )
+    execution_broker_evidence_root: Path = Field(
+        default=Path("./runtime-data/execution-broker/terminal-evidence")
+    )
     execution_snapshots_root: Path = Field(default=Path("./runtime-data/snapshots"))
     execution_artifacts_root: Path = Field(default=Path("./runtime-data/artifacts"))
     execution_temp_root: Path = Field(default=Path("./runtime-data/tmp"))

@@ -61,6 +61,7 @@ from ai_enterprise.infrastructure.execution.repository_snapshot import (
 from ai_enterprise.infrastructure.execution.scope_validator import (
     ScopeValidator,
 )
+from ai_enterprise.infrastructure.execution_broker.application_runtime import BrokerReviewRuntime
 from ai_enterprise.infrastructure.jobs.repository import JobRepository
 from ai_enterprise.infrastructure.repositories.git_repository import (
     GitRepositoryInspector,
@@ -394,8 +395,6 @@ class ReviewCandidatePatchService:
 
             review.status = PatchReviewStatus.RUNNING
 
-            self._ensure_review_runtime_dispatch_wired()
-
             self._add_event(
                 review,
                 "patch_review.container_started",
@@ -407,7 +406,7 @@ class ReviewCandidatePatchService:
 
             await self._session.commit()
 
-            runtime = DockerReviewRuntime()
+            runtime = self._review_runtime()
 
             runtime_result = await asyncio.to_thread(
                 runtime.run,
@@ -712,9 +711,18 @@ class ReviewCandidatePatchService:
 
     def _ensure_review_runtime_dispatch_wired(self) -> None:
         if self._settings.execution_container_provider.strip().lower() == "restricted-local-docker":
-            raise PatchReviewError(
-                "Restricted review dispatch is not wired to the durable broker runner yet"
+            BrokerReviewRuntime.from_settings(
+                self._settings,
+                owner_worker_id=f"worker:{self._settings.worker_profile}",
             )
+
+    def _review_runtime(self) -> Any:
+        if self._settings.execution_container_provider.strip().lower() == "restricted-local-docker":
+            return BrokerReviewRuntime.from_settings(
+                self._settings,
+                owner_worker_id=f"worker:{self._settings.worker_profile}",
+            )
+        return DockerReviewRuntime()
 
     async def _append_audit_event(
         self,

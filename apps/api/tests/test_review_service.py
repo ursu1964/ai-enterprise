@@ -4,7 +4,6 @@ import pytest
 
 from ai_enterprise.application.review.service import ReviewCandidatePatchService
 from ai_enterprise.config import Settings
-from ai_enterprise.domain.review.exceptions import PatchReviewError
 from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records
 from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import AuditEventModel
@@ -73,11 +72,23 @@ async def test_review_audit_events_write_tamper_evident_chain() -> None:
     )
 
 
-def test_restricted_executor_cannot_fall_back_to_legacy_review_runtime() -> None:
+def test_restricted_executor_uses_broker_review_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = object()
+
+    def broker_runtime_from_settings(settings: Settings, *, owner_worker_id: str) -> object:
+        assert settings.execution_container_provider == "restricted-local-docker"
+        assert owner_worker_id == "worker:general"
+        return selected
+
+    monkeypatch.setattr(
+        "ai_enterprise.application.review.service.BrokerReviewRuntime.from_settings",
+        broker_runtime_from_settings,
+    )
     service = ReviewCandidatePatchService(
         session=WriteSession(),  # type: ignore[arg-type]
         settings=Settings(execution_container_provider="restricted-local-docker"),
     )
 
-    with pytest.raises(PatchReviewError, match="durable broker runner"):
-        service._ensure_review_runtime_dispatch_wired()
+    assert service._review_runtime() is selected

@@ -24,6 +24,8 @@ from ai_enterprise.infrastructure.execution_broker.store import SnapshotHandle
 
 MAXIMUM_ENGINE_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAXIMUM_ENGINE_LOG_BYTES = 4 * 1024 * 1024
+MAXIMUM_EXTRA_INPUT_BYTES = 8 * 1024 * 1024
+EXTRA_INPUT_FILES_KEY = "_broker_extra_input_files"
 
 
 class BrokerEngineError(RuntimeError):
@@ -160,6 +162,8 @@ class DockerEngineAdapter:
                 "/seed/input",
                 _archive_bytes(input_name, runtime_input_encoded),
             )
+            for name, content in _extra_input_files(runtime_input).items():
+                materializer.put_archive("/seed/input", _archive_bytes(name, content))
             materializer.start()
             try:
                 materializer_result = materializer.wait(timeout=60)
@@ -372,6 +376,32 @@ def _runtime_input_bytes(runtime_input: dict[str, Any]) -> bytes:
     return json.dumps(
         runtime_input, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode()
+
+
+def _extra_input_files(runtime_input: dict[str, Any]) -> dict[str, bytes]:
+    raw_files = runtime_input.get(EXTRA_INPUT_FILES_KEY, {})
+    if not isinstance(raw_files, dict):
+        raise BrokerPolicyError("broker extra input files must be an object")
+    encoded_files: dict[str, bytes] = {}
+    total_bytes = 0
+    for name, value in raw_files.items():
+        if (
+            not isinstance(name, str)
+            or not name
+            or "/" in name
+            or "\\" in name
+            or name in {".", "..", "execution.json", "review.json"}
+            or any(ord(character) < 32 or ord(character) == 127 for character in name)
+        ):
+            raise BrokerPolicyError("broker extra input file name is invalid")
+        content = json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
+        total_bytes += len(content)
+        if total_bytes > MAXIMUM_EXTRA_INPUT_BYTES:
+            raise BrokerPolicyError("broker extra input files exceed size limit")
+        encoded_files[name] = content
+    return encoded_files
 
 
 def _read_archive(chunks: Iterable[bytes]) -> bytes:

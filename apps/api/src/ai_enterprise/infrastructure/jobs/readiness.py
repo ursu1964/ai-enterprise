@@ -265,22 +265,6 @@ def _docker_blockers(
                     ),
                 )
             )
-    if not blockers:
-        blockers.append(
-            SetupBlocker(
-                code="restricted_executor_dispatch_unwired",
-                capability="container_execution",
-                job_types=job_types,
-                detail=(
-                    "The approved restricted executor images are present, but application "
-                    "execution/review dispatch is not wired to the durable broker path yet."
-                ),
-                next_action=(
-                    "Wire execution and review dispatch to the durable restricted broker runner "
-                    "before leasing production jobs."
-                ),
-            )
-        )
     return tuple(blockers)
 
 

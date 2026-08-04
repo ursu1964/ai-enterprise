@@ -72,6 +72,7 @@ Status date: 2026-08-04
 - [x] Local execution and review agent images use pinned base/runtime inputs and pass local broker preflight.
 - [x] Execution/review leasing requires an explicitly approved restricted provider and exact immutable image IDs.
 - [x] Local approved-executor env generation is reproducible and non-destructive.
+- [x] Application execution/review dispatch is wired to the durable restricted broker runtime.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
 - [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
@@ -222,6 +223,19 @@ Status date: 2026-08-04
   with 895 tests. Activation remains blocked until application dispatch is wired to the durable
   broker runner; only then can the running worker be activated and the ten-project canary sequence
   begin.
+- 2026-08-04: Wired application execution/review dispatch to the durable restricted broker runtime
+  for `EXECUTION_CONTAINER_PROVIDER=restricted-local-docker`. The broker application adapter
+  registers the prepared repository snapshot into the durable broker snapshot store, binds the exact
+  canonical runtime input hash into `BrokerRunRequest`, routes execution and review through
+  `DurableBrokerRunner`, records terminal evidence before acknowledgement, and maps broker
+  `result.json` archives back into the existing execution/review result contracts. The broker engine
+  now supports bounded broker-owned extra input files so execution can pass `edits.json` without
+  falling back to host bind mounts. Focused tests, a live broker adapter smoke for execution and
+  review, the broker canary, and the fast gate passed with 898 tests. Host preflight with generated
+  image IDs now permits execution/review with no blockers. Activation remains blocked because the
+  currently running compose worker still lacks the generated executor env and Docker access; the
+  worker must be deliberately recreated in an approved activation mode before ten canary projects
+  can begin.
 
 ## Active blockers observed
 
@@ -230,9 +244,9 @@ Status date: 2026-08-04
 - No approved restricted container execution provider is connected. Execution/review leasing now
   stays fail-closed unless the approved provider is explicitly enabled and exact immutable image IDs
   match the locally resolved images.
-- The generated local executor env values are known and verified, but applying them is not enough
-  yet: application execution/review dispatch still needs to be wired to the durable restricted
-  broker runner before the running worker may lease those jobs.
+- The generated local executor env values are known and verified, and application dispatch now uses
+  the durable broker runtime. The currently running compose worker is still not activated with those
+  values and cannot reach Docker, so execution/review jobs remain blocked in that running topology.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
