@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact production-release-artifact
+.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check local-executor-env demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan check check-fast check-ci check-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact production-release-artifact
 
 build:
 	docker compose build
@@ -33,6 +33,9 @@ laptop-worker-up:
 
 laptop-compose-check:
 	docker compose -f docker-compose.yml -f docker-compose.laptop.yml config --quiet
+
+local-executor-env:
+	python tools/configure_local_executor.py
 
 demo-preview:
 	python tools/demo_lifecycle.py

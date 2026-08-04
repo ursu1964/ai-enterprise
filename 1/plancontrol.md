@@ -71,6 +71,7 @@ Status date: 2026-08-04
 - [x] Repeated setup warnings are emitted only on blocker state changes.
 - [x] Local execution and review agent images use pinned base/runtime inputs and pass local broker preflight.
 - [x] Execution/review leasing requires an explicitly approved restricted provider and exact immutable image IDs.
+- [x] Local approved-executor env generation is reproducible and non-destructive.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
 - [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
@@ -200,6 +201,17 @@ Status date: 2026-08-04
   the fast gate passed with 890 tests. Activation remains blocked until an approved restricted
   executor is actually connected with verified pinned image IDs, followed by ten consecutive
   zero-infrastructure-dead-letter canary projects.
+- 2026-08-04: Added `tools/configure_local_executor.py` and `make local-executor-env` so the local
+  approved-executor connection inputs are generated from Docker inspection instead of copied by
+  hand. The tool verifies that both local agent images resolve to immutable sha256 image IDs, prints
+  the exact env block by default, and writes an output file only when requested, refusing to
+  overwrite unless `--force` is explicit. Current local image IDs are execution
+  `sha256:2469bf219b30c181705d3d5874915159a9b3ada818dcfbb01b1dbd44c9baa69b` and review
+  `sha256:64177b3263616ea0deb77a2bb6ea1d81000fb8c09a4cd7a3ebf25ac0a266365f`. A direct worker
+  readiness proof with those generated values permits execution and review with no blockers, the
+  broker canary passed, and the fast gate passed with 893 tests. Activation remains blocked until
+  the running worker is deliberately recreated with these generated values and then proves ten
+  consecutive zero-infrastructure-dead-letter canary projects.
 
 ## Active blockers observed
 
@@ -208,6 +220,8 @@ Status date: 2026-08-04
 - No approved restricted container execution provider is connected. Execution/review leasing now
   stays fail-closed unless the approved provider is explicitly enabled and exact immutable image IDs
   match the locally resolved images.
+- The generated local executor env values are known and verified, but they have not yet been applied
+  to the running worker as an operator-visible activation step.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
