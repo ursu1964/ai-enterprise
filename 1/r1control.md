@@ -21,7 +21,7 @@ Status date: 2026-08-04
 | 3 — Deterministic validation engine | **COMPLETE** | Stable classified report and hash contract |
 | 4 — AI interpretation layer | **COMPLETE** | Governed structured proposals and review boundary |
 | 5 — Knowledge storage | **COMPLETE** | Versioned PostgreSQL AEIR and immutable event storage |
-| 6 — Question engine | **BLOCKED** | Step 5 complete |
+| 6 — Question engine | **COMPLETE** | Hash-bound clarification and correction workflow |
 | 7 — Five artifact compilers | **BLOCKED** | Step 6 complete |
 | 8 — Traceability | **BLOCKED** | Step 7 complete |
 
@@ -128,3 +128,24 @@ Status date: 2026-08-04
   verified as the single reversible head and applied successfully to laptop PostgreSQL. Ruff,
   MyPy over 418 source files, tooling invariants, all 846 tests, and a refreshed code graph passed.
   Step 5 is complete; the clarification question engine is now the only authorized next step.
+
+## Step 6 acceptance
+
+- [x] Reports always contain Critical blockers, Important ambiguities, Unverified assumptions,
+  Recommended improvements, and Optional enhancements sections.
+- [x] Deterministic findings and governed AI proposals retain exact upstream provenance.
+- [x] Question identifiers, section ordering, and report hashes are stable.
+- [x] The engine does not invent optional enhancements when no explicit source exists.
+- [x] Human answers are separately hash-bound to the report and exact base AEIR model.
+- [x] Unknown, duplicate, stale, tampered, and out-of-scope answers fail closed.
+- [x] Accepted corrections create a new AEIR value and preserve the previous model unchanged.
+- [x] Corrections cannot change object identity, type, relationships, or arbitrary fields.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 6 completion evidence
+
+- 2026-08-04: Step 6 focused clarification, interpretation, validation, AEIR, and storage tests
+  passed, followed by Ruff, MyPy over 419 source files, tooling invariants, all 851 tests, and a
+  refreshed code graph. Step 6 is complete; the five artifact compilers are now the only authorized
+  next step.

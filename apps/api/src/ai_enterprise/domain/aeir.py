@@ -40,9 +40,10 @@ class AeirValue(BaseModel):
 
 
 class AeirSource(AeirValue):
-    kind: Literal["aepm_manifest"] = "aepm_manifest"
+    kind: Literal["aepm_manifest", "human_clarification"] = "aepm_manifest"
     reference: str = Field(min_length=1)
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_references: tuple[str, ...] = ()
 
 
 class AeirObject(AeirValue):
@@ -306,4 +307,22 @@ def _model_hash(
             "objects": [item.model_dump(mode="json") for item in objects],
             "relationships": [item.model_dump(mode="json") for item in relationships],
         }
+    )
+
+
+def rebuild_aeir(
+    model: AeirProjectModel, *, objects: tuple[AeirObject, ...]
+) -> AeirProjectModel:
+    original = {item.id: item for item in model.objects}
+    replacements = {item.id: item for item in objects}
+    if original.keys() != replacements.keys():
+        raise ValueError("AEIR rebuild cannot add or remove object identities")
+    if any(original[key].type is not replacements[key].type for key in original):
+        raise ValueError("AEIR rebuild cannot change object types")
+    ordered = tuple(replacements[item.id] for item in model.objects)
+    return AeirProjectModel(
+        source_manifest_sha256=model.source_manifest_sha256,
+        objects=ordered,
+        relationships=model.relationships,
+        model_sha256=_model_hash(model.source_manifest_sha256, ordered, model.relationships),
     )
