@@ -14,7 +14,7 @@ from ai_enterprise.domain.hashing import canonical_json
 from ai_enterprise.infrastructure.execution_broker.engine import BrokerEngineResult
 from ai_enterprise.infrastructure.execution_broker.policy import BrokerRunRequest
 
-TerminalEvidenceState = Literal["retained", "handoff_completed"]
+TerminalEvidenceState = Literal["retained", "handoff_started", "handoff_completed"]
 
 
 class TerminalEvidenceStoreError(RuntimeError):
@@ -42,6 +42,7 @@ class StoredTerminalEvidence:
 @dataclass(frozen=True, slots=True)
 class TerminalEvidenceReconciliation:
     retained_records: int
+    started_records: int
     completed_records: int
 
 
@@ -140,13 +141,40 @@ class TerminalEvidenceStore:
         return stored
 
     def pending_handoff(self) -> tuple[StoredTerminalEvidence, ...]:
-        return self._list_by_state("retained")
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM terminal_evidence "
+                "WHERE state IN (?, ?) ORDER BY captured_at, evidence_ref",
+                ("retained", "handoff_started"),
+            ).fetchall()
+        return tuple(_row_to_evidence(row) for row in rows)
+
+    def mark_handoff_started(self, evidence_ref: uuid.UUID) -> StoredTerminalEvidence:
+        with self._connect() as connection:
+            updated = connection.execute(
+                "UPDATE terminal_evidence SET state = ? WHERE evidence_ref = ? AND state = ?",
+                ("handoff_started", str(evidence_ref), "retained"),
+            ).rowcount
+        if updated != 1:
+            existing = self.get(evidence_ref)
+            if existing.state == "handoff_started":
+                return existing
+            raise KeyError("terminal evidence record is unavailable for handoff")
+        _fsync_file(self._database)
+        _fsync_directory(self._root)
+        return self.get(evidence_ref)
 
     def mark_handoff_completed(self, evidence_ref: uuid.UUID) -> StoredTerminalEvidence:
         with self._connect() as connection:
             updated = connection.execute(
-                "UPDATE terminal_evidence SET state = ? WHERE evidence_ref = ? AND state = ?",
-                ("handoff_completed", str(evidence_ref), "retained"),
+                "UPDATE terminal_evidence SET state = ? "
+                "WHERE evidence_ref = ? AND state IN (?, ?)",
+                (
+                    "handoff_completed",
+                    str(evidence_ref),
+                    "retained",
+                    "handoff_started",
+                ),
             ).rowcount
         if updated != 1:
             raise KeyError("terminal evidence record is unavailable for handoff")
@@ -195,15 +223,19 @@ class TerminalEvidenceStore:
                 raise TerminalEvidenceStoreError("terminal evidence database is corrupt")
             rows = connection.execute("SELECT * FROM terminal_evidence").fetchall()
         retained = 0
+        started = 0
         completed = 0
         for row in rows:
             evidence = _row_to_evidence(row)
             if evidence.state == "retained":
                 retained += 1
+            elif evidence.state == "handoff_started":
+                started += 1
             else:
                 completed += 1
         return TerminalEvidenceReconciliation(
             retained_records=retained,
+            started_records=started,
             completed_records=completed,
         )
 
@@ -229,7 +261,7 @@ def _row_to_evidence(row: tuple[Any, ...]) -> StoredTerminalEvidence:
     ) = row
     retained = _validate_retained_volumes(json.loads(str(retained_volumes_json)))
     state_value = str(state)
-    if state_value not in {"retained", "handoff_completed"}:
+    if state_value not in {"retained", "handoff_started", "handoff_completed"}:
         raise TerminalEvidenceStoreError("terminal evidence row is malformed")
     hashes = (
         str(output_archive_sha256),

@@ -173,6 +173,14 @@ Status date: 2026-08-04
   created. The local Docker canary now uses this runner rather than manually composing engine and
   evidence steps. Activation remains blocked until crash-replay cleanup/handoff uses the retained
   evidence list against real engine volumes and proves recovery after process or host failure.
+- 2026-08-04: Added crash-replay terminal-evidence handoff for the inactive broker path. Evidence
+  records now support a durable `handoff_started` state, allowing replay to resume after a process
+  crash between retained-volume cleanup and completion marking. The replayer refuses to start a
+  retained handoff if required volumes are missing, marks handoff intent before cleanup, tolerates
+  already-removed volumes when resuming a started handoff, and marks completion only after cleanup
+  succeeds. The local Docker canary now uses this replayer instead of manual volume removal.
+  Activation remains blocked on approved executor connection, production-reproducible pinned images,
+  and the required ten zero-dead-letter canary projects.
 
 ## Active blockers observed
 
@@ -184,8 +192,9 @@ Status date: 2026-08-04
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
   Terminal-evidence-aware volume retention, durable retained-evidence manifest persistence, and
-  internal runner acknowledgement ordering are implemented inside the inactive broker path, but
-  activation still requires crash-replay cleanup/handoff against real retained engine volumes.
+  internal runner acknowledgement ordering are implemented inside the inactive broker path. Crash-
+  replay cleanup/handoff for retained evidence volumes is implemented and covered by focused tests,
+  but the approved executor still is not connected for production job leasing.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

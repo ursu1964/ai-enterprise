@@ -64,6 +64,7 @@ def test_health_is_live_but_truthfully_not_execution_ready(tmp_path: Path) -> No
     assert response.json()["snapshot_reconciliation"]["blocking_references"] == 0
     assert response.json()["terminal_evidence"] == {
         "retained_records": 0,
+        "started_records": 0,
         "completed_records": 0,
         "pending_handoff": 0,
     }
@@ -107,6 +108,7 @@ def test_readiness_reports_pending_terminal_evidence_after_restart(
     assert response.status_code == 503
     assert response.json()["terminal_evidence"] == {
         "retained_records": 1,
+        "started_records": 0,
         "completed_records": 0,
         "pending_handoff": 1,
     }

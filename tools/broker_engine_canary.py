@@ -13,6 +13,10 @@ from typing import Any
 
 from ai_enterprise.infrastructure.execution_broker.engine import DockerEngineAdapter
 from ai_enterprise.infrastructure.execution_broker.evidence import TerminalEvidenceStore
+from ai_enterprise.infrastructure.execution_broker.handoff import (
+    DockerVolumeGateway,
+    TerminalEvidenceHandoffReplayer,
+)
 from ai_enterprise.infrastructure.execution_broker.policy import (
     BrokerPolicy,
     BrokerRunRequest,
@@ -121,10 +125,6 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
         retained = result.retained_evidence_volumes
         if set(retained) != {"workspace", "output"}:
             raise RuntimeError("broker canary did not retain terminal evidence volumes")
-        retained_volumes = [
-            client.volumes.get(retained["workspace"]),
-            client.volumes.get(retained["output"]),
-        ]
         resolved = store.resolve(stored.snapshot_ref, owner_worker_id="canary")
         if (resolved.root / "seed.txt").read_bytes() != b"original\n":
             raise RuntimeError("immutable snapshot changed during canary")
@@ -135,9 +135,12 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
         visible_names = {volume.name for volume in visible_volumes}
         if visible_names != set(retained.values()):
             raise RuntimeError("broker canary volume retention did not match terminal evidence")
-        for volume in retained_volumes:
-            volume.remove(force=True)
-        restarted_evidence_store.mark_handoff_completed(receipt.evidence.evidence_ref)
+        replayed = TerminalEvidenceHandoffReplayer(
+            evidence_store=restarted_evidence_store,
+            volume_gateway=DockerVolumeGateway(client),
+        ).replay_pending()
+        if len(replayed) != 1 or replayed[0].evidence_ref != receipt.evidence.evidence_ref:
+            raise RuntimeError("broker canary evidence handoff replay did not complete")
         if client.volumes.list(filters={"label": label}):
             raise RuntimeError("broker canary cleanup left a volume behind")
         return {
@@ -149,6 +152,7 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
             "snapshot_unchanged": True,
             "terminal_evidence_retained": True,
             "terminal_evidence_manifest_durable": True,
+            "crash_replay_handoff_proven": True,
             "cleanup_proven_after_handoff": True,
             "tree_sha256": stored.tree_sha256,
         }

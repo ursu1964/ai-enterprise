@@ -71,7 +71,28 @@ def test_terminal_evidence_survives_restart_and_lists_pending_handoff(
     }
     assert pending[0].output_archive_sha256 == hashlib.sha256(b"output tar bytes").hexdigest()
     assert restarted.reconciliation.retained_records == 1
+    assert restarted.reconciliation.started_records == 0
     assert restarted.reconciliation.completed_records == 0
+
+
+def test_terminal_evidence_handoff_started_state_survives_restart(
+    tmp_path: Path,
+) -> None:
+    store = TerminalEvidenceStore(tmp_path / "terminal-evidence")
+    stored = store.record(request(), result())
+
+    started = store.mark_handoff_started(stored.evidence_ref)
+    restarted = TerminalEvidenceStore(tmp_path / "terminal-evidence")
+
+    assert started.state == "handoff_started"
+    assert restarted.pending_handoff()[0].state == "handoff_started"
+    assert restarted.reconciliation.retained_records == 0
+    assert restarted.reconciliation.started_records == 1
+    assert restarted.reconciliation.completed_records == 0
+    assert (
+        restarted.mark_handoff_started(stored.evidence_ref).state
+        == "handoff_started"
+    )
 
 
 def test_terminal_evidence_handoff_completion_is_durable(tmp_path: Path) -> None:
@@ -85,6 +106,7 @@ def test_terminal_evidence_handoff_completion_is_durable(tmp_path: Path) -> None
     assert restarted.pending_handoff() == ()
     assert restarted.get(stored.evidence_ref).state == "handoff_completed"
     assert restarted.reconciliation.retained_records == 0
+    assert restarted.reconciliation.started_records == 0
     assert restarted.reconciliation.completed_records == 1
 
 

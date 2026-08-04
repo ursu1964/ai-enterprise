@@ -61,6 +61,7 @@ def create_broker_app(
             },
             "terminal_evidence": {
                 "retained_records": evidence_store.reconciliation.retained_records,
+                "started_records": evidence_store.reconciliation.started_records,
                 "completed_records": evidence_store.reconciliation.completed_records,
                 "pending_handoff": len(evidence_store.pending_handoff()),
             },
