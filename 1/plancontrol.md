@@ -110,6 +110,12 @@ Status date: 2026-08-04
   devices, special entries, oversized input, and pre-existing destinations. Direct Docker leasing
   remains blocked until the broker service, archive client adapter, authentication, cleanup audit,
   and positive/negative live canaries pass.
+- 2026-08-04: Added the authenticated snapshot-registration service boundary. Upload signatures
+  bind method, path, worker, timestamp, nonce, and exact body hash; comparison is constant-time,
+  clock skew is bounded, and a private SQLite nonce ledger burns authenticated nonces for at least
+  15 minutes across broker restarts. Snapshot archives stream through a compressed-size limit into
+  private atomic staging, and rejected archives leave no published snapshot. Liveness is separate
+  from execution readiness; `/health/ready` remains 503 `engine_adapter_unconfigured` by design.
 
 ## Active blockers observed
 
