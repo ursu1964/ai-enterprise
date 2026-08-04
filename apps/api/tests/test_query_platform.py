@@ -345,6 +345,20 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert response["totals"]["tasks_done"] == 1
     assert response["totals"]["tasks_active"] == 1
     assert response["totals"]["online_workers"] == 1
+    assert response["records"]["projects"][0]["id"] == project_id
+    assert len(response["records"]["jobs"]) == 2
+    assert response["records"]["workers"][0]["status"] == "online"
+    assert response["telemetry_summary"]["runtime"] == {
+        "query_strategy": "dashboard_manager_reuse",
+        "project_count": 1,
+        "job_count": 2,
+        "running_job_count": 0,
+        "queued_job_count": 1,
+        "problem_job_count": 0,
+        "acknowledged_problem_job_count": 0,
+        "signal": "nominal",
+    }
+    assert response["telemetry_summary"]["governed_performance"]["metric_count"] == 0
     assert response["projects"][0]["phase"] == "requirements"
     assert response["projects"][0]["phase_detail"]["label"] == "Requirements"
     assert response["projects"][0]["phase_detail"]["confidence"] == "live workflow"
@@ -456,6 +470,20 @@ async def test_dashboard_manager_projects_tasks_crews_and_live_graph() -> None:
     assert any(node["kind"] == "project" for node in response["graph"]["nodes"])
     assert any(edge["label"] == "assigns" for edge in response["graph"]["edges"])
     assert all("status_label" in node for node in response["graph"]["nodes"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_manager_compact_mode_omits_legacy_project_duplicate() -> None:
+    now = datetime.now(UTC)
+    row = project(now)
+    rows = [[row], [], [], [], [], [], [], []]
+
+    response = await dashboard_manager(  # type: ignore[arg-type]
+        QuerySession(rows), actor(), compact=True
+    )
+
+    assert response["records"]["projects"][0]["id"] == row.id
+    assert "projects" not in response
 
 
 @pytest.mark.asyncio

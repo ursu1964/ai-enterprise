@@ -9,14 +9,10 @@ from typing import Any, TypedDict
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ai_enterprise.api.dependencies import SessionDependency
 from ai_enterprise.application.ecosystem_service import EcosystemService
-from ai_enterprise.application.operator_job_resolution import (
-    job_is_acknowledged,
-    unresolved_problem_jobs,
-)
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.application.specification_platform_service import SpecificationPlatformService
 from ai_enterprise.config import get_settings
@@ -316,8 +312,32 @@ async def dashboard_graph_demo_setup(session: SessionDependency) -> dict[str, ob
 async def dashboard_telemetry_summary(
     session: SessionDependency, organization_id: uuid.UUID | None = None
 ) -> dict[str, Any]:
-    projects = list((await session.scalars(select(ProjectModel))).all())
-    jobs = list((await session.scalars(select(JobModel))).all())
+    project_count = int(
+        await session.scalar(select(func.count()).select_from(ProjectModel)) or 0
+    )
+    acknowledged = (
+        JobModel.payload["operator_resolution"]["state"].astext == "acknowledged"
+    )
+    problem_status = JobModel.status.in_({"failed", "dead_letter", "abandoned"})
+    job_counts = (
+        await session.execute(
+            select(
+                func.count(JobModel.id).label("job_count"),
+                func.count(JobModel.id)
+                .filter(JobModel.status.in_({"running", "leased"}))
+                .label("running_job_count"),
+                func.count(JobModel.id)
+                .filter(JobModel.status.in_({"queued", "retry_wait"}))
+                .label("queued_job_count"),
+                func.count(JobModel.id)
+                .filter(problem_status & ~acknowledged)
+                .label("problem_job_count"),
+                func.count(JobModel.id)
+                .filter(problem_status & acknowledged)
+                .label("acknowledged_problem_job_count"),
+            )
+        )
+    ).one()
     performance_metrics: list[PerformanceMetricModel] = []
     if organization_id is not None:
         performance_metrics = list(
@@ -330,23 +350,19 @@ async def dashboard_telemetry_summary(
                 )
             ).all()
         )
-    problem_jobs = unresolved_problem_jobs(jobs)
-    acknowledged_problem_jobs = [
-        job
-        for job in jobs
-        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
-    ]
-    running_jobs = [job for job in jobs if job.status in {"running", "leased"}]
-    queued_jobs = [job for job in jobs if job.status in {"queued", "retry_wait"}]
+    problem_job_count = int(job_counts.problem_job_count or 0)
     return {
         "runtime": {
-            "project_count": len(projects),
-            "job_count": len(jobs),
-            "running_job_count": len(running_jobs),
-            "queued_job_count": len(queued_jobs),
-            "problem_job_count": len(problem_jobs),
-            "acknowledged_problem_job_count": len(acknowledged_problem_jobs),
-            "signal": "attention_required" if problem_jobs else "nominal",
+            "query_strategy": "database_aggregates",
+            "project_count": project_count,
+            "job_count": int(job_counts.job_count or 0),
+            "running_job_count": int(job_counts.running_job_count or 0),
+            "queued_job_count": int(job_counts.queued_job_count or 0),
+            "problem_job_count": problem_job_count,
+            "acknowledged_problem_job_count": int(
+                job_counts.acknowledged_problem_job_count or 0
+            ),
+            "signal": "attention_required" if problem_job_count else "nominal",
         },
         "governed_performance": {
             "organization_id": None if organization_id is None else str(organization_id),
@@ -365,7 +381,7 @@ async def dashboard_telemetry_summary(
         },
         "operator_summary": (
             "Telemetry is nominal."
-            if not problem_jobs
+            if not problem_job_count
             else "Telemetry shows blocked work that needs operator review."
         ),
     }
@@ -2156,7 +2172,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       "X-Actor-Type": "human",
       "X-Actor-Role": "admin"
     };
-    const state = { jobs: [], workers: [], projects: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, serverReadiness: null, infrastructureChoices: null, context: null, sources: {} };
+    const state = { jobs: [], workers: [], projects: [], blueprints: [], metrics: {}, telemetrySummary: null, operatingPicture: null, dashboardManager: null, serverReadiness: null, infrastructureChoices: null, context: null, sources: {} };
     let loadedManifestDocument = null;
     let lastFactoryProject = null;
     let selectedMovementNode = "manifesto";
@@ -2998,8 +3014,9 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Problem Pressure", detail: "Blocked work changes the operating picture and recommended action.", idea: "Problem pressure should drive recovery and blueprint hardening.", effect: `${countSentence(failed, "followed issue")}.`, signal: `${failed}`, kind: failed ? "bad" : "ok", action: "problems" },
         { title: "Calibration Feed", detail: "Telemetry supports phase completion, errors followed, and economic proof.", idea: "Use metrics to decide, not to decorate.", effect: "Improves estimate quality and future automation design.", signal: "active", kind: "ok", action: "projects" }
       ]);
-      if (state.operatingPicture) {
-        const nodes = state.operatingPicture.graph.nodes || [];
+      const operatingGraph = state.dashboardManager?.graph || state.operatingPicture?.graph;
+      if (operatingGraph) {
+        const nodes = operatingGraph.nodes || [];
         const important = nodes.slice(0, 8).map(node => ({
           title: node.label,
           detail: node.human_summary,
@@ -3021,6 +3038,15 @@ DASHBOARD_HTML = r"""<!doctype html>
       const nextReviewEvidence = nextCatalogReview?.evidence_bundle?.sources || {};
       const nextReviewEvidenceCount = Object.values(nextReviewEvidence).reduce((total, value) => total + Number(value || 0), 0);
       const nextReviewCriteriaPassed = (nextCatalogReview?.evidence_bundle?.criteria_status || []).filter(item => item.passed).length;
+      const governedBlueprints = (state.blueprints || []).slice(0, 5).map(item => ({
+        title: `${item.title} v${item.version}`,
+        detail: `Origin: project ${item.source_project_id}, phase ${item.source_phase}. ${item.recommended_use}`,
+        idea: `Lifecycle: ${humanStatus(item.lifecycle)}. Evidence and economic proof are retained with the governed asset.`,
+        effect: item.lifecycle === "deprecated" ? "Visible as history and excluded from recommendations." : `Recorded reuse: ${countSentence(item.reuse_count || 0, "use")}.`,
+        signal: humanStatus(item.lifecycle),
+        kind: item.lifecycle === "reusable" ? "ok" : item.lifecycle === "deprecated" ? "bad" : "info",
+        action: "projects"
+      }));
       renderSurfaceNodes("blueprintGraph", [
         { title: "Code Graph", detail: "Graphify architecture map for the repository.", idea: "Use it to understand what code areas a change touches.", effect: "Reduces blind edits and improves architecture navigation.", signal: "open", kind: "info", action: "graphify" },
         { title: "Project Foundry Core", detail: "AEOS project factory specification, schemas, prompt contracts, gates, and repository template.", idea: "Use it as the standard operating contract for every governed project.", effect: "Turns the Corel manifest into reusable enterprise factory rules.", signal: "download", kind: "ok", action: "foundry" },
@@ -3029,6 +3055,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         { title: "Project Blueprints", detail: "Workflow, specialist-crew, and economic-proof patterns produced by project intelligence.", idea: "Promote repeated successful structures into templates.", effect: "Increases reuse across future projects.", signal: "reuse", kind: "ok", action: "projects" },
         { title: "Blueprint Learning Queue", detail: `${reuse.summary || "No reusable learning candidates have been observed yet."} Review-ready: ${reuseReadiness.catalog_review_ready || 0}; needs proof: ${reuseReadiness.needs_more_proof || 0}. Next review: ${nextCatalogReview ? nextCatalogReview.project_name : "none ready"} with ${countSentence(nextReviewEvidenceCount, "proof item")} and ${nextReviewCriteriaPassed} passed criterion/criteria.`, idea: "Successful project proof becomes candidate blueprint material after review.", effect: reuse.operator_action || "Promote reusable patterns only after proof review.", signal: `${blueprintLearning.length} blueprint`, kind: (reuseReadiness.catalog_review_ready || 0) ? "ok" : blueprintLearning.length ? "warn" : "info", action: "projects" },
         { title: "Guardrail Learning Queue", detail: `${countSentence(guardrailLearning.length, "recurring-problem guardrail candidate")}. Evidence required: ${reuseReadiness.guardrails_evidence_required || 0}.`, idea: "Recurring problems should become recovery checklists, tests, or template guardrails.", effect: "Keeps the factory from repeating known problem classes.", signal: `${guardrailLearning.length} guardrail`, kind: guardrailLearning.length ? "warn" : "ok", action: "problems" },
+        ...governedBlueprints,
         { title: "Future Templates", detail: "Reusable patterns become stronger starting points for later manifestos.", idea: "Feed lessons back into the next project creation cycle.", effect: "Compounds delivery speed and quality over time.", signal: "evolve", kind: "ok", action: "factory" }
       ]);
     }
@@ -4171,6 +4198,36 @@ DASHBOARD_HTML = r"""<!doctype html>
         .filter(group => group.jobs.length);
     }
 
+    function groupedRecoveryItems(items) {
+      const groups = new Map();
+      (items || []).forEach(item => {
+        const key = [
+          item.status || "unknown",
+          item.failure_class || "unknown",
+          item.explanation || "",
+          item.likely_cause || "",
+          item.next_action || item.operator_action || ""
+        ].join("|");
+        if (!groups.has(key)) {
+          groups.set(key, { ...item, occurrence_count: 0, job_ids: [], diagnostics: [] });
+        }
+        const group = groups.get(key);
+        group.occurrence_count += 1;
+        if (item.job_id) group.job_ids.push(String(item.job_id));
+        if (item.raw_diagnostic && !group.diagnostics.includes(item.raw_diagnostic)) {
+          group.diagnostics.push(item.raw_diagnostic);
+        }
+      });
+      return Array.from(groups.values());
+    }
+
+    function recoveryProofDetail(item, fallback) {
+      const parts = [];
+      if (item.job_ids?.length) parts.push(`Affected jobs: ${item.job_ids.join(", ")}.`);
+      if (item.diagnostics?.length) parts.push(`Diagnostics: ${item.diagnostics.join(" | ")}`);
+      return parts.join(" ") || item.raw_diagnostic || fallback;
+    }
+
     async function loadJobAttempts(jobId) {
       byId("jobActionStatus").innerHTML = `<strong>Loading attempt proof</strong><div class="muted">Reading worker evidence for this work item.</div>`;
       const attempts = await json(`/api/v1/operator/jobs/by-id/${encodeURIComponent(jobId)}/attempts`, { headers: actorHeaders });
@@ -4893,13 +4950,13 @@ DASHBOARD_HTML = r"""<!doctype html>
             </div>
             <div class="mini" style="margin-top: 10px;"><strong>Phase Information</strong><div class="list-meta">Phase confidence, owner crew, executed work, remaining work, and proof are explained here in human language.</div>${table(phase.details.map(detail => ({ detail })), [{ label: "Detail", value: row => row.detail }], "This phase has no transition notes yet.")}</div>
             <div class="grid" style="margin-top: 10px;">
-              <div class="mini span-6"><strong>Current Issues</strong><div class="list-meta">Used to show active blockers for the selected phase, with cause and next recovery action.</div>${listbox(phase.current_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this issue yet.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "This phase has no active blockers. If work fails, the cause and next recovery action will appear here.")}</div>
+              <div class="mini span-6"><strong>Current Issues</strong><div class="list-meta">Repeated failures are grouped by recovery pattern. The count and affected job IDs preserve the underlying proof.</div>${listbox(groupedRecoveryItems(phase.current_issues || []), item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(recoveryProofDetail(item, "Worker proof has not been attached to this issue yet."))}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}${item.occurrence_count > 1 ? ` · ${esc(item.occurrence_count)} jobs` : ""}</span></div>`, "This phase has no active blockers. If work fails, the cause and next recovery action will appear here.")}</div>
               <div class="mini span-6"><strong>Reviewed History</strong><div class="list-meta">Used to preserve old problems after they are resolved or acknowledged, so proof is not lost.</div>${listbox(phase.historical_issues || [], item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this history item yet.")}</div></details></div><span class="pill info">reviewed history</span></div>`, "No resolved or acknowledged issues are attached to this phase yet. Past problems will appear here after review.")}</div>
               <div class="mini span-6"><strong>Crew Activity</strong>${table(payload.crew, [{ label: "Crew", value: row => row.crew_name }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Error", value: row => row.error_message || "" }], "This table shows which specialist crew worked on the project. No crew run is linked to this phase yet.")}</div>
               <div class="mini span-6"><strong>Project Jobs</strong>${table(payload.jobs, [{ label: "Type", value: row => row.job_type }, { label: "Status", value: row => humanStatus(row.status) }, { label: "Attempts", value: row => row.attempt_count }, { label: "Error", value: row => row.last_error || "" }], "This table shows worker jobs, attempts, and errors. No job history is linked to this project yet.")}</div>
               <div class="mini span-6"><strong>Calibration</strong>${listbox(payload.calibration, item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.detail)}</div></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No calibration checks are available yet.")}</div>
               <div class="mini span-6"><strong>Improvements & Solutions</strong>${listbox(payload.improvements, item => `<div class="list-item"><div><div class="list-title">${esc(item.source)}</div><div class="list-meta">${esc(item.recommendation)}</div></div><span class="pill info">${esc(humanStatus(item.status))}</span></div>`, "No improvement proposals are needed right now.")}</div>
-              <div class="mini span-6"><strong>Recovery Items</strong>${listbox(payload.errors, item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(item.raw_diagnostic || "Worker proof has not been attached to this recovery item yet.")}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}</span></div>`, "No active recovery items are attached to this project. Reviewed history remains preserved in job records.")}</div>
+              <div class="mini span-6"><strong>Recovery Patterns</strong>${listbox(groupedRecoveryItems(payload.errors), item => `<div class="list-item"><div><div class="list-title">${esc(item.explanation)}</div><div class="list-meta">${esc(item.likely_cause)} Next: ${esc(item.next_action)}</div><details><summary>Proof detail</summary><div class="list-meta">${esc(recoveryProofDetail(item, "Worker proof has not been attached to this recovery pattern yet."))}</div></details></div><span class="pill ${statusClass(item.status)}">${esc(humanStatus(item.status))}${item.occurrence_count > 1 ? ` · ${esc(item.occurrence_count)} jobs` : ""}</span></div>`, "No active recovery patterns are attached to this project. Reviewed history remains preserved in job records.")}</div>
               <div class="mini span-6"><strong>Specialist Agents</strong>${listbox(payload.specialist_agents, item => `<div class="list-item"><div><div class="list-title">${esc(item.agent_key)}</div><div class="list-meta">${esc(item.specialty)} · ${esc(item.mission)}</div></div><span class="pill ok">${esc(humanStatus(item.status))}</span></div>`, "No specialist agents are suggested for this project type yet.")}</div>
               <div class="mini span-6"><strong>Economic Effects</strong>${listbox(Object.entries(payload.economic_effects).map(([name, value]) => ({ name, value })), item => `<div class="list-item"><div><div class="list-title">${esc(item.name)}</div><div class="list-meta">${esc(item.value)}</div></div><span class="pill info">proof</span></div>`, "Economic proof will appear after project evidence is collected.")}</div>
               <div class="mini span-12"><strong>Blueprints of Patterns</strong>${listbox(payload.blueprints, item => {
@@ -4948,37 +5005,29 @@ DASHBOARD_HTML = r"""<!doctype html>
       renderProjectIntelligence(payload);
     }
 
-    async function refresh() {
+    async function refreshOnce() {
       byId("apiStatus").className = "status muted";
       byId("apiStatus").innerHTML = `<span class="dot"></span>Checking`;
-      let dashboardContext = null;
-      try {
-        dashboardContext = await json("/dashboard/context");
-        applyDashboardContext(dashboardContext);
-      } catch (error) {
-        dashboardContext = null;
+      let dashboardContext = state.context || null;
+      if (!dashboardContext) {
+        try {
+          dashboardContext = await json("/dashboard/context");
+          applyDashboardContext(dashboardContext);
+        } catch (error) {
+          dashboardContext = null;
+        }
       }
-      const telemetryUrl = dashboardContext && dashboardContext.organization_id
-        ? `/dashboard/telemetry-summary?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
-        : "/dashboard/telemetry-summary";
-      const operatingPictureUrl = dashboardContext && dashboardContext.organization_id
-        ? `/api/v1/query/operating-picture?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
-        : "/api/v1/query/operating-picture";
       const dashboardManagerUrl = dashboardContext && dashboardContext.organization_id
-        ? `/api/v1/query/dashboard-manager?organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
-        : "/api/v1/query/dashboard-manager";
-      const [ready, jobs, workers, projects, rawMetrics, operatingPicture, dashboardManager, serverReadiness, infrastructureChoices] = await Promise.allSettled([
+        ? `/api/v1/query/dashboard-manager?compact=true&organization_id=${encodeURIComponent(dashboardContext.organization_id)}`
+        : "/api/v1/query/dashboard-manager?compact=true";
+      const [ready, blueprints, rawMetrics, dashboardManager, serverReadiness, infrastructureChoices] = await Promise.allSettled([
         json("/health/ready"),
-        json("/api/v1/operator/jobs", { headers: actorHeaders }),
-        json("/api/v1/operator/jobs/worker-instances", { headers: actorHeaders }),
-        json("/api/v1/projects", { headers: actorHeaders }),
+        json("/api/v1/blueprints?include_deprecated=true", { headers: actorHeaders }),
         text("/metrics"),
-        json(operatingPictureUrl, { headers: actorHeaders }),
         json(dashboardManagerUrl, { headers: actorHeaders }),
         json("/dashboard/server-readiness"),
         json("/dashboard/infrastructure-choices")
       ]);
-      const telemetrySummary = await Promise.allSettled([json(telemetryUrl)]);
       if (ready.status === "fulfilled" && ready.value.status === "ok") {
         byId("apiStatus").className = "status ok";
         byId("apiStatus").innerHTML = `<span class="dot"></span>Ready`;
@@ -4986,22 +5035,29 @@ DASHBOARD_HTML = r"""<!doctype html>
         byId("apiStatus").className = "status bad";
         byId("apiStatus").innerHTML = `<span class="dot"></span>Not ready`;
       }
-      state.jobs = jobs.status === "fulfilled" ? jobs.value : [];
-      state.workers = workers.status === "fulfilled" ? workers.value : [];
-      state.projects = projects.status === "fulfilled" ? projects.value : [];
+      const managerRecords = dashboardManager.status === "fulfilled"
+        ? dashboardManager.value.records || {}
+        : {};
+      state.jobs = managerRecords.jobs || [];
+      state.workers = managerRecords.workers || [];
+      state.projects = managerRecords.projects || [];
+      state.blueprints = blueprints.status === "fulfilled" ? blueprints.value : [];
       state.metrics = rawMetrics.status === "fulfilled" ? parseMetrics(rawMetrics.value) : {};
-      state.telemetrySummary = telemetrySummary[0].status === "fulfilled" ? telemetrySummary[0].value : null;
-      state.operatingPicture = operatingPicture.status === "fulfilled" ? operatingPicture.value : null;
+      state.telemetrySummary = dashboardManager.status === "fulfilled"
+        ? dashboardManager.value.telemetry_summary || null
+        : null;
+      state.operatingPicture = null;
       state.dashboardManager = dashboardManager.status === "fulfilled" ? dashboardManager.value : null;
       state.serverReadiness = serverReadiness.status === "fulfilled" ? serverReadiness.value : null;
       state.infrastructureChoices = infrastructureChoices.status === "fulfilled" ? infrastructureChoices.value : null;
       state.sources = {
         ready: sourceStatus(ready, "API", "overview", ready.status === "fulfilled" && ready.value.status === "ok" ? "Service is ready" : "Service readiness is not confirmed"),
-        jobs: sourceStatus(jobs, "Work", "problems", countSentence(state.jobs.length, "tracked job")),
-        workers: sourceStatus(workers, "Crew", "problems", countSentence(state.workers.length, "worker signal")),
-        projects: sourceStatus(projects, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
+        jobs: sourceStatus(dashboardManager, "Work", "problems", countSentence(state.jobs.length, "tracked job")),
+        workers: sourceStatus(dashboardManager, "Crew", "problems", countSentence(state.workers.length, "worker signal")),
+        projects: sourceStatus(dashboardManager, "Projects", "projects", `${countSentence(state.projects.length, "project")} visible`),
+        blueprints: sourceStatus(blueprints, "Blueprint Catalog", "graph", `${countSentence(state.blueprints.length, "governed blueprint")} visible`),
         metrics: sourceStatus(rawMetrics, "Telemetry", "metrics", `${countSentence(Object.keys(state.metrics).length, "system pulse signal")}, ${countSentence(state.telemetrySummary?.governed_performance?.metric_count ?? 0, "governed metric")}`),
-        query: sourceStatus(operatingPicture, "Operating Picture", "overview", state.operatingPicture ? state.operatingPicture.headline.summary : "Operating picture connection needs attention"),
+        query: sourceStatus(dashboardManager, "Operating Picture", "overview", state.dashboardManager ? state.dashboardManager.headline.summary : "Operating picture connection needs attention"),
         manager: sourceStatus(dashboardManager, "Execution Manager", "execution", state.dashboardManager ? state.dashboardManager.headline.summary : "Execution manager connection needs attention"),
         server: sourceStatus(serverReadiness, "Server Readiness", "metrics", state.serverReadiness ? state.serverReadiness.summary : "Server readiness connection needs attention"),
         infrastructure: sourceStatus(infrastructureChoices, "Infrastructure Choices", "metrics", state.infrastructureChoices ? state.infrastructureChoices.summary : "Infrastructure choices connection needs attention")
@@ -5012,6 +5068,37 @@ DASHBOARD_HTML = r"""<!doctype html>
       renderBusinessBoard();
       renderEcosystemModules();
     }
+
+    let activeRefresh = null;
+    async function refresh() {
+      if (activeRefresh) return activeRefresh;
+      activeRefresh = refreshOnce();
+      try {
+        return await activeRefresh;
+      } finally {
+        activeRefresh = null;
+      }
+    }
+
+    const refreshIntervalMs = 15000;
+    let refreshTimer = null;
+    function scheduleRefresh(delay = refreshIntervalMs) {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (document.hidden) return;
+      refreshTimer = setTimeout(async () => {
+        await refresh();
+        scheduleRefresh();
+      }, delay);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = null;
+        return;
+      }
+      refresh().finally(() => scheduleRefresh());
+    });
 
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => {
@@ -5178,7 +5265,7 @@ DASHBOARD_HTML = r"""<!doctype html>
         switchView(window.location.hash.slice(1));
       }
     });
-    setInterval(refresh, 15000);
+    scheduleRefresh();
   </script>
 </body>
 </html>
@@ -5517,13 +5604,18 @@ DEMO_HTML = r"""<!doctype html>
     const consoleProof = document.getElementById("consoleProof");
     const consoleMeaning = document.getElementById("consoleMeaning");
     const consoleOpen = document.getElementById("consoleOpen");
+    const demoActorHeaders = {
+      "X-Actor-ID": "local-dashboard-admin",
+      "X-Actor-Type": "human",
+      "X-Actor-Role": "platform-admin"
+    };
     async function fetchText(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`${response.status}`);
       return response.text();
     }
     async function fetchJson(url) {
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: demoActorHeaders });
       if (!response.ok) throw new Error(`${response.status}`);
       return response.json();
     }

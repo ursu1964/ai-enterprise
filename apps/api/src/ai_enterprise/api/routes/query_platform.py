@@ -1014,6 +1014,7 @@ async def dashboard_manager(
     actor: ActorDependency,
     organization_id: uuid.UUID | None = None,
     limit: int = 25,
+    compact: bool = False,
 ) -> dict[str, Any]:
     _require_query_read(actor)
     if limit < 1 or limit > 100:
@@ -1186,6 +1187,7 @@ async def dashboard_manager(
                 "state": state,
                 "state_meaning": current_meaning,
                 "repository_path": project.repository_path,
+                "updated_at": project.updated_at,
                 "project_type": project.manifest.get("project_type", "enterprise_project")
                 if isinstance(project.manifest, dict)
                 else "enterprise_project",
@@ -1232,6 +1234,11 @@ async def dashboard_manager(
         else "waiting_for_manifesto"
     )
     recovery_proposals = _failure_improvement_proposals(jobs)
+    acknowledged_problem_jobs = [
+        job
+        for job in jobs
+        if job.status in {"failed", "dead_letter", "abandoned"} and job_is_acknowledged(job)
+    ]
     business_board = _dashboard_business_board(
         manager_state=manager_state,
         summaries=summaries,
@@ -1241,7 +1248,7 @@ async def dashboard_manager(
         total_problems=total_problems,
         online_workers=len(online_workers),
     )
-    return {
+    payload = {
         "generated_at": datetime.now(UTC),
         "query_policy": {
             "mode": "dashboard_manager_projection",
@@ -1279,6 +1286,38 @@ async def dashboard_manager(
             "governed_metrics": len(metrics),
         },
         "business_board": business_board,
+        "records": {
+            "projects": summaries,
+            "jobs": [
+                {
+                    "id": job.id,
+                    "project_id": job.project_id,
+                    "job_type": job.job_type,
+                    "status": job.status,
+                    "attempt_count": job.attempt_count,
+                    "max_attempts": job.max_attempts,
+                    "retry_count": job.retry_count,
+                    "available_at": job.available_at,
+                    "lease_owner": job.lease_owner,
+                    "lease_expires_at": job.lease_expires_at,
+                    "last_failure_class": job.last_failure_class,
+                    "last_error": job.last_error,
+                    "operator_resolution": job_resolution(job),
+                }
+                for job in jobs[:100]
+            ],
+            "workers": [
+                {
+                    "worker_id": worker.worker_id,
+                    "profile": worker.profile,
+                    "status": worker.status,
+                    "started_at": worker.started_at,
+                    "last_heartbeat_at": worker.last_heartbeat_at,
+                    "stopped_at": worker.stopped_at,
+                }
+                for worker in workers
+            ],
+        },
         "recovery": {
             "improvement_proposals": recovery_proposals,
             "proposal_basis": (
@@ -1368,6 +1407,42 @@ async def dashboard_manager(
                 "workers": _status_counts(workers),
             },
         },
+        "telemetry_summary": {
+            "runtime": {
+                "query_strategy": "dashboard_manager_reuse",
+                "project_count": len(projects),
+                "job_count": len(jobs),
+                "running_job_count": sum(
+                    1 for job in jobs if job.status in {"running", "leased"}
+                ),
+                "queued_job_count": sum(
+                    1 for job in jobs if job.status in {"queued", "retry_wait"}
+                ),
+                "problem_job_count": total_problems,
+                "acknowledged_problem_job_count": len(acknowledged_problem_jobs),
+                "signal": "attention_required" if total_problems else "nominal",
+            },
+            "governed_performance": {
+                "organization_id": None if organization_id is None else str(organization_id),
+                "metric_count": len(metrics),
+                "metrics": [
+                    {
+                        "metric_name": row.metric_key,
+                        "scope_type": row.scope_type,
+                        "score": float(row.metric_value),
+                        "calculated_at": row.calculated_at,
+                        "policy_version": row.policy_version,
+                    }
+                    for row in metrics
+                ],
+                "status": "context_required" if organization_id is None else "available",
+            },
+            "operator_summary": (
+                "Telemetry is nominal."
+                if not total_problems
+                else "Telemetry shows blocked work that needs operator review."
+            ),
+        },
         "graph": _manager_graph(
             projects,
             workflows_by_project,
@@ -1398,6 +1473,9 @@ async def dashboard_manager(
             },
         ],
     }
+    if compact:
+        payload.pop("projects")
+    return payload
 
 
 @router.get("/operating-picture")

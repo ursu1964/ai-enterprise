@@ -24,7 +24,29 @@ jobs:
         run: python tools/federation_verify.py --json
       - name: Governed strategic intelligence conformance
         run: python tools/intelligence_verify.py --json
+      - name: Tooling invariants
+        run: python tools/check_tooling_invariants.py
       - name: Install application and verification dependencies
-        run: pip install -e ./apps/api pytest pytest-asyncio ruff mypy psycopg[binary]
+        run: pip install -e ./apps/api pytest pytest-asyncio ruff==0.16.1 mypy psycopg[binary]
       - name: Full continuous engineering verification
         run: python tools/engineering_verify.py --full --json
+      - name: Install Chromium journey runtime
+        run: |
+          pip install playwright==1.54.0
+          playwright install --with-deps chromium
+      - name: Start dashboard stack
+        run: |
+          cp .env.example .env
+          docker compose up --build -d api
+      - name: Browser dashboard journeys
+        run: python tools/dashboard_browser_verify.py
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-browser-evidence
+          path: artifacts/browser/
+          if-no-files-found: ignore
+      - name: Stop dashboard stack
+        if: always()
+        run: docker compose down

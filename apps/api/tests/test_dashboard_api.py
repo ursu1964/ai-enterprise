@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -62,9 +63,15 @@ class Session:
 
 
 class DashboardSession:
-    def __init__(self, scalar_rows: list[Any], scalars_rows: list[list[Any]]) -> None:
+    def __init__(
+        self,
+        scalar_rows: list[Any],
+        scalars_rows: list[list[Any]],
+        execute_rows: list[Any] | None = None,
+    ) -> None:
         self.scalar_rows = scalar_rows
         self.scalars_rows = scalars_rows
+        self.execute_rows = execute_rows or []
         self.added: list[Any] = []
         self.commit_count = 0
 
@@ -73,6 +80,10 @@ class DashboardSession:
 
     async def scalars(self, statement: object) -> Scalars:
         return Scalars(self.scalars_rows.pop(0) if self.scalars_rows else [])
+
+    async def execute(self, statement: object) -> Any:
+        row = self.execute_rows.pop(0)
+        return SimpleNamespace(one=lambda: row)
 
     async def get(self, model: type, identity: uuid.UUID) -> Any:
         return None
@@ -384,6 +395,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "Advanced raw metrics" not in response.text
     assert "raw signal(s)" not in response.text
     assert "Blueprint Graph Hub" in response.text
+    assert "/api/v1/blueprints?include_deprecated=true" in response.text
+    assert "governed blueprint" in response.text
     assert "Blueprint Learning Queue" in response.text
     assert "Guardrail Learning Queue" in response.text
     assert "dashboardManager?.reuse" in response.text
@@ -432,7 +445,9 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "/api/v1/ecosystem/graph" in response.text
     assert "/api/v1/specifications/evidence/graph" in response.text
     assert "operator headers" not in response.text
-    assert "/api/v1/query/operating-picture" in response.text
+    assert "/api/v1/query/operating-picture" not in response.text
+    assert 'json("/api/v1/operator/jobs"' not in response.text
+    assert 'json("/api/v1/operator/jobs/worker-instances"' not in response.text
     assert "/api/v1/project-formation/projects/" in response.text
     assert "Operating Picture" in response.text
     assert "unresolvedProblemJobs" in response.text
@@ -444,9 +459,13 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "surface-node" in response.text
     assert 'renderSurfaceNodes("operatingPictureSignals", important)' in response.text
     assert 'renderSurfaceNodes("movementGraph", important)' not in response.text
-    assert (
-        "const unresolved = state.operatingPicture.counts?.unresolved_problem_jobs" in response.text
-    )
+    assert "state.dashboardManager?.graph || state.operatingPicture?.graph" in response.text
+    assert "if (activeRefresh) return activeRefresh" in response.text
+    assert '"/api/v1/query/dashboard-manager?compact=true"' in response.text
+    assert "let dashboardContext = state.context || null" in response.text
+    assert 'document.addEventListener("visibilitychange"' in response.text
+    assert "if (document.hidden) return" in response.text
+    assert "setInterval(refresh, 15000)" not in response.text
     assert "Economic Proof" in response.text
     assert "humanStatus" in response.text
     assert (
@@ -475,8 +494,10 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No current work needs action" in response.text
     assert "No current worker capacity is visible" in response.text
     assert "No projects are visible yet" in response.text
-    assert "Recovery Items" in response.text
-    assert "No active recovery items are attached to this project" in response.text
+    assert "Recovery Patterns" in response.text
+    assert "function groupedRecoveryItems(items)" in response.text
+    assert "Affected jobs:" in response.text
+    assert "No active recovery patterns are attached to this project" in response.text
     assert "No active errors are attached to this project" not in response.text
     assert "Worker proof has not been attached to this error yet" not in response.text
     assert "No records." not in response.text
@@ -508,7 +529,7 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "No transition recorded" not in response.text
     assert "No active step" not in response.text
     assert "Current Issues" in response.text
-    assert "Used to show active blockers for the selected phase" in response.text
+    assert "Repeated failures are grouped by recovery pattern" in response.text
     assert "This phase has no active blockers" in response.text
     assert "Used to preserve old problems after they are resolved or acknowledged" in response.text
     assert "Past problems will appear here after review" in response.text
@@ -538,6 +559,9 @@ async def test_local_dashboard_context_actor_can_read_query_model() -> None:
 
     assert actor.capabilities == frozenset(
         {
+            "blueprint.read",
+            "blueprint.review",
+            "blueprint.write",
             "ecosystem.read",
             "operator.jobs.manage",
             "project.read",
@@ -750,6 +774,8 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert 'id="proofTelemetryCard" class="proof-card" href="/dashboard#metrics"' in response.text
     assert 'id="proofNextCard" class="proof-card" href="/dashboard#factory"' in response.text
     assert "loadLiveProof" in response.text
+    assert 'const demoActorHeaders = {' in response.text
+    assert 'fetch(url, { headers: demoActorHeaders })' in response.text
     assert "card.href = href" in response.text
     assert "If the proof still needs attention" in response.text
     assert "Project proof is waiting for source confirmation" in response.text
@@ -1423,41 +1449,6 @@ async def test_dashboard_graph_demo_setup_requires_existing_project() -> None:
 async def test_dashboard_telemetry_summary_merges_runtime_and_governed_metrics() -> None:
     now = datetime.now(UTC)
     organization_id = uuid.uuid4()
-    project = ProjectModel(
-        id=uuid.uuid4(),
-        name="Telemetry Project",
-        description="A project used to populate dashboard telemetry summary.",
-        repository_path="/home/user/projects/telemetry-project",
-        repository_url=None,
-        default_branch="main",
-        status=ProjectStatus.CREATED,
-        manifest_hash="0" * 64,
-        manifest={},
-        created_at=now,
-        updated_at=now,
-    )
-    failed_job = JobModel(
-        id=uuid.uuid4(),
-        project_id=project.id,
-        run_id=None,
-        job_type="execute_work_package",
-        status="failed",
-        payload={},
-        priority=100,
-        attempt_count=1,
-        max_attempts=3,
-        retry_count=1,
-        available_at=now,
-        lease_owner=None,
-        lease_expires_at=None,
-        lease_token=None,
-        lease_version=0,
-        last_failure_class="runtime",
-        last_leased_at=None,
-        last_error="failure",
-        completed_at=None,
-        created_at=now,
-    )
     metric = PerformanceMetricModel(
         id=uuid.uuid4(),
         organization_id=organization_id,
@@ -1475,7 +1466,19 @@ async def test_dashboard_telemetry_summary_merges_runtime_and_governed_metrics()
     )
 
     response = await dashboard_telemetry_summary(
-        DashboardSession([], [[project], [failed_job], [metric]]),  # type: ignore[arg-type]
+        DashboardSession(
+            [1],
+            [[metric]],
+            [
+                SimpleNamespace(
+                    job_count=1,
+                    running_job_count=0,
+                    queued_job_count=0,
+                    problem_job_count=1,
+                    acknowledged_problem_job_count=0,
+                )
+            ],
+        ),  # type: ignore[arg-type]
         organization_id,
     )
 
