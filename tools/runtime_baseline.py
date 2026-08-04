@@ -39,7 +39,7 @@ def _git(root: Path, *args: str) -> str:
 def _request(url: str, *, headers: dict[str, str] | None = None) -> tuple[bytes, Any]:
     request = urllib.request.Request(url, headers=headers or {})
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=15) as response:
             return response.read(), response.headers
     except (urllib.error.URLError, TimeoutError) as exc:
         raise BaselineError(f"Runtime evidence request failed: {url}") from exc
