@@ -125,6 +125,105 @@ def service_project_reader(scope: str) -> Actor:
     )
 
 
+def sample_aepm_document() -> dict[str, Any]:
+    return {
+        "schema_version": "aepm-0.1",
+        "project_intent": {
+            "name": "Service Request Portal",
+            "summary": (
+                "Create one governed portal for customers to submit and track service requests."
+            ),
+            "problem": "Requests arrive through disconnected email threads and cannot be measured.",
+            "opportunity": "Give customers and service teams a shared, traceable workflow.",
+        },
+        "business_outcomes": [
+            {
+                "id": "OUT-001",
+                "description": "Reduce the time needed to acknowledge a new request.",
+                "indicators": ["95% of requests acknowledged within 15 minutes"],
+            }
+        ],
+        "stakeholders": [
+            {
+                "id": "STK-001",
+                "name": "Service Operations Lead",
+                "role": "Business owner",
+                "responsibilities": ["Own request policy", "Approve workflow changes"],
+            }
+        ],
+        "capabilities": [
+            {
+                "id": "CAP-001",
+                "name": "Request intake",
+                "description": "Capture and classify a customer service request.",
+                "owner_stakeholder_id": "STK-001",
+            }
+        ],
+        "core_processes": [
+            {
+                "id": "PROC-001",
+                "name": "Triage request",
+                "description": "Validate, classify, and assign a submitted request.",
+                "trigger": "A customer submits a complete request.",
+                "outputs": ["Assigned request", "Acknowledgement notification"],
+            }
+        ],
+        "business_rules": [
+            {
+                "id": "RULE-001",
+                "description": "Only an authenticated customer may view their request details.",
+            }
+        ],
+        "data_entities": [
+            {
+                "id": "ENT-001",
+                "name": "Service Request",
+                "description": "The governed record of a customer's requested service.",
+                "owner_stakeholder_id": "STK-001",
+            }
+        ],
+        "integrations": [
+            {
+                "id": "INT-001",
+                "name": "Identity Provider",
+                "system": "Managed OIDC provider",
+                "purpose": "Authenticate customers and service operators.",
+                "security_rules": [
+                    "Use authorization code flow with PKCE",
+                    "Do not store passwords",
+                ],
+            }
+        ],
+        "quality_requirements": [
+            {
+                "id": "QUAL-001",
+                "category": "performance",
+                "description": (
+                    "Interactive portal requests must respond quickly under normal load."
+                ),
+                "acceptance_criteria": ["95th percentile API latency is below 500 ms"],
+            }
+        ],
+        "constraints": [
+            {
+                "id": "CON-001",
+                "category": "technical",
+                "description": (
+                    "The first release must run in Docker on a single managed environment."
+                ),
+            }
+        ],
+        "preferred_technology_targets": {
+            "frontend": ["React"],
+            "backend": ["Python", "FastAPI"],
+            "database": ["PostgreSQL"],
+            "queue": ["Redis"],
+            "object_storage": ["S3-compatible storage"],
+            "deployment": ["Docker"],
+        },
+    }
+
+
 def test_dashboard_page_links_operator_surfaces() -> None:
     client = TestClient(app)
 
@@ -595,6 +694,54 @@ def test_sample_project_blueprint_proof_exposes_hashes_and_trace_counts() -> Non
     ]
 
 
+def test_project_blueprint_compiler_page_exposes_manifest_compile_surface() -> None:
+    client = TestClient(app)
+
+    response = client.get("/dashboard/project-blueprint-compiler")
+
+    assert response.status_code == 200
+    assert "Traceable Blueprint Compiler" in response.text
+    assert "AEPM v0.1 JSON becomes five blueprint artifacts" in response.text
+    assert "manifestInput" in response.text
+    assert "compileBlueprint" in response.text
+    assert "/dashboard/project-blueprint/compile" in response.text
+    assert "Download Markdown" in response.text
+
+
+def test_project_blueprint_compiler_accepts_aepm_json_and_returns_traceable_markdown() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/compile",
+        json=sample_aepm_document(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == "project-blueprint-compiler-result-0.1"
+    assert payload["proof"]["schema_version"] == "project-blueprint-proof-0.1"
+    assert payload["proof"]["source"] == "submitted_aepm_manifest"
+    assert payload["proof"]["artifact_count"] == 5
+    assert payload["proof"]["section_trace_count"] == 25
+    assert payload["proof"]["entry_trace_count"] == 35
+    assert "# Project Blueprint with Traceability" in payload["markdown"]
+    assert "# Software Requirements Specification" in payload["markdown"]
+    assert "Sources: CAP-001, INT-001, PROC-001, RULE-001" in payload["markdown"]
+    assert "Client references: capabilities/CAP-001" in payload["markdown"]
+
+
+def test_project_blueprint_compiler_rejects_invalid_aepm_json() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/compile",
+        json={"schema_version": "aepm-0.1"},
+    )
+
+    assert response.status_code == 422
+    assert "project_intent" in response.text
+
+
 @pytest.mark.asyncio
 async def test_local_dashboard_context_actor_can_read_query_model() -> None:
     actor = await get_actor(
@@ -694,6 +841,8 @@ def test_documentation_hub_explains_working_method_and_project_assets() -> None:
     assert "Sample Traceable Blueprint" in response.text
     assert "/dashboard/sample-project-blueprint" in response.text
     assert 'data-doc="sample-project-blueprint"' in response.text
+    assert "Traceable Blueprint Compiler" in response.text
+    assert "/dashboard/project-blueprint-compiler" in response.text
     assert "/dashboard/documentation/operator-startup-guide?download=true" in response.text
     assert (
         "/dashboard/documentation/real-world-infrastructure-choices?download=true" in response.text

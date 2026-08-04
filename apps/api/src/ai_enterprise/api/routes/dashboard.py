@@ -10,6 +10,7 @@ from typing import Any, TypedDict
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from ai_enterprise.api.dependencies import SessionDependency
@@ -115,6 +116,11 @@ async def documentation_hub() -> HTMLResponse:
     return HTMLResponse(DOCUMENTATION_HUB_HTML)
 
 
+@router.get("/dashboard/project-blueprint-compiler", response_class=HTMLResponse)
+async def project_blueprint_compiler() -> HTMLResponse:
+    return HTMLResponse(PROJECT_BLUEPRINT_COMPILER_HTML)
+
+
 @router.get("/dashboard/client-manifest-template", response_class=PlainTextResponse)
 async def client_manifest_template() -> PlainTextResponse:
     return _markdown_response(
@@ -144,19 +150,27 @@ async def sample_project_blueprint() -> PlainTextResponse:
 
 @router.get("/dashboard/sample-project-blueprint/proof")
 async def sample_project_blueprint_proof() -> dict[str, object]:
-    model, bundle, manifest = _sample_project_blueprint()
-    return {
-        "schema_version": "sample-project-blueprint-proof-0.1",
-        "source": "examples/sample-project/aepm-0.1.json",
-        "source_model_sha256": model.model_sha256,
-        "source_manifest_sha256": model.source_manifest_sha256,
-        "artifact_bundle_sha256": bundle.bundle_sha256,
-        "traceability_manifest_sha256": manifest.manifest_sha256,
-        "artifact_count": len(bundle.artifacts),
-        "section_trace_count": len(manifest.section_traces),
-        "entry_trace_count": len(manifest.entry_traces),
-        "artifact_types": [artifact.artifact_type.value for artifact in bundle.artifacts],
-    }
+    manifest = _sample_project_manifest()
+    proof = _project_blueprint_payload(
+        manifest,
+        title="Sample Project Blueprint with Traceability",
+        source="examples/sample-project/aepm-0.1.json",
+    )["proof"]
+    assert isinstance(proof, dict)
+    return {**proof, "schema_version": "sample-project-blueprint-proof-0.1"}
+
+
+@router.post("/dashboard/project-blueprint/compile")
+async def compile_project_blueprint(document: dict[str, Any]) -> dict[str, object]:
+    try:
+        manifest = AepmManifest.model_validate(document)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+    return _project_blueprint_payload(
+        manifest,
+        title="Project Blueprint with Traceability",
+        source="submitted_aepm_manifest",
+    )
 
 
 @router.get("/dashboard/documentation/{document_id}", response_class=PlainTextResponse)
@@ -198,22 +212,68 @@ async def dashboard_documentation_document(
 
 
 def _sample_project_blueprint():
-    path = _sample_aepm_path()
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Sample AEPM project manifest is missing")
-    manifest = AepmManifest.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    manifest = _sample_project_manifest()
     model = compile_aepm(manifest)
     bundle = compile_artifact_bundle(model)
     traceability = compile_traceability_manifest(model, bundle)
     return model, bundle, traceability
 
 
+def _sample_project_manifest() -> AepmManifest:
+    path = _sample_aepm_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Sample AEPM project manifest is missing")
+    return AepmManifest.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _project_blueprint_payload(
+    manifest: AepmManifest, *, title: str, source: str
+) -> dict[str, object]:
+    model = compile_aepm(manifest)
+    bundle = compile_artifact_bundle(model)
+    traceability = compile_traceability_manifest(model, bundle)
+    markdown = _project_blueprint_markdown(
+        title=title,
+        source=source,
+        bundle=bundle,
+        traceability=traceability,
+    )
+    proof = {
+        "schema_version": "project-blueprint-proof-0.1",
+        "source": source,
+        "source_model_sha256": model.model_sha256,
+        "source_manifest_sha256": model.source_manifest_sha256,
+        "artifact_bundle_sha256": bundle.bundle_sha256,
+        "traceability_manifest_sha256": traceability.manifest_sha256,
+        "artifact_count": len(bundle.artifacts),
+        "section_trace_count": len(traceability.section_traces),
+        "entry_trace_count": len(traceability.entry_traces),
+        "artifact_types": [artifact.artifact_type.value for artifact in bundle.artifacts],
+    }
+    return {"schema_version": "project-blueprint-compiler-result-0.1", "proof": proof, "markdown": markdown}
+
+
 def _sample_project_blueprint_markdown() -> str:
     _, bundle, traceability = _sample_project_blueprint()
+    return _project_blueprint_markdown(
+        title="Sample Project Blueprint with Traceability",
+        source="examples/sample-project/aepm-0.1.json",
+        bundle=bundle,
+        traceability=traceability,
+    )
+
+
+def _project_blueprint_markdown(
+    *,
+    title: str,
+    source: str,
+    bundle,
+    traceability,
+) -> str:
     sections = [
-        "# Sample Project Blueprint with Traceability",
+        f"# {title}",
         "",
-        "Source manifest: `examples/sample-project/aepm-0.1.json`",
+        f"Source manifest: `{source}`",
         f"AEIR model SHA-256: `{bundle.source_model_sha256}`",
         f"Artifact bundle SHA-256: `{bundle.bundle_sha256}`",
         f"Traceability manifest SHA-256: `{traceability.manifest_sha256}`",
@@ -1062,6 +1122,288 @@ Canonical repo artifacts:
 """
 
 
+PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traceable Blueprint Compiler</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: rgba(13, 18, 24, 0.92);
+      --border: rgba(143, 166, 190, 0.24);
+      --text: #edf4fb;
+      --muted: #a6b4c2;
+      --blue: #5db8ff;
+      --green: #56e39f;
+      --red: #ff6b6b;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #07090d, #0d1418 54%, #080a0e);
+      color: var(--text);
+    }
+    main { width: min(1280px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 40px; }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.45rem, 3vw, 2.2rem); }
+    h2 { margin: 0 0 10px; font-size: 1rem; }
+    p { margin: 0; color: var(--muted); line-height: 1.45; }
+    a { color: inherit; }
+    .button, button {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(15, 23, 31, 0.86);
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 650;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    button:hover, .button:hover { border-color: rgba(93, 184, 255, 0.72); }
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      min-width: 0;
+    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+    textarea, pre {
+      width: 100%;
+      min-height: 560px;
+      border: 1px solid rgba(143, 166, 190, 0.22);
+      border-radius: 8px;
+      background: rgba(5, 9, 13, 0.94);
+      color: var(--text);
+      padding: 12px;
+      overflow: auto;
+      font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      resize: vertical;
+      white-space: pre-wrap;
+    }
+    .proof {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .metric { border: 1px solid rgba(143, 166, 190, 0.18); border-radius: 8px; padding: 10px; background: rgba(7, 12, 18, 0.78); }
+    .metric strong { display: block; color: var(--green); font-size: 1.1rem; }
+    .metric span { color: var(--muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+    .status { min-height: 22px; margin-top: 10px; color: var(--muted); }
+    .status.error { color: var(--red); }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Traceable Blueprint Compiler</h1>
+        <p>AEPM v0.1 JSON becomes five blueprint artifacts with source traceability.</p>
+      </div>
+      <a class="button" href="/dashboard/documentation-hub">Documentation Hub</a>
+    </header>
+    <section class="grid">
+      <article class="panel">
+        <h2>AEPM JSON</h2>
+        <textarea id="manifestInput" spellcheck="false">{}</textarea>
+        <div class="actions">
+          <button id="compileButton">Compile Blueprint</button>
+          <button id="loadSampleButton">Load Sample Manifest</button>
+        </div>
+        <p id="compileStatus" class="status">Ready.</p>
+      </article>
+      <article class="panel">
+        <h2>Proof</h2>
+        <div id="proofPanel" class="proof">
+          <div class="metric"><strong>0</strong><span>artifacts</span></div>
+          <div class="metric"><strong>0</strong><span>section traces</span></div>
+          <div class="metric"><strong>0</strong><span>entry traces</span></div>
+          <div class="metric"><strong>waiting</strong><span>traceability manifest</span></div>
+        </div>
+        <h2>Traceable Markdown</h2>
+        <pre id="markdownOutput">Compile an AEPM manifest to preview the blueprint here.</pre>
+        <div class="actions">
+          <button id="downloadButton" disabled>Download Markdown</button>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script>
+    const input = document.getElementById("manifestInput");
+    const output = document.getElementById("markdownOutput");
+    const proof = document.getElementById("proofPanel");
+    const statusLine = document.getElementById("compileStatus");
+    const downloadButton = document.getElementById("downloadButton");
+    let compiledMarkdown = "";
+
+    function setStatus(message, error = false) {
+      statusLine.textContent = message;
+      statusLine.classList.toggle("error", error);
+    }
+
+    function renderProof(data) {
+      const p = data.proof || {};
+      proof.innerHTML = [
+        ["artifact_count", "artifacts"],
+        ["section_trace_count", "section traces"],
+        ["entry_trace_count", "entry traces"],
+        ["traceability_manifest_sha256", "traceability manifest"]
+      ].map(([key, label]) => `<div class="metric"><strong>${String(p[key] ?? "waiting")}</strong><span>${label}</span></div>`).join("");
+    }
+
+    async function compileBlueprint() {
+      let document;
+      try {
+        document = JSON.parse(input.value);
+      } catch (error) {
+        setStatus(`JSON parse failed: ${error.message}`, true);
+        return;
+      }
+      setStatus("Compiling.");
+      const response = await fetch("/dashboard/project-blueprint/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(document)
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatus(`Compilation failed: ${JSON.stringify(payload.detail || payload)}`, true);
+        return;
+      }
+      compiledMarkdown = payload.markdown || "";
+      output.textContent = compiledMarkdown;
+      renderProof(payload);
+      downloadButton.disabled = false;
+      setStatus("Compiled.");
+    }
+
+    async function loadSampleManifest() {
+      const response = await fetch("/dashboard/sample-project-blueprint/proof");
+      if (!response.ok) {
+        setStatus("Sample proof is unavailable.", true);
+        return;
+      }
+      input.value = `{
+  "schema_version": "aepm-0.1",
+  "project_intent": {
+    "name": "Service Request Portal",
+    "summary": "Create one governed portal for customers to submit and track service requests.",
+    "problem": "Requests arrive through disconnected email threads and cannot be measured.",
+    "opportunity": "Give customers and service teams a shared, traceable workflow."
+  },
+  "business_outcomes": [
+    {
+      "id": "OUT-001",
+      "description": "Reduce the time needed to acknowledge a new request.",
+      "indicators": ["95% of requests acknowledged within 15 minutes"]
+    }
+  ],
+  "stakeholders": [
+    {
+      "id": "STK-001",
+      "name": "Service Operations Lead",
+      "role": "Business owner",
+      "responsibilities": ["Own request policy", "Approve workflow changes"]
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-001",
+      "name": "Request intake",
+      "description": "Capture and classify a customer service request.",
+      "owner_stakeholder_id": "STK-001"
+    }
+  ],
+  "core_processes": [
+    {
+      "id": "PROC-001",
+      "name": "Triage request",
+      "description": "Validate, classify, and assign a submitted request.",
+      "trigger": "A customer submits a complete request.",
+      "outputs": ["Assigned request", "Acknowledgement notification"]
+    }
+  ],
+  "business_rules": [
+    {
+      "id": "RULE-001",
+      "description": "Only an authenticated customer may view their request details."
+    }
+  ],
+  "data_entities": [
+    {
+      "id": "ENT-001",
+      "name": "Service Request",
+      "description": "The governed record of a customer's requested service.",
+      "owner_stakeholder_id": "STK-001"
+    }
+  ],
+  "integrations": [
+    {
+      "id": "INT-001",
+      "name": "Identity Provider",
+      "system": "Managed OIDC provider",
+      "purpose": "Authenticate customers and service operators.",
+      "security_rules": ["Use authorization code flow with PKCE", "Do not store passwords"]
+    }
+  ],
+  "quality_requirements": [
+    {
+      "id": "QUAL-001",
+      "category": "performance",
+      "description": "Interactive portal requests must respond quickly under normal load.",
+      "acceptance_criteria": ["95th percentile API latency is below 500 ms"]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "CON-001",
+      "category": "technical",
+      "description": "The first release must run in Docker on a single managed environment."
+    }
+  ],
+  "preferred_technology_targets": {
+    "frontend": ["React"],
+    "backend": ["Python", "FastAPI"],
+    "database": ["PostgreSQL"],
+    "queue": ["Redis"],
+    "object_storage": ["S3-compatible storage"],
+    "deployment": ["Docker"]
+  }
+}`;
+      setStatus("Sample manifest loaded.");
+    }
+
+    function downloadMarkdown() {
+      const blob = new Blob([compiledMarkdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "project-blueprint-traceable.md";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("compileButton").addEventListener("click", compileBlueprint);
+    document.getElementById("loadSampleButton").addEventListener("click", loadSampleManifest);
+    downloadButton.addEventListener("click", downloadMarkdown);
+  </script>
+</body>
+</html>
+"""
+
+
 DOCUMENTATION_HUB_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -1183,6 +1525,7 @@ DOCUMENTATION_HUB_HTML = r"""<!doctype html>
           <button class="item doc-open" data-doc="client-manifest-template" data-download="/dashboard/client-manifest-template"><strong>Client Manifest Template</strong><span>Download and send to a client or requesting service.</span></button>
           <button class="item doc-open" data-doc="project-foundry-core" data-download="/dashboard/project-foundry-core"><strong>Project Foundry Core</strong><span>AEOS project factory contracts, gates, and prompt rules.</span></button>
           <button class="item doc-open" data-doc="sample-project-blueprint" data-download="/dashboard/sample-project-blueprint"><strong>Sample Traceable Blueprint</strong><span>Five generated artifacts with AEIR source traceability.</span></button>
+          <a class="item" href="/dashboard/project-blueprint-compiler"><strong>Traceable Blueprint Compiler</strong><span>Compile AEPM JSON into sourced blueprint Markdown.</span></a>
           <button class="item doc-open" data-doc="operator-startup-guide" data-download="/dashboard/documentation/operator-startup-guide?download=true"><strong>Operator Startup Guide</strong><span><code>docs/enterprise/operator-startup-guide.md</code></span></button>
           <button class="item doc-open" data-doc="project-execution-walkthrough" data-download="/dashboard/documentation/project-execution-walkthrough?download=true"><strong>Project Execution Walkthrough</strong><span><code>docs/enterprise/project-execution-walkthrough.md</code></span></button>
           <button class="item doc-open" data-doc="working-method" data-download="/dashboard/documentation/working-method?download=true"><strong>Working Method</strong><span><code>docs/enterprise/working-method.md</code></span></button>
