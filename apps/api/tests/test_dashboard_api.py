@@ -705,7 +705,21 @@ def test_project_blueprint_compiler_page_exposes_manifest_compile_surface() -> N
     assert "manifestInput" in response.text
     assert "compileBlueprint" in response.text
     assert "/dashboard/project-blueprint/compile" in response.text
+    assert "/dashboard/sample-project-manifest" in response.text
+    assert "Sample manifest is unavailable." in response.text
     assert "Download Markdown" in response.text
+
+
+def test_sample_project_manifest_endpoint_returns_canonical_aepm_json() -> None:
+    client = TestClient(app)
+
+    response = client.get("/dashboard/sample-project-manifest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == sample_aepm_document()
+    assert payload["schema_version"] == "aepm-0.1"
+    assert payload["project_intent"]["name"] == "Service Request Portal"
 
 
 def test_project_blueprint_compiler_accepts_aepm_json_and_returns_traceable_markdown() -> None:
