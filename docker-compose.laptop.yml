@@ -1,0 +1,7 @@
+services:
+  worker:
+    # Reach loopback-only host services without exposing Ollama to the laptop's LAN.
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@127.0.0.1:5432/ai_enterprise
+      OLLAMA_BASE_URL: http://127.0.0.1:11434

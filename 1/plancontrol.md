@@ -70,7 +70,7 @@ Status date: 2026-08-04
 - [x] Lease timing is validated and heartbeat uncertainty fences execution output immediately.
 - [x] Repeated setup warnings are emitted only on blocker state changes.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
-- [ ] The configured model endpoint and required models pass preflight.
+- [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
 
 ## Phase 1 execution log
@@ -96,6 +96,10 @@ Status date: 2026-08-04
 - 2026-08-04: Upgraded the local database to `f2c6a9e1b407`; all blueprint rows have non-null
   ownership, migration verification covers 40 reversible revisions, and the complete live Chromium
   journey passes without console errors.
+- 2026-08-04: Confirmed the laptop already provides `gemma3:12b`, but Ollama is intentionally bound
+  to host loopback. Added and activated an opt-in laptop worker overlay using host networking only
+  for the hardened general worker. Model preflight now passes; no Docker socket or capability was
+  granted, and `docker_runtime_unavailable` is the sole remaining general-worker setup blocker.
 
 ## Active blockers observed
 
@@ -103,10 +107,8 @@ Status date: 2026-08-04
   the historical failures remain preserved as recovery evidence.
 - No approved restricted container execution provider is connected, so execution and review jobs
   remain capability-blocked before leasing.
-- The configured `ollama/gemma3:12b` endpoint is unavailable, so decomposition remains
-  capability-blocked before leasing.
-- The required ten consecutive end-to-end canary projects cannot begin until both capabilities are
-  connected. Phase 2 remains closed.
+- The required ten consecutive end-to-end canary projects cannot begin until the remaining executor
+  capability is connected. The model capability is now connected. Phase 2 remains closed.
 
 ---
 

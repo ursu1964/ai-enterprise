@@ -123,6 +123,18 @@ rtk docker compose --profile ollama exec ollama ollama pull gemma3:12b
 
 If you already run Ollama on the host, the API container uses `host.docker.internal:11434`.
 
+When the host Ollama service is intentionally bound only to `127.0.0.1`, activate the general
+worker with the laptop overlay:
+
+```bash
+rtk make laptop-compose-check
+rtk make laptop-worker-up
+```
+
+The overlay uses host networking only for the hardened general worker so it can reach loopback
+Ollama and the loopback-published database. It does not mount the Docker socket, add Linux
+capabilities, or change the API, specialized workers, or server deployment profile.
+
 ## 5. Prepare the Development Enterprise
 
 Bootstrap creates runtime directories, a local bare Git remote, development secrets, seeded

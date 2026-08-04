@@ -77,3 +77,14 @@ def test_prepare_owned_paths_refuses_symbolic_links(tmp_path: Path) -> None:
         prepare_owned_paths(
             [runtime_root], owner_uid=os.getuid(), owner_gid=os.getgid()
         )
+
+
+def test_laptop_model_overlay_does_not_grant_container_execution_access() -> None:
+    root = Path(__file__).resolve().parents[3]
+    overlay = (root / "docker-compose.laptop.yml").read_text(encoding="utf-8")
+
+    assert "network_mode: host" in overlay
+    assert "http://127.0.0.1:11434" in overlay
+    assert "127.0.0.1:5432" in overlay
+    assert "docker.sock" not in overlay
+    assert "cap_add" not in overlay
