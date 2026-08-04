@@ -47,7 +47,32 @@ async def test_unavailable_model_capabilities_are_removed_before_dispatch(
 
 
 @pytest.mark.asyncio
-async def test_unavailable_docker_blocks_execution_without_host_socket_fallback(
+async def test_unconfigured_restricted_executor_blocks_execution_without_docker_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docker_probe = MagicMock(side_effect=AssertionError("docker must not be probed"))
+    monkeypatch.setattr(readiness_module, "from_env", docker_probe)
+    candidates = frozenset(
+        {
+            JobType.ADVANCE_WORKFLOW,
+            JobType.EXECUTE_WORK_PACKAGE,
+            JobType.REVIEW_CANDIDATE_PATCH,
+        }
+    )
+
+    result = await assess_worker_readiness(Settings(_env_file=None), candidates)
+
+    assert result.permitted_job_types == {JobType.ADVANCE_WORKFLOW}
+    assert len(result.blockers) == 1
+    blocker = result.blockers[0]
+    assert blocker.code == "restricted_executor_unconfigured"
+    assert blocker.capability == "container_execution"
+    assert "restricted-local-docker" in blocker.next_action
+    docker_probe.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_approved_provider_still_blocks_unavailable_docker_without_host_socket_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def unavailable() -> object:
@@ -62,13 +87,111 @@ async def test_unavailable_docker_blocks_execution_without_host_socket_fallback(
         }
     )
 
-    result = await assess_worker_readiness(Settings(_env_file=None), candidates)
+    result = await assess_worker_readiness(
+        Settings(execution_container_provider="restricted-local-docker", _env_file=None),
+        candidates,
+    )
 
     assert result.permitted_job_types == {JobType.ADVANCE_WORKFLOW}
     assert len(result.blockers) == 1
     blocker = result.blockers[0]
     assert blocker.code == "docker_runtime_unavailable"
     assert "do not expose an unrestricted host Docker socket" in blocker.next_action
+
+
+@pytest.mark.asyncio
+async def test_approved_provider_requires_configured_immutable_image_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = MagicMock()
+    client.ping.return_value = None
+    monkeypatch.setattr(readiness_module, "from_env", MagicMock(return_value=client))
+    candidates = frozenset(
+        {
+            JobType.EXECUTE_WORK_PACKAGE,
+            JobType.REVIEW_CANDIDATE_PATCH,
+        }
+    )
+
+    result = await assess_worker_readiness(
+        Settings(execution_container_provider="restricted-local-docker", _env_file=None),
+        candidates,
+    )
+
+    assert result.permitted_job_types == frozenset()
+    assert {blocker.code for blocker in result.blockers} == {
+        "execute_work_package_image_id_unconfigured",
+        "review_candidate_patch_image_id_unconfigured",
+    }
+    client.images.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_approved_provider_requires_images_to_match_immutable_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "sha256:" + "a" * 64
+    review_id = "sha256:" + "b" * 64
+    client = MagicMock()
+    client.ping.return_value = None
+    client.images.get.side_effect = [
+        MagicMock(id=execution_id, attrs={"Id": execution_id}),
+        MagicMock(id="sha256:" + "c" * 64, attrs={"Id": "sha256:" + "c" * 64}),
+    ]
+    monkeypatch.setattr(readiness_module, "from_env", MagicMock(return_value=client))
+    candidates = frozenset(
+        {
+            JobType.EXECUTE_WORK_PACKAGE,
+            JobType.REVIEW_CANDIDATE_PATCH,
+        }
+    )
+
+    result = await assess_worker_readiness(
+        Settings(
+            execution_container_provider="restricted-local-docker",
+            execution_image_id=execution_id,
+            review_image_id=review_id,
+            _env_file=None,
+        ),
+        candidates,
+    )
+
+    assert result.permitted_job_types == {JobType.EXECUTE_WORK_PACKAGE}
+    assert [blocker.code for blocker in result.blockers] == ["review_image_id_mismatch"]
+
+
+@pytest.mark.asyncio
+async def test_approved_provider_permits_execution_when_images_match_immutable_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "sha256:" + "a" * 64
+    review_id = "sha256:" + "b" * 64
+    client = MagicMock()
+    client.ping.return_value = None
+    client.images.get.side_effect = [
+        MagicMock(id=execution_id, attrs={"Id": execution_id}),
+        MagicMock(id=review_id, attrs={"Id": review_id}),
+    ]
+    monkeypatch.setattr(readiness_module, "from_env", MagicMock(return_value=client))
+    candidates = frozenset(
+        {
+            JobType.EXECUTE_WORK_PACKAGE,
+            JobType.REVIEW_CANDIDATE_PATCH,
+        }
+    )
+
+    result = await assess_worker_readiness(
+        Settings(
+            execution_container_provider="restricted-local-docker",
+            execution_image_id=execution_id,
+            review_image_id=review_id,
+            _env_file=None,
+        ),
+        candidates,
+    )
+
+    assert result.permitted_job_types == candidates
+    assert result.blockers == ()
 
 
 @pytest.mark.asyncio

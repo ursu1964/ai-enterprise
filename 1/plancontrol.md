@@ -70,6 +70,7 @@ Status date: 2026-08-04
 - [x] Lease timing is validated and heartbeat uncertainty fences execution output immediately.
 - [x] Repeated setup warnings are emitted only on blocker state changes.
 - [x] Local execution and review agent images use pinned base/runtime inputs and pass local broker preflight.
+- [x] Execution/review leasing requires an explicitly approved restricted provider and exact immutable image IDs.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
 - [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
@@ -190,13 +191,23 @@ Status date: 2026-08-04
   successfully, the broker canary passed for execution and review, and the fast gate passed with
   886 tests. Activation remains blocked on connecting an approved restricted executor and then
   running ten consecutive zero-infrastructure-dead-letter canary projects.
+- 2026-08-04: Hardened worker execution preflight so container execution is fail-closed until
+  `EXECUTION_CONTAINER_PROVIDER=restricted-local-docker` is deliberately configured. An unconfigured
+  provider now blocks execution/review without probing Docker, the approved local provider still
+  blocks if Docker is unavailable, and both execution/review images must resolve to the exact
+  configured immutable sha256 image IDs before those job types can lease. Local examples document
+  the required settings as unconfigured by default. Focused readiness tests, the broker canary, and
+  the fast gate passed with 890 tests. Activation remains blocked until an approved restricted
+  executor is actually connected with verified pinned image IDs, followed by ten consecutive
+  zero-infrastructure-dead-letter canary projects.
 
 ## Active blockers observed
 
 - Runtime path ownership and result-contract protections are implemented and locally verified, but
   the historical failures remain preserved as recovery evidence.
-- No approved restricted container execution provider is connected, so production execution and
-  review jobs remain capability-blocked before leasing.
+- No approved restricted container execution provider is connected. Execution/review leasing now
+  stays fail-closed unless the approved provider is explicitly enabled and exact immutable image IDs
+  match the locally resolved images.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.

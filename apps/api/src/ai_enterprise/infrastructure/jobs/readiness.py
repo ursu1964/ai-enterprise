@@ -163,6 +163,24 @@ async def assess_worker_readiness(
 def _docker_blockers(
     settings: Settings, job_types: frozenset[JobType]
 ) -> tuple[SetupBlocker, ...]:
+    provider = settings.execution_container_provider.strip().lower()
+    if provider != "restricted-local-docker":
+        return (
+            SetupBlocker(
+                code="restricted_executor_unconfigured",
+                capability="container_execution",
+                job_types=job_types,
+                detail=(
+                    "No approved restricted container execution provider is configured for "
+                    "execution or review jobs."
+                ),
+                next_action=(
+                    "Set EXECUTION_CONTAINER_PROVIDER=restricted-local-docker only after the "
+                    "restricted broker engine, pinned image IDs, and local canaries are verified."
+                ),
+            ),
+        )
+
     try:
         client = from_env()
         client.ping()
@@ -181,29 +199,83 @@ def _docker_blockers(
         )
 
     blockers: list[SetupBlocker] = []
-    for job_type, image, code in (
+    for job_type, image, expected_image_id, unavailable_code, identity_code in (
         (
             JobType.EXECUTE_WORK_PACKAGE,
             settings.execution_image,
+            settings.execution_image_id,
             "execution_image_unavailable",
+            "execution_image_id_mismatch",
         ),
-        (JobType.REVIEW_CANDIDATE_PATCH, settings.review_image, "review_image_unavailable"),
+        (
+            JobType.REVIEW_CANDIDATE_PATCH,
+            settings.review_image,
+            settings.review_image_id,
+            "review_image_unavailable",
+            "review_image_id_mismatch",
+        ),
     ):
         if job_type not in job_types:
             continue
+        if expected_image_id is None or not _is_sha256_image_id(expected_image_id):
+            blockers.append(
+                SetupBlocker(
+                    code=f"{job_type.value}_image_id_unconfigured",
+                    capability="container_image_identity",
+                    job_types=frozenset({job_type}),
+                    detail=(
+                        f"Required governed runtime image {image!r} does not have a configured "
+                        "immutable sha256 image ID."
+                    ),
+                    next_action=(
+                        "Build the pinned image, record its exact Docker image ID, and configure "
+                        "the matching *_IMAGE_ID value before dispatch."
+                    ),
+                )
+            )
+            continue
         try:
-            client.images.get(image)
+            resolved = client.images.get(image)
         except (DockerException, ImageNotFound):
             blockers.append(
                 SetupBlocker(
-                    code=code,
+                    code=unavailable_code,
                     capability="container_image",
                     job_types=frozenset({job_type}),
                     detail=f"Required governed runtime image {image!r} is unavailable.",
                     next_action="Build and verify the pinned runtime image before dispatch.",
                 )
             )
+            continue
+        resolved_attrs = getattr(resolved, "attrs", {})
+        actual_image_id = getattr(resolved, "id", None) or resolved_attrs.get("Id")
+        if actual_image_id != expected_image_id:
+            blockers.append(
+                SetupBlocker(
+                    code=identity_code,
+                    capability="container_image_identity",
+                    job_types=frozenset({job_type}),
+                    detail=(
+                        f"Required governed runtime image {image!r} resolved to "
+                        f"{actual_image_id!r}, not the approved immutable image ID."
+                    ),
+                    next_action=(
+                        "Rebuild or retag the pinned runtime image and update the approved image "
+                        "ID only after verification."
+                    ),
+                )
+            )
     return tuple(blockers)
+
+
+def _is_sha256_image_id(value: str) -> bool:
+    if not value.startswith("sha256:") or len(value) != 71:
+        return False
+    try:
+        int(value.removeprefix("sha256:"), 16)
+    except ValueError:
+        return False
+    return True
 
 
 def _model_blocker(*, code: str, job_type: JobType, model: str) -> SetupBlocker:

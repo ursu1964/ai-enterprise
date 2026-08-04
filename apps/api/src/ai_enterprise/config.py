@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     repository_allowed_root: Path = Field(default=Path("/home/user/projects"))
 
     execution_image: str = "ai-enterprise-execution-agent:local"
+    execution_container_provider: str = "unconfigured"
+    execution_image_id: str | None = None
     execution_snapshots_root: Path = Field(default=Path("./runtime-data/snapshots"))
     execution_artifacts_root: Path = Field(default=Path("./runtime-data/artifacts"))
     execution_temp_root: Path = Field(default=Path("./runtime-data/tmp"))
@@ -75,6 +77,7 @@ class Settings(BaseSettings):
     execution_implementation_timeout_seconds: int = 600
 
     review_image: str = "ai-enterprise-review-agent:local"
+    review_image_id: str | None = None
     review_snapshots_root: Path = Field(default=Path("./runtime-data/review-snapshots"))
     review_artifacts_root: Path = Field(default=Path("./runtime-data/review-artifacts"))
     review_temp_root: Path = Field(default=Path("./runtime-data/review-tmp"))
