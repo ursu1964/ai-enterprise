@@ -164,9 +164,15 @@ Status date: 2026-08-04
   time, state, and a canonical manifest hash into a fsynced SQLite store. Restart reconciliation now
   counts retained versus completed handoffs, broker readiness exposes pending retained evidence, and
   the local canary records evidence, restarts the store, proves pending handoff recovery, removes the
-  retained volumes, and marks handoff complete. Activation remains blocked until the broker run API
-  integration records this manifest before acknowledging terminal runs and a crash-replay worker uses
-  the pending handoff list against real engine volumes.
+  retained volumes, and marks handoff complete. The next required step is integrating this store into
+  the run acknowledgement path and crash-replay cleanup/handoff against real engine volumes.
+- 2026-08-04: Added the inactive durable broker runner integration. The runner resolves the
+  owner-bound snapshot, executes the restricted engine, records the terminal evidence manifest, and
+  only then returns an acknowledgement receipt. If evidence persistence fails, the run fails closed
+  with no success receipt; if engine execution fails before terminal capture, no evidence record is
+  created. The local Docker canary now uses this runner rather than manually composing engine and
+  evidence steps. Activation remains blocked until crash-replay cleanup/handoff uses the retained
+  evidence list against real engine volumes and proves recovery after process or host failure.
 
 ## Active blockers observed
 
@@ -177,9 +183,9 @@ Status date: 2026-08-04
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
-  Terminal-evidence-aware volume retention and durable retained-evidence manifest persistence are
-  implemented inside the inactive broker path, but activation still requires broker run API
-  integration plus crash-replay cleanup/handoff against real retained engine volumes.
+  Terminal-evidence-aware volume retention, durable retained-evidence manifest persistence, and
+  internal runner acknowledgement ordering are implemented inside the inactive broker path, but
+  activation still requires crash-replay cleanup/handoff against real retained engine volumes.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

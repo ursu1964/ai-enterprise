@@ -17,6 +17,7 @@ from ai_enterprise.infrastructure.execution_broker.policy import (
     BrokerPolicy,
     BrokerRunRequest,
 )
+from ai_enterprise.infrastructure.execution_broker.runner import DurableBrokerRunner
 from ai_enterprise.infrastructure.execution_broker.store import SnapshotStore
 
 EXECUTION_IMAGE = "ai-enterprise-execution-agent:local"
@@ -79,7 +80,6 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
         store = SnapshotStore(temporary_root / "store")
         evidence_store = TerminalEvidenceStore(temporary_root / "terminal-evidence")
         stored = store.register(_snapshot_archive(), owner_worker_id="canary")
-        snapshot = store.resolve(stored.snapshot_ref, owner_worker_id="canary")
         runtime_input = _runtime_input(kind, uid)
         encoded = json.dumps(
             runtime_input, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -98,16 +98,25 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
                 "correlation_id": uuid.uuid4(),
             }
         )
-        result = DockerEngineAdapter(client, policy).run(
-            request, snapshot=snapshot, runtime_input=runtime_input
+        receipt = DurableBrokerRunner(
+            snapshot_store=store,
+            engine=DockerEngineAdapter(client, policy),
+            evidence_store=evidence_store,
+        ).run(
+            request,
+            owner_worker_id="canary",
+            runtime_input=runtime_input,
         )
+        result = receipt.result
         if result.exit_code != 0:
             raise RuntimeError(f"{kind} canary exited {result.exit_code}: {result.runtime_log}")
         _result(result.output_archive)
-        evidence = evidence_store.record(request, result)
         restarted_evidence_store = TerminalEvidenceStore(temporary_root / "terminal-evidence")
         pending_handoff = restarted_evidence_store.pending_handoff()
-        if len(pending_handoff) != 1 or pending_handoff[0].evidence_ref != evidence.evidence_ref:
+        if (
+            len(pending_handoff) != 1
+            or pending_handoff[0].evidence_ref != receipt.evidence.evidence_ref
+        ):
             raise RuntimeError("broker canary evidence handoff did not survive restart")
         retained = result.retained_evidence_volumes
         if set(retained) != {"workspace", "output"}:
@@ -128,7 +137,7 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
             raise RuntimeError("broker canary volume retention did not match terminal evidence")
         for volume in retained_volumes:
             volume.remove(force=True)
-        restarted_evidence_store.mark_handoff_completed(evidence.evidence_ref)
+        restarted_evidence_store.mark_handoff_completed(receipt.evidence.evidence_ref)
         if client.volumes.list(filters={"label": label}):
             raise RuntimeError("broker canary cleanup left a volume behind")
         return {
