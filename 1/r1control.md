@@ -19,7 +19,7 @@ Status date: 2026-08-04
 | 1 — AEPM v0.1 | **COMPLETE** | Narrow JSON manifest contract, example, documentation, and tests |
 | 2 — Canonical project model / AEIR | **COMPLETE** | Deterministic AEPM-to-AEIR compiler and integrity contract |
 | 3 — Deterministic validation engine | **COMPLETE** | Stable classified report and hash contract |
-| 4 — AI interpretation layer | **BLOCKED** | Step 3 complete |
+| 4 — AI interpretation layer | **COMPLETE** | Governed structured proposals and review boundary |
 | 5 — Knowledge storage | **BLOCKED** | Step 4 complete |
 | 6 — Question engine | **BLOCKED** | Step 5 complete |
 | 7 — Five artifact compilers | **BLOCKED** | Step 6 complete |
@@ -89,3 +89,22 @@ Status date: 2026-08-04
 - 2026-08-04: Step 3 focused tests passed, followed by Ruff, MyPy over 415 source files,
   tooling invariants, all 834 tests, and a refreshed code graph. Step 3 is complete; governed AI
   interpretation is now the only authorized next step.
+
+## Step 4 acceptance
+
+- [x] AI use is limited to extraction, ambiguity analysis, question proposals, classification,
+  probable contradiction detection, and candidate requirement drafting.
+- [x] Model output is validated against a strict structured schema before use.
+- [x] Every interpretation retains source references, rationale, confidence, and authority status.
+- [x] The model may emit proposed, inferred, or unverified information only.
+- [x] Approval and rejection require a separate human review decision with reviewer evidence.
+- [x] Interpretation output remains separate from canonical AEIR objects.
+- [x] Identical normalized output produces an identical tamper-evident batch.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 4 completion evidence
+
+- 2026-08-04: Step 4 focused tests passed alongside the existing governed model runtime tests,
+  followed by Ruff, MyPy over 416 source files, tooling invariants, all 841 tests, and a refreshed
+  code graph. Step 4 is complete; knowledge storage is now the only authorized next step.
