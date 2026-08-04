@@ -22,7 +22,7 @@ Status date: 2026-08-04
 | 4 — AI interpretation layer | **COMPLETE** | Governed structured proposals and review boundary |
 | 5 — Knowledge storage | **COMPLETE** | Versioned PostgreSQL AEIR and immutable event storage |
 | 6 — Question engine | **COMPLETE** | Hash-bound clarification and correction workflow |
-| 7 — Five artifact compilers | **BLOCKED** | Step 6 complete |
+| 7 — Five artifact compilers | **COMPLETE** | Five deterministic AEIR-bound artifacts |
 | 8 — Traceability | **BLOCKED** | Step 7 complete |
 
 ## Step 1 acceptance
@@ -149,3 +149,22 @@ Status date: 2026-08-04
   passed, followed by Ruff, MyPy over 419 source files, tooling invariants, all 851 tests, and a
   refreshed code graph. Step 6 is complete; the five artifact compilers are now the only authorized
   next step.
+
+## Step 7 acceptance
+
+- [x] The bundle contains exactly the five outputs authorized by `r1.txt`.
+- [x] Compilers consume only validated AEIR input and do not call an LLM or original client prose.
+- [x] Executive, requirements, domain/data, architecture, and delivery concerns are projected into
+  explicit structured sections.
+- [x] Empty AEIR categories are reported as absent rather than populated with invented content.
+- [x] Every artifact binds the exact AEIR model hash and validates content and envelope hashes.
+- [x] The bundle validates exact artifact types, canonical order, source consistency, and identity.
+- [x] Markdown rendering is deterministic and derived only from the structured artifact.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 7 completion evidence
+
+- 2026-08-04: Step 7 focused compiler, AEIR, and clarification tests passed, followed by Ruff,
+  MyPy over 420 source files, tooling invariants, all 856 tests, and a refreshed code graph. Step 7
+  is complete; formal section-level traceability is now the only authorized next step.
