@@ -20,6 +20,7 @@ from ai_enterprise.application.specification_platform_service import Specificati
 from ai_enterprise.config import get_settings
 from ai_enterprise.domain.aeir import compile_aepm
 from ai_enterprise.domain.aepm import AepmManifest
+from ai_enterprise.domain.aepm_validation import AepmValidationEngine, AepmValidationReport
 from ai_enterprise.domain.artifact_compilers import ArtifactType, compile_artifact_bundle
 from ai_enterprise.domain.traceability import (
     compile_traceability_manifest,
@@ -156,10 +157,12 @@ async def sample_project_blueprint() -> PlainTextResponse:
 @router.get("/dashboard/sample-project-blueprint/proof")
 async def sample_project_blueprint_proof() -> dict[str, object]:
     manifest = _sample_project_manifest()
+    validation = _validate_project_manifest(manifest.model_dump(mode="json"))
     proof = _project_blueprint_payload(
         manifest,
         title="Sample Project Blueprint with Traceability",
         source="examples/sample-project/aepm-0.1.json",
+        validation=validation,
     )["proof"]
     assert isinstance(proof, dict)
     return {**proof, "schema_version": "sample-project-blueprint-proof-0.1"}
@@ -167,6 +170,15 @@ async def sample_project_blueprint_proof() -> dict[str, object]:
 
 @router.post("/dashboard/project-blueprint/compile")
 async def compile_project_blueprint(document: dict[str, Any]) -> dict[str, object]:
+    validation = AepmValidationEngine().validate(document)
+    if not validation.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "AEPM validation failed; blueprint compilation was not started.",
+                "validation_report": validation.model_dump(mode="json"),
+            },
+        )
     try:
         manifest = AepmManifest.model_validate(document)
     except ValidationError as exc:
@@ -175,6 +187,7 @@ async def compile_project_blueprint(document: dict[str, Any]) -> dict[str, objec
         manifest,
         title="Project Blueprint with Traceability",
         source="submitted_aepm_manifest",
+        validation=validation,
     )
 
 
@@ -218,6 +231,7 @@ async def dashboard_documentation_document(
 
 def _sample_project_blueprint():
     manifest = _sample_project_manifest()
+    _validate_project_manifest(manifest.model_dump(mode="json"))
     model = compile_aepm(manifest)
     bundle = compile_artifact_bundle(model)
     traceability = compile_traceability_manifest(model, bundle)
@@ -232,7 +246,7 @@ def _sample_project_manifest() -> AepmManifest:
 
 
 def _project_blueprint_payload(
-    manifest: AepmManifest, *, title: str, source: str
+    manifest: AepmManifest, *, title: str, source: str, validation: AepmValidationReport
 ) -> dict[str, object]:
     model = compile_aepm(manifest)
     bundle = compile_artifact_bundle(model)
@@ -248,6 +262,7 @@ def _project_blueprint_payload(
         "source": source,
         "source_model_sha256": model.model_sha256,
         "source_manifest_sha256": model.source_manifest_sha256,
+        "validation_report_sha256": validation.report_sha256,
         "artifact_bundle_sha256": bundle.bundle_sha256,
         "traceability_manifest_sha256": traceability.manifest_sha256,
         "artifact_count": len(bundle.artifacts),
@@ -255,7 +270,12 @@ def _project_blueprint_payload(
         "entry_trace_count": len(traceability.entry_traces),
         "artifact_types": [artifact.artifact_type.value for artifact in bundle.artifacts],
     }
-    return {"schema_version": "project-blueprint-compiler-result-0.1", "proof": proof, "markdown": markdown}
+    return {
+        "schema_version": "project-blueprint-compiler-result-0.1",
+        "validation_report": validation.model_dump(mode="json"),
+        "proof": proof,
+        "markdown": markdown,
+    }
 
 
 def _sample_project_blueprint_markdown() -> str:
@@ -266,6 +286,19 @@ def _sample_project_blueprint_markdown() -> str:
         bundle=bundle,
         traceability=traceability,
     )
+
+
+def _validate_project_manifest(document: dict[str, Any]) -> AepmValidationReport:
+    validation = AepmValidationEngine().validate(document)
+    if not validation.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "AEPM validation failed; blueprint compilation was not started.",
+                "validation_report": validation.model_dump(mode="json"),
+            },
+        )
+    return validation
 
 
 def _project_blueprint_markdown(
@@ -1284,7 +1317,12 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
       });
       const payload = await response.json();
       if (!response.ok) {
-        setStatus(`Compilation failed: ${JSON.stringify(payload.detail || payload)}`, true);
+        const report = payload.detail?.validation_report;
+        const findings = report?.findings || [];
+        const message = findings.length
+          ? findings.map((item) => `${item.code} ${item.path}: ${item.message}`).join(" | ")
+          : JSON.stringify(payload.detail || payload);
+        setStatus(`Compilation failed: ${message}`, true);
         return;
       }
       compiledMarkdown = payload.markdown || "";

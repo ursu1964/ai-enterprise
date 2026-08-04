@@ -683,6 +683,7 @@ def test_sample_project_blueprint_proof_exposes_hashes_and_trace_counts() -> Non
     assert payload["entry_trace_count"] == 35
     assert len(payload["source_model_sha256"]) == 64
     assert len(payload["source_manifest_sha256"]) == 64
+    assert len(payload["validation_report_sha256"]) == 64
     assert len(payload["artifact_bundle_sha256"]) == 64
     assert len(payload["traceability_manifest_sha256"]) == 64
     assert payload["artifact_types"] == [
@@ -707,6 +708,8 @@ def test_project_blueprint_compiler_page_exposes_manifest_compile_surface() -> N
     assert "/dashboard/project-blueprint/compile" in response.text
     assert "/dashboard/sample-project-manifest" in response.text
     assert "Sample manifest is unavailable." in response.text
+    assert "validation_report" in response.text
+    assert "findings.map" in response.text
     assert "Download Markdown" in response.text
 
 
@@ -735,6 +738,11 @@ def test_project_blueprint_compiler_accepts_aepm_json_and_returns_traceable_mark
     assert payload["schema_version"] == "project-blueprint-compiler-result-0.1"
     assert payload["proof"]["schema_version"] == "project-blueprint-proof-0.1"
     assert payload["proof"]["source"] == "submitted_aepm_manifest"
+    assert payload["validation_report"]["valid"] is True
+    assert (
+        payload["proof"]["validation_report_sha256"]
+        == payload["validation_report"]["report_sha256"]
+    )
     assert payload["proof"]["artifact_count"] == 5
     assert payload["proof"]["section_trace_count"] == 25
     assert payload["proof"]["entry_trace_count"] == 35
@@ -753,7 +761,27 @@ def test_project_blueprint_compiler_rejects_invalid_aepm_json() -> None:
     )
 
     assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]["message"] == (
+        "AEPM validation failed; blueprint compilation was not started."
+    )
+    assert payload["detail"]["validation_report"]["valid"] is False
     assert "project_intent" in response.text
+
+
+def test_project_blueprint_compiler_rejects_semantically_invalid_aepm() -> None:
+    client = TestClient(app)
+    document = sample_aepm_document()
+    document["business_outcomes"][0]["indicators"] = []  # type: ignore[index]
+
+    response = client.post("/dashboard/project-blueprint/compile", json=document)
+
+    assert response.status_code == 422
+    payload = response.json()
+    report = payload["detail"]["validation_report"]
+    assert report["valid"] is False
+    assert "AEPM-VAL-002" in {item["code"] for item in report["findings"]}
+    assert "markdown" not in payload
 
 
 @pytest.mark.asyncio
