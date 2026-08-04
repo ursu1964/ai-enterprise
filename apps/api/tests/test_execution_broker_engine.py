@@ -95,6 +95,10 @@ def test_engine_constructs_exact_hardened_container_and_cleans_up(tmp_path: Path
     )
 
     assert result.exit_code == 0
+    assert result.retained_evidence_volumes == {
+        "workspace": volumes[0].name,
+        "output": volumes[2].name,
+    }
     materializer_create = client.containers.create.call_args_list[0].kwargs
     create = client.containers.create.call_args_list[1].kwargs
     assert materializer_create["user"] == "0:0"
@@ -142,9 +146,60 @@ def test_engine_constructs_exact_hardened_container_and_cleans_up(tmp_path: Path
         "cap_add",
     ):
         assert forbidden not in create
-    container.remove.assert_called_once_with(force=True, v=True)
+    container.remove.assert_called_once_with(force=True, v=False)
     materializer.remove.assert_called_once_with(force=True, v=False)
-    assert all(volume.remove.call_count == 1 for volume in volumes)
+    assert volumes[0].remove.call_count == 0
+    assert volumes[1].remove.call_count == 1
+    assert volumes[2].remove.call_count == 0
+    assert client.volumes.get.call_args_list == [
+        ((volumes[2].name,),),
+        ((volumes[0].name,),),
+    ]
+
+
+def test_engine_success_keeps_terminal_evidence_even_for_failed_workload(
+    tmp_path: Path,
+) -> None:
+    client, _materializer, container, volumes = configured_client()
+    container.wait.return_value = {"StatusCode": 23}
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    request_value = request()
+
+    result = adapter(client).run(
+        request_value,
+        snapshot=snapshot_handle(request_value, snapshot),
+        runtime_input={},
+    )
+
+    assert result.exit_code == 23
+    assert result.retained_evidence_volumes == {
+        "workspace": volumes[0].name,
+        "output": volumes[2].name,
+    }
+    container.remove.assert_called_once_with(force=True, v=False)
+    assert volumes[0].remove.call_count == 0
+    assert volumes[1].remove.call_count == 1
+    assert volumes[2].remove.call_count == 0
+
+
+def test_engine_missing_retained_evidence_is_terminal_cleanup_failure(
+    tmp_path: Path,
+) -> None:
+    client, _materializer, _container, _volumes = configured_client()
+    client.volumes.get.side_effect = APIError("lost evidence")
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    request_value = request()
+
+    with pytest.raises(BrokerEngineError) as raised:
+        adapter(client).run(
+            request_value,
+            snapshot=snapshot_handle(request_value, snapshot),
+            runtime_input={},
+        )
+
+    assert raised.value.code == "engine_cleanup_failed"
 
 
 def test_engine_rejects_post_create_image_mismatch_before_start(tmp_path: Path) -> None:

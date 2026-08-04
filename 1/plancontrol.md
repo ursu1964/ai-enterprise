@@ -151,6 +151,13 @@ Status date: 2026-08-04
   governed input, can write private workspace/output volumes, leave the immutable source unchanged,
   produce a valid result contract, and leave zero labeled containers or volumes. Activation remains
   blocked until captured results survive broker crashes and cleanup through a durable handoff.
+- 2026-08-04: Added terminal-evidence-aware broker volume retention. Once a workload reaches the
+  terminal evidence capture point, the broker now returns the retained workspace/output volume names,
+  preserves those volumes through container cleanup, verifies they still exist, and removes only
+  transient input/setup material. Setup failures and timeouts still clean all volumes. The local
+  canary now proves retained terminal evidence before explicitly removing it after handoff. Activation
+  remains blocked until the broker API persists this retained-evidence manifest durably and recovery
+  can replay cleanup/handoff after process or host failure.
 
 ## Active blockers observed
 
@@ -160,8 +167,10 @@ Status date: 2026-08-04
   remain capability-blocked before leasing.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
-  private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries,
-  but terminal-evidence-aware volume retention remains required before activation.
+  private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
+  Terminal-evidence-aware volume retention is implemented inside the inactive engine path, but
+  activation still requires durable broker API persistence and recovery replay for the retained
+  evidence manifest.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

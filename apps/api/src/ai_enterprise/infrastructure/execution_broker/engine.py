@@ -40,6 +40,7 @@ class BrokerEngineResult:
     output_archive: bytes
     workspace_archive: bytes
     runtime_log: str
+    retained_evidence_volumes: dict[str, str]
 
 
 class DockerEngineAdapter:
@@ -96,6 +97,8 @@ class DockerEngineAdapter:
         materializer: Any | None = None
         container: Any | None = None
         cleanup_failed = False
+        terminal_evidence_captured = False
+        retained_evidence_volumes: dict[str, str] = {}
         try:
             for purpose in ("workspace", "input", "output"):
                 volumes.append(
@@ -106,6 +109,11 @@ class DockerEngineAdapter:
                             "ai.enterprise.workload-id": run_label,
                             "ai.enterprise.run-nonce": run_nonce,
                             "ai.enterprise.purpose": purpose,
+                            "ai.enterprise.retention": (
+                                "terminal-evidence-candidate"
+                                if purpose in {"workspace", "output"}
+                                else "transient"
+                            ),
                         },
                     )
                 )
@@ -219,6 +227,11 @@ class DockerEngineAdapter:
             output_archive = _read_archive(container.get_archive("/runtime-output")[0])
             workspace_archive = _read_archive(container.get_archive("/workspace")[0])
             runtime_log = _read_log(container.logs(stdout=True, stderr=True, timestamps=True))
+            terminal_evidence_captured = True
+            retained_evidence_volumes = {
+                "workspace": workspace_volume.name,
+                "output": output_volume.name,
+            }
             return BrokerEngineResult(
                 runtime_instance_id=str(container.id),
                 image_id=image.id,
@@ -226,6 +239,7 @@ class DockerEngineAdapter:
                 output_archive=output_archive,
                 workspace_archive=workspace_archive,
                 runtime_log=runtime_log,
+                retained_evidence_volumes=retained_evidence_volumes,
             )
         except ImageNotFound as exc:
             raise BrokerEngineError(
@@ -241,10 +255,16 @@ class DockerEngineAdapter:
                     cleanup_failed = True
             if container is not None:
                 try:
-                    container.remove(force=True, v=True)
+                    container.remove(force=True, v=not terminal_evidence_captured)
                 except APIError:
                     cleanup_failed = True
             for volume in reversed(volumes):
+                if terminal_evidence_captured and volume.name in retained_evidence_volumes.values():
+                    try:
+                        self._client.volumes.get(volume.name)
+                    except APIError:
+                        cleanup_failed = True
+                    continue
                 try:
                     volume.remove(force=True)
                 except APIError:

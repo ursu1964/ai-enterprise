@@ -101,14 +101,27 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
         if result.exit_code != 0:
             raise RuntimeError(f"{kind} canary exited {result.exit_code}: {result.runtime_log}")
         _result(result.output_archive)
+        retained = result.retained_evidence_volumes
+        if set(retained) != {"workspace", "output"}:
+            raise RuntimeError("broker canary did not retain terminal evidence volumes")
+        retained_volumes = [
+            client.volumes.get(retained["workspace"]),
+            client.volumes.get(retained["output"]),
+        ]
         resolved = store.resolve(stored.snapshot_ref, owner_worker_id="canary")
         if (resolved.root / "seed.txt").read_bytes() != b"original\n":
             raise RuntimeError("immutable snapshot changed during canary")
         label = f"ai.enterprise.workload-id={workload_id}"
         if client.containers.list(all=True, filters={"label": label}):
             raise RuntimeError("broker canary left a container behind")
+        visible_volumes = client.volumes.list(filters={"label": label})
+        visible_names = {volume.name for volume in visible_volumes}
+        if visible_names != set(retained.values()):
+            raise RuntimeError("broker canary volume retention did not match terminal evidence")
+        for volume in retained_volumes:
+            volume.remove(force=True)
         if client.volumes.list(filters={"label": label}):
-            raise RuntimeError("broker canary left a volume behind")
+            raise RuntimeError("broker canary cleanup left a volume behind")
         return {
             "kind": kind,
             "runtime_uid": uid,
@@ -116,7 +129,8 @@ def _run_kind(client: Any, policy: BrokerPolicy, kind: str, uid: int) -> dict[st
             "workspace_writable": True,
             "output_writable": True,
             "snapshot_unchanged": True,
-            "cleanup_proven": True,
+            "terminal_evidence_retained": True,
+            "cleanup_proven_after_handoff": True,
             "tree_sha256": stored.tree_sha256,
         }
 
