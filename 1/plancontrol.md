@@ -103,6 +103,13 @@ Status date: 2026-08-04
 - 2026-08-04: Live activation exposed successful Ollama preflight traffic on every two-second poll.
   Added a bounded 30-second readiness cache with an injected monotonic clock, preserving fail-closed
   leasing while reducing idle provider traffic by approximately 93%.
+- 2026-08-04: Three independent broker audits rejected a generic Docker API proxy because
+  container-create authority still permits arbitrary host mounts and privilege escalation. Added
+  the first narrow-broker foundation: a closed run schema, immutable image-ID policy, fixed resource
+  profiles, kind/image binding, and bounded archive extraction that rejects traversal, links,
+  devices, special entries, oversized input, and pre-existing destinations. Direct Docker leasing
+  remains blocked until the broker service, archive client adapter, authentication, cleanup audit,
+  and positive/negative live canaries pass.
 
 ## Active blockers observed
 
@@ -110,6 +117,8 @@ Status date: 2026-08-04
   the historical failures remain preserved as recovery evidence.
 - No approved restricted container execution provider is connected, so execution and review jobs
   remain capability-blocked before leasing.
+- Current execution/review Dockerfiles are adequate for a local canary but are not production-
+  reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor
   capability is connected. The model capability is now connected. Phase 2 remains closed.
 
