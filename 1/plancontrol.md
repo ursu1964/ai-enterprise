@@ -158,6 +158,15 @@ Status date: 2026-08-04
   canary now proves retained terminal evidence before explicitly removing it after handoff. Activation
   remains blocked until the broker API persists this retained-evidence manifest durably and recovery
   can replay cleanup/handoff after process or host failure.
+- 2026-08-04: Added the durable retained-evidence manifest store below the inactive broker service.
+  Terminal evidence records bind workload ID, correlation ID, kind, runtime identity, image identity,
+  exit code, retained workspace/output volume names, result archive hashes, runtime log hash, capture
+  time, state, and a canonical manifest hash into a fsynced SQLite store. Restart reconciliation now
+  counts retained versus completed handoffs, broker readiness exposes pending retained evidence, and
+  the local canary records evidence, restarts the store, proves pending handoff recovery, removes the
+  retained volumes, and marks handoff complete. Activation remains blocked until the broker run API
+  integration records this manifest before acknowledging terminal runs and a crash-replay worker uses
+  the pending handoff list against real engine volumes.
 
 ## Active blockers observed
 
@@ -168,9 +177,9 @@ Status date: 2026-08-04
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
-  Terminal-evidence-aware volume retention is implemented inside the inactive engine path, but
-  activation still requires durable broker API persistence and recovery replay for the retained
-  evidence manifest.
+  Terminal-evidence-aware volume retention and durable retained-evidence manifest persistence are
+  implemented inside the inactive broker path, but activation still requires broker run API
+  integration plus crash-replay cleanup/handoff against real retained engine volumes.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

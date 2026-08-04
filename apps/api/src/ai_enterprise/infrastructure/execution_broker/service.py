@@ -12,6 +12,7 @@ from ai_enterprise.infrastructure.execution_broker.auth import (
     BrokerAuthenticator,
     SqliteNonceStore,
 )
+from ai_enterprise.infrastructure.execution_broker.evidence import TerminalEvidenceStore
 from ai_enterprise.infrastructure.execution_broker.policy import (
     MAXIMUM_ARCHIVE_BYTES,
     BrokerPolicyError,
@@ -32,6 +33,7 @@ def create_broker_app(
     )
     authenticator = BrokerAuthenticator(hmac_secret, clock=clock, nonce_store=nonce_store)
     store = SnapshotStore(snapshot_root)
+    evidence_store = TerminalEvidenceStore(snapshot_root.parent / "terminal-evidence")
 
     @app.get("/health/live")
     async def live() -> dict[str, str]:
@@ -56,6 +58,11 @@ def create_broker_app(
                     store.reconciliation.referenced_objects_verified
                 ),
                 "blocking_references": store.reconciliation.blocking_references,
+            },
+            "terminal_evidence": {
+                "retained_records": evidence_store.reconciliation.retained_records,
+                "completed_records": evidence_store.reconciliation.completed_records,
+                "pending_handoff": len(evidence_store.pending_handoff()),
             },
         }
 
