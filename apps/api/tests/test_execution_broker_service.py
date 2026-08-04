@@ -57,6 +57,8 @@ def test_health_is_live_but_truthfully_not_execution_ready(tmp_path: Path) -> No
     response = broker.get("/health/ready")
     assert response.status_code == 503
     assert response.json()["code"] == "engine_adapter_unconfigured"
+    assert response.json()["snapshot_store"] == "ready"
+    assert response.json()["snapshot_reconciliation"]["blocking_references"] == 0
 
 
 def test_authenticated_snapshot_is_immutable_and_privately_stored(

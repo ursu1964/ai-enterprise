@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import fcntl
 import hashlib
 import json
 import os
 import shutil
 import sqlite3
 import uuid
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,21 +31,62 @@ class StoredSnapshot:
     created_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class SnapshotHandle:
+    snapshot_ref: uuid.UUID
+    tree_sha256: str
+    root: Path
+
+
+class SnapshotStoreCorruptionError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class ReconciliationReport:
+    stale_staging_quarantined: int
+    orphan_objects_quarantined: int
+    referenced_objects_verified: int
+    blocking_references: int
+
+
 class SnapshotStore:
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self, root: Path, *, checkpoint: Callable[[str], None] | None = None
+    ) -> None:
         if root.is_symlink():
             raise ValueError("broker snapshot root cannot be a symbolic link")
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         root.chmod(0o700)
         self._root = root.resolve()
+        self._checkpoint = checkpoint or (lambda _name: None)
         self._objects = self._root / "objects"
         self._staging = self._root / ".staging"
-        for directory in (self._objects, self._staging):
+        self._quarantine = self._root / ".quarantine"
+        for directory in (self._objects, self._staging, self._quarantine):
             if directory.is_symlink():
                 raise ValueError("broker managed directories cannot be symbolic links")
             directory.mkdir(mode=0o700, exist_ok=True)
             directory.chmod(0o700)
         self._database = self._root / "registrations.sqlite3"
+        self._lock_path = self._root / ".store.lock"
+        database_existed = self._database.exists()
+        if not database_existed and (
+            (self._root / "reconciliation.json").exists()
+            or any(self._objects.iterdir())
+            or any(self._staging.iterdir())
+            or any(self._quarantine.iterdir())
+        ):
+            raise SnapshotStoreCorruptionError(
+                "snapshot registration database is missing from an initialized store"
+            )
+        lock_descriptor = os.open(
+            self._lock_path,
+            os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        os.close(lock_descriptor)
+        self._lock_path.chmod(0o600)
         with self._connect() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS snapshot_registrations ("
@@ -52,16 +96,24 @@ class SnapshotStore:
                 "owner_worker_id TEXT NOT NULL, created_at TEXT NOT NULL)"
             )
         self._database.chmod(0o600)
+        with self._exclusive():
+            self.reconciliation = self._reconcile()
 
     def register(self, encoded: bytes, *, owner_worker_id: str) -> StoredSnapshot:
+        with self._exclusive():
+            return self._register(encoded, owner_worker_id=owner_worker_id)
+
+    def _register(self, encoded: bytes, *, owner_worker_id: str) -> StoredSnapshot:
         snapshot_ref = uuid.uuid4()
         staging = self._staging / f"{snapshot_ref}.partial"
         created_at = datetime.now(UTC)
         published = False
         try:
             staging.mkdir(mode=0o700)
+            self._checkpoint("staging_created")
             tree_root = staging / "tree"
             archive_sha256 = extract_snapshot_archive(encoded, tree_root)
+            self._checkpoint("archive_extracted")
             manifest, file_count, expanded_bytes = _canonical_manifest(tree_root)
             manifest_encoded = json.dumps(
                 manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -77,16 +129,22 @@ class SnapshotStore:
                 "manifest": manifest,
             }
             _write_new_json(staging / "READY.json", ready)
+            self._checkpoint("ready_written")
             _fsync_tree(staging)
+            self._checkpoint("content_fsynced")
             _make_immutable(staging)
+            self._checkpoint("sealed")
             _fsync_tree(staging)
+            self._checkpoint("sealed_fsynced")
             destination = self._objects / tree_sha256
             try:
                 _rename_no_replace(staging, destination)
                 published = True
+                self._checkpoint("object_renamed")
                 destination.chmod(0o500)
                 _fsync_directory(destination)
                 _fsync_directory(self._objects)
+                self._checkpoint("objects_parent_fsynced")
             except FileExistsError:
                 _verify_ready_object(destination, tree_sha256, manifest_sha256)
                 _remove_private_tree(staging)
@@ -101,6 +159,7 @@ class SnapshotStore:
                 created_at=created_at,
             )
             self._insert_registration(stored)
+            self._checkpoint("after_registration_commit")
             return stored
         except Exception:
             if staging.exists():
@@ -111,10 +170,11 @@ class SnapshotStore:
                 _fsync_directory(self._objects)
             raise
 
-    def resolve(self, snapshot_ref: uuid.UUID, *, owner_worker_id: str) -> Path:
+    def resolve(self, snapshot_ref: uuid.UUID, *, owner_worker_id: str) -> SnapshotHandle:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT tree_sha256, manifest_sha256, owner_worker_id "
+                "SELECT tree_sha256, manifest_sha256, owner_worker_id, file_count, "
+                "expanded_bytes "
                 "FROM snapshot_registrations "
                 "WHERE snapshot_ref = ?",
                 (str(snapshot_ref),),
@@ -122,8 +182,10 @@ class SnapshotStore:
         if row is None or row[2] != owner_worker_id:
             raise KeyError("snapshot reference is unavailable")
         destination = self._objects / str(row[0])
-        _verify_ready_object(destination, str(row[0]), str(row[1]))
-        return destination / "tree"
+        _verify_ready_object(
+            destination, str(row[0]), str(row[1]), int(row[3]), int(row[4])
+        )
+        return SnapshotHandle(snapshot_ref, str(row[0]), destination / "tree")
 
     def _insert_registration(self, snapshot: StoredSnapshot) -> None:
         with self._connect() as connection:
@@ -150,9 +212,182 @@ class SnapshotStore:
             0o600,
         )
         try:
-            return sqlite3.connect(f"/proc/self/fd/{descriptor}")
+            connection = sqlite3.connect(f"/proc/self/fd/{descriptor}")
+            connection.execute("PRAGMA synchronous = FULL")
+            connection.execute("PRAGMA foreign_keys = ON")
+            return connection
         finally:
             os.close(descriptor)
+
+    @contextmanager
+    def _exclusive(self) -> Any:
+        descriptor = os.open(
+            self._lock_path,
+            os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    def _reconcile(self) -> ReconciliationReport:
+        stale_staging = 0
+        orphan_objects = 0
+        verified_objects = 0
+        actions = self._recover_quarantine_intents()
+        for entry in sorted(self._staging.iterdir(), key=lambda value: value.name):
+            actions.append(self._quarantine_entry(entry, reason="interrupted-staging"))
+            stale_staging += 1
+
+        with self._connect() as connection:
+            integrity = connection.execute("PRAGMA quick_check").fetchone()
+            if integrity != ("ok",):
+                raise SnapshotStoreCorruptionError("snapshot registration database is corrupt")
+            rows = connection.execute(
+                "SELECT snapshot_ref, tree_sha256, archive_sha256, manifest_sha256, "
+                "file_count, expanded_bytes, owner_worker_id, created_at "
+                "FROM snapshot_registrations"
+            ).fetchall()
+        registrations: dict[str, set[tuple[str, int, int]]] = {}
+        for row in rows:
+            _validate_registration_row(row)
+            (
+                _snapshot_ref,
+                tree_sha256,
+                _archive_sha256,
+                manifest_sha256,
+                file_count,
+                expanded_bytes,
+                *_remainder,
+            ) = row
+            registrations.setdefault(str(tree_sha256), set()).add(
+                (str(manifest_sha256), int(file_count), int(expanded_bytes))
+            )
+
+        corrupt_references: list[str] = []
+        for tree_sha256, expected_values in registrations.items():
+            if len(expected_values) != 1:
+                corrupt_references.append(tree_sha256)
+                continue
+            destination = self._objects / tree_sha256
+            try:
+                manifest_sha256, file_count, expanded_bytes = next(iter(expected_values))
+                _verify_ready_object(
+                    destination,
+                    tree_sha256,
+                    manifest_sha256,
+                    file_count,
+                    expanded_bytes,
+                )
+            except (OSError, ValueError):
+                if destination.exists() or destination.is_symlink():
+                    actions.append(
+                        self._quarantine_entry(
+                            destination, reason="referenced-object-corrupt"
+                        )
+                    )
+                corrupt_references.append(tree_sha256)
+            else:
+                verified_objects += 1
+
+        for entry in sorted(self._objects.iterdir(), key=lambda value: value.name):
+            if entry.name not in registrations:
+                try:
+                    _verify_ready_object(entry, entry.name, None)
+                except (OSError, ValueError):
+                    reason = "unreferenced-object-corrupt"
+                else:
+                    reason = "unreferenced-object-valid"
+                actions.append(self._quarantine_entry(entry, reason=reason))
+                orphan_objects += 1
+
+        report = ReconciliationReport(
+            stale_staging_quarantined=stale_staging,
+            orphan_objects_quarantined=orphan_objects,
+            referenced_objects_verified=verified_objects,
+            blocking_references=len(corrupt_references),
+        )
+        _write_atomic_json(
+            self._root / "reconciliation.json",
+            {
+                "schema_version": 1,
+                "stale_staging_quarantined": report.stale_staging_quarantined,
+                "orphan_objects_quarantined": report.orphan_objects_quarantined,
+                "referenced_objects_verified": report.referenced_objects_verified,
+                "blocking_references": report.blocking_references,
+                "actions": sorted(
+                    actions,
+                    key=lambda action: (
+                        str(action["reason"]), str(action["original_name"])
+                    ),
+                ),
+            },
+        )
+        if corrupt_references:
+            raise SnapshotStoreCorruptionError(
+                "snapshot registrations reference missing or corrupt objects"
+            )
+        return report
+
+    def _quarantine_entry(self, source: Path, *, reason: str) -> dict[str, str]:
+        source_area = source.parent.name
+        evidence_id = hashlib.sha256(
+            f"{source_area}\0{source.name}\0{reason}".encode()
+        ).hexdigest()[:32]
+        payload_name = f"{evidence_id}-{source.name}"
+        destination = self._quarantine / payload_name
+        evidence_path = self._quarantine / f"{evidence_id}.json"
+        evidence = {
+            "schema_version": 1,
+            "evidence_id": evidence_id,
+            "reason": reason,
+            "source_area": source_area,
+            "original_name": source.name,
+            "payload_name": payload_name,
+            "state": "intent",
+        }
+        _write_atomic_json(evidence_path, evidence)
+        if source.is_dir() and not source.is_symlink():
+            source.chmod(0o700)
+        _rename_no_replace(source, destination)
+        evidence["state"] = "quarantined"
+        _write_atomic_json(evidence_path, evidence)
+        _fsync_directory(self._quarantine)
+        _fsync_directory(source.parent)
+        return {
+            "evidence_id": evidence_id,
+            "reason": reason,
+            "original_name": source.name,
+        }
+
+    def _recover_quarantine_intents(self) -> list[dict[str, str]]:
+        recovered: list[dict[str, str]] = []
+        for evidence_path in sorted(self._quarantine.glob("*.json")):
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            if evidence.get("state") != "intent":
+                continue
+            payload = self._quarantine / str(evidence.get("payload_name", ""))
+            source_area = str(evidence.get("source_area", ""))
+            source_parent = self._staging if source_area == ".staging" else self._objects
+            source = source_parent / str(evidence.get("original_name", ""))
+            if not payload.exists() and not payload.is_symlink():
+                if source.exists() or source.is_symlink():
+                    continue
+                raise SnapshotStoreCorruptionError(
+                    "quarantine intent has neither source nor payload"
+                )
+            evidence["state"] = "quarantined"
+            _write_atomic_json(evidence_path, evidence)
+            recovered.append(
+                {
+                    "evidence_id": str(evidence["evidence_id"]),
+                    "reason": str(evidence["reason"]),
+                    "original_name": str(evidence["original_name"]),
+                }
+            )
+        return recovered
 
 
 def _canonical_manifest(root: Path) -> tuple[list[dict[str, Any]], int, int]:
@@ -183,6 +418,42 @@ def _canonical_manifest(root: Path) -> tuple[list[dict[str, Any]], int, int]:
     return manifest, file_count, expanded_bytes
 
 
+def _validate_registration_row(row: tuple[Any, ...]) -> None:
+    if len(row) != 8:
+        raise SnapshotStoreCorruptionError("snapshot registration row is malformed")
+    (
+        snapshot_ref,
+        tree_sha256,
+        archive_sha256,
+        manifest_sha256,
+        file_count,
+        expanded_bytes,
+        owner,
+        created,
+    ) = row
+    try:
+        uuid.UUID(str(snapshot_ref))
+        datetime.fromisoformat(str(created))
+    except ValueError as exc:
+        raise SnapshotStoreCorruptionError("snapshot registration row is malformed") from exc
+    hashes = (str(tree_sha256), str(archive_sha256), str(manifest_sha256))
+    if any(
+        len(value) != 64 or any(character not in "0123456789abcdef" for character in value)
+        for value in hashes
+    ):
+        raise SnapshotStoreCorruptionError("snapshot registration row is malformed")
+    if (
+        not isinstance(file_count, int)
+        or file_count < 0
+        or not isinstance(expanded_bytes, int)
+        or expanded_bytes < 0
+        or not isinstance(owner, str)
+        or not owner
+        or len(owner) > 255
+    ):
+        raise SnapshotStoreCorruptionError("snapshot registration row is malformed")
+
+
 def _hash_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -203,6 +474,16 @@ def _write_new_json(path: Path, value: dict[str, Any]) -> None:
         os.fsync(handle.fileno())
 
 
+def _write_atomic_json(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4()}.partial")
+    try:
+        _write_new_json(temporary, value)
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _make_immutable(root: Path) -> None:
     for path in sorted(root.rglob("*"), reverse=True):
         if path.is_dir():
@@ -216,7 +497,11 @@ def _make_immutable(root: Path) -> None:
 
 
 def _verify_ready_object(
-    destination: Path, tree_sha256: str, manifest_sha256: str | None
+    destination: Path,
+    tree_sha256: str,
+    manifest_sha256: str | None,
+    expected_file_count: int | None = None,
+    expected_expanded_bytes: int | None = None,
 ) -> None:
     if destination.is_symlink() or not destination.is_dir():
         raise ValueError("snapshot object is unavailable")
@@ -239,6 +524,8 @@ def _verify_ready_object(
         or ready.get("manifest") != manifest
         or ready.get("file_count") != file_count
         or ready.get("expanded_bytes") != expanded_bytes
+        or (expected_file_count is not None and file_count != expected_file_count)
+        or (expected_expanded_bytes is not None and expanded_bytes != expected_expanded_bytes)
         or actual_manifest_sha256 != ready.get("manifest_sha256")
         or actual_tree_sha256 != tree_sha256
     ):

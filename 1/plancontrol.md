@@ -132,6 +132,17 @@ Status date: 2026-08-04
   restart, owner isolation, metadata/content tamper, database rebind, and mode behavior are covered.
   The broker remains intentionally unready: startup reconciliation/quarantine, dirfd-based root
   hardening, private runtime materialization, and a dedicated/rootless engine are still required.
+- 2026-08-04: Added deterministic snapshot-store startup reconciliation under an exclusive
+  publication lock. SQLite integrity and complete registration evidence are checked; every active
+  object is rehashed; interrupted staging, valid or corrupt orphan publications, and corrupt
+  referenced objects move through a crash-recoverable quarantine intent journal; lost registration
+  databases fail closed; and a durable reconciliation report is exposed through broker readiness.
+  Named crash checkpoints plus a real SIGKILL-after-publication test prove recovery on both sides of
+  the object/registration commit boundary. The engine now binds the resolved snapshot reference and
+  canonical input hash before creating resources, uses retry-unique names, and prepares fresh named
+  volumes in a fixed, networkless, capability-minimal materializer before the non-root runtime sees
+  workspace RW, input RO, and output RW. This remains unactivated pending trusted-root dirfd leases,
+  real Docker UID/mode canaries, durable terminal-evidence volume retention, and dedicated images.
 
 ## Active blockers observed
 
@@ -140,8 +151,9 @@ Status date: 2026-08-04
 - No approved restricted container execution provider is connected, so execution and review jobs
   remain capability-blocked before leasing.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
-  startup reconciliation/quarantine, trusted-root dirfd operations, and runtime-owned copy/reflink
-  materialization so shared content is never exposed as a writable runtime mount.
+  trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
+  private named-volume materialization are implemented, but still require real Docker UID/mode/hash
+  canaries and terminal-evidence-aware volume retention before activation.
 - Current execution/review Dockerfiles are adequate for a local canary but are not production-
   reproducible yet: base images, apt packages, and pip bootstrap inputs still need immutable pins.
 - The required ten consecutive end-to-end canary projects cannot begin until the remaining executor

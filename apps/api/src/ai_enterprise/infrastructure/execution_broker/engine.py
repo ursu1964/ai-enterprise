@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import tarfile
@@ -12,12 +13,14 @@ from typing import Any, Literal
 
 from docker.client import DockerClient
 from docker.errors import APIError, ImageNotFound
+from requests.exceptions import Timeout as RequestTimeout
 
 from ai_enterprise.infrastructure.execution_broker.policy import (
     BrokerPolicy,
     BrokerPolicyError,
     BrokerRunRequest,
 )
+from ai_enterprise.infrastructure.execution_broker.store import SnapshotHandle
 
 MAXIMUM_ENGINE_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAXIMUM_ENGINE_LOG_BYTES = 4 * 1024 * 1024
@@ -73,32 +76,95 @@ class DockerEngineAdapter:
         self,
         request: BrokerRunRequest,
         *,
-        snapshot_root: Path,
+        snapshot: SnapshotHandle,
         runtime_input: dict[str, Any],
     ) -> BrokerEngineResult:
+        runtime_input_encoded = _runtime_input_bytes(runtime_input)
+        if snapshot.snapshot_ref != request.snapshot_ref:
+            raise BrokerEngineError(
+                "snapshot_identity_mismatch", "resolved snapshot does not match request"
+            )
+        if hashlib.sha256(runtime_input_encoded).hexdigest() != request.input_sha256:
+            raise BrokerEngineError(
+                "input_identity_mismatch", "runtime input does not match request"
+            )
         resolved = self._policy.resolve(request)
         image = self._verified_image(resolved.image_id)
         run_label = str(request.workload_id)
+        run_nonce = uuid.uuid4().hex
         volumes: list[Any] = []
+        materializer: Any | None = None
         container: Any | None = None
         cleanup_failed = False
         try:
             for purpose in ("workspace", "input", "output"):
                 volumes.append(
                     self._client.volumes.create(
-                        name=f"ai-broker-{run_label}-{purpose}",
+                        name=f"ai-broker-{run_label}-{run_nonce}-{purpose}",
                         labels={
                             "ai.enterprise.broker-managed": "true",
                             "ai.enterprise.workload-id": run_label,
+                            "ai.enterprise.run-nonce": run_nonce,
                             "ai.enterprise.purpose": purpose,
                         },
                     )
                 )
             workspace_volume, input_volume, output_volume = volumes
             resources = resolved.resources
+            materializer = self._client.containers.create(
+                image=image.id,
+                name=f"ai-broker-materializer-{run_nonce}",
+                detach=True,
+                auto_remove=False,
+                network_disabled=True,
+                read_only=True,
+                user="0:0",
+                entrypoint=["/bin/sh", "-c"],
+                command=_materializer_command(resolved.runtime_uid, resolved.runtime_gid),
+                cap_drop=["ALL"],
+                cap_add=["CHOWN"],
+                security_opt=["no-new-privileges:true"],
+                privileged=False,
+                pids_limit=32,
+                mem_limit=128 << 20,
+                memswap_limit=128 << 20,
+                nano_cpus=250_000_000,
+                volumes={
+                    workspace_volume.name: {"bind": "/seed/workspace", "mode": "rw"},
+                    input_volume.name: {"bind": "/seed/input", "mode": "rw"},
+                    output_volume.name: {"bind": "/seed/output", "mode": "rw"},
+                },
+                tmpfs={"/tmp": "rw,noexec,nosuid,nodev,size=16777216,mode=1777"},
+                labels={
+                    "ai.enterprise.broker-managed": "true",
+                    "ai.enterprise.workload-id": run_label,
+                    "ai.enterprise.run-nonce": run_nonce,
+                    "ai.enterprise.purpose": "materializer",
+                },
+            )
+            materializer.put_archive("/seed/workspace", _archive_directory(snapshot.root))
+            input_name = "execution.json" if request.kind == "execution" else "review.json"
+            materializer.put_archive(
+                "/seed/input",
+                _archive_bytes(input_name, runtime_input_encoded),
+            )
+            materializer.start()
+            try:
+                materializer_result = materializer.wait(timeout=60)
+            except RequestTimeout as exc:
+                materializer.kill(signal="SIGKILL")
+                raise BrokerEngineError(
+                    "materialization_timeout", "runtime volume preparation timed out"
+                ) from exc
+            if int(materializer_result["StatusCode"]) != 0:
+                raise BrokerEngineError(
+                    "materialization_failed", "runtime volume preparation failed"
+                )
+            materializer.remove(force=True, v=False)
+            materializer = None
             container = self._client.containers.create(
                 image=image.id,
-                name=f"ai-broker-{request.kind}-{run_label}",
+                name=f"ai-broker-{request.kind}-{run_label}-{run_nonce}",
                 detach=True,
                 auto_remove=False,
                 network_disabled=True,
@@ -127,11 +193,15 @@ class DockerEngineAdapter:
                     "/tmp": (
                         f"rw,noexec,nosuid,nodev,size={resources.tmpfs_size_bytes},mode=1777"
                     ),
-                    "/home/runtime": "rw,noexec,nosuid,nodev,size=16777216,mode=0700",
+                    "/home/runtime": (
+                        "rw,noexec,nosuid,nodev,size=16777216,mode=0700,"
+                        f"uid={resolved.runtime_uid},gid={resolved.runtime_gid}"
+                    ),
                 },
                 labels={
                     "ai.enterprise.broker-managed": "true",
                     "ai.enterprise.workload-id": run_label,
+                    "ai.enterprise.run-nonce": run_nonce,
                     "ai.enterprise.kind": request.kind,
                 },
             )
@@ -140,12 +210,6 @@ class DockerEngineAdapter:
                 raise BrokerEngineError(
                     "image_identity_mismatch", "created container image identity changed"
                 )
-            container.put_archive("/workspace", _archive_directory(snapshot_root))
-            input_name = "execution.json" if request.kind == "execution" else "review.json"
-            container.put_archive(
-                "/runtime-input",
-                _archive_bytes(input_name, json.dumps(runtime_input, sort_keys=True).encode()),
-            )
             container.start()
             wait_result = self._wait(container, resources.timeout_seconds)
             output_archive = _read_archive(container.get_archive("/runtime-output")[0])
@@ -166,6 +230,11 @@ class DockerEngineAdapter:
         except APIError as exc:
             raise BrokerEngineError("engine_api_failure", "engine operation failed") from exc
         finally:
+            if materializer is not None:
+                try:
+                    materializer.remove(force=True, v=False)
+                except APIError:
+                    cleanup_failed = True
             if container is not None:
                 try:
                     container.remove(force=True, v=True)
@@ -219,6 +288,19 @@ def _readiness_request(
     )
 
 
+def _materializer_command(runtime_uid: int, runtime_gid: int) -> str:
+    identity = f"{runtime_uid}:{runtime_gid}"
+    return (
+        "find /seed/workspace -type d -exec chmod 0700 {} + && "
+        "find /seed/workspace -type f -perm /0111 -exec chmod 0700 {} + && "
+        "find /seed/workspace -type f ! -perm /0111 -exec chmod 0600 {} + && "
+        "find /seed/input -type d -exec chmod 0500 {} + && "
+        "find /seed/input -type f -exec chmod 0400 {} + && "
+        "chmod 0700 /seed/output && "
+        f"chown -R {identity} /seed/workspace /seed/input /seed/output"
+    )
+
+
 def _archive_directory(root: Path) -> bytes:
     root = root.resolve()
     if not root.is_dir() or root.is_symlink():
@@ -252,6 +334,12 @@ def _archive_bytes(name: str, content: bytes) -> bytes:
         info.mode = 0o400
         archive.addfile(info, io.BytesIO(content))
     return output.getvalue()
+
+
+def _runtime_input_bytes(runtime_input: dict[str, Any]) -> bytes:
+    return json.dumps(
+        runtime_input, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
 
 
 def _read_archive(chunks: Iterable[bytes]) -> bytes:

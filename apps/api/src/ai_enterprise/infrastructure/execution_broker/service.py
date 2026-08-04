@@ -38,12 +38,25 @@ def create_broker_app(
         return {"status": "ok", "service": "restricted-execution-broker"}
 
     @app.get("/health/ready")
-    async def ready(response: Response) -> dict[str, str]:
+    async def ready(response: Response) -> dict[str, object]:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "blocked",
             "code": "engine_adapter_unconfigured",
             "next": "Configure and verify the restricted engine adapter before dispatch.",
+            "snapshot_store": "ready",
+            "snapshot_reconciliation": {
+                "stale_staging_quarantined": (
+                    store.reconciliation.stale_staging_quarantined
+                ),
+                "orphan_objects_quarantined": (
+                    store.reconciliation.orphan_objects_quarantined
+                ),
+                "referenced_objects_verified": (
+                    store.reconciliation.referenced_objects_verified
+                ),
+                "blocking_references": store.reconciliation.blocking_references,
+            },
         }
 
     @app.post("/v1/snapshots", status_code=status.HTTP_201_CREATED)
