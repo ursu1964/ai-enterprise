@@ -138,6 +138,48 @@ async def test_worker_rejects_unpermitted_execution_image() -> None:
 
 
 @pytest.mark.asyncio
+async def test_restricted_executor_cannot_fall_back_to_legacy_execution_runtime() -> None:
+    settings = Settings(execution_container_provider="restricted-local-docker")
+    service = ExecutionApplicationService(
+        session=AsyncMock(),
+        settings=settings,
+    )
+    approval_id = uuid4()
+    service._get_approval = AsyncMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(id=approval_id)
+    )
+    manifest = {"name": "test"}
+    contract = {
+        "command_policy": {"test_commands": [["pytest", "-q"]]},
+        "file_scope": {
+            "allowed_files": ["src/example.py"],
+            "allowed_directories": [],
+            "forbidden_files": [".env"],
+            "forbidden_directories": [".git"],
+        },
+        "network": {"policy": "none"},
+    }
+
+    with pytest.raises(ApprovalInvalidError, match="durable broker runner"):
+        await service._validate_execution_invariants(
+            run=SimpleNamespace(
+                approval_id=approval_id,
+                container_image=settings.execution_image,
+            ),
+            project=SimpleNamespace(
+                manifest=manifest,
+                manifest_hash=hash_json(manifest),
+            ),
+            work_package=SimpleNamespace(
+                id=uuid4(),
+                status=WorkPackageStatus.APPROVED,
+                contract=contract,
+                contract_hash=hash_json(contract),
+            ),
+        )
+
+
+@pytest.mark.asyncio
 async def test_terminal_execution_events_write_tamper_evident_audit_chain() -> None:
     session = WriteSession()
     service = ExecutionApplicationService(

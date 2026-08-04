@@ -394,6 +394,8 @@ class ReviewCandidatePatchService:
 
             review.status = PatchReviewStatus.RUNNING
 
+            self._ensure_review_runtime_dispatch_wired()
+
             self._add_event(
                 review,
                 "patch_review.container_started",
@@ -707,6 +709,12 @@ class ReviewCandidatePatchService:
                 payload=payload,
             )
         )
+
+    def _ensure_review_runtime_dispatch_wired(self) -> None:
+        if self._settings.execution_container_provider.strip().lower() == "restricted-local-docker":
+            raise PatchReviewError(
+                "Restricted review dispatch is not wired to the durable broker runner yet"
+            )
 
     async def _append_audit_event(
         self,

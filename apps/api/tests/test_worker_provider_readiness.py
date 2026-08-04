@@ -161,7 +161,7 @@ async def test_approved_provider_requires_images_to_match_immutable_ids(
 
 
 @pytest.mark.asyncio
-async def test_approved_provider_permits_execution_when_images_match_immutable_ids(
+async def test_approved_provider_blocks_until_dispatch_is_wired_even_when_images_match(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     execution_id = "sha256:" + "a" * 64
@@ -190,8 +190,11 @@ async def test_approved_provider_permits_execution_when_images_match_immutable_i
         candidates,
     )
 
-    assert result.permitted_job_types == candidates
-    assert result.blockers == ()
+    assert result.permitted_job_types == frozenset()
+    assert [blocker.code for blocker in result.blockers] == [
+        "restricted_executor_dispatch_unwired"
+    ]
+    assert "durable restricted broker runner" in result.blockers[0].next_action
 
 
 @pytest.mark.asyncio

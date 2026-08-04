@@ -4,6 +4,7 @@ import pytest
 
 from ai_enterprise.application.review.service import ReviewCandidatePatchService
 from ai_enterprise.config import Settings
+from ai_enterprise.domain.review.exceptions import PatchReviewError
 from ai_enterprise.infrastructure.audit.event_hasher import verify_chain_records
 from ai_enterprise.infrastructure.database.foundation_models import AuditChainRecordModel
 from ai_enterprise.infrastructure.database.models import AuditEventModel
@@ -70,3 +71,13 @@ async def test_review_audit_events_write_tamper_evident_chain() -> None:
         )
         == []
     )
+
+
+def test_restricted_executor_cannot_fall_back_to_legacy_review_runtime() -> None:
+    service = ReviewCandidatePatchService(
+        session=WriteSession(),  # type: ignore[arg-type]
+        settings=Settings(execution_container_provider="restricted-local-docker"),
+    )
+
+    with pytest.raises(PatchReviewError, match="durable broker runner"):
+        service._ensure_review_runtime_dispatch_wired()

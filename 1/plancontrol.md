@@ -207,11 +207,21 @@ Status date: 2026-08-04
   the exact env block by default, and writes an output file only when requested, refusing to
   overwrite unless `--force` is explicit. Current local image IDs are execution
   `sha256:2469bf219b30c181705d3d5874915159a9b3ada818dcfbb01b1dbd44c9baa69b` and review
-  `sha256:64177b3263616ea0deb77a2bb6ea1d81000fb8c09a4cd7a3ebf25ac0a266365f`. A direct worker
-  readiness proof with those generated values permits execution and review with no blockers, the
-  broker canary passed, and the fast gate passed with 893 tests. Activation remains blocked until
-  the running worker is deliberately recreated with these generated values and then proves ten
-  consecutive zero-infrastructure-dead-letter canary projects.
+  `sha256:64177b3263616ea0deb77a2bb6ea1d81000fb8c09a4cd7a3ebf25ac0a266365f`. The broker canary
+  passed, and the fast gate passed with 893 tests. Activation remains blocked until the running
+  worker is deliberately recreated with these generated values and then proves ten consecutive
+  zero-infrastructure-dead-letter canary projects.
+- 2026-08-04: Corrected a false-positive executor-readiness path. A live probe showed that the
+  current container worker still cannot reach Docker even with generated image IDs, and source
+  inspection showed execution/review dispatch still instantiates the legacy Docker runtimes instead
+  of the durable restricted broker runner. Readiness now blocks valid-image configurations with
+  `restricted_executor_dispatch_unwired`, and both execution and review services refuse to fall back
+  to the legacy runtime when `EXECUTION_CONTAINER_PROVIDER=restricted-local-docker` is configured.
+  A direct readiness proof with generated IDs now returns no permitted execution/review job types
+  and exactly the dispatch-wiring blocker. Focused tests, broker canary, and the fast gate passed
+  with 895 tests. Activation remains blocked until application dispatch is wired to the durable
+  broker runner; only then can the running worker be activated and the ten-project canary sequence
+  begin.
 
 ## Active blockers observed
 
@@ -220,8 +230,9 @@ Status date: 2026-08-04
 - No approved restricted container execution provider is connected. Execution/review leasing now
   stays fail-closed unless the approved provider is explicitly enabled and exact immutable image IDs
   match the locally resolved images.
-- The generated local executor env values are known and verified, but they have not yet been applied
-  to the running worker as an operator-visible activation step.
+- The generated local executor env values are known and verified, but applying them is not enough
+  yet: application execution/review dispatch still needs to be wired to the durable restricted
+  broker runner before the running worker may lease those jobs.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.

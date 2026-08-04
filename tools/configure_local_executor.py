@@ -120,8 +120,8 @@ def _is_sha256_image_id(value: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate the exact local env block required to enable the approved "
-            "restricted Docker executor."
+            "Generate the exact local env block required as input to the approved "
+            "restricted Docker executor preflight."
         )
     )
     parser.add_argument("--execution-image", default=EXECUTION_IMAGE)

@@ -651,6 +651,11 @@ class ExecutionApplicationService:
         if run.container_image != self._settings.execution_image:
             raise ApprovalInvalidError("Execution image is not permitted by current runtime policy")
 
+        if self._settings.execution_container_provider.strip().lower() == "restricted-local-docker":
+            raise ApprovalInvalidError(
+                "Restricted executor dispatch is not wired to the durable broker runner yet"
+            )
+
         if work_package.contract.get("network", {}).get("policy") != "none":
             raise ApprovalInvalidError("Execution network must be disabled")
 
