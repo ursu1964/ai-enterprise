@@ -18,7 +18,7 @@ Status date: 2026-08-04
 | --- | --- | --- |
 | 1 — AEPM v0.1 | **COMPLETE** | Narrow JSON manifest contract, example, documentation, and tests |
 | 2 — Canonical project model / AEIR | **COMPLETE** | Deterministic AEPM-to-AEIR compiler and integrity contract |
-| 3 — Deterministic validation engine | **BLOCKED** | Step 2 complete |
+| 3 — Deterministic validation engine | **COMPLETE** | Stable classified report and hash contract |
 | 4 — AI interpretation layer | **BLOCKED** | Step 3 complete |
 | 5 — Knowledge storage | **BLOCKED** | Step 4 complete |
 | 6 — Question engine | **BLOCKED** | Step 5 complete |
@@ -69,3 +69,23 @@ Status date: 2026-08-04
 - 2026-08-04: Step 2 focused tests passed, followed by Ruff, MyPy over 414 source files,
   tooling invariants, all 830 tests, and a refreshed code graph. Step 2 is complete; deterministic
   validation is now the only authorized next step.
+
+## Step 3 acceptance
+
+- [x] Raw AEPM input is checked without an LLM or probabilistic interpretation.
+- [x] Findings have stable codes, severity, paths, affected identifiers, and canonical ordering.
+- [x] Missing intent, indicators, ownership, process boundaries, acceptance criteria, and
+  integration security rules are classified explicitly.
+- [x] Deterministic contradictions, unresolved assumptions, duplicates, and orphaned objects are
+  classified explicitly.
+- [x] Structural AEPM violations are retained as validation findings rather than escaping as
+  exceptions.
+- [x] Identical input produces an identical validation report and SHA-256 identity.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 3 completion evidence
+
+- 2026-08-04: Step 3 focused tests passed, followed by Ruff, MyPy over 415 source files,
+  tooling invariants, all 834 tests, and a refreshed code graph. Step 3 is complete; governed AI
+  interpretation is now the only authorized next step.
