@@ -2,7 +2,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -196,3 +207,112 @@ class KnowledgeRetrievalManifestModel(Base):
     manifest_document: Mapped[dict[str, Any]] = mapped_column(JSONB)
     manifest_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AeirModelVersionModel(Base):
+    __tablename__ = "aeir_model_versions"
+    __table_args__ = (
+        UniqueConstraint("project_id", "version_number"),
+        CheckConstraint("version_number > 0", name="ck_aeir_model_version_positive"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    model_document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AeirObjectModel(Base):
+    __tablename__ = "aeir_objects"
+    __table_args__ = (
+        UniqueConstraint("model_version_id", "object_id"),
+        UniqueConstraint("model_version_id", "id"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_aeir_object_confidence"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    model_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("aeir_model_versions.id"), index=True
+    )
+    object_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    object_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    object_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    attributes: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class AeirRelationshipModel(Base):
+    __tablename__ = "aeir_relationships"
+    __table_args__ = (
+        UniqueConstraint("model_version_id", "relationship_id"),
+        ForeignKeyConstraint(
+            ("model_version_id", "source_object_id"),
+            ("aeir_objects.model_version_id", "aeir_objects.id"),
+        ),
+        ForeignKeyConstraint(
+            ("model_version_id", "target_object_id"),
+            ("aeir_objects.model_version_id", "aeir_objects.id"),
+        ),
+        CheckConstraint(
+            "source_object_id <> target_object_id", name="ck_aeir_relationship_distinct"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    model_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("aeir_model_versions.id"), index=True
+    )
+    relationship_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    relationship_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    target_object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    relationship_document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class AeirSourceObjectModel(Base):
+    __tablename__ = "aeir_source_objects"
+    __table_args__ = (
+        UniqueConstraint("storage_provider", "bucket", "object_key"),
+        CheckConstraint("size_bytes >= 0", name="ck_aeir_source_size_nonnegative"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    storage_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    bucket: Mapped[str] = mapped_column(String(200), nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(200), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    uploaded_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AeirChangeEventModel(Base):
+    __tablename__ = "aeir_change_events"
+    __table_args__ = (UniqueConstraint("project_id", "sequence"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
+    model_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("aeir_model_versions.id"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    actor_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    previous_hash: Mapped[str | None] = mapped_column(String(64))
+    event_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

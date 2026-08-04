@@ -20,7 +20,7 @@ Status date: 2026-08-04
 | 2 — Canonical project model / AEIR | **COMPLETE** | Deterministic AEPM-to-AEIR compiler and integrity contract |
 | 3 — Deterministic validation engine | **COMPLETE** | Stable classified report and hash contract |
 | 4 — AI interpretation layer | **COMPLETE** | Governed structured proposals and review boundary |
-| 5 — Knowledge storage | **BLOCKED** | Step 4 complete |
+| 5 — Knowledge storage | **COMPLETE** | Versioned PostgreSQL AEIR and immutable event storage |
 | 6 — Question engine | **BLOCKED** | Step 5 complete |
 | 7 — Five artifact compilers | **BLOCKED** | Step 6 complete |
 | 8 — Traceability | **BLOCKED** | Step 7 complete |
@@ -108,3 +108,23 @@ Status date: 2026-08-04
 - 2026-08-04: Step 4 focused tests passed alongside the existing governed model runtime tests,
   followed by Ruff, MyPy over 416 source files, tooling invariants, all 841 tests, and a refreshed
   code graph. Step 4 is complete; knowledge storage is now the only authorized next step.
+
+## Step 5 acceptance
+
+- [x] PostgreSQL stores immutable canonical model versions and hashes.
+- [x] Canonical objects and relationships have dedicated relational tables and foreign keys.
+- [x] Extensible model, object, relationship, event, and source metadata uses JSONB.
+- [x] Uploaded source content remains in object storage with immutable PostgreSQL metadata.
+- [x] Model changes create hash-linked events in the same persistence unit.
+- [x] PostgreSQL rejects event updates and deletes through an append-only trigger.
+- [x] Version allocation is serialized per project and protected by uniqueness constraints.
+- [x] No graph database is introduced.
+- [x] Full repository verification passes.
+- [x] Code graph is updated and the implementation is committed cleanly.
+
+## Step 5 completion evidence
+
+- 2026-08-04: Step 5 focused persistence and object-storage tests passed; the new migration was
+  verified as the single reversible head and applied successfully to laptop PostgreSQL. Ruff,
+  MyPy over 418 source files, tooling invariants, all 846 tests, and a refreshed code graph passed.
+  Step 5 is complete; the clarification question engine is now the only authorized next step.
