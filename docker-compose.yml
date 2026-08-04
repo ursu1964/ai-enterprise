@@ -1,10 +1,53 @@
 services:
+  runtime-init:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    user: "0:0"
+    command:
+      [
+        "python",
+        "-m",
+        "ai_enterprise.bootstrap",
+        "--runtime-root",
+        "/runtime-data",
+        "--owned-path",
+        "/artifacts",
+        "--owned-path",
+        "/integration-work",
+        "--owned-path",
+        "/recovery-work",
+        "--owner-uid",
+        "${HOST_UID:-1000}",
+        "--owner-gid",
+        "${HOST_GID:-1000}",
+        "--paths-only"
+      ]
+    volumes:
+      - ./runtime-data:/runtime-data
+      - ./artifacts:/artifacts
+      - integration-work:/integration-work
+      - recovery-work:/recovery-work
+      - ./apps/api/src:/app/src:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
   bootstrap:
     profiles: ["dev-bootstrap"]
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     command: ["python", "-m", "ai_enterprise.bootstrap", "--runtime-root", "/runtime-data"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - .env
     environment:
@@ -13,6 +56,8 @@ services:
       - ./runtime-data:/runtime-data
       - ./apps/api/src:/app/src:ro
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     restart: "no"
@@ -52,6 +97,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     restart: "no"
@@ -84,6 +131,8 @@ services:
       - ./runtime-data:/app/runtime-data
       - /home/user/projects:/home/user/projects
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       migrate:
@@ -132,6 +181,8 @@ services:
       - ./runtime-data:/app/runtime-data
       - /home/user/projects:/home/user/projects
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -154,7 +205,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
       WORKER_PROFILE: integration
       INTEGRATION_WORK_ROOT: /integration-work
-      INTEGRATION_ARTIFACTS_ROOT: /artifacts
+      # Scratch output belongs on the writable work volume; evidence inputs stay read-only.
+      INTEGRATION_ARTIFACTS_ROOT: /integration-work/runtime
       INTEGRATION_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
       GIT_TERMINAL_PROMPT: "0"
       HOME: /tmp
@@ -178,6 +230,8 @@ services:
     mem_limit: 2g
     cpus: 2.0
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -200,7 +254,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://ai_enterprise:ai_enterprise_dev@postgres:5432/ai_enterprise
       WORKER_PROFILE: recovery
       RECOVERY_WORK_ROOT: /recovery-work
-      RECOVERY_ARTIFACTS_ROOT: /artifacts
+      # Scratch output belongs on the writable work volume; evidence inputs stay read-only.
+      RECOVERY_ARTIFACTS_ROOT: /recovery-work/runtime
       RECOVERY_SSH_CONFIG_PATH: /run/secrets/integration_ssh_config
       GIT_TERMINAL_PROMPT: "0"
       HOME: /tmp
@@ -224,6 +279,8 @@ services:
     mem_limit: 2g
     cpus: 2.0
     depends_on:
+      runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 

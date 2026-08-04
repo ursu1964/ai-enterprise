@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -45,6 +45,40 @@ class JobRepository:
         await self._session.flush()
 
         return job
+
+    async def record_setup_blockers(
+        self,
+        *,
+        candidate_job_types: Collection[str],
+        blockers: Mapping[str, str],
+    ) -> None:
+        """Expose current setup blockers without leasing work or consuming an attempt."""
+        if not candidate_job_types:
+            return
+        jobs = (
+            await self._session.scalars(
+                select(JobModel).where(
+                    JobModel.job_type.in_(tuple(candidate_job_types)),
+                    JobModel.status.in_((JobStatus.QUEUED, JobStatus.RETRY_WAIT)),
+                )
+            )
+        ).all()
+        appended_marker = "\nCurrent Setup blocker ["
+        for job in jobs:
+            blocker = blockers.get(job.job_type)
+            if blocker is not None:
+                if job.last_error and not job.last_error.startswith("Setup blocker ["):
+                    original_error = job.last_error.split(appended_marker, 1)[0]
+                    job.last_error = f"{original_error}\nCurrent {blocker}"[:4000]
+                else:
+                    job.last_error = blocker[:4000]
+                    job.last_failure_class = "configuration"
+            elif job.last_error and job.last_error.startswith("Setup blocker ["):
+                job.last_error = None
+                job.last_failure_class = None
+            elif job.last_error and appended_marker in job.last_error:
+                job.last_error = job.last_error.split(appended_marker, 1)[0]
+        await self._session.flush()
 
     async def claim_next(
         self,

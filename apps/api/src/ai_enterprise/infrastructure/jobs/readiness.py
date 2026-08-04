@@ -1,0 +1,188 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+
+from docker import from_env
+from docker.errors import DockerException, ImageNotFound
+
+from ai_enterprise.config import Settings
+from ai_enterprise.domain.enums import JobType
+from ai_enterprise.infrastructure.architecture.provider_factory import (
+    ArchitectureProviderConfig,
+    architecture_provider_ready,
+)
+from ai_enterprise.infrastructure.requirements_llm.provider import (
+    RequirementsProviderError,
+    create_requirements_provider,
+    provider_config_from_settings,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SetupBlocker:
+    code: str
+    capability: str
+    job_types: frozenset[JobType]
+    detail: str
+    next_action: str
+
+    @property
+    def evidence(self) -> str:
+        return (
+            f"Setup blocker [{self.code}] capability={self.capability}. "
+            f"{self.detail} Next: {self.next_action}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerReadiness:
+    permitted_job_types: frozenset[JobType]
+    blockers: tuple[SetupBlocker, ...]
+
+    @property
+    def degraded(self) -> bool:
+        return bool(self.blockers)
+
+
+async def assess_worker_readiness(
+    settings: Settings,
+    candidate_job_types: frozenset[JobType],
+) -> WorkerReadiness:
+    blockers: list[SetupBlocker] = []
+    docker_job_types = candidate_job_types & {
+        JobType.EXECUTE_WORK_PACKAGE,
+        JobType.REVIEW_CANDIDATE_PATCH,
+    }
+    if docker_job_types:
+        blockers.extend(await asyncio.to_thread(_docker_blockers, settings, docker_job_types))
+
+    if JobType.RUN_REQUIREMENTS_CREW in candidate_job_types and (
+        settings.requirements_crew_adapter.strip().lower() == "crewai"
+    ):
+        try:
+            await create_requirements_provider(provider_config_from_settings(settings)).preflight()
+        except (RequirementsProviderError, ValueError):
+            blockers.append(
+                _model_blocker(
+                    code="requirements_provider_unavailable",
+                    job_type=JobType.RUN_REQUIREMENTS_CREW,
+                    model=settings.requirements_llm_model,
+                )
+            )
+
+    model_checks: list[tuple[JobType, str, str, str]] = []
+    if JobType.RUN_ARCHITECTURE_CREW in candidate_job_types:
+        model_checks.append(
+            (
+                JobType.RUN_ARCHITECTURE_CREW,
+                "architecture_provider_unavailable",
+                settings.architecture_model_name,
+                settings.architecture_model_base_url,
+            )
+        )
+    if JobType.RUN_WORK_PACKAGE_DECOMPOSITION in candidate_job_types:
+        model_checks.append(
+            (
+                JobType.RUN_WORK_PACKAGE_DECOMPOSITION,
+                "decomposition_provider_unavailable",
+                settings.decomposition_model_name,
+                settings.decomposition_model_base_url,
+            )
+        )
+    if (
+        JobType.PLAN_WORK_PACKAGE in candidate_job_types
+        and settings.architecture_provider.strip().lower() != "scripted"
+    ):
+        model_checks.append(
+            (
+                JobType.PLAN_WORK_PACKAGE,
+                "planning_provider_unavailable",
+                settings.ollama_model,
+                settings.ollama_base_url,
+            )
+        )
+    readiness = await asyncio.gather(
+        *(
+            architecture_provider_ready(
+                ArchitectureProviderConfig(
+                    provider=(
+                        settings.architecture_provider
+                        if job_type is JobType.RUN_ARCHITECTURE_CREW
+                        else "crewai-ollama"
+                    ),
+                    model_name=model,
+                    base_url=base_url,
+                    timeout_seconds=10,
+                )
+            )
+            for job_type, _code, model, base_url in model_checks
+        )
+    )
+    for (job_type, code, model, _base_url), ready in zip(model_checks, readiness, strict=True):
+        if not ready:
+            blockers.append(_model_blocker(code=code, job_type=job_type, model=model))
+
+    blocked_types = frozenset(job_type for blocker in blockers for job_type in blocker.job_types)
+    return WorkerReadiness(
+        permitted_job_types=candidate_job_types - blocked_types,
+        blockers=tuple(blockers),
+    )
+
+
+def _docker_blockers(
+    settings: Settings, job_types: frozenset[JobType]
+) -> tuple[SetupBlocker, ...]:
+    try:
+        client = from_env()
+        client.ping()
+    except (DockerException, OSError):
+        return (
+            SetupBlocker(
+                code="docker_runtime_unavailable",
+                capability="container_execution",
+                job_types=job_types,
+                detail="The worker cannot reach its configured container execution service.",
+                next_action=(
+                    "Configure an approved restricted execution provider; do not expose an "
+                    "unrestricted host Docker socket."
+                ),
+            ),
+        )
+
+    blockers: list[SetupBlocker] = []
+    for job_type, image, code in (
+        (
+            JobType.EXECUTE_WORK_PACKAGE,
+            settings.execution_image,
+            "execution_image_unavailable",
+        ),
+        (JobType.REVIEW_CANDIDATE_PATCH, settings.review_image, "review_image_unavailable"),
+    ):
+        if job_type not in job_types:
+            continue
+        try:
+            client.images.get(image)
+        except (DockerException, ImageNotFound):
+            blockers.append(
+                SetupBlocker(
+                    code=code,
+                    capability="container_image",
+                    job_types=frozenset({job_type}),
+                    detail=f"Required governed runtime image {image!r} is unavailable.",
+                    next_action="Build and verify the pinned runtime image before dispatch.",
+                )
+            )
+    return tuple(blockers)
+
+
+def _model_blocker(*, code: str, job_type: JobType, model: str) -> SetupBlocker:
+    return SetupBlocker(
+        code=code,
+        capability="model_provider",
+        job_types=frozenset({job_type}),
+        detail=f"Required model provider for {model!r} did not pass preflight.",
+        next_action=(
+            "Restore the configured provider and verify the required model before dispatch."
+        ),
+    )

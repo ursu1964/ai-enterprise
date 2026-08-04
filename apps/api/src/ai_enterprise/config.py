@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,12 +53,12 @@ class Settings(BaseSettings):
     artifact_root: Path = Field(default=Path("./artifacts"))
 
     worker_poll_interval_seconds: float = 2.0
-    worker_lease_seconds: int = 900
+    worker_lease_seconds: int = Field(default=900, ge=3)
     worker_retry_delay_seconds: int = 30
-    worker_heartbeat_seconds: int = 60
+    worker_heartbeat_seconds: int = Field(default=60, ge=1)
     worker_execution_timeout_seconds: int = 1800
-    worker_recovery_interval_seconds: int = 60
-    worker_stale_after_seconds: int = 180
+    worker_recovery_interval_seconds: int = Field(default=60, ge=1)
+    worker_stale_after_seconds: int = Field(default=180, ge=1)
     worker_retry_base_seconds: int = 30
     worker_retry_maximum_seconds: int = 900
     worker_profile: str = "general"
@@ -105,6 +105,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_worker_lease_timing(self) -> "Settings":
+        if self.worker_lease_seconds < self.worker_heartbeat_seconds * 3:
+            raise ValueError("worker lease must be at least three heartbeat intervals")
+        if self.worker_stale_after_seconds < self.worker_heartbeat_seconds * 2:
+            raise ValueError("worker stale window must be at least two heartbeat intervals")
+        return self
 
 
 @lru_cache

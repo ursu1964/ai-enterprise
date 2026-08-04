@@ -135,6 +135,25 @@ Containerized bootstrap:
 rtk docker compose --profile dev-bootstrap run --rm bootstrap
 ```
 
+Compose runs the one-shot `runtime-init` service before the API and workers. It creates the bounded
+runtime, artifact, integration, and recovery output directories and assigns them to `HOST_UID` and
+`HOST_GID` (both default to `1000`). The initializer has only the filesystem ownership capabilities
+needed for that task and exits before application work begins. Specialized workers keep the shared
+evidence artifact mount read-only; their scratch output is written to `/integration-work/runtime`
+and `/recovery-work/runtime`.
+
+For an existing installation, preserve all evidence and repair ownership in place before restarting:
+
+```bash
+export HOST_UID="$(id -u)"
+export HOST_GID="$(id -g)"
+rtk docker compose run --rm runtime-init
+rtk docker compose up -d
+```
+
+The initializer does not delete, truncate, or acknowledge records. It refuses symbolic links inside
+the managed roots rather than following them with elevated ownership privileges.
+
 Local bootstrap, after migrations:
 
 ```bash

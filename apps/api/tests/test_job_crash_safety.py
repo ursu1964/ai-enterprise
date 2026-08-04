@@ -31,6 +31,18 @@ def test_retry_policy_classifies_and_caps_backoff() -> None:
     assert policy.delay(9) == timedelta(seconds=45)
 
 
+def test_retry_policy_classifies_missing_result_as_non_retryable_contract_failure() -> None:
+    policy = RetryPolicy(base_seconds=10, maximum_seconds=45)
+
+    missing = policy.classify(RuntimeError("Container produced no result.json"))
+    invalid = policy.classify(RuntimeError("Review result.json contract is invalid"))
+
+    for decision in (missing, invalid):
+        assert decision.failure_class is FailureClass.VALIDATION
+        assert decision.retryable is False
+        assert decision.code == "missing_or_invalid_result_artifact"
+
+
 @pytest.mark.asyncio
 async def test_stale_worker_cannot_commit_success_after_lease_reassignment() -> None:
     session = AsyncMock()

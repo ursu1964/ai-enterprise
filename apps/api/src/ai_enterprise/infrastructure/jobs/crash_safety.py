@@ -45,6 +45,14 @@ class RetryPolicy:
     def classify(self, exc: Exception) -> FailureDecision:
         name = type(exc).__name__.lower()
         message = str(exc).lower()
+        if "result.json" in message and any(
+            marker in message for marker in ("no result.json", "missing", "invalid")
+        ):
+            return FailureDecision(
+                FailureClass.VALIDATION,
+                False,
+                "missing_or_invalid_result_artifact",
+            )
         if isinstance(exc, TimeoutError) or "timeout" in name:
             return FailureDecision(FailureClass.TEMPORARY_PROVIDER, True, "execution_timeout")
         if any(value in name + message for value in ("connection", "docker", "database")):

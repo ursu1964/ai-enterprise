@@ -17,7 +17,6 @@ from ai_enterprise.domain.review.exceptions import ReviewRuntimeError
 
 @dataclass(frozen=True, slots=True)
 class ReviewCheckResult:
-    check_type: str
     name: str
     argv: tuple[str, ...]
     exit_code: int | None
@@ -26,6 +25,7 @@ class ReviewCheckResult:
     stderr: str
     timed_out: bool
     required: bool
+    check_type: str = "review_check"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +148,7 @@ class DockerReviewRuntime:
             if not result_path.is_file():
                 raise ReviewRuntimeError("Review container produced no result.json")
 
-            result_data = json.loads(result_path.read_text(encoding="utf-8"))
+            result_data = self._read_result(result_path)
 
             approved_tests = tuple(
                 ReviewCheckResult(
@@ -200,6 +200,39 @@ class DockerReviewRuntime:
                     container.remove(force=True)
                 except APIError:
                     pass
+
+    @staticmethod
+    def _read_result(result_path: Path) -> dict[str, Any]:
+        try:
+            result_data = json.loads(result_path.read_text(encoding="utf-8"))
+            if not isinstance(result_data, dict):
+                raise TypeError("top-level result must be an object")
+            if not isinstance(result_data.get("success"), bool):
+                raise TypeError("success must be a boolean")
+            required_check_fields = {
+                "name",
+                "argv",
+                "exit_code",
+                "duration_ms",
+                "stdout",
+                "stderr",
+                "timed_out",
+            }
+            for group in ("approved_tests", "review_checks"):
+                checks = result_data.get(group, [])
+                if not isinstance(checks, list):
+                    raise TypeError(f"{group} must be a list")
+                for index, check in enumerate(checks):
+                    if not isinstance(check, dict):
+                        raise TypeError(f"{group}[{index}] must be an object")
+                    missing = required_check_fields - check.keys()
+                    if missing:
+                        raise TypeError(
+                            f"{group}[{index}] is missing {', '.join(sorted(missing))}"
+                        )
+            return result_data
+        except (json.JSONDecodeError, OSError, TypeError) as exc:
+            raise ReviewRuntimeError(f"Review result.json contract is invalid: {exc}") from exc
 
     def _read_review_log(
         self,

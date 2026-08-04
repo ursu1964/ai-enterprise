@@ -29,7 +29,7 @@ Status date: 2026-08-04
 | 6 — Security/production | **BLOCKED** | Phase 5 not proven | Phase 5 complete |
 | 7 — Customer proof | **BLOCKED** | Phase 6 not proven | Phase 6 complete |
 
-## Active Phase 0 checklist
+## Phase 0 checklist
 
 - [x] Controlling plan is no longer ignored and is included in the pending release change set.
 - [x] Current changes are reviewed for authorization, migration, compatibility, and evidence risks.
@@ -58,14 +58,48 @@ Status date: 2026-08-04
   `e4b3af1bd53d76a49ca51de9cb8e6cee30b715d1`, tree
   `54580d49954c331cb6ae285de8e8861ca30c1296`, and migration head `f1b5c8d3e7a2`.
 
+## Active Phase 1 checklist
+
+- [x] Runtime directories are initialized with explicit host ownership before services start.
+- [x] Integration and recovery scratch paths are writable without granting artifact mutation.
+- [x] Executor and model capabilities are preflighted before affected jobs can be leased.
+- [x] Setup blockers preserve queued status, attempt count, retry count, and prior failure evidence.
+- [x] Worker readiness is operator-visible as `degraded` while required capabilities are absent.
+- [x] Missing or invalid execution result artifacts have a stable, non-retryable classification.
+- [x] Review output is structurally validated before it enters the workflow.
+- [x] Lease timing is validated and heartbeat uncertainty fences execution output immediately.
+- [x] Repeated setup warnings are emitted only on blocker state changes.
+- [ ] An approved restricted container executor is connected and its pinned images pass preflight.
+- [ ] The configured model endpoint and required models pass preflight.
+- [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
+
+## Phase 1 execution log
+
+- 2026-08-04: Parallel runtime, readiness, and workflow specialists implemented independent Phase 1
+  slices, then converged through the same focused and full verification gates.
+- 2026-08-04: Activated the one-shot runtime initializer locally. API readiness is healthy and all
+  three worker profiles remain online; the general worker truthfully reports `degraded`.
+- 2026-08-04: Live preflight classified `docker_runtime_unavailable` and
+  `decomposition_provider_unavailable` before dispatch. No unrestricted Docker socket fallback was
+  introduced.
+- 2026-08-04: Found and corrected warning amplification during activation. Across repeated worker
+  polls, each distinct blocker is now logged once when introduced and once when cleared.
+- 2026-08-04: Preserved all 37 historical dead-letter records. The existing operator projection
+  still identifies 17 records requiring recovery review; no queued jobs existed during this proof,
+  so no runtime attempts or retries were consumed.
+- 2026-08-04: Full local gate passed with 778 tests, Ruff, MyPy over 406 source files, tooling
+  invariants, compose validation, and an updated code graph.
+
 ## Active blockers observed
 
-- Runtime snapshot, integration work, review output, and artifact paths have permission failures.
-- Execution provider and model provider connectivity have produced dead letters.
-- Lease expiry, illegal workflow transitions, missing result artifacts, and result-contract drift
-  remain unresolved historical evidence.
-- These runtime failures belong to Phase 1, but Phase 0 must first produce a trustworthy baseline
-  that preserves and measures them.
+- Runtime path ownership and result-contract protections are implemented and locally verified, but
+  the historical failures remain preserved as recovery evidence.
+- No approved restricted container execution provider is connected, so execution and review jobs
+  remain capability-blocked before leasing.
+- The configured `ollama/gemma3:12b` endpoint is unavailable, so decomposition remains
+  capability-blocked before leasing.
+- The required ten consecutive end-to-end canary projects cannot begin until both capabilities are
+  connected. Phase 2 remains closed.
 
 ---
 

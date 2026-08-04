@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import os
 import secrets
 import stat
 import subprocess
@@ -41,6 +42,19 @@ DEV_GRANTS = {
     "model.governance": "model_governance_authority",
 }
 
+RUNTIME_DIRECTORIES = (
+    "remotes",
+    "integration-work",
+    "recovery-work",
+    "snapshots",
+    "artifacts",
+    "tmp",
+    "review-snapshots",
+    "review-artifacts",
+    "review-tmp",
+    "decomposition-snapshots",
+)
+
 
 def _write_secrets(path: Path) -> None:
     if path.exists():
@@ -54,7 +68,7 @@ def _write_secrets(path: Path) -> None:
 
 
 def prepare_runtime(root: Path) -> str:
-    for name in ("remotes", "integration-work", "recovery-work", "snapshots", "tmp"):
+    for name in RUNTIME_DIRECTORIES:
         (root / name).mkdir(parents=True, exist_ok=True)
     _write_secrets(root / "dev-secrets.env")
     remote = (root / "remotes" / "ai-enterprise.git").resolve()
@@ -63,6 +77,24 @@ def prepare_runtime(root: Path) -> str:
     remote_url = remote.as_uri()
     require_bounded_bare_remote(remote_url=remote_url, allowed_root=root.resolve())
     return remote_url
+
+
+def prepare_owned_paths(paths: list[Path], *, owner_uid: int, owner_gid: int) -> None:
+    """Create and chown bounded runtime roots without following symbolic links."""
+
+    if owner_uid < 0 or owner_gid < 0:
+        raise ValueError("Runtime owner UID and GID must be non-negative")
+    for unresolved in paths:
+        root = unresolved.absolute()
+        if root.is_symlink():
+            raise ValueError(f"Runtime root must not be a symbolic link: {root}")
+        root.mkdir(parents=True, exist_ok=True, mode=0o750)
+        candidates = [root, *root.rglob("*")]
+        symbolic_link = next((path for path in candidates if path.is_symlink()), None)
+        if symbolic_link is not None:
+            raise ValueError(f"Runtime ownership refuses symbolic links: {symbolic_link}")
+        for path in candidates:
+            os.chown(path, owner_uid, owner_gid, follow_symlinks=False)
 
 
 async def seed_database() -> None:
@@ -137,9 +169,23 @@ async def seed_database() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Idempotent local AI Enterprise bootstrap")
     parser.add_argument("--runtime-root", type=Path, default=Path("runtime-data"))
+    parser.add_argument("--owned-path", action="append", type=Path, default=[])
+    parser.add_argument("--owner-uid", type=int)
+    parser.add_argument("--owner-gid", type=int)
+    parser.add_argument("--paths-only", action="store_true")
     parser.add_argument("--skip-seed", action="store_true")
     args = parser.parse_args()
     runtime_root = args.runtime_root.resolve()
+    if (args.owner_uid is None) != (args.owner_gid is None):
+        parser.error("--owner-uid and --owner-gid must be supplied together")
+    if args.owner_uid is not None:
+        prepare_owned_paths(
+            [runtime_root, *(path.resolve() for path in args.owned_path)],
+            owner_uid=args.owner_uid,
+            owner_gid=args.owner_gid,
+        )
+    if args.paths_only:
+        return
     remote_url = prepare_runtime(runtime_root)
     print(f"LOCAL_GIT_REMOTE_URL={remote_url}")
     print(f"DEV_SECRETS_FILE={runtime_root / 'dev-secrets.env'}")

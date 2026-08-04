@@ -13,11 +13,6 @@ from ai_enterprise.application.integration.processor import IntegrationWorkerEnt
 from ai_enterprise.application.recovery.processor import RecoveryWorkerEntry
 from ai_enterprise.application.workflow.service import WorkflowService
 from ai_enterprise.config import Settings, get_settings
-from ai_enterprise.domain.enums import JobType
-from ai_enterprise.infrastructure.architecture.provider_factory import (
-    ArchitectureProviderConfig,
-    architecture_provider_ready,
-)
 from ai_enterprise.infrastructure.database.models import JobModel
 from ai_enterprise.infrastructure.database.session import SessionFactory
 from ai_enterprise.infrastructure.jobs.crash_safety import LeaseLostError, RetryPolicy
@@ -27,13 +22,9 @@ from ai_enterprise.infrastructure.jobs.profiles import (
     WorkerProfile,
     allowed_job_types,
 )
+from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
 from ai_enterprise.infrastructure.jobs.recovery import JobRecoveryService, WorkerRegistry
 from ai_enterprise.infrastructure.jobs.repository import JobRepository
-from ai_enterprise.infrastructure.requirements_llm.provider import (
-    RequirementsProviderError,
-    create_requirements_provider,
-    provider_config_from_settings,
-)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +37,21 @@ IntegrationEntryFactory = Callable[[AsyncSession, Settings, str], IntegrationWor
 
 
 RecoveryEntryFactory = Callable[[AsyncSession, Settings, str], RecoveryWorkerEntry]
+
+
+def _report_setup_blocker_changes(
+    current_blockers: set[str], reported_setup_blockers: set[str] | None
+) -> None:
+    if reported_setup_blockers is None:
+        for evidence in sorted(current_blockers):
+            logger.warning("Worker %s", evidence)
+        return
+    for evidence in sorted(current_blockers - reported_setup_blockers):
+        logger.warning("Worker %s", evidence)
+    for evidence in sorted(reported_setup_blockers - current_blockers):
+        logger.info("Worker setup blocker cleared: %s", evidence)
+    reported_setup_blockers.clear()
+    reported_setup_blockers.update(current_blockers)
 
 
 def build_worker_id() -> str:
@@ -68,16 +74,21 @@ async def _heartbeat_job(
 ) -> None:
     while True:
         await asyncio.sleep(interval)
-        async with SessionFactory() as session:
-            repository = JobRepository(session)
-            async with session.begin():
-                extended = await repository.extend_lease(
-                    job_id=job_id,
-                    worker_id=worker_id,
-                    lease_token=lease_token,
-                    lease_version=lease_version,
-                    lease_duration=timedelta(seconds=lease_seconds),
-                )
+        try:
+            async with SessionFactory() as session:
+                repository = JobRepository(session)
+                async with session.begin():
+                    extended = await repository.extend_lease(
+                        job_id=job_id,
+                        worker_id=worker_id,
+                        lease_token=lease_token,
+                        lease_version=lease_version,
+                        lease_duration=timedelta(seconds=lease_seconds),
+                    )
+        except Exception:
+            logger.exception("Lease heartbeat failed for job %s", job_id)
+            lease_lost.set()
+            return
         if not extended:
             logger.warning("Lease heartbeat lost for job %s", job_id)
             lease_lost.set()
@@ -92,35 +103,18 @@ async def process_one_job(
     integration_entry_factory: IntegrationEntryFactory | None = None,
     recovery_entry: RecoveryWorkerEntry | None = None,
     recovery_entry_factory: RecoveryEntryFactory | None = None,
+    reported_setup_blockers: set[str] | None = None,
 ) -> bool:
     settings = get_settings()
-    permitted_job_types = set(allowed_job_types(profile))
-    provider_degraded = False
-    if JobType.RUN_ARCHITECTURE_CREW in permitted_job_types:
-        architecture_ready = await architecture_provider_ready(
-            ArchitectureProviderConfig(
-                provider=settings.architecture_provider,
-                model_name=settings.architecture_model_name,
-                base_url=settings.architecture_model_base_url,
-                temperature=settings.architecture_temperature,
-                timeout_seconds=settings.architecture_timeout_seconds,
-                max_tokens=settings.architecture_max_tokens,
-            )
-        )
-        if not architecture_ready:
-            provider_degraded = True
-            permitted_job_types.remove(JobType.RUN_ARCHITECTURE_CREW)
-            logger.warning("Architecture provider degraded; leasing is disabled")
-    if (
-        JobType.RUN_REQUIREMENTS_CREW in permitted_job_types
-        and settings.requirements_crew_adapter.strip().lower() == "crewai"
-    ):
-        try:
-            await create_requirements_provider(provider_config_from_settings(settings)).preflight()
-        except RequirementsProviderError:
-            provider_degraded = True
-            permitted_job_types.remove(JobType.RUN_REQUIREMENTS_CREW)
-            logger.warning("Requirements provider preflight failed; leasing is disabled")
+    candidate_job_types = allowed_job_types(profile)
+    readiness = await assess_worker_readiness(settings, candidate_job_types)
+    current_blockers = {blocker.evidence for blocker in readiness.blockers}
+    _report_setup_blocker_changes(current_blockers, reported_setup_blockers)
+    blocker_evidence = {
+        job_type.value: blocker.evidence
+        for blocker in readiness.blockers
+        for job_type in blocker.job_types
+    }
 
     async with SessionFactory() as claim_session:
         repository = JobRepository(claim_session)
@@ -130,11 +124,15 @@ async def process_one_job(
                 select(WorkerInstanceModel).where(WorkerInstanceModel.worker_id == worker_id)
             )
             if worker_record is not None:
-                worker_record.status = "degraded" if provider_degraded else "online"
+                worker_record.status = "degraded" if readiness.degraded else "online"
+            await repository.record_setup_blockers(
+                candidate_job_types={job_type.value for job_type in candidate_job_types},
+                blockers=blocker_evidence,
+            )
             job = await repository.claim_next(
                 worker_id=worker_id,
                 lease_duration=timedelta(seconds=settings.worker_lease_seconds),
-                allowed_job_types=permitted_job_types,
+                allowed_job_types=readiness.permitted_job_types,
                 execution_timeout=timedelta(seconds=settings.worker_execution_timeout_seconds),
             )
 
@@ -344,6 +342,7 @@ async def run_worker(
                 stale_worker_after=timedelta(seconds=settings.worker_stale_after_seconds)
             )
     maintenance = asyncio.create_task(_maintenance_loop(worker_id, selected_profile, settings))
+    reported_setup_blockers: set[str] = set()
     try:
         while True:
             claimed = await process_one_job(
@@ -353,6 +352,7 @@ async def run_worker(
                 integration_entry_factory=integration_entry_factory,
                 recovery_entry=recovery_entry,
                 recovery_entry_factory=recovery_entry_factory,
+                reported_setup_blockers=reported_setup_blockers,
             )
 
             if not claimed:
