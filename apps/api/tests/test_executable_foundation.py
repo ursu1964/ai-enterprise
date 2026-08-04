@@ -121,6 +121,20 @@ def test_test_compose_profile_installs_dev_dependencies() -> None:
     assert "docker-test:" in makefile
 
 
+def test_local_executor_worker_targets_use_project_venv() -> None:
+    root = repo_root()
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+
+    assert "local-executor-check:" in makefile
+    assert (
+        "apps/api/.venv/bin/python tools/local_executor_worker.py --json" in makefile
+    )
+    assert "local-executor-worker:" in makefile
+    assert (
+        "apps/api/.venv/bin/python tools/local_executor_worker.py --run" in makefile
+    )
+
+
 def test_broker_agent_images_use_pinned_reproducible_inputs() -> None:
     root = repo_root()
     requirements = (root / "docker/agent-runtime-requirements.txt").read_text(

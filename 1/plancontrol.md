@@ -73,6 +73,7 @@ Status date: 2026-08-04
 - [x] Execution/review leasing requires an explicitly approved restricted provider and exact immutable image IDs.
 - [x] Local approved-executor env generation is reproducible and non-destructive.
 - [x] Application execution/review dispatch is wired to the durable restricted broker runtime.
+- [x] Host-process local executor worker activation has an explicit preflight/run tool.
 - [ ] An approved restricted container executor is connected and its pinned images pass preflight.
 - [x] The configured model endpoint and required models pass preflight.
 - [ ] Ten consecutive canary projects complete with zero infrastructure dead letters.
@@ -236,6 +237,16 @@ Status date: 2026-08-04
   currently running compose worker still lacks the generated executor env and Docker access; the
   worker must be deliberately recreated in an approved activation mode before ten canary projects
   can begin.
+- 2026-08-04: Added `tools/local_executor_worker.py` plus `make local-executor-check` and
+  `make local-executor-worker` as the approved laptop activation path. The tool runs under the API
+  virtualenv, generates the immutable local executor image IDs, overlays only the required
+  execution/review worker environment, preflights execution/review readiness from the host process,
+  and only execs `python -m ai_enterprise.worker` when `--run` is explicitly requested. This avoids
+  mounting the unrestricted host Docker socket into the compose worker. `make local-executor-check`
+  passed with no blockers and permitted execution/review job types, the broker canary passed, and
+  the fast gate passed with 902 tests. Activation remains blocked until the host worker is actually
+  started under this approved mode and the ten consecutive zero-infrastructure-dead-letter canary
+  projects complete.
 
 ## Active blockers observed
 
@@ -244,9 +255,10 @@ Status date: 2026-08-04
 - No approved restricted container execution provider is connected. Execution/review leasing now
   stays fail-closed unless the approved provider is explicitly enabled and exact immutable image IDs
   match the locally resolved images.
-- The generated local executor env values are known and verified, and application dispatch now uses
-  the durable broker runtime. The currently running compose worker is still not activated with those
-  values and cannot reach Docker, so execution/review jobs remain blocked in that running topology.
+- The generated local executor env values are known and verified, application dispatch now uses the
+  durable broker runtime, and host-process preflight passes. The currently running compose worker is
+  still not activated with those values and cannot reach Docker; the approved activation path is now
+  to run the general worker as a host process via `make local-executor-worker`.
 - The snapshot store now publishes durable immutable objects, but activation remains blocked on
   trusted-root dirfd operations and store-lifetime resolver leases. Startup reconciliation and
   private named-volume materialization are implemented and pass real Docker UID/mode/hash canaries.
