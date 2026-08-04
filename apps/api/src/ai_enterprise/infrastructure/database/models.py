@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -72,6 +73,9 @@ class ProjectModel(Base):
 
 class CrewRunModel(Base):
     __tablename__ = "crew_runs"
+    __table_args__ = (
+        Index("ix_crew_runs_project_created_at", "project_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -203,6 +207,7 @@ class AuditEventModel(Base):
 
 class JobModel(Base):
     __tablename__ = "jobs"
+    __table_args__ = (Index("ix_jobs_project_created_at", "project_id", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -309,6 +314,9 @@ class JobModel(Base):
 
 class WorkPackageModel(Base):
     __tablename__ = "work_packages"
+    __table_args__ = (
+        Index("ix_work_packages_project_created_at", "project_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -1318,3 +1326,66 @@ class RecoveryRemoteVerificationModel(Base):
     remote_parent_sha: Mapped[str] = mapped_column(String(64), nullable=False)
     integration_commit_in_history: Mapped[bool] = mapped_column(Boolean, nullable=False)
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class BlueprintAssetModel(Base):
+    __tablename__ = "blueprint_assets"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "blueprint_key",
+            "version",
+            name="uq_blueprint_asset_org_key_version",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    blueprint_key: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(80), nullable=False)
+    lifecycle: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="proposed", index=True
+    )
+    source_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    source_phase: Mapped[str] = mapped_column(String(80), nullable=False)
+    source_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="RESTRICT")
+    )
+    supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("blueprint_assets.id", ondelete="RESTRICT")
+    )
+    pattern: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    economic_proof: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    recommended_use: Mapped[str] = mapped_column(Text, nullable=False)
+    reuse_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class BlueprintDecisionModel(Base):
+    __tablename__ = "blueprint_decisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("blueprint_assets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    previous_lifecycle: Mapped[str] = mapped_column(String(40), nullable=False)
+    lifecycle: Mapped[str] = mapped_column(String(40), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(200), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

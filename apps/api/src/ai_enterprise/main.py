@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 
 from ai_enterprise.api.routes.agent_runtime import router as agent_runtime_router
@@ -12,6 +14,7 @@ from ai_enterprise.api.routes.architecture_operations import (
     router as architecture_operations_router,
 )
 from ai_enterprise.api.routes.audit import router as audit_router
+from ai_enterprise.api.routes.blueprints import router as blueprints_router
 from ai_enterprise.api.routes.change_management import (
     router as change_management_router,
 )
@@ -50,6 +53,7 @@ from ai_enterprise.infrastructure.database.session import SessionFactory
 from ai_enterprise.observability import (
     configure_logging,
     increment_metric,
+    observe_duration,
     prometheus_metrics_snapshot,
 )
 
@@ -70,8 +74,10 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+app.add_middleware(GZipMiddleware, minimum_size=1_000, compresslevel=5)
 
 app.include_router(projects_router, prefix="/api/v1")
+app.include_router(blueprints_router, prefix="/api/v1")
 app.include_router(project_formation_router, prefix="/api/v1")
 app.include_router(architecture_governance_router, prefix="/api/v1")
 app.include_router(architecture_operations_router)
@@ -106,6 +112,7 @@ app.include_router(dashboard_router)
 
 @app.middleware("http")
 async def record_http_metrics(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+    started = perf_counter()
     increment_metric("http_requests_total")
     increment_metric(f"http_requests_{request.method.lower()}_total")
     try:
@@ -113,9 +120,16 @@ async def record_http_metrics(request: Request, call_next) -> Response:  # type:
     except Exception:
         increment_metric("http_responses_500_total")
         raise
-    route = request.scope.get("route")
-    route_path = getattr(route, "path", request.url.path)
-    route_key = route_path.strip("/").replace("/", "_").replace("{", "").replace("}", "") or "root"
+    finally:
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", request.url.path)
+        route_key = (
+            route_path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
+            or "root"
+        )
+        elapsed_seconds = perf_counter() - started
+        observe_duration(f"http_route_{route_key}_duration", elapsed_seconds)
+    response.headers["Server-Timing"] = f"app;dur={elapsed_seconds * 1000:.3f}"
     increment_metric(f"http_route_{route_key}_total")
     increment_metric(f"http_responses_{response.status_code}_total")
     return response

@@ -3,20 +3,31 @@ import logging
 import sys
 import threading
 import time
-from collections import Counter
 from collections.abc import Mapping
 from contextvars import ContextVar
 from typing import Any
 
 correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
-_metrics: Counter[str] = Counter()
+_metrics: dict[str, int | float] = {}
 _lock = threading.Lock()
 _process_started_at = time.time()
 
 
 def increment_metric(name: str, amount: int = 1) -> None:
     with _lock:
-        _metrics[name] += amount
+        _metrics[name] = _metrics.get(name, 0) + amount
+
+
+def observe_duration(name: str, seconds: float) -> None:
+    """Record dependency-free count, sum, and max latency signals."""
+    milliseconds = max(0.0, seconds * 1000)
+    with _lock:
+        count = f"{name}_count"
+        total = f"{name}_milliseconds_sum"
+        _metrics[count] = _metrics.get(count, 0) + 1
+        _metrics[total] = _metrics.get(total, 0) + milliseconds
+        maximum = f"{name}_milliseconds_max"
+        _metrics[maximum] = max(float(_metrics.get(maximum, 0)), milliseconds)
 
 
 def metrics_snapshot() -> dict[str, int | float]:

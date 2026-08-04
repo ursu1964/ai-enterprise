@@ -103,6 +103,9 @@ async def get_actor(
             role=actor_role,
             capabilities=frozenset(
                 {
+                    "blueprint.read",
+                    "blueprint.review",
+                    "blueprint.write",
                     "ecosystem.read",
                     "operator.jobs.manage",
                     "project.read",
