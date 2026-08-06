@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _load_bk_roadmap_audit():
     root = Path(__file__).resolve().parents[3]
@@ -22,6 +24,9 @@ def test_bk_roadmap_audit_reports_bk_evidence_and_canonical_ir_specs() -> None:
     report = module.audit_bk_roadmap(root, Path("1/bk.txt"))
 
     assert report["status"] == "pass"
+    assert report["schema_ref"] == (
+        "schemas/architecture-baseline/bk-roadmap-audit-report.schema.json"
+    )
     assert report["documents_detected"] == ["R10-IR-01"]
     canonical = {item["document_id"]: item for item in report["canonical_specifications"]}
     assert canonical["R10-IR-01"]["status"] == "canonical_ir_specification"
@@ -44,6 +49,13 @@ def test_bk_roadmap_audit_reports_bk_evidence_and_canonical_ir_specs() -> None:
     assert modules["BK-R10"]["missing_paths"] == []
     assert modules["BK-R11"]["complete"] is True
     assert modules["BK-R11"]["missing_paths"] == []
+    schema = json.loads(
+        (
+            root / "schemas" / "architecture-baseline" / "bk-roadmap-audit-report.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(report, schema)
 
 
 def test_bk_roadmap_audit_blocks_when_required_evidence_is_missing(tmp_path: Path) -> None:
@@ -86,3 +98,23 @@ def test_bk_roadmap_audit_has_ci_friendly_json_output(capsys) -> None:
     output = json.loads(capsys.readouterr().out)
     assert output["schema_version"] == "1.0"
     assert output["status"] == "pass"
+
+
+def test_bk_roadmap_audit_fails_closed_when_report_schema_validation_fails(monkeypatch) -> None:
+    module = _load_bk_roadmap_audit()
+    root = Path(__file__).resolve().parents[3]
+    original_schema = module._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "_schema", stricter_schema)
+
+    try:
+        module.audit_bk_roadmap(root, Path("1/bk.txt"))
+    except RuntimeError as exc:
+        assert module.SCHEMA_REF in str(exc)
+        assert "generated BK roadmap audit report does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid BK roadmap audit report was accepted")

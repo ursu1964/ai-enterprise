@@ -20,12 +20,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 DOCUMENT_ID_PATTERN = re.compile(r"^Document ID:\s*(?P<document_id>[A-Z0-9-]+)\s*$", re.MULTILINE)
 NEXT_SPEC_PATTERN = re.compile(
     r"The next required specification is\s+(?P<specification>R\d+-[A-Z0-9-]+)\s+—\s+"
     r"(?P<title>[^.\n]+)",
     re.MULTILINE,
 )
+SCHEMA_REF = "schemas/architecture-baseline/bk-roadmap-audit-report.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "architecture-baseline"
 
 BK_R10_EVIDENCE_PATHS: tuple[str, ...] = (
     "docs/ir/R10-IR-01-verification-validation-engine.md",
@@ -120,6 +124,7 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
 
     payload_without_hash: dict[str, Any] = {
         "schema_version": "1.0",
+        "schema_ref": SCHEMA_REF,
         "source_path": str(source_path),
         "source_hash": _sha256_text(source_text),
         "documents_detected": list(document_ids),
@@ -146,10 +151,12 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
         "status": status,
         "next_action": _next_action(gaps, next_spec),
     }
-    return {
+    report = {
         **payload_without_hash,
         "audit_hash": _stable_hash(payload_without_hash),
     }
+    _validate_report(report)
+    return report
 
 
 def _bk_r10_module(root: Path) -> ImplementedModule:
@@ -313,6 +320,21 @@ def _sha256_text(value: str) -> str:
 def _stable_hash(payload: dict[str, Any]) -> str:
     rendered = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / "bk-roadmap-audit-report.schema.json").read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{SCHEMA_REF}: generated BK roadmap audit report does not validate: {exc.message}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:

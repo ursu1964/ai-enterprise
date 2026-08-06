@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/architecture-baseline/bk-roadmap-audit-report.schema.json",
+  "title": "BK Roadmap Audit Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_ref",
+    "source_path",
+    "source_hash",
+    "documents_detected",
+    "canonical_specifications",
+    "derived_specifications",
+    "referenced_next_specification",
+    "next_required_specification",
+    "implemented_modules",
+    "gaps",
+    "status",
+    "next_action",
+    "audit_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/architecture-baseline/bk-roadmap-audit-report.schema.json"
+    },
+    "source_path": { "type": "string", "minLength": 1 },
+    "source_hash": { "$ref": "#/$defs/sha256" },
+    "documents_detected": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/document_id" }
+    },
+    "canonical_specifications": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonical_specification" }
+    },
+    "derived_specifications": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/derived_specification" }
+    },
+    "referenced_next_specification": {
+      "oneOf": [
+        { "$ref": "#/$defs/referenced_specification" },
+        { "type": "null" }
+      ]
+    },
+    "next_required_specification": {
+      "oneOf": [
+        { "$ref": "#/$defs/specification_reference" },
+        { "type": "null" }
+      ]
+    },
+    "implemented_modules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/implemented_module" }
+    },
+    "gaps": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "status": {
+      "enum": ["pass", "blocked", "r11_core_runtime_ready_canonical_spec_missing"]
+    },
+    "next_action": { "type": "string", "minLength": 1 },
+    "audit_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "^R[0-9]+-IR-[0-9]+$"
+    },
+    "specification_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "title"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/document_id" },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "referenced_specification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "title", "resolution"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/document_id" },
+        "title": { "type": "string", "minLength": 1 },
+        "resolution": {
+          "enum": [
+            "already_canonical_and_implemented",
+            "canonical_specification_present",
+            "canonical_specification_missing"
+          ]
+        }
+      }
+    },
+    "canonical_specification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "path", "status", "source_hash"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/document_id" },
+        "path": {
+          "type": "string",
+          "pattern": "^docs/ir/R[0-9]+-IR-[0-9]+-.+\\.md$"
+        },
+        "status": { "const": "canonical_ir_specification" },
+        "source_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "derived_specification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "title", "path", "status"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/document_id" },
+        "title": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "status": {
+          "enum": ["superseded_by_canonical_ir_specification", "derived_local_specification"]
+        }
+      }
+    },
+    "implemented_module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "source_document_id",
+        "title",
+        "complete",
+        "missing_paths",
+        "evidence"
+      ],
+      "properties": {
+        "module": { "type": "string", "pattern": "^BK-R[0-9]+$" },
+        "source_document_id": { "$ref": "#/$defs/document_id" },
+        "title": { "type": "string", "minLength": 1 },
+        "complete": { "type": "boolean" },
+        "missing_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence_check" }
+        }
+      }
+    },
+    "evidence_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "present"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "present": { "type": "boolean" }
+      }
+    }
+  }
+}
