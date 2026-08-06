@@ -103,7 +103,7 @@ linked evidence-correction records.
 - AI-generated summaries do not replace raw evidence.
 - Missing required evidence is represented as an explicit evidence gap.
 
-## Commands and APIs
+## Commands
 
 Required commands include:
 
@@ -137,6 +137,18 @@ Required commands include:
 Every mutating command includes authenticated actor, organization, project
 where applicable, subject references, expected aggregate revision, idempotency
 key, policy context, reason, and correlation identifier.
+
+## Security and governance
+
+R11-IR-01 enforces strong identity, role- and policy-based authorization,
+purpose limitation, least-privilege evidence access, tenant isolation,
+encryption, key rotation, signature-key protection, dual control where
+required, immutable access audit, export controls, malware scanning,
+content-type validation, legal hold, retention enforcement, and tamper
+detection.
+
+Administrative control and evidence-reading authority are separable. No
+platform administrator automatically receives unrestricted evidence access.
 
 ## Events
 

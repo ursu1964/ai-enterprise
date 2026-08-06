@@ -99,7 +99,7 @@ Core invariants:
 - The implementation-producing actor cannot be the sole authority for critical
   verification.
 
-## Commands and APIs
+## Commands
 
 Required commands include:
 
@@ -129,6 +129,17 @@ Required commands include:
 Every mutating command includes authenticated actor, organization, project,
 campaign, exact baselines, expected revision, idempotency key, policy context,
 reason, and correlation identifier.
+
+## Security and governance
+
+R10-IR-01 enforces authenticated actors and agents, role- and policy-based
+authorization, verification independence, confidential test-data controls,
+restricted vulnerability details, environment isolation, destructive-test
+approval, production-observation controls, secret isolation, evidence integrity,
+waiver authority, separation of duties, tenant isolation, and immutable audit.
+
+Security testing must remain authorized and scoped. Verification cannot become
+an uncontrolled attack against shared, external, or production systems.
 
 ## Events
 

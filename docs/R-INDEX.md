@@ -41,6 +41,8 @@ product-platform R-series where names collide:
   `docs/ir/R10-IR-01-verification-validation-engine.md`
 - `R11-IR-01` — Evidence and Audit Engine:
   `docs/ir/R11-IR-01-evidence-audit-engine.md`
+- `R12-IR-01` — Policy and Governance Engine:
+  `docs/ir/R12-IR-01-policy-governance-engine.md`
 
-These IR modules reconcile to the existing BK/R10 and BK/R11 implementation
-paths and do not replace the existing R10 UEIF or R11 UIEF modules.
+These IR modules reconcile to existing repository implementation paths and do
+not replace the existing R10 UEIF, R11 UIEF, or R12 bootstrap modules.
