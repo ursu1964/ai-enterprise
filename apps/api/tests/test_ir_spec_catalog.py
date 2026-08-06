@@ -11,6 +11,14 @@ def _read(path: Path) -> str:
 
 def test_ir_catalog_tracks_r10_to_r12_without_r_series_collision() -> None:
     expected = {
+        "R02-IR-01": IR_DIR / "R02-IR-01-foundational-domain-manifest-concepts.md",
+        "R03-IR-01": IR_DIR / "R03-IR-01-registry-foundations-executable-foundation.md",
+        "R04-IR-01": IR_DIR / "R04-IR-01-controlled-ai-participation.md",
+        "R05-IR-01": IR_DIR / "R05-IR-01-manifest-transformation-engine.md",
+        "R06-IR-01": IR_DIR / "R06-IR-01-artifact-generation-framework.md",
+        "R07-IR-01": IR_DIR / "R07-IR-01-execution-runtime-model.md",
+        "R08-IR-01": IR_DIR / "R08-IR-01-governance-evolution-intelligence-framework.md",
+        "R09-IR-01": IR_DIR / "R09-IR-01-universal-ai-enterprise-kernel.md",
         "R10-IR-01": IR_DIR / "R10-IR-01-verification-validation-engine.md",
         "R11-IR-01": IR_DIR / "R11-IR-01-evidence-audit-engine.md",
         "R12-IR-01": IR_DIR / "R12-IR-01-policy-governance-engine.md",

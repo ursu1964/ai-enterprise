@@ -14,7 +14,7 @@ The repository contains R2–R22 implementation evidence under the existing AI-E
 ## Repository inventory
 
 - R source documents: 22
-- IR specification documents: 13
+- IR specification documents: 21
 - implementation packages: 21
 - application Python files: 508
 - test files: 162
@@ -26,11 +26,19 @@ The repository contains R2–R22 implementation evidence under the existing AI-E
 
 - Product R packages complete: 21/21
 - Capability areas reconciled: 168/168
-- Repository evidence references: 527
+- Repository evidence references: 535
 - Verdict: COMPLETE
 
 ## IR constitutional specifications
 
+- `R02-IR-01` — `docs/ir/R02-IR-01-foundational-domain-manifest-concepts.md`
+- `R03-IR-01` — `docs/ir/R03-IR-01-registry-foundations-executable-foundation.md`
+- `R04-IR-01` — `docs/ir/R04-IR-01-controlled-ai-participation.md`
+- `R05-IR-01` — `docs/ir/R05-IR-01-manifest-transformation-engine.md`
+- `R06-IR-01` — `docs/ir/R06-IR-01-artifact-generation-framework.md`
+- `R07-IR-01` — `docs/ir/R07-IR-01-execution-runtime-model.md`
+- `R08-IR-01` — `docs/ir/R08-IR-01-governance-evolution-intelligence-framework.md`
+- `R09-IR-01` — `docs/ir/R09-IR-01-universal-ai-enterprise-kernel.md`
 - `R10-IR-01` — `docs/ir/R10-IR-01-verification-validation-engine.md`
 - `R11-IR-01` — `docs/ir/R11-IR-01-evidence-audit-engine.md`
 - `R12-IR-01` — `docs/ir/R12-IR-01-policy-governance-engine.md`

@@ -36,6 +36,22 @@ Application code remains under `apps/api/src`; implementation packages contain a
 
 The BK/IR constitutional modules are tracked separately from the numbered product-platform R-series where names collide:
 
+- `R02-IR-01` — Foundational Domain and Manifest Concepts:
+  `docs/ir/R02-IR-01-foundational-domain-manifest-concepts.md`
+- `R03-IR-01` — Registry Foundations and Executable Foundation:
+  `docs/ir/R03-IR-01-registry-foundations-executable-foundation.md`
+- `R04-IR-01` — Controlled AI Participation:
+  `docs/ir/R04-IR-01-controlled-ai-participation.md`
+- `R05-IR-01` — Universal Manifest Transformation Engine:
+  `docs/ir/R05-IR-01-manifest-transformation-engine.md`
+- `R06-IR-01` — Universal Artifact Generation Framework:
+  `docs/ir/R06-IR-01-artifact-generation-framework.md`
+- `R07-IR-01` — Universal Execution and Runtime Model:
+  `docs/ir/R07-IR-01-execution-runtime-model.md`
+- `R08-IR-01` — Universal Governance, Evolution and Intelligence Framework:
+  `docs/ir/R08-IR-01-governance-evolution-intelligence-framework.md`
+- `R09-IR-01` — Universal AI-Enterprise Kernel:
+  `docs/ir/R09-IR-01-universal-ai-enterprise-kernel.md`
 - `R10-IR-01` — Verification and Validation Engine:
   `docs/ir/R10-IR-01-verification-validation-engine.md`
 - `R11-IR-01` — Evidence and Audit Engine:

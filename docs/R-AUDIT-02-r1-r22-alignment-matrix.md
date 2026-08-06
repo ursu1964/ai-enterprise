@@ -1,17 +1,17 @@
 # R-AUDIT-02 — R1–R22 Alignment Matrix
 
-Total repository evidence references: 527
+Total repository evidence references: 535
 
 | R | P phase | Title | Evidence areas | Evidence refs | Status |
 |---|---|---|---:|---:|---|
-| R2 | P12 | R2 — Foundational Domain and Manifest Concepts | 8/8 | 45 | complete |
-| R3 | P13 | R3 should convert R1 and R2 into the first executable implementation specification. It should define exactly what the engineering team builds before introducing the frontend, document generators, or AI interpretation. | 8/8 | 24 | complete |
-| R4 | P14 | R4 — AI Interpretation and Manifest Extraction Specification | 8/8 | 30 | complete |
-| R5 | P15 | R5 — Universal Manifest Transformation Engine (UMTE) | 8/8 | 21 | complete |
-| R6 | P16 | R6 — Universal Artifact Generation Framework (UAGF) | 8/8 | 21 | complete |
-| R7 | P17 | R7 — Universal Execution & Runtime Model (UERM) | 8/8 | 24 | complete |
-| R8 | P18 | R8 — Universal Governance, Evolution & Intelligence Framework (UGEIF) | 8/8 | 19 | complete |
-| R9 | P19 | R9 — Universal AI-Enterprise Kernel (UAK) | 8/8 | 21 | complete |
+| R2 | P12 | R2 — Foundational Domain and Manifest Concepts | 8/8 | 46 | complete |
+| R3 | P13 | R3 should convert R1 and R2 into the first executable implementation specification. It should define exactly what the engineering team builds before introducing the frontend, document generators, or AI interpretation. | 8/8 | 25 | complete |
+| R4 | P14 | R4 — AI Interpretation and Manifest Extraction Specification | 8/8 | 31 | complete |
+| R5 | P15 | R5 — Universal Manifest Transformation Engine (UMTE) | 8/8 | 22 | complete |
+| R6 | P16 | R6 — Universal Artifact Generation Framework (UAGF) | 8/8 | 22 | complete |
+| R7 | P17 | R7 — Universal Execution & Runtime Model (UERM) | 8/8 | 25 | complete |
+| R8 | P18 | R8 — Universal Governance, Evolution & Intelligence Framework (UGEIF) | 8/8 | 20 | complete |
+| R9 | P19 | R9 — Universal AI-Enterprise Kernel (UAK) | 8/8 | 22 | complete |
 | R10 | P20 | R10 — Universal Experience & Interaction Framework (UEIF) | 8/8 | 35 | complete |
 | R11 | P21 | R11 | 8/8 | 36 | complete |
 | R12 | P22 | R12 — AI-Enterprise Implementation & Bootstrap Specification | 7/8 | 26 | complete |

@@ -19,6 +19,38 @@ from typing import Any
 RANGE = tuple(range(2, 23))
 ALIGNMENT_REPORT_SCHEMA_REF = "schemas/architecture-baseline/r-series-alignment-report.schema.json"
 IR_SPECIFICATIONS: dict[str, tuple[str, str]] = {
+    "R02-IR-01": (
+        "Foundational Domain and Manifest Concepts",
+        "docs/ir/R02-IR-01-foundational-domain-manifest-concepts.md",
+    ),
+    "R03-IR-01": (
+        "Registry Foundations and Executable Foundation",
+        "docs/ir/R03-IR-01-registry-foundations-executable-foundation.md",
+    ),
+    "R04-IR-01": (
+        "Controlled AI Participation",
+        "docs/ir/R04-IR-01-controlled-ai-participation.md",
+    ),
+    "R05-IR-01": (
+        "Universal Manifest Transformation Engine",
+        "docs/ir/R05-IR-01-manifest-transformation-engine.md",
+    ),
+    "R06-IR-01": (
+        "Universal Artifact Generation Framework",
+        "docs/ir/R06-IR-01-artifact-generation-framework.md",
+    ),
+    "R07-IR-01": (
+        "Universal Execution and Runtime Model",
+        "docs/ir/R07-IR-01-execution-runtime-model.md",
+    ),
+    "R08-IR-01": (
+        "Universal Governance, Evolution and Intelligence Framework",
+        "docs/ir/R08-IR-01-governance-evolution-intelligence-framework.md",
+    ),
+    "R09-IR-01": (
+        "Universal AI-Enterprise Kernel",
+        "docs/ir/R09-IR-01-universal-ai-enterprise-kernel.md",
+    ),
     "R10-IR-01": (
         "Verification and Validation Engine",
         "docs/ir/R10-IR-01-verification-validation-engine.md",
@@ -760,7 +792,7 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
             "",
             "- Product R-series: R2–R22",
             "- Implementation phases: P12–P32",
-            "- IR constitutional specifications: R10-IR-01–R22-IR-01",
+            "- IR constitutional specifications: R02-IR-01–R22-IR-01",
             "- Audit reconciliation: R-AUDIT-01 and R-AUDIT-02",
             "- Application source root: `apps/api/src`",
             "- Evidence packages: `implementation/r02` through `implementation/r22`",

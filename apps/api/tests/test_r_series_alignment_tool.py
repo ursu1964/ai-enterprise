@@ -40,7 +40,7 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     assert report["reconciled_capability_area_count"] == 168
     assert report["evidence_reference_count"] > 0
     assert report["reconciliation_verdict"] == "complete"
-    assert report["ir_specification_count"] == 13
+    assert report["ir_specification_count"] == 21
     assert len(report["alignment_hash"]) == 64
 
     packages = {item["r"]: item for item in report["packages"]}
@@ -48,6 +48,9 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     assert packages["R22"]["p_phase"] == "P32"
     assert packages["R22"]["complete"] is True
     ir_specs = {item["document_id"]: item for item in report["ir_specifications"]}
+    assert ir_specs["R02-IR-01"]["path"] == (
+        "docs/ir/R02-IR-01-foundational-domain-manifest-concepts.md"
+    )
     assert ir_specs["R22-IR-01"]["path"] == (
         "docs/ir/R22-IR-01-constitutional-kernel-evolution-framework.md"
     )
