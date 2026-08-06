@@ -17,6 +17,60 @@ from pathlib import Path
 from typing import Any
 
 RANGE = tuple(range(2, 23))
+IR_SPECIFICATIONS: dict[str, tuple[str, str]] = {
+    "R10-IR-01": (
+        "Verification and Validation Engine",
+        "docs/ir/R10-IR-01-verification-validation-engine.md",
+    ),
+    "R11-IR-01": (
+        "Evidence and Audit Engine",
+        "docs/ir/R11-IR-01-evidence-audit-engine.md",
+    ),
+    "R12-IR-01": (
+        "Policy and Governance Engine",
+        "docs/ir/R12-IR-01-policy-governance-engine.md",
+    ),
+    "R13-IR-01": (
+        "AI Orchestration Engine",
+        "docs/ir/R13-IR-01-ai-orchestration-engine.md",
+    ),
+    "R14-IR-01": (
+        "Agent Framework",
+        "docs/ir/R14-IR-01-agent-framework.md",
+    ),
+    "R15-IR-01": (
+        "Workflow and Process Engine",
+        "docs/ir/R15-IR-01-workflow-process-engine.md",
+    ),
+    "R16-IR-01": (
+        "Repository Integration Engine",
+        "docs/ir/R16-IR-01-repository-integration-engine.md",
+    ),
+    "R17-IR-01": (
+        "Deployment and Runtime Engine",
+        "docs/ir/R17-IR-01-deployment-runtime-engine.md",
+    ),
+    "R18-IR-01": (
+        "Observability and Telemetry Engine",
+        "docs/ir/R18-IR-01-observability-telemetry-engine.md",
+    ),
+    "R19-IR-01": (
+        "Security and Identity Engine",
+        "docs/ir/R19-IR-01-security-identity-engine.md",
+    ),
+    "R20-IR-01": (
+        "Organizational Knowledge Engine",
+        "docs/ir/R20-IR-01-organizational-knowledge-engine.md",
+    ),
+    "R21-IR-01": (
+        "Platform Administration and Operations",
+        "docs/ir/R21-IR-01-platform-administration-operations.md",
+    ),
+    "R22-IR-01": (
+        "Constitutional Kernel and Evolution Framework",
+        "docs/ir/R22-IR-01-constitutional-kernel-evolution-framework.md",
+    ),
+}
 PACKAGE_FILES = (
     "repository-baseline.md",
     "requirement-matrix.md",
@@ -368,6 +422,8 @@ def _write_master_docs(root: Path, alignments: list[RAlignment]) -> None:
                     "Application code remains under `apps/api/src`; implementation "
                     "packages contain audit, planning, and acceptance evidence only."
                 ),
+                "",
+                _ir_index_section(root),
             ]
         ),
         encoding="utf-8",
@@ -382,6 +438,10 @@ def _write_master_docs(root: Path, alignments: list[RAlignment]) -> None:
     )
     (docs / "R-REV-01-corrected-r-series-baseline.md").write_text(
         _rev_01(alignments),
+        encoding="utf-8",
+    )
+    (docs / "ARCHITECTURE-BASELINE-v1.0.md").write_text(
+        _architecture_baseline(root, alignments),
         encoding="utf-8",
     )
 
@@ -573,6 +633,13 @@ def _rev_01(alignments: list[RAlignment]) -> str:
             "",
             correction,
             "",
+            (
+                "Additional correction: IR constitutional specifications are not "
+                "replacements for existing product-platform R-series modules. They "
+                "are tracked under `docs/ir/` and reconciled through existing "
+                "repository boundaries."
+            ),
+            "",
             "Policy:",
             "",
             "- R23 must not be started as a continuation label until R2–R22 are audited.",
@@ -585,17 +652,131 @@ def _rev_01(alignments: list[RAlignment]) -> str:
     )
 
 
+def _ir_index_section(root: Path) -> str:
+    lines = [
+        "## IR constitutional specifications",
+        "",
+        (
+            "The BK/IR constitutional modules are tracked separately from the numbered "
+            "product-platform R-series where names collide:"
+        ),
+        "",
+    ]
+    for document_id, (title, path) in IR_SPECIFICATIONS.items():
+        lines.extend([f"- `{document_id}` — {title}:", f"  `{path}`"])
+    lines.extend(
+        [
+            "",
+            (
+                "These IR modules reconcile to existing repository implementation paths "
+                "and do not replace the existing product-platform R-series modules. "
+                "R18-IR preserves the existing R18 generator orchestration module. "
+                "R19-IR preserves the existing R19 project memory module. R20-IR "
+                "preserves the existing R20 runtime kernel module. R21-IR preserves "
+                "the existing R21 execution orchestrator module. R22-IR preserves "
+                "the existing R22 artifact intelligence and evidence graph module."
+            ),
+        ]
+    )
+    missing = [
+        f"`{document_id}` -> `{path}`"
+        for document_id, (_, path) in IR_SPECIFICATIONS.items()
+        if not (root / path).is_file()
+    ]
+    if missing:
+        lines.extend(
+            ["", "Missing IR specification files:", "", *[f"- {item}" for item in missing]]
+        )
+    return "\n".join(lines)
+
+
+def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
+    complete_count = sum(1 for item in alignments if item.complete)
+    incomplete_packages = ", ".join(f"R{item.r_number}" for item in alignments if not item.complete)
+    ir_present = [
+        document_id
+        for document_id, (_, path) in IR_SPECIFICATIONS.items()
+        if (root / path).is_file()
+    ]
+    ir_missing = [
+        document_id
+        for document_id, (_, path) in IR_SPECIFICATIONS.items()
+        if not (root / path).is_file()
+    ]
+    release_bundle = root / "artifacts" / "release-evidence-bundle.json"
+    release_bundle_line = (
+        "- Latest release evidence bundle: `artifacts/release-evidence-bundle.json`"
+        if release_bundle.is_file()
+        else "- Latest release evidence bundle: not present in this checkout"
+    )
+    verdict = (
+        "FREEZE CANDIDATE" if complete_count == len(alignments) and not ir_missing else "NOT READY"
+    )
+    return _markdown(
+        [
+            "# Architecture Baseline v1.0",
+            "",
+            "Status: " + verdict,
+            "",
+            "## Scope",
+            "",
+            "- Product R-series: R2–R22",
+            "- Implementation phases: P12–P32",
+            "- IR constitutional specifications: R10-IR-01–R22-IR-01",
+            "- Application source root: `apps/api/src`",
+            "- Evidence packages: `implementation/r02` through `implementation/r22`",
+            "",
+            "## Product R-series implementation status",
+            "",
+            f"- Complete packages: {complete_count}/{len(alignments)}",
+            f"- Incomplete packages: {incomplete_packages or 'none'}",
+            "",
+            "## IR constitutional specification status",
+            "",
+            f"- Present IR specifications: {len(ir_present)}/{len(IR_SPECIFICATIONS)}",
+            f"- Missing IR specifications: {', '.join(ir_missing) or 'none'}",
+            "",
+            "## Baseline evidence",
+            "",
+            "- R-INDEX: `docs/R-INDEX.md`",
+            "- R-AUDIT-01: `docs/R-AUDIT-01-current-state-repository-audit.md`",
+            "- R-AUDIT-02: `docs/R-AUDIT-02-r1-r22-alignment-matrix.md`",
+            "- R-REV-01: `docs/R-REV-01-corrected-r-series-baseline.md`",
+            release_bundle_line,
+            "",
+            "## Freeze rule",
+            "",
+            (
+                "This document is a freeze candidate, not a fabricated production "
+                "approval. A production baseline freeze still requires real owner "
+                "approval, release evidence archival, and any environment-specific "
+                "operational evidence required by policy."
+            ),
+        ]
+    )
+
+
 def _markdown(lines: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
 def _report(alignments: list[RAlignment]) -> dict[str, Any]:
+    ir_specs = [
+        {
+            "document_id": document_id,
+            "title": title,
+            "path": path,
+        }
+        for document_id, (title, path) in IR_SPECIFICATIONS.items()
+    ]
     payload: dict[str, Any] = {
         "schema_version": "1.0",
         "r_range": "R2-R22",
         "package_count": len(alignments),
         "complete_count": sum(1 for item in alignments if item.complete),
         "incomplete": [f"R{item.r_number}" for item in alignments if not item.complete],
+        "ir_specification_count": len(ir_specs),
+        "ir_specifications": ir_specs,
         "packages": [
             {
                 "r": f"R{item.r_number}",

@@ -26,12 +26,17 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     assert report["package_count"] == 21
     assert report["complete_count"] == 21
     assert report["incomplete"] == []
+    assert report["ir_specification_count"] == 13
     assert len(report["alignment_hash"]) == 64
 
     packages = {item["r"]: item for item in report["packages"]}
     assert packages["R2"]["p_phase"] == "P12"
     assert packages["R22"]["p_phase"] == "P32"
     assert packages["R22"]["complete"] is True
+    ir_specs = {item["document_id"]: item for item in report["ir_specifications"]}
+    assert ir_specs["R22-IR-01"]["path"] == (
+        "docs/ir/R22-IR-01-constitutional-kernel-evolution-framework.md"
+    )
 
 
 def test_r_series_alignment_generates_required_package_structure(tmp_path: Path) -> None:
@@ -61,6 +66,7 @@ def test_r_series_alignment_generates_required_package_structure(tmp_path: Path)
     assert (tmp_path / "docs/R-AUDIT-01-current-state-repository-audit.md").exists()
     assert (tmp_path / "docs/R-AUDIT-02-r1-r22-alignment-matrix.md").exists()
     assert (tmp_path / "docs/R-REV-01-corrected-r-series-baseline.md").exists()
+    assert (tmp_path / "docs/ARCHITECTURE-BASELINE-v1.0.md").exists()
 
     for r_number in range(2, 23):
         package = tmp_path / "implementation" / f"r{r_number:02d}"
@@ -69,3 +75,7 @@ def test_r_series_alignment_generates_required_package_structure(tmp_path: Path)
 
     payload = json.loads((tmp_path / "artifacts/r-series-alignment-report.json").read_text())
     assert payload["alignment_hash"] == report["alignment_hash"]
+    index = (tmp_path / "docs/R-INDEX.md").read_text(encoding="utf-8")
+    assert "R22-IR-01" in index
+    assert "product-platform R-series modules" in index
+    assert "R22 artifact intelligence and evidence graph module" in index
