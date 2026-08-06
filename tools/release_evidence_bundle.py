@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +19,46 @@ class ArtifactSpec:
     content_type: str
     bk_r11_evidence_type: str
     schema_ref: str | None = None
+
+
+ARCHITECTURE_BASELINE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
+    ArtifactSpec(
+        name="architecture-baseline-v1",
+        path=Path("docs/ARCHITECTURE-BASELINE-v1.0.md"),
+        kind="architecture_baseline",
+        content_type="text/markdown",
+        bk_r11_evidence_type="architecture-baseline-freeze-candidate",
+    ),
+    ArtifactSpec(
+        name="r-audit-01",
+        path=Path("docs/R-AUDIT-01-current-state-repository-audit.md"),
+        kind="repository_audit",
+        content_type="text/markdown",
+        bk_r11_evidence_type="repository-audit",
+    ),
+    ArtifactSpec(
+        name="r-audit-02",
+        path=Path("docs/R-AUDIT-02-r1-r22-alignment-matrix.md"),
+        kind="alignment_matrix",
+        content_type="text/markdown",
+        bk_r11_evidence_type="requirements-traceability-matrix",
+    ),
+    ArtifactSpec(
+        name="r-rev-01",
+        path=Path("docs/R-REV-01-corrected-r-series-baseline.md"),
+        kind="corrected_baseline",
+        content_type="text/markdown",
+        bk_r11_evidence_type="baseline-correction-record",
+    ),
+    ArtifactSpec(
+        name="r-series-alignment-report",
+        path=Path("artifacts/r-series-alignment-report.json"),
+        kind="r_series_alignment_report",
+        content_type="application/json",
+        bk_r11_evidence_type="machine-verifiable-alignment-report",
+        schema_ref="schemas/architecture-baseline/r-series-alignment-report.schema.json",
+    ),
+)
 
 
 RELEASE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
@@ -50,6 +92,7 @@ RELEASE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         content_type="application/json",
         bk_r11_evidence_type="gate-execution-evidence",
     ),
+    *ARCHITECTURE_BASELINE_ARTIFACTS,
 )
 
 
@@ -119,6 +162,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         content_type="application/json",
         bk_r11_evidence_type="gate-execution-evidence",
     ),
+    *ARCHITECTURE_BASELINE_ARTIFACTS,
 )
 
 
@@ -153,6 +197,37 @@ def _artifact_record(root: Path, spec: ArtifactSpec) -> dict[str, Any]:
     }
 
 
+def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
+    paths = {spec.path.as_posix() for spec in specs}
+    if "artifacts/r-series-alignment-report.json" not in paths:
+        return
+    target = root / "artifacts" / "r-series-alignment-report.json"
+    if target.is_file():
+        return
+    if not (root / "tools" / "r_series_alignment.py").is_file():
+        return
+    module = _load_r_series_alignment(root)
+    report = module._report(module.build_alignment(root))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _load_r_series_alignment(root: Path) -> Any:
+    module_name = "_release_evidence_bundle_r_series_alignment"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        root / "tools" / "r_series_alignment.py",
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("r_series_alignment.py could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_manifest(
     root: Path,
     *,
@@ -161,6 +236,7 @@ def build_manifest(
 ) -> dict[str, Any]:
     generated_at = generated_at or datetime.now(UTC)
     specs = PRODUCTION_ARTIFACTS if production else RELEASE_ARTIFACTS
+    _ensure_derived_artifacts(root, specs)
     artifacts = [_artifact_record(root, spec) for spec in specs]
     missing = [item["path"] for item in artifacts if item["required"] and not item["present"]]
     document: dict[str, Any] = {
