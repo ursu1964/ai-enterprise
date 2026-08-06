@@ -12,12 +12,18 @@ import jsonschema
 SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "production-readiness"
 
 
+def _schema(schema_name: str) -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / schema_name).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def validate_document(
     payload: dict[str, Any],
     *,
     schema_name: str,
 ) -> list[str]:
-    schema = json.loads((SCHEMA_ROOT / schema_name).read_text(encoding="utf-8"))
+    schema = _schema(schema_name)
     validator = jsonschema.Draft202012Validator(schema)
     findings: list[str] = []
     for error in sorted(validator.iter_errors(payload), key=lambda item: item.json_path):
@@ -50,12 +56,8 @@ def verify_files(
             schema_name="production-evidence.schema.json",
         ),
     ]
-    findings = [
-        f"{check['name']}: {finding}"
-        for check in checks
-        for finding in check["findings"]
-    ]
-    return {
+    findings = [f"{check['name']}: {finding}" for check in checks for finding in check["findings"]]
+    report = {
         "schema_version": "1.0",
         "status": "valid" if not findings else "invalid",
         "conformant": not findings,
@@ -67,6 +69,20 @@ def verify_files(
             else "Fix schema findings before running semantic production readiness."
         ),
     }
+    _validate_report(report)
+    return report
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    schema_name = "production-readiness-contracts-report.schema.json"
+    schema = _schema(schema_name)
+    try:
+        jsonschema.validate(report, schema)
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{schema_name}: generated production readiness contracts report does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def _validate_file(*, name: str, path: Path, schema_name: str) -> dict[str, Any]:

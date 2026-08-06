@@ -80,6 +80,29 @@ def test_contract_cli_report_is_valid_for_current_templates() -> None:
     jsonschema.validate(report, _load_schema("production-readiness-contracts-report.schema.json"))
 
 
+def test_contract_cli_report_fails_closed_when_schema_validation_fails(monkeypatch) -> None:
+    original_schema = production_readiness_contracts._schema
+
+    def stricter_schema(schema_name: str) -> dict:
+        schema = original_schema(schema_name)
+        if schema_name == "production-readiness-contracts-report.schema.json":
+            return {**schema, "required": [*schema["required"], "impossible_field"]}
+        return schema
+
+    monkeypatch.setattr(production_readiness_contracts, "_schema", stricter_schema)
+
+    try:
+        production_readiness_contracts.verify_files(
+            choices_file=ENTERPRISE_DIR / "real-world-infrastructure-decisions.template.json",
+            evidence_file=ENTERPRISE_DIR / "production-readiness-evidence.template.json",
+        )
+    except RuntimeError as exc:
+        assert "production-readiness-contracts-report.schema.json" in str(exc)
+        assert "generated production readiness contracts report does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid production readiness contracts report was accepted")
+
+
 def test_infrastructure_choices_fail_before_semantics_when_shape_is_invalid(tmp_path: Path) -> None:
     path = tmp_path / "choices.json"
     path.write_text(json.dumps({"domain_tls": {"domain": "example"}}), encoding="utf-8")
