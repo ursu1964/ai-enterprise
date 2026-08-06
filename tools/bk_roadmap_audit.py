@@ -108,8 +108,13 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
         match.group("document_id") for match in DOCUMENT_ID_PATTERN.finditer(source_text)
     )
     canonical_specifications = _canonical_specifications(root)
-    next_spec = _next_spec(source_text)
     implemented_modules = (_bk_r10_module(root), _bk_r11_module(root))
+    referenced_next_spec = _next_spec(source_text)
+    next_spec = _unresolved_next_spec(
+        referenced_next_spec,
+        canonical_specifications,
+        implemented_modules,
+    )
     gaps = _gaps(document_ids, canonical_specifications, next_spec, implemented_modules)
     status = _status(gaps, implemented_modules)
 
@@ -120,6 +125,11 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
         "documents_detected": list(document_ids),
         "canonical_specifications": canonical_specifications,
         "derived_specifications": _derived_specifications(root),
+        "referenced_next_specification": _referenced_next_specification_status(
+            referenced_next_spec,
+            canonical_specifications,
+            implemented_modules,
+        ),
         "next_required_specification": next_spec,
         "implemented_modules": [
             {
@@ -209,6 +219,44 @@ def _next_spec(source_text: str) -> dict[str, str] | None:
         "document_id": match.group("specification"),
         "title": match.group("title").strip(),
     }
+
+
+def _unresolved_next_spec(
+    referenced_next_spec: dict[str, str] | None,
+    canonical_specifications: list[dict[str, str]],
+    implemented_modules: tuple[ImplementedModule, ...],
+) -> dict[str, str] | None:
+    if referenced_next_spec is None:
+        return None
+    document_id = referenced_next_spec["document_id"]
+    canonical_ids = {item["document_id"] for item in canonical_specifications}
+    implemented_ids = {
+        module.source_document_id for module in implemented_modules if module.complete
+    }
+    if document_id in canonical_ids and document_id in implemented_ids:
+        return None
+    return referenced_next_spec
+
+
+def _referenced_next_specification_status(
+    referenced_next_spec: dict[str, str] | None,
+    canonical_specifications: list[dict[str, str]],
+    implemented_modules: tuple[ImplementedModule, ...],
+) -> dict[str, str] | None:
+    if referenced_next_spec is None:
+        return None
+    document_id = referenced_next_spec["document_id"]
+    canonical_ids = {item["document_id"] for item in canonical_specifications}
+    implemented_ids = {
+        module.source_document_id for module in implemented_modules if module.complete
+    }
+    if document_id in canonical_ids and document_id in implemented_ids:
+        resolution = "already_canonical_and_implemented"
+    elif document_id in canonical_ids:
+        resolution = "canonical_specification_present"
+    else:
+        resolution = "canonical_specification_missing"
+    return {**referenced_next_spec, "resolution": resolution}
 
 
 def _gaps(

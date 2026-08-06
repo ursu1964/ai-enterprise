@@ -30,10 +30,12 @@ def test_bk_roadmap_audit_reports_bk_evidence_and_canonical_ir_specs() -> None:
     assert (
         report["derived_specifications"][0]["status"] == "superseded_by_canonical_ir_specification"
     )
-    assert report["next_required_specification"] == {
+    assert report["referenced_next_specification"] == {
         "document_id": "R11-IR-01",
         "title": "Evidence and Audit Engine",
+        "resolution": "already_canonical_and_implemented",
     }
+    assert report["next_required_specification"] is None
     assert report["gaps"] == []
     assert len(report["source_hash"]) == 64
     assert len(report["audit_hash"]) == 64
@@ -63,6 +65,15 @@ def test_bk_roadmap_audit_blocks_when_required_evidence_is_missing(tmp_path: Pat
     assert "BK-R10_IMPLEMENTATION_EVIDENCE_MISSING" in report["gaps"]
     assert "BK-R11_IMPLEMENTATION_EVIDENCE_MISSING" in report["gaps"]
     assert "BK_NEXT_CANONICAL_SPEC_BODY_MISSING" in report["gaps"]
+    assert report["referenced_next_specification"] == {
+        "document_id": "R11-IR-01",
+        "title": "Evidence and Audit Engine",
+        "resolution": "canonical_specification_missing",
+    }
+    assert report["next_required_specification"] == {
+        "document_id": "R11-IR-01",
+        "title": "Evidence and Audit Engine",
+    }
     assert report["implemented_modules"][0]["complete"] is False
 
 
