@@ -1,0 +1,6 @@
+{
+  "id": "depends_on",
+  "name": "Depends On",
+  "semantics": "Source cannot be semantically realized before target is available.",
+  "directional": true
+}

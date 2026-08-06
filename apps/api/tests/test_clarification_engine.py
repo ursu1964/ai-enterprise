@@ -17,7 +17,9 @@ from ai_enterprise.domain.clarification import (
     CanonicalCorrection,
     ClarificationAnswer,
     ClarificationReport,
+    HumanReviewDecision,
     apply_answer_batch,
+    apply_human_review_decisions,
     build_answer_batch,
     generate_clarification_report,
 )
@@ -125,6 +127,83 @@ def test_answer_batch_updates_only_scoped_object_and_preserves_old_model() -> No
     assert changed.status == "approved"
     assert changed.source.kind == "human_clarification"
     assert updated.model_sha256 != model.model_sha256
+
+
+def test_answer_batch_can_patch_structured_attributes() -> None:
+    document = sample()
+    document["business_outcomes"][0]["description"] = "TBD retention savings"  # type: ignore[index]
+    model = compile_aepm(AepmManifest.model_validate(document))
+    report = generate_clarification_report(AepmValidationEngine().validate(document))
+    question = next(
+        item
+        for item in report.unverified_assumptions
+        if "OUT-001" in item.target_object_ids
+    )
+    answer = ClarificationAnswer(
+        question_id=question.id,
+        response="Savings will be measured by cycle-time reduction and avoided rework.",
+        resolution="answered",
+        rationale="Confirmed with the operations sponsor.",
+        corrections=(
+            CanonicalCorrection(
+                target_object_id="OUT-001",
+                field="attributes",
+                attribute_key="indicators",
+                proposed_value=["Cycle-time reduction", "Avoided rework"],
+            ),
+        ),
+    )
+
+    batch = build_answer_batch(
+        report=report, base_model=model, respondent_id="operations-sponsor", answers=(answer,)
+    )
+    updated = apply_answer_batch(report=report, base_model=model, batch=batch)
+    changed = next(item for item in updated.objects if item.id == "OUT-001")
+
+    assert changed.attributes["indicators"] == ["Cycle-time reduction", "Avoided rework"]
+    assert changed.status == "approved"
+    assert updated.model_sha256 != model.model_sha256
+
+
+def test_human_review_decisions_approve_correct_and_reject_canonical_objects() -> None:
+    model = compile_aepm(AepmManifest.model_validate(sample()))
+
+    reviewed = apply_human_review_decisions(
+        base_model=model,
+        reviewer_id="client-reviewer",
+        decisions=(
+            HumanReviewDecision(
+                object_id="CAP-001",
+                decision="approved",
+                rationale="Confirmed by the capability owner.",
+            ),
+            HumanReviewDecision(
+                object_id="RULE-001",
+                decision="corrected",
+                rationale="Policy wording was clarified.",
+                description="Only authenticated customers may view their own request details.",
+            ),
+            HumanReviewDecision(
+                object_id="DEC-001",
+                decision="rejected",
+                rationale="Frontend technology choice is not approved yet.",
+            ),
+        ),
+    )
+
+    approved = next(item for item in reviewed.objects if item.id == "CAP-001")
+    corrected = next(item for item in reviewed.objects if item.id == "RULE-001")
+    rejected = next(item for item in reviewed.objects if item.id == "DEC-001")
+
+    assert approved.status == "approved"
+    assert corrected.status == "approved"
+    assert corrected.description == (
+        "Only authenticated customers may view their own request details."
+    )
+    assert rejected.status == "rejected"
+    assert corrected.source.kind == "human_clarification"
+    assert "reviewer:client-reviewer" in corrected.source.evidence_references
+    assert reviewed.model_sha256 != model.model_sha256
 
 
 def test_unknown_stale_and_out_of_scope_answers_fail_closed() -> None:

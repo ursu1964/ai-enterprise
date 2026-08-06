@@ -59,6 +59,24 @@ def test_structured_output_is_validated_and_finalized_deterministically() -> Non
 
     assert [item.id for item in first.items] == ["AI-001", "AI-002"]
     assert first == second
+    assert first.ai_operation.review_required is True
+    assert first.ai_operation.input_source_refs[0].startswith("source:")
+
+
+def test_ai_operation_provenance_is_bound_to_interpretation_batch() -> None:
+    validation = interpretation_output_validator().validate(json.dumps(model_output()))
+    assert validation.normalized_output is not None
+    assert validation.output_hash is not None
+    batch = finalize_interpretation(
+        source="Client prose",
+        normalized_output=validation.normalized_output,
+        model_output_sha256=validation.output_hash,
+    )
+    tampered = batch.model_dump(mode="json")
+    tampered["ai_operation"]["model_name"] = "different-model"
+
+    with pytest.raises(ValidationError, match="AI operation hash"):
+        InterpretationBatch.model_validate(tampered)
 
 
 @pytest.mark.parametrize("status", ["approved", "rejected"])

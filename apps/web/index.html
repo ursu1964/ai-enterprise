@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Enterprise Universal Experience Runtime</title>
+  <link rel="stylesheet" href="/client-portal/styles.css">
+</head>
+<body>
+  <main>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">AI Enterprise</p>
+        <h1>Universal Experience Runtime</h1>
+        <p class="summary">Import a Manifest, review the canonical model, and operate role-specific R10 workspaces from the same project source.</p>
+      </div>
+      <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/dashboard/documentation-hub">Docs</a>
+      </nav>
+    </header>
+
+    <section class="workspace">
+      <article class="panel manifest-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Manifest</h2>
+            <p>AEPM v0.1 JSON or YAML</p>
+          </div>
+          <button id="loadSampleButton" type="button">Load Sample</button>
+        </div>
+        <textarea id="manifestInput" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="importButton" type="button">Import Manifest</button>
+          <button id="approveButton" type="button" disabled>Approve Blueprint</button>
+          <button id="correctButton" type="button" disabled>Submit Corrections</button>
+          <button id="answerButton" type="button" disabled>Submit Clarification Answers</button>
+          <button id="downloadButton" type="button" disabled>Download Blueprint</button>
+        </div>
+        <label class="answer-label" for="answerInput">
+          Clarification answers JSON
+        </label>
+        <textarea id="answerInput" class="answer-input" spellcheck="false" placeholder="Import a manifest to generate clarification-answer templates."></textarea>
+        <p id="statusLine" class="status">Ready for a client manifest.</p>
+      </article>
+
+      <article class="panel review-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Review</h2>
+            <p>Canonical objects, gaps, and traceability</p>
+          </div>
+          <span id="reviewState" class="badge">waiting</span>
+        </div>
+        <div id="metrics" class="metrics">
+          <div><strong>0</strong><span>objects</span></div>
+          <div><strong>0</strong><span>relationships</span></div>
+          <div><strong>0</strong><span>artifacts</span></div>
+        </div>
+        <div id="reviewContent" class="review-content">
+          Import a manifest to see missing information, assumptions, canonical model objects, and blueprint proof.
+        </div>
+      </article>
+    </section>
+
+    <section class="experience-runtime" aria-labelledby="experienceRuntimeTitle">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">R10 UEIF</p>
+          <h2 id="experienceRuntimeTitle">Role Experience Runtime</h2>
+          <p>One Manifest, multiple role perspectives, live collaboration records, and API-backed client contracts.</p>
+        </div>
+        <span id="realtimeState" class="badge">offline</span>
+      </div>
+
+      <div class="runtime-toolbar" aria-label="Experience controls">
+        <label>
+          Role
+          <select id="roleSelect">
+            <option value="client">Client</option>
+            <option value="business_analyst">Business Analyst</option>
+            <option value="product_owner">Product Owner</option>
+            <option value="architect">Architect</option>
+            <option value="developer">Developer</option>
+            <option value="tester">Tester</option>
+            <option value="devops_engineer">DevOps Engineer</option>
+            <option value="operator">Operator</option>
+            <option value="administrator">Administrator</option>
+            <option value="auditor">Auditor</option>
+          </select>
+        </label>
+        <label>
+          Client
+          <select id="deviceSelect">
+            <option value="browser">Browser</option>
+            <option value="desktop">Desktop</option>
+            <option value="mobile">Mobile</option>
+            <option value="tablet">Tablet</option>
+            <option value="command_line">Command Line</option>
+            <option value="api">API</option>
+            <option value="ai_conversation">AI Conversation</option>
+          </select>
+        </label>
+        <button id="bootstrapExperienceButton" type="button" disabled>Bootstrap R10 Workspace</button>
+        <button id="refreshExperienceButton" type="button" disabled>Refresh Live State</button>
+      </div>
+
+      <div class="runtime-grid">
+        <article class="panel">
+          <h2>Role Dashboard</h2>
+          <div id="experienceMetrics" class="metrics runtime-metrics">
+            <div><strong>0</strong><span>workspaces</span></div>
+            <div><strong>0</strong><span>surfaces</span></div>
+            <div><strong>0</strong><span>collaboration</span></div>
+          </div>
+          <div id="experienceRecords" class="review-content">
+            Import a Manifest and bootstrap R10 to see role workspace records.
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>Workspace Surfaces</h2>
+          <div id="surfaceContent" class="surface-list">
+            <div class="item"><strong>Generation</strong><span>Waiting for project context.</span></div>
+            <div class="item"><strong>Runtime</strong><span>Waiting for project context.</span></div>
+            <div class="item"><strong>Governance</strong><span>Waiting for project context.</span></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>AI Proposal</h2>
+          <label class="answer-label" for="proposalInput">Structured recommendation</label>
+          <textarea id="proposalInput" class="compact-input" spellcheck="true">Review generated artifacts and propose the next governed improvement.</textarea>
+          <button id="createProposalButton" type="button" disabled>Create AI Proposal</button>
+        </article>
+
+        <article class="panel">
+          <h2>Collaboration</h2>
+          <label class="answer-label" for="commentInput">Manifest-object comment</label>
+          <textarea id="commentInput" class="compact-input" spellcheck="true">Review note anchored to manifest:current</textarea>
+          <button id="createCollaborationButton" type="button" disabled>Record Collaboration</button>
+        </article>
+      </div>
+    </section>
+  </main>
+  <script src="/client-portal/app.js"></script>
+</body>
+</html>

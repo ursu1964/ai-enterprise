@@ -69,15 +69,11 @@ def upgrade() -> None:
             ["validation_plan_id"], ["change_validation_plans.id"], ondelete="RESTRICT"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "proposal_id", "version", name="uq_change_rollout_proposal_version"
-        ),
+        sa.UniqueConstraint("proposal_id", "version", name="uq_change_rollout_proposal_version"),
         sa.UniqueConstraint("content_hash"),
         sa.CheckConstraint("version > 0", name="ck_change_rollout_version_positive"),
     )
-    op.create_index(
-        "ix_change_rollout_plans_proposal_id", "change_rollout_plans", ["proposal_id"]
-    )
+    op.create_index("ix_change_rollout_plans_proposal_id", "change_rollout_plans", ["proposal_id"])
 
     op.create_table(
         "change_rollback_plans",
@@ -102,9 +98,7 @@ def upgrade() -> None:
             ["validation_plan_id"], ["change_validation_plans.id"], ondelete="RESTRICT"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "proposal_id", "version", name="uq_change_rollback_proposal_version"
-        ),
+        sa.UniqueConstraint("proposal_id", "version", name="uq_change_rollback_proposal_version"),
         sa.UniqueConstraint("content_hash"),
         sa.CheckConstraint("version > 0", name="ck_change_rollback_version_positive"),
         sa.CheckConstraint(

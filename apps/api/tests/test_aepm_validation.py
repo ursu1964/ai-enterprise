@@ -37,6 +37,9 @@ def test_required_semantic_checks_are_classified() -> None:
     document["data_entities"][0]["owner_stakeholder_id"] = ""  # type: ignore[index]
     document["integrations"][0]["security_rules"] = []  # type: ignore[index]
 
+    report = AepmValidationEngine().validate(document)
+    findings = {item.code: item for item in report.findings}
+
     assert {
         "AEPM-VAL-001",
         "AEPM-VAL-002",
@@ -46,7 +49,12 @@ def test_required_semantic_checks_are_classified() -> None:
         "AEPM-VAL-006",
         "AEPM-VAL-007",
         "AEPM-VAL-011",
-    } <= codes(document)
+    } <= set(findings)
+    assert findings["AEPM-VAL-002"].id == "VAL-002"
+    assert findings["AEPM-VAL-002"].rule_id == "AEPM.OUTCOME.INDICATOR_REQUIRED"
+    assert findings["AEPM-VAL-002"].category == "completeness"
+    assert findings["AEPM-VAL-002"].blocking is True
+    assert findings["AEPM-VAL-002"].suggested_action
 
 
 def test_contradictions_assumptions_and_duplicates_are_deterministic() -> None:
@@ -65,6 +73,10 @@ def test_contradictions_assumptions_and_duplicates_are_deterministic() -> None:
     assert {"AEPM-VAL-008", "AEPM-VAL-009", "AEPM-VAL-010"} <= {
         item.code for item in report.findings
     }
+    duplicate = next(item for item in report.findings if item.code == "AEPM-VAL-010")
+    assert duplicate.severity == "warning"
+    assert duplicate.category == "duplication"
+    assert duplicate.blocking is False
     assert list(report.findings) == sorted(
         report.findings,
         key=lambda item: (

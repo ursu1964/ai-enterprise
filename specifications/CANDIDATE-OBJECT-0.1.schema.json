@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/candidate/object/0.1",
+  "title": "AI Candidate Object v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "proposed_type",
+    "proposed_id",
+    "name",
+    "description",
+    "truth_status",
+    "approval_status",
+    "confidence",
+    "source_support",
+    "attributes",
+    "interpretation_rationale",
+    "warnings"
+  ],
+  "properties": {
+    "candidate_id": {"type": "string", "pattern": "^CAND-OBJ-[0-9]{4}$"},
+    "proposed_type": {"type": "string", "minLength": 1},
+    "proposed_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string", "minLength": 1},
+    "truth_status": {"enum": ["asserted", "inferred", "assumed", "disputed"]},
+    "approval_status": {"const": "pending"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "source_support": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source_support"}},
+    "attributes": {"type": "object"},
+    "interpretation_rationale": {"type": "string", "minLength": 1},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "source_support": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "segment_id", "support_type"],
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^SRC-[0-9]{3,6}$"},
+        "segment_id": {"type": "string", "pattern": "^SEG-[0-9]{3,6}-[0-9]{4}$"},
+        "support_type": {"enum": ["direct", "contextual", "inferred", "assumed", "unsupported"]},
+        "quoted_fragment": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

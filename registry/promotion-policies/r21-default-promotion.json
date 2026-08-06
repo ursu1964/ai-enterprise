@@ -1,0 +1,13 @@
+{
+  "policyId": "r21.default.promotion",
+  "levels": [
+    "GENERATED",
+    "SCHEMA_VALIDATED",
+    "TECHNICALLY_VALIDATED",
+    "POLICY_VALIDATED",
+    "REVIEWED",
+    "APPROVED",
+    "RELEASE_CANDIDATE",
+    "RELEASED"
+  ]
+}

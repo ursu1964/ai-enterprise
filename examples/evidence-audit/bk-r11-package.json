@@ -1,0 +1,87 @@
+{
+  "evidence_package_id": "bk-r11-package-example",
+  "project_id": "project-001",
+  "package_version": "evidence-audit-engine-1.0",
+  "baseline_refs": {
+    "requirements": "req-baseline-001",
+    "verification": "bk-r10-campaign-example"
+  },
+  "artifacts": [
+    {
+      "evidence_id": "ev-test-report-001",
+      "evidence_type": "test-report",
+      "source_system": "ci",
+      "uri": "evidence://ci/run/123/report.json",
+      "content_hash": "sha256-test-report",
+      "captured_at": "1970-01-01T00:00:00Z",
+      "captured_by": {
+        "actor_type": "human",
+        "actor_id": "verification-runner-1",
+        "role": "verification-runner"
+      },
+      "subjects": [
+        {
+          "subject_type": "verification_obligation",
+          "subject_id": "obl-req-api-001",
+          "relationship": "satisfies"
+        }
+      ],
+      "classification": "internal",
+      "retention_class": "project-lifecycle",
+      "metadata": {
+        "tool": "pytest",
+        "token": "<redacted>"
+      },
+      "artifact_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "audit_records": [
+    {
+      "audit_record_id": "project:project-001:1",
+      "stream_id": "project:project-001",
+      "sequence": 1,
+      "previous_hash": null,
+      "event_type": "EvidenceCaptured",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "actor": {
+        "actor_type": "human",
+        "actor_id": "auditor-1",
+        "role": "auditor"
+      },
+      "subject": {
+        "subject_type": "verification_obligation",
+        "subject_id": "obl-req-api-001",
+        "relationship": "satisfies"
+      },
+      "evidence_ids": ["ev-test-report-001"],
+      "payload_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "record_hash": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "coverage": {
+    "status": "satisfied",
+    "obligations_total": 1,
+    "obligations_satisfied": 1,
+    "obligations_blocked": 0,
+    "items": [
+      {
+        "obligation_id": "obl-req-api-001",
+        "required_evidence_types": ["test-report"],
+        "evidence_ids": ["ev-test-report-001"],
+        "status": "satisfied",
+        "missing_evidence_types": []
+      }
+    ],
+    "coverage_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "integrity": {
+    "status": "verified",
+    "stream_count": 1,
+    "record_count": 1,
+    "failures": [],
+    "integrity_hash": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "acceptance_status": "accepted",
+  "blockers": [],
+  "manifest_hash": "6666666666666666666666666666666666666666666666666666666666666666"
+}

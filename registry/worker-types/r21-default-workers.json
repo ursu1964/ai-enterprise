@@ -1,0 +1,13 @@
+{
+  "version": "r21-default-workers-1.0",
+  "workerTypes": [
+    "requirements_compiler",
+    "api_contract_worker",
+    "backend_implementation_worker",
+    "test_generation_worker",
+    "container_worker",
+    "build_validation_worker",
+    "approval_coordinator",
+    "delivery_packager"
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "schema_version": "aepm-0.1",
+  "project_intent": {
+    "name": "Invalid Service Request Portal",
+    "summary": "",
+    "problem": "Unknown intake ownership remains unresolved."
+  },
+  "business_outcomes": [
+    {
+      "id": "OUT-001",
+      "description": "Reduce intake delays.",
+      "indicators": []
+    }
+  ],
+  "stakeholders": [
+    {
+      "id": "STK-001",
+      "name": "Service Operations Lead",
+      "role": "Business owner",
+      "responsibilities": ["Approve workflow changes"]
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-001",
+      "name": "Request intake",
+      "description": "Capture service requests.",
+      "owner_stakeholder_id": "STK-999"
+    }
+  ],
+  "core_processes": [
+    {
+      "id": "PROC-001",
+      "name": "Triage request",
+      "description": "Classify and assign requests.",
+      "trigger": "",
+      "outputs": []
+    }
+  ],
+  "business_rules": [
+    {
+      "id": "RULE-001",
+      "description": "Must retain audit records"
+    },
+    {
+      "id": "RULE-002",
+      "description": "Must not retain audit records"
+    }
+  ],
+  "data_entities": [
+    {
+      "id": "ENT-001",
+      "name": "Service Request",
+      "description": "The customer request record.",
+      "owner_stakeholder_id": ""
+    }
+  ],
+  "integrations": [
+    {
+      "id": "INT-001",
+      "name": "Identity Provider",
+      "system": "Managed OIDC provider",
+      "purpose": "Authenticate users.",
+      "security_rules": []
+    }
+  ],
+  "quality_requirements": [
+    {
+      "id": "QUAL-001",
+      "category": "performance",
+      "description": "Portal requests respond quickly.",
+      "acceptance_criteria": []
+    }
+  ],
+  "constraints": [
+    {
+      "id": "CON-001",
+      "category": "technical",
+      "description": "TBD hosting"
+    },
+    {
+      "id": "CON-002",
+      "category": "technical",
+      "description": "TBD hosting"
+    }
+  ],
+  "preferred_technology_targets": {
+    "frontend": ["React"],
+    "backend": ["Python", "FastAPI"],
+    "database": ["PostgreSQL"],
+    "queue": ["Redis"],
+    "object_storage": ["S3-compatible storage"],
+    "deployment": ["Docker"]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/source/0.1",
+  "title": "AI Enterprise Source v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "project_id",
+    "storage_provider",
+    "bucket",
+    "object_key",
+    "original_filename",
+    "media_type",
+    "content_sha256",
+    "size_bytes",
+    "source_metadata",
+    "uploaded_by"
+  ],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "storage_provider": {"type": "string", "minLength": 1, "maxLength": 80},
+    "bucket": {"type": "string", "minLength": 1, "maxLength": 200},
+    "object_key": {"type": "string", "minLength": 1},
+    "original_filename": {"type": "string", "minLength": 1, "maxLength": 500},
+    "media_type": {"type": "string", "minLength": 1, "maxLength": 200},
+    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "size_bytes": {"type": "integer", "minimum": 0},
+    "source_metadata": {"type": "object"},
+    "uploaded_by": {"type": "string", "minLength": 1, "maxLength": 200}
+  }
+}

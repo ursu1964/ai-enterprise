@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "module": "BK-R11",
+  "package_version": "evidence-audit-engine-1.0",
+  "evidence_types": [
+    "test-report",
+    "scan-report",
+    "review-record",
+    "approval-record",
+    "runtime-log",
+    "deployment-proof",
+    "configuration-snapshot",
+    "traceability-export",
+    "audit-export",
+    "policy-decision",
+    "waiver-record"
+  ],
+  "archive_backends": ["filesystem", "s3", "gcs", "azure_blob", "minio", "custom"],
+  "signature_providers": ["disabled", "mock", "kms", "custom"],
+  "fail_closed_rules": [
+    "evidence package cannot be accepted when required evidence coverage is incomplete",
+    "evidence package cannot be accepted when audit chain integrity fails",
+    "evidence package cannot be accepted when audit records reference missing evidence",
+    "production and staging cannot use mock archive or mock signature modes",
+    "external archive backends require archive URI and credential references",
+    "signature-required publication requires a signer key reference"
+  ],
+  "published_schemas": [
+    "schemas/evidence-audit/evidence-package.schema.json",
+    "schemas/evidence-audit/archive-backend.schema.json",
+    "schemas/evidence-audit/archive-publication.schema.json",
+    "schemas/evidence-audit/archive-verification.schema.json"
+  ]
+}

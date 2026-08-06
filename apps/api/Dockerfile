@@ -17,6 +17,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY apps/api/pyproject.toml /app/pyproject.toml
 COPY apps/api/uv.lock /app/uv.lock
 COPY apps/api/src /app/src
+COPY apps/web /app/apps/web
 COPY migrations /app/migrations
 COPY tools/migration_verify.py /app/tools/migration_verify.py
 COPY tools/backup_verify.py /app/tools/backup_verify.py
@@ -25,6 +26,8 @@ COPY tools/sign_proxy_assertion.py /app/tools/sign_proxy_assertion.py
 COPY tools/model_endpoint_verify.py /app/tools/model_endpoint_verify.py
 COPY tools/deployment_blueprint.py /app/tools/deployment_blueprint.py
 COPY tools/infrastructure_choices.py /app/tools/infrastructure_choices.py
+COPY tools/production_readiness_contracts.py /app/tools/production_readiness_contracts.py
+COPY schemas/production-readiness /app/schemas/production-readiness
 COPY tools/dashboard_verify.py /app/tools/dashboard_verify.py
 COPY apps/api/alembic.ini /app/apps/api/alembic.ini
 COPY docker-compose.server.example.yml /app/docker-compose.server.example.yml

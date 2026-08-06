@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import infrastructure_choices
+import production_readiness_contracts
 
 REQUIRED_PROOF: dict[str, tuple[str, ...]] = {
     "tls": ("endpoint", "certificate_expires_at"),
@@ -21,6 +22,35 @@ REQUIRED_PROOF: dict[str, tuple[str, ...]] = {
     "prometheus": ("endpoint", "scrape_target"),
     "grafana": ("endpoint", "dashboard"),
     "alert_routing": ("channel", "test_alert_id"),
+    "production_owners": (
+        "product_owner",
+        "technical_owner",
+        "operations_owner",
+        "security_owner",
+    ),
+    "pilot_results": (
+        "pilot_project",
+        "manifest_to_project_passed",
+        "feedback_reviewed",
+    ),
+    "infrastructure_credentials": (
+        "credential_inventory",
+        "secret_manager",
+        "raw_secret_values_absent",
+    ),
+    "production_run_artifacts": (
+        "release_artifact",
+        "gate_evidence",
+        "deployment_audit_id",
+    ),
+    "r16_graph_backend": (
+        "backend",
+        "deployment_evidence",
+        "connectivity_evidence",
+        "credential_reference",
+        "restore_or_export_evidence",
+        "owner_approval",
+    ),
 }
 
 
@@ -59,6 +89,9 @@ def verify(
     except json.JSONDecodeError as exc:
         payload = {}
         findings.append(f"evidence_bundle: invalid JSON: {exc}")
+    if payload:
+        schema_findings = production_readiness_contracts.validate_production_evidence(payload)
+        findings.extend(f"evidence_schema: {finding}" for finding in schema_findings)
 
     environment = payload.get("environment")
     if environment != "production":
@@ -97,6 +130,8 @@ def verify(
             value = item.get(field)
             if value is not True and (not isinstance(value, str) or not value.strip()):
                 item_findings.append(f"{field} is required")
+            if _contains_inline_secret_value(value):
+                item_findings.append(f"{field} must be a reference, not a secret value")
         findings.extend(f"{name}: {finding}" for finding in item_findings)
         checks.append(
             {
@@ -126,6 +161,22 @@ def verify(
             else "Complete every blocked proof and rerun make production-readiness."
         ),
     }
+
+
+def _contains_inline_secret_value(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if normalized in {"secret", "password", "token", "api_key", "private_key"}:
+                return True
+            if _contains_inline_secret_value(item):
+                return True
+    if isinstance(value, list):
+        return any(_contains_inline_secret_value(item) for item in value)
+    if isinstance(value, str):
+        lowered = value.lower()
+        return any(marker in lowered for marker in ("password=", "token=", "secret="))
+    return False
 
 
 def main() -> int:

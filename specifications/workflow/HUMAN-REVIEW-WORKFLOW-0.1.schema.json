@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/workflow/human-review/0.1",
+  "title": "AI Enterprise Human Review Workflow v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "states", "transitions", "artifact_compilation_rule"],
+  "properties": {
+    "schema_version": {"const": "human-review-workflow-0.1"},
+    "states": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "extracted"},
+        {"const": "validation_pending"},
+        {"const": "clarification_required"},
+        {"const": "client_review"},
+        {"const": "approved"},
+        {"const": "ready_for_compilation"}
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": {
+            "enum": [
+              "extracted",
+              "validation_pending",
+              "clarification_required",
+              "client_review",
+              "approved"
+            ]
+          },
+          "to": {
+            "enum": [
+              "validation_pending",
+              "clarification_required",
+              "client_review",
+              "approved",
+              "ready_for_compilation"
+            ]
+          }
+        }
+      },
+      "contains": {
+        "type": "object",
+        "required": ["from", "to"],
+        "properties": {
+          "from": {"const": "approved"},
+          "to": {"const": "ready_for_compilation"}
+        }
+      }
+    },
+    "artifact_compilation_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_snapshot_required", "draft_artifacts_allowed_when_marked"],
+      "properties": {
+        "approved_snapshot_required": {"const": true},
+        "draft_artifacts_allowed_when_marked": {"const": true}
+      }
+    }
+  }
+}

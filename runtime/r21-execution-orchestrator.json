@@ -1,0 +1,1396 @@
+{
+  "approval_gates": [
+    {
+      "decisions": [],
+      "evidence_required": [
+        "validation_report",
+        "traceability_report",
+        "provenance_record"
+      ],
+      "gate_hash": "fbdd4e96560eb178c3ecb2669ce0904b202e12b60e3348f0c3b95bb3dd5a3d66",
+      "gate_id": "gate-release",
+      "gate_type": "release_approval",
+      "occurs_before": "COMPLETED",
+      "project_id": "crm-v1",
+      "required_approvers": [
+        {
+          "minimum_approvals": 1,
+          "role": "project_owner"
+        },
+        {
+          "minimum_approvals": 1,
+          "role": "release_authority"
+        }
+      ],
+      "status": "pending",
+      "subject_work_package_ids": [
+        "wp-build-validation-001",
+        "wp-release-approval-001"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_hash": "ed1ee5af195813f7e00b711d17ec09f2e8d3fecba7894fbdbe90bc7cad3507c1",
+      "artifact_id": "r21-artifact-ed1ee5af195813f7",
+      "artifact_type": "compiled_requirement_specification",
+      "checksum": "sha256:5575c173425233e057e83e5cbaea4de341cc40d5a2c6bb20b0f95681a9622679",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "a9437c5d7d67d335ada6a8f9509ac4dd9807721cef94a26f2b3252ef0975c509",
+      "uri": "artifact://r21/wp-requirements-001/compiled_requirement_specification/v1",
+      "version": 1,
+      "work_package_id": "wp-requirements-001"
+    },
+    {
+      "artifact_hash": "318d6f6436b7ba2bd3abd6b523a469eed058ca337885946aa8a6263d8149eb56",
+      "artifact_id": "r21-artifact-318d6f6436b7ba2b",
+      "artifact_type": "openapi_contract",
+      "checksum": "sha256:c45ec0975bbac953d667a0b3b023b5ebb890891a2dc833896f280273e8e96837",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "1f16df39576be9212d2b006ee2078029bb64b519dced6e2f2d48922933060552",
+      "uri": "artifact://r21/wp-api-contract-001/openapi_contract/v1",
+      "version": 1,
+      "work_package_id": "wp-api-contract-001"
+    },
+    {
+      "artifact_hash": "8f1035200870dc18b547715ec34f1f4556294abf5b3cb2bf416413b23db1e76f",
+      "artifact_id": "r21-artifact-8f1035200870dc18",
+      "artifact_type": "service_source_code",
+      "checksum": "sha256:5981910722459579e71194cf70c96c0177f010b8bd5254b291255e9e508c8aa8",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "c02dda0bbc276bc1d49dfad26c99ef4a1e6dda6d7063112b253cdfe9e4723f6f",
+      "uri": "artifact://r21/wp-service-code-001/service_source_code/v1",
+      "version": 1,
+      "work_package_id": "wp-service-code-001"
+    },
+    {
+      "artifact_hash": "ccecb57e1dd1ecd40d200de6610098ad4c81fc7834aa28be920e911706f534de",
+      "artifact_id": "r21-artifact-ccecb57e1dd1ecd4",
+      "artifact_type": "unit_tests",
+      "checksum": "sha256:8af86523bdd724f71759c25bca08483f1809b253ff6bfdbc8ca1857b53619f12",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "2fc4bbfad10bb0c1d55eb308f8743ddf8651d831fafaf3aa3f0bb0fad96957dc",
+      "uri": "artifact://r21/wp-test-generation-001/unit_tests/v1",
+      "version": 1,
+      "work_package_id": "wp-test-generation-001"
+    },
+    {
+      "artifact_hash": "2d094cb011e0d16894f9ecc450349b4447de512da5db0043c3becd6d71168cd7",
+      "artifact_id": "r21-artifact-2d094cb011e0d168",
+      "artifact_type": "integration_tests",
+      "checksum": "sha256:556cb6538651752e53d013c57c1bf05eb378b677595d0c9ae7a39a69993de9f3",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "0dfc87ac88303f111f7cd9106d050fae6622b3f3b577ba203ac31bde0f87484f",
+      "uri": "artifact://r21/wp-test-generation-001/integration_tests/v1",
+      "version": 1,
+      "work_package_id": "wp-test-generation-001"
+    },
+    {
+      "artifact_hash": "94d726202041e9a29769afe0714921d8e619c1237f1b06bcee0a31b739b33835",
+      "artifact_id": "r21-artifact-94d726202041e9a2",
+      "artifact_type": "container_definition",
+      "checksum": "sha256:5003e9f99e0d33442957901c2667795c43913525264d3cbfc6c9f12f0adc3d06",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "f6f6371ca2e0d3434389e7f9972420c2fdb8c0976e40f33a735557dd81894e94",
+      "uri": "artifact://r21/wp-container-001/container_definition/v1",
+      "version": 1,
+      "work_package_id": "wp-container-001"
+    },
+    {
+      "artifact_hash": "b693081b33d933159c1c11da71fd3094a2fd3dc47c587641413ee625b82b163c",
+      "artifact_id": "r21-artifact-b693081b33d93315",
+      "artifact_type": "build_instructions",
+      "checksum": "sha256:4ce4014647ca17106252d4a0fa1c34bc988a24ba16587e27330a3f0d7a27b722",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "df28a561b12181c831e3234ed4352008b93e754ec57ff8ef57eade1af62b9e0b",
+      "uri": "artifact://r21/wp-container-001/build_instructions/v1",
+      "version": 1,
+      "work_package_id": "wp-container-001"
+    },
+    {
+      "artifact_hash": "fb408335c4692b32f6777f88df4e91d25a265d7fb11a9666f0b729f72bcfcd78",
+      "artifact_id": "r21-artifact-fb408335c4692b32",
+      "artifact_type": "validation_report",
+      "checksum": "sha256:cb63708038c4a322156e33e10e9ed460a2dc5b69bc8118796ebd6872dfce9732",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "1b68e04e3adf55b4ecc712d042fc52daafbf8d6963a6db29a7d2bd8411e3af16",
+      "uri": "artifact://r21/wp-build-validation-001/validation_report/v1",
+      "version": 1,
+      "work_package_id": "wp-build-validation-001"
+    },
+    {
+      "artifact_hash": "8d58827304d0380620167ab84173a04118bccae6d4953a2e8625490e0fe176e0",
+      "artifact_id": "r21-artifact-8d58827304d03806",
+      "artifact_type": "traceability_report",
+      "checksum": "sha256:9738ed71a0ac35428b49d6a87c7f3d95f792c61fd480e0ac97e5a5924a93bc40",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "6f0e83045b3805db7a0369a56821cd37b76438d4a6944292c4337070c155ae97",
+      "uri": "artifact://r21/wp-build-validation-001/traceability_report/v1",
+      "version": 1,
+      "work_package_id": "wp-build-validation-001"
+    },
+    {
+      "artifact_hash": "ab15135b5e23fceb5d685f63a525a44cc393ad09ab9b439d8d52a60cf0b751dd",
+      "artifact_id": "r21-artifact-ab15135b5e23fceb",
+      "artifact_type": "provenance_record",
+      "checksum": "sha256:b63a8d64d53995da1968324f7b26ee42bb0dd85642984da06cd963e00f57374d",
+      "manifest_trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db",
+      "promotion_level": "POLICY_VALIDATED",
+      "provenance_hash": "d7495f1feb3a7f332a4f888dece9ffbe2dd0fbe939591891942ef89936f48b44",
+      "uri": "artifact://r21/wp-build-validation-001/provenance_record/v1",
+      "version": 1,
+      "work_package_id": "wp-build-validation-001"
+    }
+  ],
+  "checkpoints": [
+    {
+      "blocked_work_packages": [],
+      "checkpoint_hash": "7c799d59b26ac34dfd41980380ef2d2996be08ed51f0582b27d2e03cfa678cbc",
+      "checkpoint_id": "r21-checkpoint-7c799d59b26ac34d",
+      "completed_work_packages": [
+        "wp-requirements-001",
+        "wp-api-contract-001",
+        "wp-service-code-001",
+        "wp-test-generation-001",
+        "wp-container-001",
+        "wp-build-validation-001"
+      ],
+      "created_at": "1970-01-01T00:00:00Z",
+      "execution_id": "r21-exec-8113623284f15dac",
+      "last_event_sequence": 8,
+      "manifest_hash": "r21-plan-crm-v1-1.0.0",
+      "pending_approvals": [
+        "gate-release"
+      ],
+      "produced_artifacts": [
+        "r21-artifact-ed1ee5af195813f7",
+        "r21-artifact-318d6f6436b7ba2b",
+        "r21-artifact-8f1035200870dc18",
+        "r21-artifact-ccecb57e1dd1ecd4",
+        "r21-artifact-2d094cb011e0d168",
+        "r21-artifact-94d726202041e9a2",
+        "r21-artifact-b693081b33d93315",
+        "r21-artifact-fb408335c4692b32",
+        "r21-artifact-8d58827304d03806",
+        "r21-artifact-ab15135b5e23fceb"
+      ],
+      "project_state": "AWAITING_AUTHORIZATION",
+      "retry_counters": {
+        "wp-api-contract-001": 1,
+        "wp-build-validation-001": 1,
+        "wp-container-001": 1,
+        "wp-delivery-package-001": 0,
+        "wp-release-approval-001": 0,
+        "wp-requirements-001": 1,
+        "wp-service-code-001": 1,
+        "wp-test-generation-001": 1
+      },
+      "running_work_packages": [],
+      "scheduler_state": {
+        "event_position": 8
+      }
+    }
+  ],
+  "contradictions": [],
+  "delivery_package": null,
+  "diagnostics": [],
+  "events": [
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": null,
+      "checksum": "sha256:870540f1318589aa376fd2728e649869c36a25da78b93ce0fdfb0594db8d1c73",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-870540f1318589aa",
+      "event_type": "execution.started",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "execution_plan_id": "r21-plan-crm-v1-1.0.0"
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "r21-exec-8113623284f15dac",
+        "entity_type": "execution"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-870540f1318589aa",
+      "checksum": "sha256:dfbff91f682c523d6d5262477d8127201e2df551dd38ff5395fdbf58cb39d99e",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-dfbff91f682c523d",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-ed1ee5af195813f7"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-requirements-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-dfbff91f682c523d",
+      "checksum": "sha256:a461144d4852630affc34341303b112d082ca905478c9e798c518395a3cbbe8d",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-a461144d4852630a",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-318d6f6436b7ba2b"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-api-contract-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-a461144d4852630a",
+      "checksum": "sha256:75acd527a452072f53bade4b045a3733587c758741ca5e35c2412b4543cf377e",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-75acd527a452072f",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-8f1035200870dc18"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-service-code-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-75acd527a452072f",
+      "checksum": "sha256:b1dd6fcd8845d359d1c10443e9a09fde9c4c448b366d13c0880977b6290947c2",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-b1dd6fcd8845d359",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-ccecb57e1dd1ecd4",
+          "r21-artifact-2d094cb011e0d168"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-test-generation-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-b1dd6fcd8845d359",
+      "checksum": "sha256:416ca00a274d6b24cdc0ceea92fdf602ea43bd9f0946d8216d3cd170ad5b1d9d",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-416ca00a274d6b24",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-94d726202041e9a2",
+          "r21-artifact-b693081b33d93315"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-container-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-416ca00a274d6b24",
+      "checksum": "sha256:b298f3ab3e6ab275ba16d94918059ae8f006c8e5b8c0c31eafc85db997731d1a",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-b298f3ab3e6ab275",
+      "event_type": "work_package.completed",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "artifact_ids": [
+          "r21-artifact-fb408335c4692b32",
+          "r21-artifact-8d58827304d03806",
+          "r21-artifact-ab15135b5e23fceb"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-build-validation-001",
+        "entity_type": "work_package"
+      }
+    },
+    {
+      "actor": {
+        "actor_id": "r21-orchestrator",
+        "actor_type": "orchestrator"
+      },
+      "causation_id": "r21-event-b298f3ab3e6ab275",
+      "checksum": "sha256:7fcf6b990d785227696dff9557ce7ce38b7816f5632f2f5f7e438a176fc1b702",
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "event_id": "r21-event-7fcf6b990d785227",
+      "event_type": "approval.requested",
+      "event_version": 1,
+      "execution_id": "r21-exec-8113623284f15dac",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "payload": {
+        "required_approvals": [
+          "gate-release"
+        ]
+      },
+      "project_id": "crm-v1",
+      "subject": {
+        "entity_id": "wp-release-approval-001",
+        "entity_type": "work_package"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "checksum": "sha256:9df734cc12b8096d5729c10ec44a680dc6c26af0e3a2e53b2fd4ec00d19c2ee1",
+      "entity_id": "wp-requirements-001",
+      "entity_type": "work_package",
+      "evidence_hash": "4d8a0f6f082f42db8219475acf31bada4e9587d2be7894de433ae39335e84fd6",
+      "evidence_id": "r21-evidence-4d8a0f6f082f42db",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-requirements-001/validation_report"
+    },
+    {
+      "checksum": "sha256:96eba5627fbce99e8e0ca49d029b873490df484655838844b826ed776187cbc5",
+      "entity_id": "wp-api-contract-001",
+      "entity_type": "work_package",
+      "evidence_hash": "dddd7175d63439694a7ac4fc564fb216ea788b3fee0976894482a0cc98c64bea",
+      "evidence_id": "r21-evidence-dddd7175d6343969",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-api-contract-001/validation_report"
+    },
+    {
+      "checksum": "sha256:4494b7a279b8c2d6700a5c13157babf9ab13cad22179e7ac2f9b59a468065448",
+      "entity_id": "wp-service-code-001",
+      "entity_type": "work_package",
+      "evidence_hash": "bcf6fcb562a7808f1ef3a8d95f03dc6820ada8872e98e0e88a25fb55a1c6c14c",
+      "evidence_id": "r21-evidence-bcf6fcb562a7808f",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-service-code-001/validation_report"
+    },
+    {
+      "checksum": "sha256:36fdf78dc86e7c445da193ef1892f995bbcb7ad3692ebd83e0ce8b105ac41029",
+      "entity_id": "wp-test-generation-001",
+      "entity_type": "work_package",
+      "evidence_hash": "f50c6ee3027d75fe21e95ef33651f7e6074c2002a323de894c55e72e42e0bcd0",
+      "evidence_id": "r21-evidence-f50c6ee3027d75fe",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-test-generation-001/validation_report"
+    },
+    {
+      "checksum": "sha256:e1fa28297da3dc598b27ef24696ae820646613091e75767ab6952ad7294c8edb",
+      "entity_id": "wp-container-001",
+      "entity_type": "work_package",
+      "evidence_hash": "3c5cd6a77ef868a41eb67abcd28be478cae450a270f3dccc90193c5924ad3059",
+      "evidence_id": "r21-evidence-3c5cd6a77ef868a4",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-container-001/validation_report"
+    },
+    {
+      "checksum": "sha256:8f8e8e65cbc27b7fe905cb99468b9acd3fc79a5a3012ec5761af7496f7fd7663",
+      "entity_id": "wp-build-validation-001",
+      "entity_type": "work_package",
+      "evidence_hash": "2a495e1f192fa94a5e47cad135b0821144026947a2df22086f2c1cf3b02e8d5f",
+      "evidence_id": "r21-evidence-2a495e1f192fa94a",
+      "evidence_type": "validation_report",
+      "uri": "evidence://r21/work_package/wp-build-validation-001/validation_report"
+    }
+  ],
+  "execution_hash": "f0c15c4a8f60f8f41650143e531cc88639fb3739916a3cb8c8910552cbd107d8",
+  "execution_id": "r21-exec-8113623284f15dac",
+  "execution_plan_id": "r21-plan-crm-v1-1.0.0",
+  "project_id": "crm-v1",
+  "project_state": "AWAITING_AUTHORIZATION",
+  "retries": [],
+  "transitions": [
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-requirements-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "4d8a0f6f082f42db8219475acf31bada4e9587d2be7894de433ae39335e84fd6"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "f836fd003634cde887d863871cfb9b62dc8295b0ee13f95bdc177e4ab5b56c32",
+      "transition_id": "r21-transition-f836fd003634cde8",
+      "triggered_by": {
+        "actor_id": "requirements_compiler",
+        "actor_type": "worker"
+      }
+    },
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-api-contract-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "dddd7175d63439694a7ac4fc564fb216ea788b3fee0976894482a0cc98c64bea"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "c19513a074f9fd13274e9be6c0870ae0f75a8c4dff7b86a6cd8a938a59db6aed",
+      "transition_id": "r21-transition-c19513a074f9fd13",
+      "triggered_by": {
+        "actor_id": "api_contract_worker",
+        "actor_type": "worker"
+      }
+    },
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-service-code-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "bcf6fcb562a7808f1ef3a8d95f03dc6820ada8872e98e0e88a25fb55a1c6c14c"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "9de252af24854559d962e208cf7c7aa83a66ddc015d260d3bf1eb38c33b400e4",
+      "transition_id": "r21-transition-9de252af24854559",
+      "triggered_by": {
+        "actor_id": "backend_implementation_worker",
+        "actor_type": "worker"
+      }
+    },
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-test-generation-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "f50c6ee3027d75fe21e95ef33651f7e6074c2002a323de894c55e72e42e0bcd0"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "25dddfbb8686e2f1925e63300ddfc3b30e1d07419957a2202f65826752a773d8",
+      "transition_id": "r21-transition-25dddfbb8686e2f1",
+      "triggered_by": {
+        "actor_id": "test_generation_worker",
+        "actor_type": "worker"
+      }
+    },
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-container-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "3c5cd6a77ef868a41eb67abcd28be478cae450a270f3dccc90193c5924ad3059"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "186ed51c9d1c77a67f5f0a3363820fe5d2a7867ff0c0d603ac9dc65c6868a78f",
+      "transition_id": "r21-transition-186ed51c9d1c77a6",
+      "triggered_by": {
+        "actor_id": "container_worker",
+        "actor_type": "worker"
+      }
+    },
+    {
+      "correlation_id": "r21-exec-8113623284f15dac",
+      "entity_id": "wp-build-validation-001",
+      "entity_type": "work_package",
+      "event_type": "work_package.completed",
+      "evidence": [
+        "2a495e1f192fa94a5e47cad135b0821144026947a2df22086f2c1cf3b02e8d5f"
+      ],
+      "from_state": "RUNNING",
+      "occurred_at": "1970-01-01T00:00:00Z",
+      "to_state": "COMPLETED",
+      "transition_hash": "fd61c34976293b87e2bdf44f0bc89fcaa49f340bc93783019e57ceafacd24db6",
+      "transition_id": "r21-transition-fd61c34976293b87",
+      "triggered_by": {
+        "actor_id": "build_validation_worker",
+        "actor_type": "worker"
+      }
+    }
+  ],
+  "validations": [
+    {
+      "artifact_ids": [
+        "r21-artifact-ed1ee5af195813f7"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "98ddbece4a57b9986d82e21665079bc4dccc601ce743fde00f04592c8ed84da9",
+      "validation_id": "r21-validation-98ddbece4a57b998",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-requirements-001"
+    },
+    {
+      "artifact_ids": [
+        "r21-artifact-318d6f6436b7ba2b"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "0a1b40d8674e287a114f1667bf1856e91f5c4359b4bbc1177cbbbee4f63e9203",
+      "validation_id": "r21-validation-0a1b40d8674e287a",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-api-contract-001"
+    },
+    {
+      "artifact_ids": [
+        "r21-artifact-8f1035200870dc18"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "ec6c50581972e83a57149040b80178c5e298f05a7c61ddf82b67356d547fe89c",
+      "validation_id": "r21-validation-ec6c50581972e83a",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-service-code-001"
+    },
+    {
+      "artifact_ids": [
+        "r21-artifact-ccecb57e1dd1ecd4",
+        "r21-artifact-2d094cb011e0d168"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "700e3b2728fcf8a18e5cdb912e6df044f769f393ad9b65133125a8818358d27b",
+      "validation_id": "r21-validation-700e3b2728fcf8a1",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-test-generation-001"
+    },
+    {
+      "artifact_ids": [
+        "r21-artifact-94d726202041e9a2",
+        "r21-artifact-b693081b33d93315"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "f4f0e6256f1688004aa2c9b93fd202d1ee4a85afdb8d4a89bd84c437c5644bd1",
+      "validation_id": "r21-validation-f4f0e6256f168800",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-container-001"
+    },
+    {
+      "artifact_ids": [
+        "r21-artifact-fb408335c4692b32",
+        "r21-artifact-8d58827304d03806",
+        "r21-artifact-ab15135b5e23fceb"
+      ],
+      "findings": [],
+      "passed": true,
+      "validation_hash": "63a9bd67f2b7e70a5815e8083d3c3690174b8b1d3771926cec27a2ad4cdde159",
+      "validation_id": "r21-validation-63a9bd67f2b7e70a",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "work_package_id": "wp-build-validation-001"
+    }
+  ],
+  "work_package_states": [
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "66bf1064126da0b6499d13a8feae9e30aca4c55f61774ba1b3dd8335b92bef3d",
+      "work_package_id": "wp-requirements-001"
+    },
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "74669dcae6defa1cc22719f1c9601259f62dd29165f575efd59002fc6215f910",
+      "work_package_id": "wp-api-contract-001"
+    },
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "da5842bb71ee5c2312f256a52e16a9bfc9c898f889b7dca813a2d8d16aa73e6a",
+      "work_package_id": "wp-service-code-001"
+    },
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "c6a746af481eda2d5acb6a07e93eb22ee64ce005ce1b30bbf1207f7aaa95dbf8",
+      "work_package_id": "wp-test-generation-001"
+    },
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "9fc382d9d6973d7860c0e8d3ca09669e0bbc1c86082d03b8e3c61e670513bda5",
+      "work_package_id": "wp-container-001"
+    },
+    {
+      "attempt": 1,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "COMPLETED",
+      "state_hash": "d1c9b225b0cd25d212e0c90e12015ce0b9fca0c49c9cdb390d386f455ec9fa93",
+      "work_package_id": "wp-build-validation-001"
+    },
+    {
+      "attempt": 0,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "WAITING_FOR_APPROVAL",
+      "state_hash": "4cc0e36e2d035caa27c42b632789f71a6227f6d2bb0b99659a63935956f084e2",
+      "work_package_id": "wp-release-approval-001"
+    },
+    {
+      "attempt": 0,
+      "lease_id": null,
+      "retry_reason": null,
+      "state": "PENDING",
+      "state_hash": "0b5b3586bc7a4cc91d8086b0729e2cc03fc195983cb8a25b438c5d0c74106e1b",
+      "work_package_id": "wp-delivery-package-001"
+    }
+  ],
+  "worker_requests": [
+    {
+      "authorization": {
+        "capability_token": "capability://wp-requirements-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Compile requirements for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "compiled_requirement_specification"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "b5811173439df34064d8d9068001151ff7e074730edf5a85af248db7a9836f00",
+      "request_id": "r21-worker-request-b5811173439df340",
+      "work_package_id": "wp-requirements-001",
+      "worker_type": "requirements_compiler",
+      "worker_version": "1.0.0"
+    },
+    {
+      "authorization": {
+        "capability_token": "capability://wp-api-contract-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [
+          "artifact://wp-requirements-001/output"
+        ],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Generate OpenAPI contract for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "openapi_contract"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "0536bc853d1021d3c37fa4b925759d1a20746a2ff3742ec2a701ebf336a84073",
+      "request_id": "r21-worker-request-0536bc853d1021d3",
+      "work_package_id": "wp-api-contract-001",
+      "worker_type": "api_contract_worker",
+      "worker_version": "1.0.0"
+    },
+    {
+      "authorization": {
+        "capability_token": "capability://wp-service-code-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [
+          "artifact://wp-api-contract-001/output"
+        ],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Generate service source code for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "service_source_code"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "d6fedb93e546d1352284cd38250db18e0bb0a3beddffa50c0b2a0828ee52248e",
+      "request_id": "r21-worker-request-d6fedb93e546d135",
+      "work_package_id": "wp-service-code-001",
+      "worker_type": "backend_implementation_worker",
+      "worker_version": "1.0.0"
+    },
+    {
+      "authorization": {
+        "capability_token": "capability://wp-test-generation-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [
+          "artifact://wp-api-contract-001/output"
+        ],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Generate tests for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "unit_tests",
+          "integration_tests"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "65d552d9a41f30a706ad03473f030981822ed9ae99bfe04517578d6ed6d6d4cc",
+      "request_id": "r21-worker-request-65d552d9a41f30a7",
+      "work_package_id": "wp-test-generation-001",
+      "worker_type": "test_generation_worker",
+      "worker_version": "1.0.0"
+    },
+    {
+      "authorization": {
+        "capability_token": "capability://wp-container-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [
+          "artifact://wp-service-code-001/output"
+        ],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Generate container definition for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "container_definition",
+          "build_instructions"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "dacbbb82521d3ced87c8f303a4775747a1a017ddc07d60b189e9c7fcb884f8c4",
+      "request_id": "r21-worker-request-dacbbb82521d3ced",
+      "work_package_id": "wp-container-001",
+      "worker_type": "container_worker",
+      "worker_version": "1.0.0"
+    },
+    {
+      "authorization": {
+        "capability_token": "capability://wp-build-validation-001",
+        "expires_at": "1970-01-01T00:00:00Z",
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "context": {
+        "input_artifacts": [
+          "artifact://wp-service-code-001/output",
+          "artifact://wp-test-generation-001/output",
+          "artifact://wp-container-001/output"
+        ],
+        "manifest_trace": {
+          "manifest_version": "1.0.0",
+          "project_id": "crm-v1",
+          "source_objects": [
+            {
+              "object_id": "unique-customer",
+              "object_type": "business_rule",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "manage-customers",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "track-opportunities",
+              "object_type": "capability",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "eu-data",
+              "object_type": "constraint",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "customer",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "lead",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "opportunity",
+              "object_type": "entity",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "workspace",
+              "object_type": "integration",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "reduce-sales-cycle",
+              "object_type": "objective",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "audit-policy",
+              "object_type": "policy",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "availability",
+              "object_type": "quality_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "role-based-access",
+              "object_type": "security_requirement",
+              "relationship": "drives"
+            },
+            {
+              "object_id": "qualify-lead",
+              "object_type": "workflow",
+              "relationship": "drives"
+            }
+          ],
+          "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+        }
+      },
+      "execution_id": "r21-exec-8113623284f15dac",
+      "instructions": {
+        "constraints": [
+          "Do not change project scope.",
+          "Do not invent unavailable requirements.",
+          "Use only approved Registry objects."
+        ],
+        "objective": "Validate build for the approved Manifest."
+      },
+      "output_contract": {
+        "required_artifacts": [
+          "validation_report",
+          "traceability_report",
+          "provenance_record"
+        ],
+        "response_schema": "registry://schemas/worker-response/v1"
+      },
+      "request_hash": "4c86b06cc89d901618f388c172be0884b2c8d8a652acfbe844bb9b973e7b4f7f",
+      "request_id": "r21-worker-request-4c86b06cc89d9016",
+      "work_package_id": "wp-build-validation-001",
+      "worker_type": "build_validation_worker",
+      "worker_version": "1.0.0"
+    }
+  ]
+}

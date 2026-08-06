@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ai_enterprise.domain.aepm import AepmManifest
 from ai_enterprise.domain.specification.kernel import specification_hash
 
+AEIR_VERSION = "0.1.0"
+AEIR_SYSTEM_ACTOR = "aepm-deterministic-compiler"
+AEIR_CANONICAL_TIMESTAMP = "2026-08-04T00:00:00Z"
+AEIR_CANONICAL_VALID_FROM = "2026-08-04"
+
 
 class AeirObjectType(StrEnum):
     PROJECT = "project"
@@ -27,7 +32,41 @@ class AeirObjectType(StrEnum):
     RELATIONSHIP = "relationship"
 
 
+class LifecycleStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    ARCHIVED = "archived"
+
+
+class TruthStatus(StrEnum):
+    ASSERTED = "asserted"
+    INFERRED = "inferred"
+    ASSUMED = "assumed"
+    VERIFIED = "verified"
+    DISPUTED = "disputed"
+
+
+class ApprovalStatus(StrEnum):
+    NOT_REQUIRED = "not_required"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class RelationshipType(StrEnum):
+    CONTAINS = "contains"
+    OWNED_BY = "owned_by"
+    SUPPORTS = "supports"
+    CONSTRAINS = "constrains"
+    REALIZES = "realizes"
+    TRACES_TO = "traces_to"
+    DEPENDS_ON = "depends_on"
+
+
 class AeirStatus(StrEnum):
+    """Compatibility enum for callers that still name the old mixed status concept."""
+
     PROPOSED = "proposed"
     INFERRED = "inferred"
     UNVERIFIED = "unverified"
@@ -40,10 +79,21 @@ class AeirValue(BaseModel):
 
 
 class AeirSource(AeirValue):
-    kind: Literal["aepm_manifest", "human_clarification"] = "aepm_manifest"
+    kind: Literal["aepm_manifest", "human_clarification", "ai_operation"] = "aepm_manifest"
     reference: str = Field(min_length=1)
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence_references: tuple[str, ...] = ()
+
+
+class AiOperationProvenance(AeirValue):
+    model_provider: str = Field(min_length=1, max_length=200)
+    model_name: str = Field(min_length=1, max_length=200)
+    operation_type: str = Field(min_length=1, max_length=80)
+    prompt_version: str = Field(min_length=1, max_length=80)
+    schema_version: Literal["AEIR-0.1"] = "AEIR-0.1"
+    generated_at: str = Field(min_length=1, max_length=40)
+    input_source_refs: tuple[str, ...] = Field(min_length=1)
+    review_required: bool = True
 
 
 class AeirObject(AeirValue):
@@ -52,18 +102,90 @@ class AeirObject(AeirValue):
     name: str = Field(min_length=1, max_length=300)
     description: str = Field(min_length=1, max_length=4000)
     status: AeirStatus
-    source: AeirSource
+    lifecycle_status: LifecycleStatus
+    truth_status: TruthStatus
+    approval_status: ApprovalStatus
+    source_refs: tuple[str, ...] = Field(default_factory=tuple)
+    evidence_refs: tuple[str, ...] = Field(default_factory=tuple)
+    relationship_refs: tuple[str, ...] = Field(default_factory=tuple)
     confidence: float = Field(ge=0, le=1)
     version: str = Field(pattern=r"^0\.1\.0$")
-    relationships: tuple[str, ...] = ()
+    created_at: str = Field(min_length=1, max_length=40)
+    created_by: str = Field(min_length=1, max_length=200)
+    updated_at: str = Field(min_length=1, max_length=40)
+    updated_by: str = Field(min_length=1, max_length=200)
+    source: AeirSource
+    ai_operation: AiOperationProvenance | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def relationships(self) -> tuple[str, ...]:
+        return self.relationship_refs
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> AeirObject:
+        if not self.source_refs:
+            raise ValueError("AEIR objects require at least one source reference")
+        if self.truth_status in {TruthStatus.INFERRED, TruthStatus.ASSUMED}:
+            if self.approval_status is ApprovalStatus.APPROVED:
+                raise ValueError("inferred or assumed AEIR objects cannot be silently approved")
+            if self.ai_operation is None and self.source.kind == "ai_operation":
+                raise ValueError("AI-derived AEIR objects require AI operation provenance")
+        return self
 
 
-class AeirRelationship(AeirObject):
+class AeirRelationship(AeirValue):
+    id: str = Field(pattern=r"^REL-[0-9]{3}$")
     type: Literal[AeirObjectType.RELATIONSHIP] = AeirObjectType.RELATIONSHIP
-    source_object_id: str
-    target_object_id: str
-    relationship_type: Literal["contains", "owned_by"]
+    relationship_type: RelationshipType
+    source_object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
+    target_object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
+    status: AeirStatus
+    lifecycle_status: LifecycleStatus
+    truth_status: TruthStatus
+    approval_status: ApprovalStatus
+    source_refs: tuple[str, ...] = Field(default_factory=tuple)
+    evidence_refs: tuple[str, ...] = Field(default_factory=tuple)
+    confidence: float = Field(ge=0, le=1)
+    version: str = Field(pattern=r"^0\.1\.0$")
+    created_at: str = Field(min_length=1, max_length=40)
+    created_by: str = Field(min_length=1, max_length=200)
+    updated_at: str = Field(min_length=1, max_length=40)
+    updated_by: str = Field(min_length=1, max_length=200)
+    valid_from: str = Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+    valid_to: str | None = Field(default=None, pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+    source: AeirSource
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_relationship(self) -> AeirRelationship:
+        if self.source_object_id == self.target_object_id:
+            raise ValueError("AEIR relationship endpoints must be distinct")
+        if not self.source_refs:
+            raise ValueError("AEIR relationships require at least one source reference")
+        return self
+
+
+class ProjectSnapshot(AeirValue):
+    schema_version: Literal["aeir-snapshot-0.1"] = "aeir-snapshot-0.1"
+    snapshot_id: str = Field(pattern=r"^SNP-[0-9]{4}$")
+    project_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
+    aepm_version: Literal["0.1"] = "0.1"
+    aeir_version: Literal["0.1"] = "0.1"
+    source_model_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_versions: tuple[dict[str, str], ...]
+    relationship_versions: tuple[dict[str, str], ...]
+    status: Literal["draft", "approved"]
+    created_at: str = Field(min_length=1, max_length=40)
+    snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_snapshot_hash(self) -> ProjectSnapshot:
+        if self.snapshot_sha256 != _snapshot_hash(self):
+            raise ValueError("AEIR snapshot hash does not match canonical content")
+        return self
 
 
 class AeirProjectModel(AeirValue):
@@ -87,7 +209,7 @@ class AeirProjectModel(AeirValue):
                 raise ValueError("AEIR relationship source is unavailable")
             if relationship.target_object_id not in known:
                 raise ValueError("AEIR relationship target is unavailable")
-        referenced = {value for item in self.objects for value in item.relationships}
+        referenced = {value for item in self.objects for value in item.relationship_refs}
         if referenced != set(relationship_ids):
             raise ValueError("AEIR object relationship references are inconsistent")
         if self.model_sha256 != _model_hash(
@@ -97,10 +219,36 @@ class AeirProjectModel(AeirValue):
         return self
 
 
+class AeirSnapshotStatus(StrEnum):
+    DRAFT = "draft"
+    APPROVED = "approved"
+
+
+class AeirProjectSnapshot(AeirValue):
+    schema_version: Literal["aeir-snapshot-0.1"] = "aeir-snapshot-0.1"
+    snapshot_id: str = Field(pattern=r"^SNP-[0-9]{4}$")
+    project_id: str = Field(min_length=1, max_length=200)
+    aepm_version: Literal["0.1"] = "0.1"
+    aeir_version: Literal["0.1"] = "0.1"
+    source_model_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_versions: tuple[str, ...] = Field(min_length=1)
+    status: AeirSnapshotStatus
+    created_at: str = "1970-01-01T00:00:00Z"
+    snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_snapshot_hash(self) -> AeirProjectSnapshot:
+        if tuple(sorted(self.object_versions)) != self.object_versions:
+            raise ValueError("snapshot object versions must be sorted")
+        if self.snapshot_sha256 != _snapshot_hash(self):
+            raise ValueError("AEIR snapshot hash does not match canonical content")
+        return self
+
+
 def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
     manifest_sha256 = specification_hash(manifest)
     objects: list[AeirObject] = []
-    relationship_specs: list[tuple[str, str, str, Literal["contains", "owned_by"]]] = []
+    relationship_specs: list[tuple[str, str, str, RelationshipType]] = []
 
     def source(reference: str) -> AeirSource:
         return AeirSource(reference=reference, manifest_sha256=manifest_sha256)
@@ -113,6 +261,8 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
         description: str,
         reference: str,
         status: AeirStatus = AeirStatus.UNVERIFIED,
+        truth_status: TruthStatus = TruthStatus.ASSERTED,
+        approval_status: ApprovalStatus = ApprovalStatus.PENDING,
         attributes: dict[str, Any] | None = None,
     ) -> None:
         objects.append(
@@ -122,15 +272,31 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
                 name=name,
                 description=description,
                 status=status,
+                lifecycle_status=LifecycleStatus.DRAFT,
+                truth_status=truth_status,
+                approval_status=approval_status,
+                source_refs=(reference,),
+                evidence_refs=(),
+                relationship_refs=(),
                 source=source(reference),
-                confidence=1.0,
-                version="0.1.0",
+                confidence=1.0 if truth_status is TruthStatus.ASSERTED else 0.75,
+                version=AEIR_VERSION,
+                created_at=AEIR_CANONICAL_TIMESTAMP,
+                created_by=AEIR_SYSTEM_ACTOR,
+                updated_at=AEIR_CANONICAL_TIMESTAMP,
+                updated_by=AEIR_SYSTEM_ACTOR,
                 attributes=attributes or {},
+                metadata={},
             )
         )
         if object_id != "PROJ-001":
             relationship_specs.append(
-                (f"REL-{len(relationship_specs) + 1:03d}", "PROJ-001", object_id, "contains")
+                (
+                    f"REL-{len(relationship_specs) + 1:03d}",
+                    "PROJ-001",
+                    object_id,
+                    RelationshipType.CONTAINS,
+                )
             )
 
     intent = manifest.project_intent
@@ -165,7 +331,10 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
             name=stakeholder.name,
             description=stakeholder.role,
             reference=f"stakeholders/{stakeholder.id}",
-            attributes={"responsibilities": list(stakeholder.responsibilities)},
+            attributes={
+                "responsibilities": list(stakeholder.responsibilities),
+                "decision_authority": getattr(stakeholder, "decision_authority", False),
+            },
         )
     for capability in manifest.capabilities:
         add(
@@ -180,7 +349,7 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
                 f"REL-{len(relationship_specs) + 1:03d}",
                 capability.id,
                 capability.owner_stakeholder_id,
-                "owned_by",
+                RelationshipType.OWNED_BY,
             )
         )
     for process in manifest.core_processes:
@@ -213,7 +382,7 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
                 f"REL-{len(relationship_specs) + 1:03d}",
                 entity.id,
                 entity.owner_stakeholder_id,
-                "owned_by",
+                RelationshipType.OWNED_BY,
             )
         )
     for integration in manifest.integrations:
@@ -260,6 +429,8 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
                 description=", ".join(targets),
                 reference=f"preferred_technology_targets/{category}",
                 status=AeirStatus.PROPOSED,
+                truth_status=TruthStatus.ASSUMED,
+                approval_status=ApprovalStatus.PENDING,
                 attributes={"category": category, "targets": targets},
             )
 
@@ -271,19 +442,28 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
         relationships.append(
             AeirRelationship(
                 id=relationship_id,
-                name=f"{source_id} {relationship_type} {target_id}",
-                description=f"Canonical {relationship_type} relationship.",
-                status=AeirStatus.UNVERIFIED,
-                source=source("relationships"),
-                confidence=1.0,
-                version="0.1.0",
+                relationship_type=relationship_type,
                 source_object_id=source_id,
                 target_object_id=target_id,
-                relationship_type=relationship_type,
+                status=AeirStatus.UNVERIFIED,
+                lifecycle_status=LifecycleStatus.ACTIVE,
+                truth_status=TruthStatus.ASSERTED,
+                approval_status=ApprovalStatus.NOT_REQUIRED,
+                source_refs=("relationships",),
+                evidence_refs=(),
+                source=source("relationships"),
+                confidence=1.0,
+                version=AEIR_VERSION,
+                created_at=AEIR_CANONICAL_TIMESTAMP,
+                created_by=AEIR_SYSTEM_ACTOR,
+                updated_at=AEIR_CANONICAL_TIMESTAMP,
+                updated_by=AEIR_SYSTEM_ACTOR,
+                valid_from=AEIR_CANONICAL_VALID_FROM,
+                valid_to=None,
             )
         )
     bound_objects = tuple(
-        item.model_copy(update={"relationships": tuple(relationship_map[item.id])})
+        item.model_copy(update={"relationship_refs": tuple(relationship_map[item.id])})
         for item in objects
     )
     bound_relationships = tuple(relationships)
@@ -292,6 +472,47 @@ def compile_aepm(manifest: AepmManifest) -> AeirProjectModel:
         objects=bound_objects,
         relationships=bound_relationships,
         model_sha256=_model_hash(manifest_sha256, bound_objects, bound_relationships),
+    )
+
+
+def compile_project_snapshot(
+    model: AeirProjectModel,
+    *,
+    snapshot_id: str = "SNP-0001",
+    status: Literal["draft", "approved"] | AeirSnapshotStatus = AeirSnapshotStatus.DRAFT,
+) -> AeirProjectSnapshot:
+    object_versions = tuple(
+        f"{item.id}:{item.version}"
+        for item in sorted(model.objects, key=lambda item: item.id)
+    )
+    project_id = next(item.id for item in model.objects if item.type is AeirObjectType.PROJECT)
+    snapshot_status = (
+        status
+        if isinstance(status, AeirSnapshotStatus)
+        else AeirSnapshotStatus.APPROVED
+        if status == "approved"
+        else AeirSnapshotStatus.DRAFT
+    )
+    provisional = AeirProjectSnapshot.model_construct(
+        schema_version="aeir-snapshot-0.1",
+        snapshot_id=snapshot_id,
+        project_id=project_id,
+        aepm_version="0.1",
+        aeir_version="0.1",
+        source_model_sha256=model.model_sha256,
+        object_versions=object_versions,
+        status=snapshot_status,
+        created_at=AEIR_CANONICAL_TIMESTAMP,
+        snapshot_sha256="0" * 64,
+    )
+    return AeirProjectSnapshot(
+        snapshot_id=snapshot_id,
+        project_id=project_id,
+        source_model_sha256=model.model_sha256,
+        object_versions=object_versions,
+        status=snapshot_status,
+        created_at=AEIR_CANONICAL_TIMESTAMP,
+        snapshot_sha256=_snapshot_hash(provisional),
     )
 
 
@@ -308,6 +529,10 @@ def _model_hash(
             "relationships": [item.model_dump(mode="json") for item in relationships],
         }
     )
+
+
+def _snapshot_hash(snapshot: ProjectSnapshot | AeirProjectSnapshot) -> str:
+    return specification_hash(snapshot.model_dump(mode="json", exclude={"snapshot_sha256"}))
 
 
 def rebuild_aeir(

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/assumption/0.1",
+  "title": "AI Assumption v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "statement", "reason", "source_refs", "confidence", "approval_status", "status"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^ASM-[0-9]{3}$"},
+    "statement": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "source_refs": {"type": "array"},
+    "affected_candidate_refs": {"type": "array", "items": {"type": "string"}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "approval_status": {"const": "pending"},
+    "status": {"enum": ["open", "resolved", "rejected"]}
+  }
+}

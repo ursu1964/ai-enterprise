@@ -2,6 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-enterprise.local/schemas/aepm/0.1",
   "title": "AI Enterprise Project Manifest v0.1",
+  "description": "Normative AEPM v0.1 contract. schema_version is the compatibility identifier; aepm_version is the human-facing major/minor version and defaults to 0.1 for existing aepm-0.1 manifests.",
+  "x-compatibility_policy": "Compatibility policy: patch-compatible additions must be optional or carried under extensions. Existing valid schema_version=aepm-0.1 manifests remain valid unless a future schema_version is introduced.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,6 +22,7 @@
   ],
   "properties": {
     "schema_version": {"const": "aepm-0.1"},
+    "aepm_version": {"const": "0.1", "default": "0.1"},
     "project_intent": {"$ref": "#/$defs/project_intent"},
     "business_outcomes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/business_outcome"}},
     "stakeholders": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/stakeholder"}},
@@ -30,20 +33,34 @@
     "integrations": {"type": "array", "items": {"$ref": "#/$defs/integration"}},
     "quality_requirements": {"type": "array", "items": {"$ref": "#/$defs/quality_requirement"}},
     "constraints": {"type": "array", "items": {"$ref": "#/$defs/constraint"}},
-    "preferred_technology_targets": {"$ref": "#/$defs/technology_targets"}
+    "preferred_technology_targets": {"$ref": "#/$defs/technology_targets"},
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced vendor or future fields. Implementations must not treat extension content as approved canonical truth without explicit validation.",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"},
+      "additionalProperties": true,
+      "default": {}
+    }
   },
   "$defs": {
     "non_empty_string": {"type": "string", "minLength": 1},
     "string_list": {"type": "array", "items": {"$ref": "#/$defs/non_empty_string"}},
+    "source_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "default": []
+    },
     "project_intent": {
       "type": "object",
       "additionalProperties": false,
       "required": ["name", "summary", "problem"],
       "properties": {
+        "id": {"type": "string", "pattern": "^PRJ-[0-9]{3}$", "default": "PRJ-001"},
         "name": {"type": "string", "minLength": 1, "maxLength": 200},
         "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
         "problem": {"type": "string", "minLength": 1, "maxLength": 4000},
-        "opportunity": {"type": ["string", "null"], "maxLength": 4000}
+        "opportunity": {"type": ["string", "null"], "maxLength": 4000},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "business_outcome": {
@@ -53,7 +70,8 @@
       "properties": {
         "id": {"type": "string", "pattern": "^OUT-[0-9]{3}$"},
         "description": {"$ref": "#/$defs/non_empty_string"},
-        "indicators": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}}
+        "indicators": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "stakeholder": {
@@ -64,7 +82,9 @@
         "id": {"type": "string", "pattern": "^STK-[0-9]{3}$"},
         "name": {"$ref": "#/$defs/non_empty_string"},
         "role": {"$ref": "#/$defs/non_empty_string"},
-        "responsibilities": {"$ref": "#/$defs/string_list"}
+        "decision_authority": {"type": "boolean", "default": false},
+        "responsibilities": {"$ref": "#/$defs/string_list"},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "capability": {
@@ -75,7 +95,8 @@
         "id": {"type": "string", "pattern": "^CAP-[0-9]{3}$"},
         "name": {"$ref": "#/$defs/non_empty_string"},
         "description": {"$ref": "#/$defs/non_empty_string"},
-        "owner_stakeholder_id": {"type": "string", "pattern": "^STK-[0-9]{3}$"}
+        "owner_stakeholder_id": {"type": "string", "pattern": "^STK-[0-9]{3}$"},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "core_process": {
@@ -87,7 +108,8 @@
         "name": {"$ref": "#/$defs/non_empty_string"},
         "description": {"$ref": "#/$defs/non_empty_string"},
         "trigger": {"$ref": "#/$defs/non_empty_string"},
-        "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}}
+        "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "business_rule": {
@@ -96,7 +118,8 @@
       "required": ["id", "description"],
       "properties": {
         "id": {"type": "string", "pattern": "^RULE-[0-9]{3}$"},
-        "description": {"$ref": "#/$defs/non_empty_string"}
+        "description": {"$ref": "#/$defs/non_empty_string"},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "data_entity": {
@@ -107,7 +130,8 @@
         "id": {"type": "string", "pattern": "^ENT-[0-9]{3}$"},
         "name": {"$ref": "#/$defs/non_empty_string"},
         "description": {"$ref": "#/$defs/non_empty_string"},
-        "owner_stakeholder_id": {"type": "string", "pattern": "^STK-[0-9]{3}$"}
+        "owner_stakeholder_id": {"type": "string", "pattern": "^STK-[0-9]{3}$"},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "integration": {
@@ -119,7 +143,8 @@
         "name": {"$ref": "#/$defs/non_empty_string"},
         "system": {"$ref": "#/$defs/non_empty_string"},
         "purpose": {"$ref": "#/$defs/non_empty_string"},
-        "security_rules": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}}
+        "security_rules": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "quality_requirement": {
@@ -130,7 +155,8 @@
         "id": {"type": "string", "pattern": "^QUAL-[0-9]{3}$"},
         "category": {"enum": ["accessibility", "availability", "maintainability", "performance", "privacy", "reliability", "scalability", "security", "usability"]},
         "description": {"$ref": "#/$defs/non_empty_string"},
-        "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}}
+        "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/non_empty_string"}},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "constraint": {
@@ -140,7 +166,8 @@
       "properties": {
         "id": {"type": "string", "pattern": "^CON-[0-9]{3}$"},
         "category": {"enum": ["budget", "compliance", "delivery", "operational", "organizational", "technical"]},
-        "description": {"$ref": "#/$defs/non_empty_string"}
+        "description": {"$ref": "#/$defs/non_empty_string"},
+        "source_refs": {"$ref": "#/$defs/source_refs"}
       }
     },
     "technology_targets": {

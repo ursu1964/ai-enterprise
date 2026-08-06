@@ -1,0 +1,71 @@
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+
+def _load_bk_roadmap_audit():
+    root = Path(__file__).resolve().parents[3]
+    path = root / "tools" / "bk_roadmap_audit.py"
+    spec = importlib.util.spec_from_file_location("bk_roadmap_audit", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bk_roadmap_audit_reports_bk_evidence_and_missing_canonical_next_spec_body() -> None:
+    module = _load_bk_roadmap_audit()
+    root = Path(__file__).resolve().parents[3]
+
+    report = module.audit_bk_roadmap(root, Path("1/bk.txt"))
+
+    assert report["status"] == "r11_core_runtime_ready_canonical_spec_missing"
+    assert report["documents_detected"] == ["R10-IR-01"]
+    assert report["derived_specifications"][0]["document_id"] == "R11-IR-01"
+    assert report["next_required_specification"] == {
+        "document_id": "R11-IR-01",
+        "title": "Evidence and Audit Engine",
+    }
+    assert report["gaps"] == ["BK_NEXT_CANONICAL_SPEC_BODY_MISSING"]
+    assert len(report["source_hash"]) == 64
+    assert len(report["audit_hash"]) == 64
+    modules = {item["module"]: item for item in report["implemented_modules"]}
+    assert modules["BK-R10"]["complete"] is True
+    assert modules["BK-R10"]["missing_paths"] == []
+    assert modules["BK-R11"]["complete"] is True
+    assert modules["BK-R11"]["missing_paths"] == []
+
+
+def test_bk_roadmap_audit_blocks_when_required_evidence_is_missing(tmp_path: Path) -> None:
+    module = _load_bk_roadmap_audit()
+    source = tmp_path / "bk.txt"
+    source.write_text(
+        "\n".join(
+            [
+                "Document ID: R10-IR-01",
+                "The next required specification is R11-IR-01 — Evidence and Audit Engine.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = module.audit_bk_roadmap(tmp_path, source)
+
+    assert report["status"] == "blocked"
+    assert "BK-R10_IMPLEMENTATION_EVIDENCE_MISSING" in report["gaps"]
+    assert "BK-R11_IMPLEMENTATION_EVIDENCE_MISSING" in report["gaps"]
+    assert "BK_NEXT_CANONICAL_SPEC_BODY_MISSING" in report["gaps"]
+    assert report["implemented_modules"][0]["complete"] is False
+
+
+def test_bk_roadmap_audit_has_ci_friendly_json_output(capsys) -> None:
+    module = _load_bk_roadmap_audit()
+    root = Path(__file__).resolve().parents[3]
+
+    assert module.main(["--root", str(root), "--source", "1/bk.txt", "--json"]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["schema_version"] == "1.0"
+    assert output["status"] == "r11_core_runtime_ready_canonical_spec_missing"

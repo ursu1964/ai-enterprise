@@ -14,6 +14,20 @@ from ai_enterprise.domain.specification.kernel import specification_hash
 class ValidationSeverity(StrEnum):
     ERROR = "error"
     WARNING = "warning"
+    INFORMATION = "information"
+    RECOMMENDATION = "recommendation"
+
+
+class ValidationCategory(StrEnum):
+    SCHEMA = "schema"
+    COMPLETENESS = "completeness"
+    CONSISTENCY = "consistency"
+    TRACEABILITY = "traceability"
+    SECURITY = "security"
+    QUALITY = "quality"
+    GOVERNANCE = "governance"
+    AMBIGUITY = "ambiguity"
+    DUPLICATION = "duplication"
 
 
 class ValidationValue(BaseModel):
@@ -21,11 +35,20 @@ class ValidationValue(BaseModel):
 
 
 class ValidationFinding(ValidationValue):
+    id: str = Field(pattern=r"^VAL-[0-9]{3}$")
     code: str = Field(pattern=r"^AEPM-VAL-[0-9]{3}$")
+    rule_id: str = Field(pattern=r"^AEPM\.[A-Z0-9_.]+$")
     severity: ValidationSeverity
+    category: ValidationCategory
     message: str
     path: str
-    object_ids: tuple[str, ...] = ()
+    object_refs: tuple[str, ...] = ()
+    blocking: bool = True
+    suggested_action: str
+
+    @property
+    def object_ids(self) -> tuple[str, ...]:
+        return self.object_refs
 
 
 class AepmValidationReport(ValidationValue):
@@ -36,9 +59,7 @@ class AepmValidationReport(ValidationValue):
 
     @model_validator(mode="after")
     def validate_report(self) -> AepmValidationReport:
-        expected_valid = not any(
-            finding.severity is ValidationSeverity.ERROR for finding in self.findings
-        )
+        expected_valid = not any(finding.blocking for finding in self.findings)
         if self.valid is not expected_valid:
             raise ValueError("validation status does not match finding severities")
         expected_hash = _report_hash(self.valid, self.findings)
@@ -63,7 +84,7 @@ class AepmValidationEngine:
                     0 if item.severity is ValidationSeverity.ERROR else 1,
                     item.code,
                     item.path,
-                    item.object_ids,
+                    item.object_refs,
                 ),
             )
         )
@@ -179,6 +200,7 @@ class AepmValidationEngine:
                     "009",
                     "Text contains an unresolved assumption marker.",
                     path,
+                    _path_identifier(document, path),
                 )
 
     def _duplicates(self, document: dict[str, Any], findings: list[ValidationFinding]) -> None:
@@ -195,12 +217,12 @@ class AepmValidationEngine:
             "constraints",
         ):
             for index, item in enumerate(_objects(document.get(collection))):
-                value = item.get("name") or item.get("description")
-                normalized = _normalize(value)
-                if normalized:
-                    concepts.setdefault(normalized, []).append(
-                        (f"{collection}/{index}", str(item.get("id", "")))
-                    )
+                for field in ("name", "description"):
+                    normalized = _normalize(item.get(field))
+                    if normalized:
+                        concepts.setdefault(normalized, []).append(
+                            (f"{collection}/{index}/{field}", str(item.get("id", "")))
+                        )
         for values in concepts.values():
             if len(values) > 1:
                 _add(
@@ -233,19 +255,77 @@ def _add(
     suffix: str,
     message: str,
     path: str,
-    object_ids: tuple[str, ...] = (),
+    object_refs: tuple[str, ...] = (),
     *,
     severity: ValidationSeverity = ValidationSeverity.ERROR,
 ) -> None:
+    category = _category(suffix)
+    blocking = severity is ValidationSeverity.ERROR
     findings.append(
         ValidationFinding(
+            id=f"VAL-{suffix}",
             code=f"AEPM-VAL-{suffix}",
+            rule_id=_rule_id(suffix),
             severity=severity,
+            category=category,
             message=message,
             path=path,
-            object_ids=object_ids,
+            object_refs=object_refs,
+            blocking=blocking,
+            suggested_action=_suggested_action(suffix, category),
         )
     )
+
+
+def _category(suffix: str) -> ValidationCategory:
+    return {
+        "000": ValidationCategory.SCHEMA,
+        "001": ValidationCategory.COMPLETENESS,
+        "002": ValidationCategory.COMPLETENESS,
+        "003": ValidationCategory.GOVERNANCE,
+        "004": ValidationCategory.COMPLETENESS,
+        "005": ValidationCategory.QUALITY,
+        "006": ValidationCategory.GOVERNANCE,
+        "007": ValidationCategory.SECURITY,
+        "008": ValidationCategory.CONSISTENCY,
+        "009": ValidationCategory.AMBIGUITY,
+        "010": ValidationCategory.DUPLICATION,
+        "011": ValidationCategory.TRACEABILITY,
+    }[suffix]
+
+
+def _rule_id(suffix: str) -> str:
+    return {
+        "000": "AEPM.SCHEMA.VALID",
+        "001": "AEPM.PROJECT_INTENT.REQUIRED",
+        "002": "AEPM.OUTCOME.INDICATOR_REQUIRED",
+        "003": "AEPM.CAPABILITY.OWNER_REQUIRED",
+        "004": "AEPM.PROCESS.TRIGGER_OUTPUT_REQUIRED",
+        "005": "AEPM.REQUIREMENT.ACCEPTANCE_CRITERIA_REQUIRED",
+        "006": "AEPM.ENTITY.OWNER_REQUIRED",
+        "007": "AEPM.INTEGRATION.SECURITY_RULE_REQUIRED",
+        "008": "AEPM.CONSISTENCY.CONTRADICTION_CHECK",
+        "009": "AEPM.AMBIGUITY.UNRESOLVED_ASSUMPTION",
+        "010": "AEPM.DUPLICATION.NORMALIZED_CONCEPT",
+        "011": "AEPM.TRACEABILITY.ORPHAN_OBJECT",
+    }[suffix]
+
+
+def _suggested_action(suffix: str, category: ValidationCategory) -> str:
+    return {
+        "000": "Correct the manifest so it conforms to AEPM v0.1.",
+        "001": "Provide a project intent summary before intake.",
+        "002": "Define at least one measurable indicator for the outcome.",
+        "003": "Assign the capability to a known stakeholder.",
+        "004": "Define the process trigger and at least one output.",
+        "005": "Add acceptance criteria that can be evaluated later.",
+        "006": "Assign the data entity to a known stakeholder.",
+        "007": "Add explicit security rules for the integration.",
+        "008": "Resolve the conflicting mandatory statements.",
+        "009": "Confirm or replace the assumption marker with approved text.",
+        "010": "Review the duplicated concept and merge or differentiate it.",
+        "011": "Link the object to a valid owner or source relationship.",
+    }.get(suffix, f"Review and resolve the {category.value} finding.")
 
 
 def _objects(value: Any) -> list[dict[str, Any]]:
@@ -262,6 +342,20 @@ def _present(value: Any) -> bool:
 
 def _identifier(value: dict[str, Any]) -> tuple[str, ...]:
     return (str(value["id"]),) if _text(value.get("id")) else ()
+
+
+def _path_identifier(document: dict[str, Any], path: str) -> tuple[str, ...]:
+    parts = path.removeprefix("$/").split("/")
+    if len(parts) < 2:
+        return ()
+    collection = document.get(parts[0])
+    if not isinstance(collection, list):
+        return ()
+    try:
+        item = collection[int(parts[1])]
+    except (IndexError, ValueError):
+        return ()
+    return _identifier(item) if isinstance(item, dict) else ()
 
 
 def _normalize(value: Any) -> str:

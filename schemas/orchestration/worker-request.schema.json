@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/orchestration/worker-request/1.0",
+  "title": "R21 Worker Request",
+  "type": "object",
+  "required": ["request_id", "execution_id", "work_package_id", "worker_type", "instructions", "authorization"],
+  "properties": {
+    "request_id": {"type": "string"},
+    "execution_id": {"type": "string"},
+    "work_package_id": {"type": "string"},
+    "worker_type": {"type": "string"},
+    "instructions": {"type": "object"},
+    "authorization": {"type": "object"}
+  }
+}

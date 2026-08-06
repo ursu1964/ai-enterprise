@@ -1,0 +1,11 @@
+{
+  "case_id": "clear-project-manifesto",
+  "expected_object_types": ["Intent", "Stakeholder", "Capability"],
+  "expected_direct_facts": ["reduce inventory discrepancies", "warehouse managers"],
+  "expected_unknowns": [],
+  "expected_ambiguities": [],
+  "expected_assumptions": [],
+  "expected_contradictions": [],
+  "prohibited_invented_facts": ["automatic deployment", "regulatory certification"],
+  "expected_source_segment_links": ["SEG-002-0001", "SEG-002-0002", "SEG-002-0003"]
+}

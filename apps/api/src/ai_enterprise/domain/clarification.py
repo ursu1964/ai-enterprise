@@ -10,6 +10,8 @@ from ai_enterprise.domain.aeir import (
     AeirProjectModel,
     AeirSource,
     AeirStatus,
+    ApprovalStatus,
+    TruthStatus,
     rebuild_aeir,
 )
 from ai_enterprise.domain.aepm_interpretation import (
@@ -34,6 +36,59 @@ class ClarificationSection(StrEnum):
 
 
 AuthorityStatus = Literal["deterministic", "proposed", "inferred", "unverified"]
+
+
+class HumanReviewWorkflowState(StrEnum):
+    EXTRACTED = "extracted"
+    VALIDATION_PENDING = "validation_pending"
+    CLARIFICATION_REQUIRED = "clarification_required"
+    CLIENT_REVIEW = "client_review"
+    APPROVED = "approved"
+    READY_FOR_COMPILATION = "ready_for_compilation"
+
+
+ALLOWED_HUMAN_REVIEW_TRANSITIONS: frozenset[
+    tuple[HumanReviewWorkflowState, HumanReviewWorkflowState]
+] = frozenset(
+    {
+        (
+            HumanReviewWorkflowState.EXTRACTED,
+            HumanReviewWorkflowState.VALIDATION_PENDING,
+        ),
+        (
+            HumanReviewWorkflowState.VALIDATION_PENDING,
+            HumanReviewWorkflowState.CLARIFICATION_REQUIRED,
+        ),
+        (
+            HumanReviewWorkflowState.VALIDATION_PENDING,
+            HumanReviewWorkflowState.CLIENT_REVIEW,
+        ),
+        (
+            HumanReviewWorkflowState.CLARIFICATION_REQUIRED,
+            HumanReviewWorkflowState.CLIENT_REVIEW,
+        ),
+        (
+            HumanReviewWorkflowState.CLIENT_REVIEW,
+            HumanReviewWorkflowState.APPROVED,
+        ),
+        (
+            HumanReviewWorkflowState.APPROVED,
+            HumanReviewWorkflowState.READY_FOR_COMPILATION,
+        ),
+    }
+)
+
+
+def validate_human_review_transition(
+    current: HumanReviewWorkflowState | str, next_state: HumanReviewWorkflowState | str
+) -> tuple[HumanReviewWorkflowState, HumanReviewWorkflowState]:
+    current_state = HumanReviewWorkflowState(current)
+    target_state = HumanReviewWorkflowState(next_state)
+    if (current_state, target_state) not in ALLOWED_HUMAN_REVIEW_TRANSITIONS:
+        raise ValueError(
+            f"invalid human review transition: {current_state.value} -> {target_state.value}"
+        )
+    return current_state, target_state
 
 
 class ClarificationQuestion(ClarificationValue):
@@ -92,8 +147,22 @@ class ClarificationReport(ClarificationValue):
 
 class CanonicalCorrection(ClarificationValue):
     target_object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
-    field: Literal["name", "description"]
-    proposed_value: str = Field(min_length=1, max_length=4000)
+    field: Literal["name", "description", "attributes"]
+    proposed_value: Any = Field()
+    attribute_key: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9_]{1,79}$"
+    )
+
+    @model_validator(mode="after")
+    def validate_correction(self) -> CanonicalCorrection:
+        if self.field == "attributes":
+            if self.attribute_key is None:
+                raise ValueError("attribute corrections require an attribute_key")
+        elif self.attribute_key is not None:
+            raise ValueError("attribute_key is only valid for attribute corrections")
+        if self.field in {"name", "description"} and not isinstance(self.proposed_value, str):
+            raise ValueError("name and description corrections require string values")
+        return self
 
 
 class ClarificationAnswer(ClarificationValue):
@@ -125,6 +194,22 @@ class ClarificationAnswerBatch(ClarificationValue):
             raise ValueError("clarification answers must be unique and canonically ordered")
         if self.answer_batch_sha256 != _answer_hash(self):
             raise ValueError("clarification answer hash does not match canonical content")
+        return self
+
+
+class HumanReviewDecision(ClarificationValue):
+    object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
+    decision: Literal["approved", "rejected", "corrected"]
+    rationale: str = Field(min_length=1, max_length=2000)
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> HumanReviewDecision:
+        if self.decision == "corrected" and self.name is None and self.description is None:
+            raise ValueError("corrected review decisions must include a name or description")
+        if self.decision == "rejected" and (self.name is not None or self.description is not None):
+            raise ValueError("rejected review decisions cannot carry corrected fields")
         return self
 
 
@@ -258,8 +343,9 @@ def apply_answer_batch(
                 f"respondent:{batch.respondent_id}",
             )
             changes: dict[str, Any] = {
-                correction.field: correction.proposed_value,
                 "status": AeirStatus.APPROVED,
+                "truth_status": TruthStatus.VERIFIED,
+                "approval_status": ApprovalStatus.APPROVED,
                 "confidence": 1.0,
                 "source": AeirSource(
                     kind="human_clarification",
@@ -268,7 +354,58 @@ def apply_answer_batch(
                     evidence_references=evidence,
                 ),
             }
+            if correction.field == "attributes":
+                attributes = dict(current.attributes)
+                assert correction.attribute_key is not None
+                attributes[correction.attribute_key] = correction.proposed_value
+                changes["attributes"] = attributes
+            else:
+                changes[correction.field] = correction.proposed_value
             objects[current.id] = current.model_copy(update=changes)
+    return rebuild_aeir(base_model, objects=tuple(objects[item.id] for item in base_model.objects))
+
+
+def apply_human_review_decisions(
+    *,
+    base_model: AeirProjectModel,
+    reviewer_id: str,
+    decisions: tuple[HumanReviewDecision, ...],
+) -> AeirProjectModel:
+    if len({item.object_id for item in decisions}) != len(decisions):
+        raise ValueError("human review decisions must target each AEIR object at most once")
+    objects = {item.id: item for item in base_model.objects}
+    for review in decisions:
+        current = objects.get(review.object_id)
+        if current is None:
+            raise ValueError("human review decision target is unavailable")
+        evidence = (
+            current.source.reference,
+            f"human-review:{review.decision}",
+            f"reviewer:{reviewer_id}",
+        )
+        updates: dict[str, Any] = {
+            "status": _review_status(review),
+            "truth_status": (
+                TruthStatus.DISPUTED if review.decision == "rejected" else TruthStatus.VERIFIED
+            ),
+            "approval_status": (
+                ApprovalStatus.REJECTED
+                if review.decision == "rejected"
+                else ApprovalStatus.APPROVED
+            ),
+            "confidence": 1.0 if review.decision != "rejected" else current.confidence,
+            "source": AeirSource(
+                kind="human_clarification",
+                reference=f"human-review:{review.object_id}",
+                manifest_sha256=base_model.source_manifest_sha256,
+                evidence_references=evidence,
+            ),
+        }
+        if review.name is not None:
+            updates["name"] = review.name
+        if review.description is not None:
+            updates["description"] = review.description
+        objects[current.id] = current.model_copy(update=updates)
     return rebuild_aeir(base_model, objects=tuple(objects[item.id] for item in base_model.objects))
 
 
@@ -296,6 +433,12 @@ def _interpretation_section(
 
 def _question_id(source: str) -> str:
     return f"QUE-{hashlib.sha256(source.encode()).hexdigest()[:12].upper()}"
+
+
+def _review_status(review: HumanReviewDecision) -> AeirStatus:
+    if review.decision == "rejected":
+        return AeirStatus.REJECTED
+    return AeirStatus.APPROVED
 
 
 def _report_hash(report: ClarificationReport) -> str:

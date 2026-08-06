@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/handoff.schema.json",
+  "title": "BK/R10 Verification Handoff",
+  "type": "object",
+  "required": [
+    "verification_handoff_id",
+    "implementation_result_id",
+    "implementation_slice_id",
+    "repository_revision",
+    "requirement_baseline_id",
+    "architecture_baseline_id",
+    "planning_baseline_id",
+    "produced_by",
+    "handoff_hash"
+  ],
+  "properties": {
+    "verification_handoff_id": {"type": "string"},
+    "implementation_result_id": {"type": "string"},
+    "implementation_slice_id": {"type": "string"},
+    "repository_revision": {"type": "string"},
+    "requirement_baseline_id": {"type": "string"},
+    "architecture_baseline_id": {"type": "string"},
+    "planning_baseline_id": {"type": "string"},
+    "policy_refs": {"type": "array", "items": {"type": "string"}},
+    "artifact_refs": {"type": "array", "items": {"type": "string"}},
+    "produced_by": {"$ref": "#/$defs/actor"},
+    "handoff_hash": {"type": "string"}
+  },
+  "$defs": {
+    "actor": {
+      "type": "object",
+      "required": ["actor_type", "actor_id", "role"],
+      "properties": {
+        "actor_type": {"type": "string"},
+        "actor_id": {"type": "string"},
+        "role": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

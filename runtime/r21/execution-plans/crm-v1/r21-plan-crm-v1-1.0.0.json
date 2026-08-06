@@ -1,0 +1,1184 @@
+{
+  "approval_gates": [
+    {
+      "decisions": [],
+      "evidence_required": [
+        "validation_report",
+        "traceability_report",
+        "provenance_record"
+      ],
+      "gate_hash": "fbdd4e96560eb178c3ecb2669ce0904b202e12b60e3348f0c3b95bb3dd5a3d66",
+      "gate_id": "gate-release",
+      "gate_type": "release_approval",
+      "occurs_before": "COMPLETED",
+      "project_id": "crm-v1",
+      "required_approvers": [
+        {
+          "minimum_approvals": 1,
+          "role": "project_owner"
+        },
+        {
+          "minimum_approvals": 1,
+          "role": "release_authority"
+        }
+      ],
+      "status": "pending",
+      "subject_work_package_ids": [
+        "wp-build-validation-001",
+        "wp-release-approval-001"
+      ]
+    }
+  ],
+  "dependency_edges": [
+    {
+      "reason": "requires",
+      "source": "wp-requirements-001",
+      "target": "wp-api-contract-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-api-contract-001",
+      "target": "wp-service-code-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-api-contract-001",
+      "target": "wp-test-generation-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-service-code-001",
+      "target": "wp-container-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-service-code-001",
+      "target": "wp-build-validation-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-test-generation-001",
+      "target": "wp-build-validation-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-container-001",
+      "target": "wp-build-validation-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-build-validation-001",
+      "target": "wp-release-approval-001"
+    },
+    {
+      "reason": "requires",
+      "source": "wp-release-approval-001",
+      "target": "wp-delivery-package-001"
+    }
+  ],
+  "diagnostics": [],
+  "execution_plan_id": "r21-plan-crm-v1-1.0.0",
+  "manifest_hash": "01c1abe7004fc7cfe044ee4e6ded8f7e132f439fcf99efc3b0a2c6d160b0bb63",
+  "manifest_version": "1.0.0",
+  "orchestrator_version": "execution-orchestrator-1.0",
+  "parallel_groups": [
+    [
+      "wp-requirements-001"
+    ],
+    [
+      "wp-api-contract-001"
+    ],
+    [
+      "wp-service-code-001",
+      "wp-test-generation-001"
+    ],
+    [
+      "wp-container-001"
+    ],
+    [
+      "wp-build-validation-001"
+    ],
+    [
+      "wp-release-approval-001"
+    ],
+    [
+      "wp-delivery-package-001"
+    ]
+  ],
+  "phases": [
+    {
+      "name": "Definition compilation",
+      "phase_hash": "831a060e766cc8fd08c2642af55ed6693e61c78f6d910851309176e883e515f1",
+      "phase_id": "phase-01",
+      "work_package_ids": [
+        "wp-requirements-001"
+      ]
+    },
+    {
+      "name": "API contract",
+      "phase_hash": "b34e44562c1a92741e0dabeeed9b7b70811a1745204a10ecb39984e1274f36e8",
+      "phase_id": "phase-02",
+      "work_package_ids": [
+        "wp-api-contract-001"
+      ]
+    },
+    {
+      "name": "Implementation",
+      "phase_hash": "f2ae3fddfebe4931ea37ee27280d393b14d61dca306d2daca0948350bf4ad4f1",
+      "phase_id": "phase-03",
+      "work_package_ids": [
+        "wp-service-code-001",
+        "wp-test-generation-001",
+        "wp-container-001"
+      ]
+    },
+    {
+      "name": "Validation",
+      "phase_hash": "c36a1742babdb4b7b2c5c67d22626839d2dcf09d76bb4af6e1823b48e4cef892",
+      "phase_id": "phase-04",
+      "work_package_ids": [
+        "wp-build-validation-001"
+      ]
+    },
+    {
+      "name": "Delivery",
+      "phase_hash": "67dc02aeea861795f1d4be4cc807b1eaeac30fad503090b4f33bf781ff172ed0",
+      "phase_id": "phase-05",
+      "work_package_ids": [
+        "wp-release-approval-001",
+        "wp-delivery-package-001"
+      ]
+    }
+  ],
+  "plan_hash": "8113623284f15dacabaa1d8f4c11acab5b44294f11f1882ca149e9d31c9cb456",
+  "policy_snapshot": "r21.default.policy",
+  "project_id": "crm-v1",
+  "registry_snapshot": "updl-1.0",
+  "strategy": {
+    "approval_policy": "explicit",
+    "execution_mode": "controlled_parallel",
+    "failure_policy": "pause_affected_branch",
+    "maximum_parallel_tasks": 3,
+    "optimization_target": "balanced"
+  },
+  "work_packages": [
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "compiled_requirement_specification",
+          "schema_uri": "registry://schemas/compiled_requirement_specification/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-requirements-001:v1:attempt-1",
+      "inputs": [],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "dfafe3848051a65f89acd48958fa33666f807ff41a4e00acb9dd41b3d073e972",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-definition"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 1,
+      "project_id": "crm-v1",
+      "purpose": "Compile requirements for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-api-contract-001"
+      ],
+      "requires": [],
+      "timeout_seconds": 3600,
+      "title": "Compile requirements",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-requirements-001",
+      "worker_type": "requirements_compiler"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "openapi_contract",
+          "schema_uri": "registry://schemas/openapi_contract/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-api-contract-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-requirements-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "6afc4c391b3aad1ec1acb555cb0014282151eafbe7f21a47e443d18f1d1f7121",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-api"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 2,
+      "project_id": "crm-v1",
+      "purpose": "Generate OpenAPI contract for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-service-code-001",
+        "wp-test-generation-001"
+      ],
+      "requires": [
+        "wp-requirements-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Generate OpenAPI contract",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-api-contract-001",
+      "worker_type": "api_contract_worker"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "service_source_code",
+          "schema_uri": "registry://schemas/service_source_code/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-service-code-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-api-contract-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "27bd2c7887f5dacdcb96f8e55aefe9079428d930b1b534b20ddf2e09d5a18e96",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-implementation"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 3,
+      "project_id": "crm-v1",
+      "purpose": "Generate service source code for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-container-001",
+        "wp-build-validation-001"
+      ],
+      "requires": [
+        "wp-api-contract-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Generate service source code",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-service-code-001",
+      "worker_type": "backend_implementation_worker"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "unit_tests",
+          "schema_uri": "registry://schemas/unit_tests/v1"
+        },
+        {
+          "artifact_type": "integration_tests",
+          "schema_uri": "registry://schemas/integration_tests/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-test-generation-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-api-contract-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "ff61fedf9d23664ff12e71c264442568664bbb7c79b66d940a28f2635583be00",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-implementation"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 4,
+      "project_id": "crm-v1",
+      "purpose": "Generate tests for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-build-validation-001"
+      ],
+      "requires": [
+        "wp-api-contract-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Generate tests",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-test-generation-001",
+      "worker_type": "test_generation_worker"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "container_definition",
+          "schema_uri": "registry://schemas/container_definition/v1"
+        },
+        {
+          "artifact_type": "build_instructions",
+          "schema_uri": "registry://schemas/build_instructions/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-container-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-service-code-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "7f264cc7b4032b460981819e611be7d3e1346848da6af435a93e88e8d01ecbda",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-implementation"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 5,
+      "project_id": "crm-v1",
+      "purpose": "Generate container definition for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-build-validation-001"
+      ],
+      "requires": [
+        "wp-service-code-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Generate container definition",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-container-001",
+      "worker_type": "container_worker"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "validation_report",
+          "schema_uri": "registry://schemas/validation_report/v1"
+        },
+        {
+          "artifact_type": "traceability_report",
+          "schema_uri": "registry://schemas/traceability_report/v1"
+        },
+        {
+          "artifact_type": "provenance_record",
+          "schema_uri": "registry://schemas/provenance_record/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-build-validation-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-service-code-001/output",
+        "artifact://wp-test-generation-001/output",
+        "artifact://wp-container-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "0e58d8c2be6d35ea495a4782ba7faff5ef1fd50952a1017acb8da0dff732a775",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-validation"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 6,
+      "project_id": "crm-v1",
+      "purpose": "Validate build for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [
+        "wp-release-approval-001"
+      ],
+      "requires": [
+        "wp-service-code-001",
+        "wp-test-generation-001",
+        "wp-container-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Validate build",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-build-validation-001",
+      "worker_type": "build_validation_worker"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "approval_record",
+          "schema_uri": "registry://schemas/approval_record/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-release-approval-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-build-validation-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "21469736810240f79a8247743eebac18b75f8203e4fb89256f9cfbfb82697ec7",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-approval"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 7,
+      "project_id": "crm-v1",
+      "purpose": "Collect human release approval for the approved Manifest.",
+      "required_approvals": [
+        "gate-release"
+      ],
+      "required_by": [
+        "wp-delivery-package-001"
+      ],
+      "requires": [
+        "wp-build-validation-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Collect human release approval",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-release-approval-001",
+      "worker_type": "approval_coordinator"
+    },
+    {
+      "completion_criteria": {
+        "all_outputs_present": true,
+        "all_validators_pass": true,
+        "unresolved_critical_findings": 0
+      },
+      "execution_mode": "deterministic_worker",
+      "expected_outputs": [
+        {
+          "artifact_type": "delivery_archive",
+          "schema_uri": "registry://schemas/delivery_archive/v1"
+        }
+      ],
+      "idempotency_key": "crm-v1:wp-delivery-package-001:v1:attempt-1",
+      "inputs": [
+        "artifact://wp-release-approval-001/output"
+      ],
+      "manifest_trace": {
+        "manifest_version": "1.0.0",
+        "project_id": "crm-v1",
+        "source_objects": [
+          {
+            "object_id": "unique-customer",
+            "object_type": "business_rule",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "manage-customers",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "track-opportunities",
+            "object_type": "capability",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "eu-data",
+            "object_type": "constraint",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "customer",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "lead",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "opportunity",
+            "object_type": "entity",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "workspace",
+            "object_type": "integration",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "reduce-sales-cycle",
+            "object_type": "objective",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "audit-policy",
+            "object_type": "policy",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "availability",
+            "object_type": "quality_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "role-based-access",
+            "object_type": "security_requirement",
+            "relationship": "drives"
+          },
+          {
+            "object_id": "qualify-lead",
+            "object_type": "workflow",
+            "relationship": "drives"
+          }
+        ],
+        "trace_hash": "69dc63aed679ed274361974aec6977504e0211240bb702395d614eadb95336db"
+      },
+      "maximum_attempts": 3,
+      "package_hash": "3c2d058a104aa7e1a96027d6c70cf4fcc3ceefec83b0ac81b523f960644e02be",
+      "permissions": {
+        "destructive_operations": "denied",
+        "network_access": "denied",
+        "repositories": [
+          "crm-v1-delivery"
+        ],
+        "tools": [
+          "registry.read",
+          "artifact.read",
+          "artifact.write",
+          "validation.run"
+        ]
+      },
+      "priority": 8,
+      "project_id": "crm-v1",
+      "purpose": "Create delivery package for the approved Manifest.",
+      "required_approvals": [],
+      "required_by": [],
+      "requires": [
+        "wp-release-approval-001"
+      ],
+      "timeout_seconds": 3600,
+      "title": "Create delivery package",
+      "validators": [
+        "schema_validator",
+        "traceability_validator",
+        "policy_validator"
+      ],
+      "version": 1,
+      "work_package_id": "wp-delivery-package-001",
+      "worker_type": "delivery_packager"
+    }
+  ]
+}

@@ -15,6 +15,10 @@ def _load(name: str):
     root = _repo_root()
     if name == "release_artifact":
         _load("migration_verify")
+        _load("production_readiness_contracts")
+        _load("infrastructure_choices")
+        _load("production_readiness")
+        _load("production_evidence_plan")
     spec = importlib.util.spec_from_file_location(name, root / "tools" / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -39,13 +43,30 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
         "--require-evidence-for compose-check,migration-check,lint,typecheck,test,"
         "secret-scan,docker-smoke,dashboard-verify,dashboard-browser-verify,"
         "engineering-static,evolution-check,federation-check,intelligence-check,"
-        "engineering-full,etra-check"
-        in makefile
+        "engineering-full,etra-check" in makefile
     )
     assert "dashboard-verify:" in makefile
     assert "dashboard-browser-verify:" in makefile
     assert "tools/dashboard_verify.py" in makefile
     assert "tools/release_gate_evidence.py" in makefile
+    assert "release-artifact-verify:" in makefile
+    assert "release-evidence-bundle:" in makefile
+    assert "production-release-artifact-verify:" in makefile
+    assert "production-release-evidence-bundle:" in makefile
+    assert "--markdown-output artifacts/release-verification.md" in makefile
+    assert "--markdown-output artifacts/production-release-verification.md" in makefile
+    assert "--verify-json artifacts/release-verification.json" in makefile
+    assert "--verify-json artifacts/production-release-verification.json" in makefile
+    assert "--verify-output artifacts/release-verification-check.json" in makefile
+    assert "--verify-output artifacts/production-release-verification-check.json" in makefile
+    assert (
+        "tools/release_evidence_bundle.py --output artifacts/release-evidence-bundle.json"
+        in makefile
+    )
+    assert (
+        "tools/release_evidence_bundle.py --production "
+        "--output artifacts/production-release-evidence-bundle.json" in makefile
+    )
     assert "--profile fast" in makefile
     assert "--profile ci" in makefile
     assert "--profile release" in makefile
@@ -59,7 +80,8 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
         "etra-check=python tools/etra_conformance.py --root . --json",
     }
     assert all(
-        command in {
+        command
+        in {
             f"{name}={gate_command}"
             for name, gate_command in release_gate_evidence.CI_GATE_COMMANDS.items()
         }
@@ -68,9 +90,47 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     check_release = next(
         line for line in makefile.splitlines() if line.startswith("check-release:")
     )
-    assert "release-gate-evidence-release release-artifact" in check_release
+    assert (
+        "release-gate-evidence-release release-artifact release-artifact-verify "
+        "release-evidence-bundle" in check_release
+    )
     assert check_release.index("release-gate-evidence-release") < check_release.index(
         "release-artifact"
+    )
+    check_release_targets = check_release.split(":", 1)[1].split()
+    assert check_release_targets.index("release-artifact") < (
+        check_release_targets.index("release-artifact-verify")
+    )
+    assert check_release_targets.index("release-artifact-verify") < (
+        check_release_targets.index("release-evidence-bundle")
+    )
+    check_production_release = next(
+        line for line in makefile.splitlines() if line.startswith("check-production-release:")
+    )
+    assert (
+        "production-evidence-plan production-readiness-contracts production-readiness "
+        "production-evidence-status release-gate-evidence-release "
+        "production-release-artifact production-release-artifact-verify "
+        "production-release-evidence-bundle" in check_production_release
+    )
+    production_release_targets = check_production_release.split(":", 1)[1].split()
+    assert production_release_targets.index("production-evidence-plan") < (
+        production_release_targets.index("production-readiness-contracts")
+    )
+    assert production_release_targets.index("production-readiness-contracts") < (
+        production_release_targets.index("production-readiness")
+    )
+    assert production_release_targets.index("production-readiness") < (
+        production_release_targets.index("production-evidence-status")
+    )
+    assert production_release_targets.index("production-evidence-status") < (
+        production_release_targets.index("production-release-artifact")
+    )
+    assert production_release_targets.index("production-release-artifact") < (
+        production_release_targets.index("production-release-artifact-verify")
+    )
+    assert production_release_targets.index("production-release-artifact-verify") < (
+        production_release_targets.index("production-release-evidence-bundle")
     )
 
 
@@ -95,8 +155,9 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     assert release_gate_evidence.RELEASE_GATE_COMMANDS["compose-check"] == (
         "docker compose config --quiet"
     )
-    assert "tools/migration_verify.py --json" in (
-        release_gate_evidence.RELEASE_GATE_COMMANDS["migration-check"]
+    assert (
+        "tools/migration_verify.py --json"
+        in (release_gate_evidence.RELEASE_GATE_COMMANDS["migration-check"])
     )
     assert release_gate_evidence.RELEASE_GATE_COMMANDS["secret-scan"] == (
         "python tools/secret_scan.py --all"
@@ -104,8 +165,9 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     assert release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-verify"] == (
         'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
     )
-    assert "tools/dashboard_browser_verify.py" in (
-        release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-browser-verify"]
+    assert (
+        "tools/dashboard_browser_verify.py"
+        in (release_gate_evidence.RELEASE_GATE_COMMANDS["dashboard-browser-verify"])
     )
     assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
         "python tools/docker_smoke.py --require-worker"
@@ -192,9 +254,7 @@ def test_release_artifact_rejects_tampered_gate_log(tmp_path: Path) -> None:
         output_dir=Path("artifacts/release-gates"),
         timeout=30,
     )
-    (tmp_path / evidence["gates"]["test"]["output_path"]).write_text(
-        "tampered\n", encoding="utf-8"
-    )
+    (tmp_path / evidence["gates"]["test"]["output_path"]).write_text("tampered\n", encoding="utf-8")
 
     document = release_artifact.build_artifact(
         tmp_path,

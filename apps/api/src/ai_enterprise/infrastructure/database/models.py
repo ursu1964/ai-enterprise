@@ -462,7 +462,13 @@ class ExecutionRunModel(Base):
         ForeignKey("execution_runs.id", ondelete="RESTRICT"), nullable=True
     )
     revision_source_review_run_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("patch_review_runs.id", ondelete="RESTRICT"), nullable=True
+        ForeignKey(
+            "patch_review_runs.id",
+            ondelete="RESTRICT",
+            name="fk_execution_run_revision_source_review",
+            use_alter=True,
+        ),
+        nullable=True,
     )
     root_execution_run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("execution_runs.id", ondelete="RESTRICT"), nullable=True

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/orchestration/work-package/1.0",
+  "title": "R21 Work Package",
+  "type": "object",
+  "required": [
+    "work_package_id",
+    "project_id",
+    "manifest_trace",
+    "worker_type",
+    "permissions",
+    "expected_outputs",
+    "validators",
+    "idempotency_key"
+  ],
+  "properties": {
+    "work_package_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "manifest_trace": {"type": "object"},
+    "worker_type": {"type": "string", "minLength": 1},
+    "permissions": {"type": "object"},
+    "expected_outputs": {"type": "array", "minItems": 1},
+    "validators": {"type": "array", "minItems": 1},
+    "idempotency_key": {"type": "string", "minLength": 1}
+  }
+}

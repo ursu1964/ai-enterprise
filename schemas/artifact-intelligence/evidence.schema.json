@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/artifact-intelligence/evidence.schema.json",
+  "title": "R22 Evidence Record",
+  "type": "object",
+  "required": ["evidence_id", "subject_type", "subject_id", "evidence_type", "supports", "content_address", "evidence_hash"],
+  "properties": {
+    "evidence_id": {"type": "string"},
+    "claim_id": {"type": ["string", "null"]},
+    "subject_type": {"type": "string"},
+    "subject_id": {"type": "string"},
+    "evidence_type": {"type": "string"},
+    "supports": {"type": "string"},
+    "confidence": {"type": "string"},
+    "content_address": {"type": "string"},
+    "evidence_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

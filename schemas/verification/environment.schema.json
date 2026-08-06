@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/environment.schema.json",
+  "title": "BK/R10 Verification Environment",
+  "type": "object",
+  "required": [
+    "verification_environment_id",
+    "environment_type",
+    "environment_profile",
+    "runtime_versions",
+    "repository_revision",
+    "integrity_status",
+    "environment_hash"
+  ],
+  "properties": {
+    "verification_environment_id": {"type": "string"},
+    "environment_type": {
+      "enum": ["LOCAL", "ISOLATED", "CI", "STAGING", "PRE_PRODUCTION", "PRODUCTION_OBSERVATION", "SPECIALIZED_LAB"]
+    },
+    "environment_profile": {"type": "string"},
+    "runtime_versions": {"type": "object"},
+    "infrastructure_reference": {"type": "string"},
+    "repository_revision": {"type": "string"},
+    "configuration_hashes": {"type": "array", "items": {"type": "string"}},
+    "dependency_lock_hashes": {"type": "array", "items": {"type": "string"}},
+    "network_policy": {"type": "string"},
+    "secret_scope": {"type": "array", "items": {"type": "string"}},
+    "integrity_status": {"enum": ["PROVISIONING", "VERIFIED", "INVALID", "DEGRADED", "DESTROYED"]},
+    "verified_at": {"type": ["string", "null"]},
+    "evidence_reference": {"type": ["string", "null"]},
+    "environment_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

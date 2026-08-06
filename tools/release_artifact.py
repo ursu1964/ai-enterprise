@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import migration_verify
+import production_evidence_plan
 import production_readiness
+import production_readiness_contracts
 
 DEFAULT_GATES = (
     ("compose-check", "docker compose config --quiet"),
@@ -53,6 +55,11 @@ def _git(args: list[str], root: Path) -> str:
 def _artifact_hash(document: dict[str, Any]) -> str:
     canonical = json.dumps(document, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _recomputed_artifact_hash(document: dict[str, Any]) -> str:
+    payload = {key: value for key, value in document.items() if key != "artifact_hash"}
+    return _artifact_hash(payload)
 
 
 def _load_gate_evidence(root: Path, evidence_file: Path | None) -> dict[str, Any]:
@@ -136,6 +143,7 @@ def build_artifact(
     evidence_file: Path | None = None,
     require_evidence_for: tuple[str, ...] = (),
     production: bool = False,
+    archive_path: Path = Path("artifacts/release-verification.json"),
     production_readiness_file: Path = Path(
         "docs/enterprise/production-readiness-evidence.json"
     ),
@@ -143,6 +151,7 @@ def build_artifact(
         "docs/enterprise/real-world-infrastructure-decisions.json"
     ),
 ) -> dict[str, Any]:
+    generated_at = datetime.now(UTC)
     migration_report = migration_verify.verify(root / "migrations" / "versions")
     evidence_payload = _load_gate_evidence(root, evidence_file)
     gate_evidence = evidence_payload["gates"]
@@ -208,17 +217,53 @@ def build_artifact(
             root,
             production_readiness_file,
             infrastructure_choices_file,
+            now=generated_at,
+        )
+        if production
+        else None
+    )
+    evidence_plan = (
+        production_evidence_plan.build_plan(
+            root,
+            production_readiness_file,
+            infrastructure_choices_file,
+            now=generated_at,
+        )
+        if production
+        else None
+    )
+    readiness_contracts = (
+        production_readiness_contracts.verify_files(
+            choices_file=(
+                infrastructure_choices_file
+                if infrastructure_choices_file.is_absolute()
+                else root / infrastructure_choices_file
+            ),
+            evidence_file=(
+                production_readiness_file
+                if production_readiness_file.is_absolute()
+                else root / production_readiness_file
+            ),
         )
         if production
         else None
     )
     production_blocked = bool(readiness and not readiness["production_allowed"])
+    production_contracts_blocked = bool(
+        readiness_contracts and not readiness_contracts["conformant"]
+    )
     document: dict[str, Any] = {
         "schema_version": "1.0",
-        "generated_at": datetime.now(UTC).isoformat(),
-        "status": "failed" if gate_failure_count or production_blocked else gate_status,
+        "generated_at": generated_at.isoformat(),
+        "status": (
+            "failed"
+            if gate_failure_count or production_blocked or production_contracts_blocked
+            else gate_status
+        ),
         "release_environment": "production" if production else "non-production",
+        "production_readiness_contracts": readiness_contracts,
         "production_readiness": readiness,
+        "production_evidence_plan": evidence_plan,
         "git": current_git,
         "gates": gates,
         "gate_summary": {
@@ -245,18 +290,134 @@ def build_artifact(
         "migration_verification": migration_report,
         "artifact_policy": {
             "created_after_successful_release_gate": True,
-            "archive_path": "artifacts/release-verification.json",
+            "archive_path": str(archive_path),
             "fails_when_migration_verification_fails": True,
             "fails_when_required_gate_evidence_missing": True,
             "fails_when_gate_evidence_commit_mismatch": True,
             "fails_when_git_is_dirty_or_unknown": True,
             "fails_when_gate_evidence_tree_mismatch": True,
             "fails_when_gate_log_integrity_fails": True,
+            "fails_when_production_readiness_contracts_invalid": True,
             "fails_when_production_readiness_is_blocked": True,
+            "records_production_readiness_contracts": production is True,
+            "records_production_evidence_plan": production is True,
         },
     }
     document["artifact_hash"] = _artifact_hash(document)
     return document
+
+
+def render_markdown(document: dict[str, Any]) -> str:
+    readiness = document.get("production_readiness") or {}
+    contracts = document.get("production_readiness_contracts") or {}
+    plan = document.get("production_evidence_plan") or {}
+    gate_summary = document["gate_summary"]
+    lines = [
+        "# Release Verification Artifact",
+        "",
+        f"- Status: `{document['status']}`",
+        f"- Environment: `{document['release_environment']}`",
+        f"- Artifact hash: `{document['artifact_hash']}`",
+        f"- Git commit: `{document['git'].get('commit')}`",
+        f"- Git dirty: `{str(document['git'].get('dirty')).lower()}`",
+        "",
+        "## Gate summary",
+        "",
+        f"- Total gates: `{gate_summary['total']}`",
+        f"- Passed gates: `{gate_summary['passed']}`",
+        f"- Failed gates: `{gate_summary['failed']}`",
+        f"- Required captured evidence: `{len(gate_summary['captured_evidence_required'])}`",
+        f"- Missing captured evidence: `{len(gate_summary['captured_evidence_missing'])}`",
+        "",
+        "## Production readiness",
+        "",
+    ]
+    if document["release_environment"] != "production":
+        lines.append("- Not a production artifact.")
+    else:
+        lines.extend(
+            [
+                f"- Structural contracts: `{contracts.get('status')}`",
+                f"- Structural contract findings: `{len(contracts.get('findings', []))}`",
+                f"- Semantic readiness: `{readiness.get('status')}`",
+                f"- Production allowed: `{str(readiness.get('production_allowed')).lower()}`",
+                f"- Semantic readiness findings: `{len(readiness.get('findings', []))}`",
+                f"- Evidence plan status: `{plan.get('status')}`",
+            ]
+        )
+        for finding in contracts.get("findings", [])[:20]:
+            lines.append(f"  - Contract finding: {finding}")
+        for finding in readiness.get("findings", [])[:20]:
+            lines.append(f"  - Readiness finding: {finding}")
+    lines.extend(["", "## Failed gates", ""])
+    failed_gates = [gate for gate in document["gates"] if gate["status"] != "passed"]
+    if not failed_gates:
+        lines.append("- None")
+    for gate in failed_gates:
+        lines.append(f"- [ ] `{gate['name']}` — {gate['command']}")
+        if gate["evidence"].get("missing_required_evidence"):
+            lines.append("  - Missing required captured evidence.")
+        log_integrity = gate["evidence"].get("log_integrity", {})
+        if log_integrity.get("checked") and not log_integrity.get("valid"):
+            lines.append("  - Gate log integrity failed.")
+    lines.extend(
+        [
+            "",
+            "## Policy",
+            "",
+        ]
+    )
+    for key, value in sorted(document["artifact_policy"].items()):
+        lines.append(f"- `{key}`: `{value}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def verify_markdown_summary(json_path: Path, markdown_path: Path) -> dict[str, Any]:
+    findings: list[str] = []
+    try:
+        document = json.loads(json_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        document = {}
+        findings.append(f"{json_path}: JSON artifact is missing")
+    except json.JSONDecodeError as exc:
+        document = {}
+        findings.append(f"{json_path}: invalid JSON: {exc}")
+    if not isinstance(document, dict):
+        document = {}
+        findings.append(f"{json_path}: JSON artifact must be an object")
+
+    stored_hash = document.get("artifact_hash")
+    recomputed_hash = _recomputed_artifact_hash(document) if document else None
+    if not isinstance(stored_hash, str) or len(stored_hash) != 64:
+        findings.append("artifact_hash: missing or invalid")
+    elif stored_hash != recomputed_hash:
+        findings.append("artifact_hash: stored hash does not match JSON content")
+
+    try:
+        markdown = markdown_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        markdown = ""
+        findings.append(f"{markdown_path}: Markdown summary is missing")
+    expected_fragment = f"Artifact hash: `{stored_hash}`" if isinstance(stored_hash, str) else None
+    if expected_fragment and expected_fragment not in markdown:
+        findings.append("markdown: artifact hash reference is missing or stale")
+
+    return {
+        "schema_version": "1.0",
+        "status": "valid" if not findings else "invalid",
+        "valid": not findings,
+        "json_path": str(json_path),
+        "markdown_path": str(markdown_path),
+        "stored_artifact_hash": stored_hash,
+        "recomputed_artifact_hash": recomputed_hash,
+        "findings": findings,
+        "next_action": (
+            "Archive JSON and Markdown together."
+            if not findings
+            else "Regenerate the release artifact JSON and Markdown summary together."
+        ),
+    }
 
 
 def write_artifact(
@@ -273,6 +434,7 @@ def write_artifact(
     infrastructure_choices_file: Path = Path(
         "docs/enterprise/real-world-infrastructure-decisions.json"
     ),
+    markdown_output: Path | None = None,
 ) -> dict[str, Any]:
     document = build_artifact(
         root,
@@ -280,12 +442,19 @@ def write_artifact(
         evidence_file=evidence_file,
         require_evidence_for=require_evidence_for,
         production=production,
+        archive_path=output,
         production_readiness_file=production_readiness_file,
         infrastructure_choices_file=infrastructure_choices_file,
     )
     target = output if output.is_absolute() else root / output
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if markdown_output is not None:
+        markdown_target = (
+            markdown_output if markdown_output.is_absolute() else root / markdown_output
+        )
+        markdown_target.parent.mkdir(parents=True, exist_ok=True)
+        markdown_target.write_text(render_markdown(document), encoding="utf-8")
     return document
 
 
@@ -313,8 +482,25 @@ def main() -> int:
         "--infrastructure-choices-file",
         default="docs/enterprise/real-world-infrastructure-decisions.json",
     )
+    parser.add_argument("--markdown-output", default=None)
+    parser.add_argument("--verify-json", default=None)
+    parser.add_argument("--verify-markdown", default=None)
+    parser.add_argument("--verify-output", default=None)
     args = parser.parse_args()
     root = Path(args.root).resolve()
+    if args.verify_json or args.verify_markdown:
+        if not args.verify_json or not args.verify_markdown:
+            parser.error("--verify-json and --verify-markdown must be provided together")
+        report = verify_markdown_summary(
+            Path(args.verify_json),
+            Path(args.verify_markdown),
+        )
+        if args.verify_output:
+            target = Path(args.verify_output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps(report, sort_keys=True))
+        return 0 if report["valid"] else 1
     evidence_file = Path(args.evidence_file) if args.evidence_file else None
     document = write_artifact(
         root,
@@ -327,6 +513,7 @@ def main() -> int:
         production=args.production,
         production_readiness_file=Path(args.production_readiness_file),
         infrastructure_choices_file=Path(args.infrastructure_choices_file),
+        markdown_output=Path(args.markdown_output) if args.markdown_output else None,
     )
     print(json.dumps(document, sort_keys=True))
     return 0 if document["status"] == "passed" else 1

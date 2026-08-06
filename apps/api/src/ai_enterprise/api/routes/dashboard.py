@@ -4,6 +4,7 @@
 
 import importlib.util
 import json
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, TypedDict
@@ -14,19 +15,30 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from ai_enterprise.api.dependencies import SessionDependency
+from ai_enterprise.application.audit.writer import AuditWriter
 from ai_enterprise.application.ecosystem_service import EcosystemService
 from ai_enterprise.application.organization_persistence_service import canonical_hash
 from ai_enterprise.application.specification_platform_service import SpecificationPlatformService
 from ai_enterprise.config import get_settings
-from ai_enterprise.domain.aeir import compile_aepm
+from ai_enterprise.domain.aeir import AeirProjectModel, compile_aepm
 from ai_enterprise.domain.aepm import AepmManifest
 from ai_enterprise.domain.aepm_validation import AepmValidationEngine, AepmValidationReport
 from ai_enterprise.domain.artifact_compilers import ArtifactType, compile_artifact_bundle
+from ai_enterprise.domain.clarification import (
+    ClarificationAnswer,
+    HumanReviewDecision,
+    apply_answer_batch,
+    apply_human_review_decisions,
+    build_answer_batch,
+    generate_clarification_report,
+)
+from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.traceability import (
     compile_traceability_manifest,
     render_traceable_artifact_markdown,
 )
-from ai_enterprise.infrastructure.database.models import JobModel, ProjectModel
+from ai_enterprise.infrastructure.database.models import ArtifactModel, JobModel, ProjectModel
+from ai_enterprise.infrastructure.knowledge.object_store import LocalContentAddressedObjectStore
 from ai_enterprise.infrastructure.organization.models import OrganizationModel
 from ai_enterprise.infrastructure.performance.models import PerformanceMetricModel
 
@@ -55,6 +67,14 @@ def _sample_aepm_path() -> Path:
     return _repo_path("examples/sample-project/aepm-0.1.json")
 
 
+def _web_app_path(path: str) -> Path:
+    target = (_repo_path("apps/web") / path).resolve()
+    web_root = _repo_path("apps/web").resolve()
+    if web_root not in target.parents and target != web_root:
+        raise HTTPException(status_code=404, detail="Client portal asset is unavailable")
+    return target
+
+
 def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
     label = singular if count == 1 else plural or f"{singular}s"
     return f"{count} {label}"
@@ -69,7 +89,15 @@ def _load_tool_function(module_name: str, function_name: str) -> Any:
             detail=f"{module_name} tool needs setup before this dashboard check can run",
         )
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    tool_dir = str(module_path.parent)
+    inserted_tool_dir = tool_dir not in sys.path
+    if inserted_tool_dir:
+        sys.path.insert(0, tool_dir)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if inserted_tool_dir:
+            sys.path.remove(tool_dir)
     return getattr(module, function_name)
 
 
@@ -122,9 +150,26 @@ async def project_blueprint_compiler() -> HTMLResponse:
     return HTMLResponse(PROJECT_BLUEPRINT_COMPILER_HTML)
 
 
+@router.get("/client-portal", response_class=FileResponse)
+async def client_portal() -> FileResponse:
+    return _client_portal_file("index.html", "text/html")
+
+
+@router.get("/client-portal/{asset_name}", response_class=FileResponse)
+async def client_portal_asset(asset_name: str) -> FileResponse:
+    media_types = {
+        "app.js": "text/javascript",
+        "styles.css": "text/css",
+    }
+    media_type = media_types.get(asset_name)
+    if media_type is None:
+        raise HTTPException(status_code=404, detail="Client portal asset is not registered")
+    return _client_portal_file(asset_name, media_type)
+
+
 @router.get("/dashboard/sample-project-manifest")
 async def sample_project_manifest() -> dict[str, object]:
-    return _sample_project_manifest().model_dump(mode="json")
+    return _sample_project_manifest().model_dump(mode="json", exclude_defaults=True)
 
 
 @router.get("/dashboard/client-manifest-template", response_class=PlainTextResponse)
@@ -191,6 +236,216 @@ async def compile_project_blueprint(document: dict[str, Any]) -> dict[str, objec
     )
 
 
+@router.post("/dashboard/project-blueprint/prepare-review")
+async def prepare_project_blueprint_review(document: dict[str, Any]) -> dict[str, object]:
+    validation = AepmValidationEngine().validate(document)
+    clarification = generate_clarification_report(validation)
+    if not validation.valid:
+        return {
+            "schema_version": "project-blueprint-review-package-0.1",
+            "valid": False,
+            "validation_report": validation.model_dump(mode="json"),
+            "clarification_report": clarification.model_dump(mode="json"),
+            "review_items": [],
+        }
+    try:
+        manifest = AepmManifest.model_validate(document)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+    model = compile_aepm(manifest)
+    return {
+        "schema_version": "project-blueprint-review-package-0.1",
+        "valid": True,
+        "validation_report": validation.model_dump(mode="json"),
+        "clarification_report": clarification.model_dump(mode="json"),
+        "aeir_model_sha256": model.model_sha256,
+        "source_manifest_sha256": model.source_manifest_sha256,
+        "review_items": _review_items(model),
+    }
+
+
+@router.post("/dashboard/project-blueprint/reviewed-compile")
+async def compile_reviewed_project_blueprint(request: dict[str, Any]) -> dict[str, object]:
+    document = request.get("manifest")
+    if not isinstance(document, dict):
+        raise HTTPException(status_code=422, detail="Reviewed compile requires a manifest object")
+    validation = AepmValidationEngine().validate(document)
+    clarification = generate_clarification_report(validation)
+    try:
+        manifest = AepmManifest.model_validate(document)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    "AEPM needs structural correction before canonical review can update the model."
+                ),
+                "validation_report": validation.model_dump(mode="json"),
+                "clarification_report": clarification.model_dump(mode="json"),
+                "schema_errors": exc.errors(include_url=False),
+            },
+        ) from exc
+    model = compile_aepm(manifest)
+    raw_answers = request.get("answers", [])
+    if not isinstance(raw_answers, list):
+        raise HTTPException(status_code=422, detail="Reviewed compile answers must be a list")
+    try:
+        answers = tuple(ClarificationAnswer.model_validate(item) for item in raw_answers)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+    required_question_ids = {item.id for item in clarification.questions() if item.required}
+    answered_question_ids = {item.question_id for item in answers if item.resolution == "answered"}
+    missing_required = tuple(sorted(required_question_ids - answered_question_ids))
+    if missing_required:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Required clarification questions must be answered before review compile.",
+                "missing_question_ids": missing_required,
+                "validation_report": validation.model_dump(mode="json"),
+                "clarification_report": clarification.model_dump(mode="json"),
+            },
+        )
+    respondent_id = request.get("respondent_id", "dashboard-reviewer")
+    if not isinstance(respondent_id, str) or not respondent_id.strip():
+        raise HTTPException(status_code=422, detail="Reviewed compile requires a respondent_id")
+    try:
+        answer_batch = build_answer_batch(
+            report=clarification,
+            base_model=model,
+            respondent_id=respondent_id,
+            answers=answers,
+        )
+        reviewed_model = apply_answer_batch(
+            report=clarification,
+            base_model=model,
+            batch=answer_batch,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raw_review_decisions = request.get("review_decisions", [])
+    if not isinstance(raw_review_decisions, list):
+        raise HTTPException(status_code=422, detail="Review decisions must be a list")
+    try:
+        review_decisions = tuple(
+            HumanReviewDecision.model_validate(item) for item in raw_review_decisions
+        )
+        reviewed_model = apply_human_review_decisions(
+            base_model=reviewed_model,
+            reviewer_id=respondent_id,
+            decisions=review_decisions,
+        )
+    except (ValidationError, ValueError) as exc:
+        detail = exc.errors(include_url=False) if isinstance(exc, ValidationError) else str(exc)
+        raise HTTPException(status_code=422, detail=detail) from exc
+    payload = _project_blueprint_payload_from_model(
+        reviewed_model,
+        title="Reviewed Project Blueprint with Traceability",
+        source="reviewed_aepm_manifest",
+        validation=validation,
+    )
+    payload["clarification_report"] = clarification.model_dump(mode="json")
+    payload["review"] = {
+        "schema_version": "project-blueprint-review-0.1",
+        "respondent_id": respondent_id,
+        "report_sha256": clarification.report_sha256,
+        "base_model_sha256": model.model_sha256,
+        "reviewed_model_sha256": reviewed_model.model_sha256,
+        "answer_batch_sha256": answer_batch.answer_batch_sha256,
+        "question_count": len(clarification.questions()),
+        "required_question_count": len(required_question_ids),
+        "answered_question_count": len(answer_batch.answers),
+        "review_decision_count": len(review_decisions),
+    }
+    payload["reviewed_model"] = reviewed_model.model_dump(mode="json")
+    return payload
+
+
+@router.post("/dashboard/project-blueprint/reviewed-download", response_class=PlainTextResponse)
+async def download_reviewed_project_blueprint(request: dict[str, Any]) -> PlainTextResponse:
+    payload = await compile_reviewed_project_blueprint(request)
+    return _markdown_response(
+        str(payload["markdown"]),
+        filename="project-blueprint-traceable.md",
+        download=True,
+    )
+
+
+@router.post("/dashboard/project-blueprint/reviewed-submit")
+async def submit_reviewed_project_blueprint(
+    request: dict[str, Any], session: SessionDependency
+) -> dict[str, object]:
+    document = request.get("manifest")
+    if not isinstance(document, dict):
+        raise HTTPException(status_code=422, detail="Reviewed submit requires a manifest object")
+    payload = await compile_reviewed_project_blueprint(request)
+    review = payload.get("review")
+    proof = payload.get("proof")
+    if not isinstance(review, dict) or not isinstance(proof, dict):
+        raise HTTPException(status_code=409, detail="Reviewed blueprint proof is unavailable")
+    project_id = uuid.uuid4()
+    model = AeirProjectModel.model_validate(payload["reviewed_model"])
+    project_object = next(item for item in model.objects if item.type.value == "project")
+    markdown = str(payload["markdown"])
+    artifact_hash = hash_json({"media_type": "text/markdown", "content": markdown})
+    source_manifest = json.dumps(
+        document, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    stored_source = await LocalContentAddressedObjectStore(
+        get_settings().artifact_root
+    ).put(project_id=project_id, content=source_manifest)
+    project = ProjectModel(
+        id=project_id,
+        name=project_object.name,
+        description=project_object.description,
+        status="reviewed_blueprint_ready",
+        manifest_hash=model.source_manifest_sha256,
+        manifest=document,
+        repository_path=f"dashboard-submissions/{project_id}",
+        repository_url=None,
+        default_branch="main",
+    )
+    artifact = ArtifactModel(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        run_id=None,
+        artifact_type="traceable_project_blueprint",
+        media_type="text/markdown",
+        content=markdown,
+        content_hash=artifact_hash,
+    )
+    session.add(project)
+    session.add(artifact)
+    audit = await AuditWriter(session).append_project_event(
+        project_id=project_id,
+        event_type="project_blueprint_submitted",
+        actor_type="human",
+        actor_id=str(review["respondent_id"]),
+        payload={
+            "aggregate_type": "project",
+            "aggregate_id": str(project_id),
+            "source_object": stored_source.__dict__,
+            "source_manifest_sha256": model.source_manifest_sha256,
+            "reviewed_model_sha256": model.model_sha256,
+            "artifact_id": str(artifact.id),
+            "artifact_hash": artifact_hash,
+            "artifact_bundle_sha256": proof["artifact_bundle_sha256"],
+            "traceability_manifest_sha256": proof["traceability_manifest_sha256"],
+            "answer_batch_sha256": review["answer_batch_sha256"],
+        },
+    )
+    await session.commit()
+    return {
+        "schema_version": "project-blueprint-submission-0.1",
+        "project_id": str(project.id),
+        "artifact_id": str(artifact.id),
+        "source_object": stored_source.__dict__,
+        "audit_event_id": str(audit.event.id),
+        "audit_chain_record_hash": audit.chain_record.record_hash,
+        "blueprint_proof": proof,
+    }
+
+
 @router.get("/dashboard/documentation/{document_id}", response_class=PlainTextResponse)
 async def dashboard_documentation_document(
     document_id: str, download: bool = False
@@ -245,10 +500,41 @@ def _sample_project_manifest() -> AepmManifest:
     return AepmManifest.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
+def _client_portal_file(path: str, media_type: str) -> FileResponse:
+    target = _web_app_path(path)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Client portal asset needs setup")
+    headers = {
+        "Cache-Control": (
+            "public, max-age=3600, stale-while-revalidate=86400"
+            if path in {"app.js", "styles.css"}
+            else "no-cache"
+        ),
+        "Content-Security-Policy": (
+            "default-src 'self'; connect-src 'self'; script-src 'self'; "
+            "style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"
+        ),
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return FileResponse(target, media_type=media_type, headers=headers)
+
+
 def _project_blueprint_payload(
     manifest: AepmManifest, *, title: str, source: str, validation: AepmValidationReport
 ) -> dict[str, object]:
     model = compile_aepm(manifest)
+    return _project_blueprint_payload_from_model(
+        model,
+        title=title,
+        source=source,
+        validation=validation,
+    )
+
+
+def _project_blueprint_payload_from_model(
+    model: AeirProjectModel, *, title: str, source: str, validation: AepmValidationReport
+) -> dict[str, object]:
     bundle = compile_artifact_bundle(model)
     traceability = compile_traceability_manifest(model, bundle)
     markdown = _project_blueprint_markdown(
@@ -276,6 +562,24 @@ def _project_blueprint_payload(
         "proof": proof,
         "markdown": markdown,
     }
+
+
+def _review_items(model: AeirProjectModel) -> list[dict[str, object]]:
+    return [
+        {
+            "object_id": item.id,
+            "object_type": item.type.value,
+            "name": item.name,
+            "description": item.description,
+            "lifecycle_status": item.lifecycle_status.value,
+            "truth_status": item.truth_status.value,
+            "approval_status": item.approval_status.value,
+            "status": item.approval_status.value,
+            "source_reference": item.source.reference,
+            "confidence": item.confidence,
+        }
+        for item in model.objects
+    ]
 
 
 def _sample_project_blueprint_markdown() -> str:
@@ -1176,6 +1480,7 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
       --muted: #a6b4c2;
       --blue: #5db8ff;
       --green: #56e39f;
+      --amber: #ffd166;
       --red: #ff6b6b;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -1240,7 +1545,24 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
     .metric span { color: var(--muted); font-size: 0.78rem; overflow-wrap: anywhere; }
     .status { min-height: 22px; margin-top: 10px; color: var(--muted); }
     .status.error { color: var(--red); }
+    .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .review-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 0.78rem; }
+    input {
+      min-height: 36px;
+      border: 1px solid rgba(143, 166, 190, 0.22);
+      border-radius: 8px;
+      background: rgba(5, 9, 13, 0.94);
+      color: var(--text);
+      padding: 8px 10px;
+    }
+    .questions { display: grid; gap: 8px; margin-top: 10px; }
+    .question { border: 1px solid rgba(255, 209, 102, 0.32); border-radius: 8px; padding: 10px; background: rgba(255, 209, 102, 0.07); }
+    .question strong { color: var(--amber); }
+    .question p { margin-top: 5px; }
+    .review-item { border: 1px solid rgba(86, 227, 159, 0.25); border-radius: 8px; padding: 10px; background: rgba(86, 227, 159, 0.06); }
+    .review-item strong { display: block; color: var(--green); }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { flex-direction: column; } }
+    @media (max-width: 640px) { .review-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1258,7 +1580,15 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
         <textarea id="manifestInput" spellcheck="false">{}</textarea>
         <div class="actions">
           <button id="compileButton">Compile Blueprint</button>
+          <button id="prepareReviewButton">Prepare Review</button>
+          <button id="reviewCompileButton">Review Compile</button>
+          <button id="approveAllButton">Approve All Objects</button>
           <button id="loadSampleButton">Load Sample Manifest</button>
+        </div>
+        <div class="review-grid">
+          <label>Respondent <input id="respondentInput" value="dashboard-reviewer"></label>
+          <label>Answers JSON <input id="answersInput" value="[]"></label>
+          <label>Review Decisions JSON <input id="reviewDecisionsInput" value="[]"></label>
         </div>
         <p id="compileStatus" class="status">Ready.</p>
       </article>
@@ -1272,6 +1602,8 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
         </div>
         <h2>Traceable Markdown</h2>
         <pre id="markdownOutput">Compile an AEPM manifest to preview the blueprint here.</pre>
+        <div id="reviewPanel" class="questions"></div>
+        <div id="questionPanel" class="questions"></div>
         <div class="actions">
           <button id="downloadButton" disabled>Download Markdown</button>
         </div>
@@ -1284,7 +1616,13 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
     const proof = document.getElementById("proofPanel");
     const statusLine = document.getElementById("compileStatus");
     const downloadButton = document.getElementById("downloadButton");
+    const questionPanel = document.getElementById("questionPanel");
+    const reviewPanel = document.getElementById("reviewPanel");
+    const respondentInput = document.getElementById("respondentInput");
+    const answersInput = document.getElementById("answersInput");
+    const reviewDecisionsInput = document.getElementById("reviewDecisionsInput");
     let compiledMarkdown = "";
+    let currentReviewItems = [];
 
     function setStatus(message, error = false) {
       statusLine.textContent = message;
@@ -1299,6 +1637,69 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
         ["entry_trace_count", "entry traces"],
         ["traceability_manifest_sha256", "traceability manifest"]
       ].map(([key, label]) => `<div class="metric"><strong>${String(p[key] ?? "waiting")}</strong><span>${label}</span></div>`).join("");
+    }
+
+    function renderQuestions(report) {
+      const sections = [
+        ["critical_blockers", "Critical blocker"],
+        ["important_ambiguities", "Important ambiguity"],
+        ["unverified_assumptions", "Unverified assumption"],
+        ["recommended_improvements", "Recommended improvement"],
+        ["optional_enhancements", "Optional enhancement"]
+      ];
+      const questions = sections.flatMap(([key, label]) => (report?.[key] || []).map((item) => ({ ...item, label })));
+      questionPanel.innerHTML = questions.map((item) => `
+        <div class="question">
+          <strong>${item.label}: ${item.id}</strong>
+          <p>${item.prompt}</p>
+          <p>Targets: ${(item.target_object_ids || []).join(", ") || "manifest structure"}</p>
+        </div>
+      `).join("");
+    }
+
+    function renderReviewItems(items) {
+      currentReviewItems = items || [];
+      reviewPanel.innerHTML = currentReviewItems.map((item) => `
+        <div class="review-item">
+          <strong>${item.object_id} ${item.object_type} [${item.status}]</strong>
+          <p>${item.name}</p>
+          <p>${item.source_reference}</p>
+        </div>
+      `).join("");
+    }
+
+    async function prepareReview() {
+      let document;
+      try {
+        document = JSON.parse(input.value);
+      } catch (error) {
+        setStatus(`JSON parse failed: ${error.message}`, true);
+        return;
+      }
+      setStatus("Preparing review.");
+      const response = await fetch("/dashboard/project-blueprint/prepare-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(document)
+      });
+      const payload = await response.json();
+      renderQuestions(payload.clarification_report);
+      renderReviewItems(payload.review_items || []);
+      if (!payload.valid) {
+        setStatus("Review is blocked by validation findings.", true);
+        return;
+      }
+      setStatus(`Review prepared with ${currentReviewItems.length} canonical object(s).`);
+    }
+
+    function approveAllObjects() {
+      const decisions = currentReviewItems.map((item) => ({
+        object_id: item.object_id,
+        decision: "approved",
+        rationale: "Validated in the client blueprint review."
+      }));
+      reviewDecisionsInput.value = JSON.stringify(decisions);
+      setStatus(`Prepared ${decisions.length} approval decision(s).`);
     }
 
     async function compileBlueprint() {
@@ -1318,6 +1719,7 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
       const payload = await response.json();
       if (!response.ok) {
         const report = payload.detail?.validation_report;
+        renderQuestions(payload.detail?.clarification_report);
         const findings = report?.findings || [];
         const message = findings.length
           ? findings.map((item) => `${item.code} ${item.path}: ${item.message}`).join(" | ")
@@ -1328,8 +1730,46 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
       compiledMarkdown = payload.markdown || "";
       output.textContent = compiledMarkdown;
       renderProof(payload);
+      renderQuestions(payload.clarification_report);
       downloadButton.disabled = false;
       setStatus("Compiled.");
+    }
+
+    async function reviewCompileBlueprint() {
+      let document;
+      let answers;
+      let reviewDecisions;
+      try {
+        document = JSON.parse(input.value);
+        answers = JSON.parse(answersInput.value || "[]");
+        reviewDecisions = JSON.parse(reviewDecisionsInput.value || "[]");
+      } catch (error) {
+        setStatus(`JSON parse failed: ${error.message}`, true);
+        return;
+      }
+      setStatus("Review compiling.");
+      const response = await fetch("/dashboard/project-blueprint/reviewed-compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manifest: document,
+          respondent_id: respondentInput.value || "dashboard-reviewer",
+          answers,
+          review_decisions: reviewDecisions
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        renderQuestions(payload.detail?.clarification_report);
+        setStatus(`Review compile failed: ${JSON.stringify(payload.detail || payload)}`, true);
+        return;
+      }
+      compiledMarkdown = payload.markdown || "";
+      output.textContent = compiledMarkdown;
+      renderProof(payload);
+      renderQuestions(payload.clarification_report);
+      downloadButton.disabled = false;
+      setStatus(`Review compiled with ${payload.review?.answered_question_count || 0} answer(s) and ${payload.review?.review_decision_count || 0} decision(s).`);
     }
 
     async function loadSampleManifest() {
@@ -1353,6 +1793,9 @@ PROJECT_BLUEPRINT_COMPILER_HTML = r"""<!doctype html>
     }
 
     document.getElementById("compileButton").addEventListener("click", compileBlueprint);
+    document.getElementById("prepareReviewButton").addEventListener("click", prepareReview);
+    document.getElementById("reviewCompileButton").addEventListener("click", reviewCompileBlueprint);
+    document.getElementById("approveAllButton").addEventListener("click", approveAllObjects);
     document.getElementById("loadSampleButton").addEventListener("click", loadSampleManifest);
     downloadButton.addEventListener("click", downloadMarkdown);
   </script>

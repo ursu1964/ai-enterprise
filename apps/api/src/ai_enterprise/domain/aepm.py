@@ -10,23 +10,28 @@ class AepmValue(BaseModel):
 
 
 class ProjectIntent(AepmValue):
+    id: str = Field(default="PRJ-001", pattern=r"^PRJ-[0-9]{3}$")
     name: str = Field(min_length=1, max_length=200)
     summary: str = Field(min_length=1, max_length=4000)
     problem: str = Field(min_length=1, max_length=4000)
     opportunity: str | None = Field(default=None, max_length=4000)
+    source_refs: tuple[str, ...] = ()
 
 
 class BusinessOutcome(AepmValue):
     id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     description: str = Field(min_length=1, max_length=2000)
     indicators: tuple[str, ...] = Field(min_length=1)
+    source_refs: tuple[str, ...] = ()
 
 
 class Stakeholder(AepmValue):
     id: str = Field(pattern=r"^STK-[0-9]{3}$")
     name: str = Field(min_length=1, max_length=200)
     role: str = Field(min_length=1, max_length=200)
+    decision_authority: bool = False
     responsibilities: tuple[str, ...] = ()
+    source_refs: tuple[str, ...] = ()
 
 
 class Capability(AepmValue):
@@ -34,6 +39,7 @@ class Capability(AepmValue):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=2000)
     owner_stakeholder_id: str = Field(pattern=r"^STK-[0-9]{3}$")
+    source_refs: tuple[str, ...] = ()
 
 
 class CoreProcess(AepmValue):
@@ -42,11 +48,13 @@ class CoreProcess(AepmValue):
     description: str = Field(min_length=1, max_length=2000)
     trigger: str = Field(min_length=1, max_length=1000)
     outputs: tuple[str, ...] = Field(min_length=1)
+    source_refs: tuple[str, ...] = ()
 
 
 class BusinessRule(AepmValue):
     id: str = Field(pattern=r"^RULE-[0-9]{3}$")
     description: str = Field(min_length=1, max_length=2000)
+    source_refs: tuple[str, ...] = ()
 
 
 class DataEntity(AepmValue):
@@ -54,6 +62,7 @@ class DataEntity(AepmValue):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=2000)
     owner_stakeholder_id: str = Field(pattern=r"^STK-[0-9]{3}$")
+    source_refs: tuple[str, ...] = ()
 
 
 class Integration(AepmValue):
@@ -62,6 +71,7 @@ class Integration(AepmValue):
     system: str = Field(min_length=1, max_length=500)
     purpose: str = Field(min_length=1, max_length=2000)
     security_rules: tuple[str, ...] = Field(min_length=1)
+    source_refs: tuple[str, ...] = ()
 
 
 class QualityRequirement(AepmValue):
@@ -79,6 +89,7 @@ class QualityRequirement(AepmValue):
     ]
     description: str = Field(min_length=1, max_length=2000)
     acceptance_criteria: tuple[str, ...] = Field(min_length=1)
+    source_refs: tuple[str, ...] = ()
 
 
 class Constraint(AepmValue):
@@ -87,6 +98,7 @@ class Constraint(AepmValue):
         "budget", "compliance", "delivery", "operational", "organizational", "technical"
     ]
     description: str = Field(min_length=1, max_length=2000)
+    source_refs: tuple[str, ...] = ()
 
 
 class PreferredTechnologyTargets(AepmValue):
@@ -100,6 +112,7 @@ class PreferredTechnologyTargets(AepmValue):
 
 class AepmManifest(AepmValue):
     schema_version: Literal["aepm-0.1"]
+    aepm_version: Literal["0.1"] = "0.1"
     project_intent: ProjectIntent
     business_outcomes: tuple[BusinessOutcome, ...] = Field(min_length=1)
     stakeholders: tuple[Stakeholder, ...] = Field(min_length=1)
@@ -111,3 +124,4 @@ class AepmManifest(AepmValue):
     quality_requirements: tuple[QualityRequirement, ...]
     constraints: tuple[Constraint, ...]
     preferred_technology_targets: PreferredTechnologyTargets
+    extensions: dict[str, object] = Field(default_factory=dict)

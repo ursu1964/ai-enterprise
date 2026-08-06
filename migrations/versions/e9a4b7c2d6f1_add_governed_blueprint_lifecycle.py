@@ -52,26 +52,14 @@ def upgrade() -> None:
             name="ck_blueprint_asset_lifecycle",
         ),
         sa.CheckConstraint("version > 0", name="ck_blueprint_asset_version_positive"),
-        sa.CheckConstraint(
-            "reuse_count >= 0", name="ck_blueprint_asset_reuse_count_nonnegative"
-        ),
-        sa.ForeignKeyConstraint(
-            ["source_project_id"], ["projects.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["source_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["supersedes_id"], ["blueprint_assets.id"], ondelete="RESTRICT"
-        ),
+        sa.CheckConstraint("reuse_count >= 0", name="ck_blueprint_asset_reuse_count_nonnegative"),
+        sa.ForeignKeyConstraint(["source_project_id"], ["projects.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["source_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["supersedes_id"], ["blueprint_assets.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "blueprint_key", "version", name="uq_blueprint_asset_key_version"
-        ),
+        sa.UniqueConstraint("blueprint_key", "version", name="uq_blueprint_asset_key_version"),
     )
-    op.create_index(
-        "ix_blueprint_assets_blueprint_key", "blueprint_assets", ["blueprint_key"]
-    )
+    op.create_index("ix_blueprint_assets_blueprint_key", "blueprint_assets", ["blueprint_key"])
     op.create_index("ix_blueprint_assets_lifecycle", "blueprint_assets", ["lifecycle"])
     op.create_index(
         "ix_blueprint_assets_source_project_id",
@@ -93,24 +81,16 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["blueprint_id"], ["blueprint_assets.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["blueprint_id"], ["blueprint_assets.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_blueprint_decisions_blueprint_id", "blueprint_decisions", ["blueprint_id"]
-    )
+    op.create_index("ix_blueprint_decisions_blueprint_id", "blueprint_decisions", ["blueprint_id"])
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_blueprint_decisions_blueprint_id", table_name="blueprint_decisions"
-    )
+    op.drop_index("ix_blueprint_decisions_blueprint_id", table_name="blueprint_decisions")
     op.drop_table("blueprint_decisions")
-    op.drop_index(
-        "ix_blueprint_assets_source_project_id", table_name="blueprint_assets"
-    )
+    op.drop_index("ix_blueprint_assets_source_project_id", table_name="blueprint_assets")
     op.drop_index("ix_blueprint_assets_lifecycle", table_name="blueprint_assets")
     op.drop_index("ix_blueprint_assets_blueprint_key", table_name="blueprint_assets")
     op.drop_table("blueprint_assets")

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/orchestration/checkpoint/1.0",
+  "title": "R21 Checkpoint",
+  "type": "object",
+  "required": ["checkpoint_id", "execution_id", "project_state", "last_event_sequence", "checkpoint_hash"],
+  "properties": {
+    "checkpoint_id": {"type": "string"},
+    "execution_id": {"type": "string"},
+    "project_state": {"type": "string"},
+    "completed_work_packages": {"type": "array"},
+    "pending_approvals": {"type": "array"},
+    "last_event_sequence": {"type": "integer"},
+    "checkpoint_hash": {"type": "string"}
+  }
+}

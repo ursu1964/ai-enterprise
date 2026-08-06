@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/ai/provenance/0.1",
+  "title": "AI Provenance Link v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "project_id", "entity_type", "entity_id", "ai_operation_id", "source_segment_refs", "derivation_type", "confidence"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^AIPL-[0-9]{3,6}$"},
+    "project_id": {"type": "string", "minLength": 1},
+    "entity_type": {"enum": ["candidate_object", "candidate_relationship", "canonical_object", "canonical_relationship"]},
+    "entity_id": {"type": "string", "minLength": 1},
+    "ai_operation_id": {"type": "string", "pattern": "^AIOP-[0-9]{4}$"},
+    "source_segment_refs": {"type": "array", "items": {"type": "string", "pattern": "^SEG-[0-9]{3,6}-[0-9]{4}$"}},
+    "derivation_type": {"enum": ["direct_extraction", "contextual_extraction", "inference", "assumption"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}

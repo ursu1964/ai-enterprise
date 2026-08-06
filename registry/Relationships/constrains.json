@@ -1,0 +1,6 @@
+{
+  "id": "constrains",
+  "name": "Constrains",
+  "semantics": "Source imposes mandatory governance or business limits on target.",
+  "directional": true
+}

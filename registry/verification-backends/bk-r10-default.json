@@ -1,0 +1,22 @@
+{
+  "required_backends": [
+    "ci_runner",
+    "scanner",
+    "evidence_store",
+    "policy_engine",
+    "lab_environment"
+  ],
+  "development_profile": {
+    "provider": "mock",
+    "enabled": false,
+    "mock_mode": true
+  },
+  "production_requirements": [
+    "enabled=true",
+    "mock_mode=false",
+    "endpoint_reference is required for non-mock providers",
+    "credential_reference is required in production and staging",
+    "evidence_store requires evidence_reference",
+    "policy_engine requires policy_reference"
+  ]
+}

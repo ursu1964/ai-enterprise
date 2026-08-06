@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/release-evidence-bundle.schema.json",
+  "title": "Release Evidence Bundle Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "bundle_type",
+    "status",
+    "artifacts",
+    "missing_artifacts",
+    "artifact_count",
+    "required_artifact_count",
+    "present_artifact_count",
+    "archive_policy",
+    "next_action",
+    "bundle_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "bundle_type": { "enum": ["release", "production"] },
+    "status": { "enum": ["complete", "blocked"] },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "missing_artifacts": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "artifact_count": { "type": "integer", "minimum": 1 },
+    "required_artifact_count": { "type": "integer", "minimum": 1 },
+    "present_artifact_count": { "type": "integer", "minimum": 0 },
+    "archive_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_runtime",
+        "fail_closed_when_required_artifact_missing",
+        "archive_only_when_status_complete",
+        "schemas_are_recorded_when_available",
+        "hash_algorithm"
+      ],
+      "properties": {
+        "target_runtime": { "const": "BK/R11 evidence audit" },
+        "fail_closed_when_required_artifact_missing": { "const": true },
+        "archive_only_when_status_complete": { "const": true },
+        "schemas_are_recorded_when_available": { "const": true },
+        "hash_algorithm": { "const": "sha256" }
+      }
+    },
+    "next_action": { "type": "string", "minLength": 1 },
+    "bundle_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "kind",
+        "required",
+        "present",
+        "sha256",
+        "size_bytes",
+        "content_type",
+        "schema_ref",
+        "bk_r11_evidence_type"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "required": { "const": true },
+        "present": { "type": "boolean" },
+        "sha256": {
+          "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+        },
+        "size_bytes": {
+          "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+        },
+        "content_type": { "enum": ["application/json", "text/markdown"] },
+        "schema_ref": {
+          "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "bk_r11_evidence_type": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/evidence-audit/archive-verification.schema.json",
+  "title": "BK/R11 Archive Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "archive_backend",
+    "archive_uri",
+    "expected_archive_hash",
+    "actual_archive_hash",
+    "metadata_verified",
+    "diagnostics",
+    "verification_hash"
+  ],
+  "properties": {
+    "status": { "enum": ["verified", "failed", "remote_reference_verified"] },
+    "archive_backend": { "enum": ["filesystem", "s3", "gcs", "azure_blob", "minio", "custom"] },
+    "archive_uri": { "type": "string", "minLength": 1 },
+    "expected_archive_hash": { "$ref": "#/$defs/sha256" },
+    "actual_archive_hash": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "metadata_verified": { "type": "boolean" },
+    "diagnostics": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "verification_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

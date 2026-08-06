@@ -35,12 +35,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(
-            ["requirements_run_id"], ["crew_runs.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["source_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["requirements_run_id"], ["crew_runs.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["source_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["source_review_decision_id"], ["approvals.id"], ondelete="RESTRICT"
         ),
@@ -68,24 +64,18 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "cycle_number > 0", name="ck_requirements_revision_cycle_positive"
-        ),
+        sa.CheckConstraint("cycle_number > 0", name="ck_requirements_revision_cycle_positive"),
         sa.CheckConstraint(
             "status IN ('pending','executing','completed','failed','cancelled')",
             name="ck_requirements_revision_cycle_status",
         ),
-        sa.ForeignKeyConstraint(
-            ["requirements_run_id"], ["crew_runs.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["requirements_run_id"], ["crew_runs.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["revision_request_id"],
             ["requirements_revision_requests.id"],
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["resulting_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["resulting_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("revision_request_id"),
         sa.UniqueConstraint("resulting_artifact_id"),
@@ -116,18 +106,14 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "version > 0", name="ck_requirements_artifact_lineage_version"
-        ),
+        sa.CheckConstraint("version > 0", name="ck_requirements_artifact_lineage_version"),
         sa.ForeignKeyConstraint(["artifact_id"], ["artifacts.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["revision_cycle_id"],
             ["requirements_revision_cycles.id"],
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["previous_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["previous_artifact_id"], ["artifacts.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("artifact_id"),
     )
@@ -141,9 +127,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "job_execution_attempts",
-        sa.Column(
-            "repair_attempted", sa.Boolean(), server_default=sa.false(), nullable=False
-        ),
+        sa.Column("repair_attempted", sa.Boolean(), server_default=sa.false(), nullable=False),
     )
     op.add_column(
         "job_execution_attempts",

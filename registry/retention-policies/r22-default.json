@@ -1,0 +1,6 @@
+{
+  "policy_id": "default-retention",
+  "retention_period": {"years": 10},
+  "deletion": {"automatic": false, "approval_required": ["records_authority"]},
+  "legal_hold": {"supported": true}
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/orchestration/worker-response/1.0",
+  "title": "R21 Worker Response",
+  "type": "object",
+  "required": ["request_id", "work_package_id", "status", "outputs", "evidence"],
+  "properties": {
+    "request_id": {"type": "string"},
+    "work_package_id": {"type": "string"},
+    "status": {"enum": ["completed", "failed", "blocked"]},
+    "outputs": {"type": "array"},
+    "findings": {"type": "array"},
+    "assumptions": {"type": "array"},
+    "evidence": {"type": "array"},
+    "metrics": {"type": "object"}
+  }
+}

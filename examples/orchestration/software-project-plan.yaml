@@ -1,0 +1,8 @@
+project_id: software-project-example
+slice: api-service
+phases:
+  - Definition compilation
+  - API contract
+  - Implementation
+  - Validation
+  - Delivery

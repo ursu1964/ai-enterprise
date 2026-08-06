@@ -8,6 +8,10 @@ from ai_enterprise.domain.aeir import (
     AeirObjectType,
     AeirProjectModel,
     AeirStatus,
+    ApprovalStatus,
+    LifecycleStatus,
+    RelationshipType,
+    TruthStatus,
     compile_aepm,
 )
 from ai_enterprise.domain.aepm import AepmManifest
@@ -41,6 +45,20 @@ def test_aepm_compiles_to_deterministic_canonical_aeir() -> None:
         for item in first.objects
         if item.type == "decision"
     )
+    assert all(item.lifecycle_status is LifecycleStatus.DRAFT for item in first.objects)
+    assert all(
+        item.truth_status is TruthStatus.ASSERTED
+        for item in first.objects
+        if item.type is not AeirObjectType.DECISION
+    )
+    assert all(
+        item.truth_status is TruthStatus.ASSUMED
+        for item in first.objects
+        if item.type is AeirObjectType.DECISION
+    )
+    assert all(item.approval_status is ApprovalStatus.PENDING for item in first.objects)
+    assert all(item.source.reference in item.source_refs for item in first.objects)
+    assert all(item.relationships == item.relationship_refs for item in first.objects)
 
 
 def test_aeir_supports_every_r1_object_type_without_inventing_absent_facts() -> None:
@@ -68,6 +86,7 @@ def test_aeir_supports_every_r1_object_type_without_inventing_absent_facts() -> 
     assert "risk" not in present
     assert "artifact" not in present
     assert {item.type.value for item in model.relationships} == {"relationship"}
+    assert {item.relationship_type for item in model.relationships} <= set(RelationshipType)
 
 
 def test_ownership_and_source_traceability_are_explicit() -> None:
@@ -81,6 +100,7 @@ def test_ownership_and_source_traceability_are_explicit() -> None:
 
     assert ownership.target_object_id == "STK-001"
     assert ownership.id in capability.relationships
+    assert ownership.id in capability.relationship_refs
     assert capability.source.reference == "capabilities/CAP-001"
 
 

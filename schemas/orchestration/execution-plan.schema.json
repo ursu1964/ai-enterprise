@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/orchestration/execution-plan/1.0",
+  "title": "R21 Execution Plan",
+  "type": "object",
+  "required": ["execution_plan_id", "project_id", "work_packages", "approval_gates"],
+  "properties": {
+    "execution_plan_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "manifest_hash": {"type": "string", "minLength": 1},
+    "manifest_version": {"type": "string", "minLength": 1},
+    "work_packages": {"type": "array", "items": {"$ref": "work-package.schema.json"}},
+    "approval_gates": {"type": "array", "items": {"$ref": "approval-gate.schema.json"}}
+  }
+}

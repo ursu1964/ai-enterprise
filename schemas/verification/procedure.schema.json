@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/procedure.schema.json",
+  "title": "BK/R10 Verification Procedure",
+  "type": "object",
+  "required": [
+    "verification_procedure_id",
+    "verification_obligation_ids",
+    "title",
+    "procedure_type",
+    "ordered_steps",
+    "required_environment_profile",
+    "version",
+    "content_hash"
+  ],
+  "properties": {
+    "verification_procedure_id": {"type": "string"},
+    "verification_obligation_ids": {"type": "array", "items": {"type": "string"}},
+    "title": {"type": "string"},
+    "procedure_type": {"enum": ["AUTOMATED", "MANUAL", "HYBRID"]},
+    "ordered_steps": {"type": "array", "items": {"type": "string"}},
+    "expected_results": {"type": "array", "items": {"type": "string"}},
+    "required_tools": {"type": "array", "items": {"type": "string"}},
+    "required_environment_profile": {"type": "string"},
+    "version": {"type": "string"},
+    "content_hash": {"type": "string"},
+    "approval_reference": {"type": ["string", "null"]}
+  },
+  "additionalProperties": true
+}

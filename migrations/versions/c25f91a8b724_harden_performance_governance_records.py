@@ -77,8 +77,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "DROP TRIGGER guard_learning_proposal_mutation_trigger "
-        "ON performance_learning_proposals"
+        "DROP TRIGGER guard_learning_proposal_mutation_trigger ON performance_learning_proposals"
     )
     op.execute("DROP FUNCTION guard_learning_proposal_mutation()")
     op.execute(

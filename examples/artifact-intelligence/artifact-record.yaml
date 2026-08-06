@@ -1,0 +1,10 @@
+artifact_id: art-example-openapi
+project_id: project-example-001
+tenant_id: tenant-example-001
+artifact_type: openapi-contract
+artifact_class: implementation
+title: OpenAPI Contract
+current_version_id: artver-example-openapi-001
+version_ids:
+  - artver-example-openapi-001
+artifact_hash: example

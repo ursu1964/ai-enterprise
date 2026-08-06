@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/release-verification-check.schema.json",
+  "title": "Release Verification Markdown Consistency Check",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "valid",
+    "json_path",
+    "markdown_path",
+    "stored_artifact_hash",
+    "recomputed_artifact_hash",
+    "findings",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "status": { "enum": ["valid", "invalid"] },
+    "valid": { "type": "boolean" },
+    "json_path": { "type": "string", "minLength": 1 },
+    "markdown_path": { "type": "string", "minLength": 1 },
+    "stored_artifact_hash": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "recomputed_artifact_hash": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

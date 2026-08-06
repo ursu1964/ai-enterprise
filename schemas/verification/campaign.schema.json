@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/campaign.schema.json",
+  "title": "BK/R10 Verification Campaign",
+  "type": "object",
+  "required": [
+    "verification_campaign_id",
+    "organization_id",
+    "project_id",
+    "implementation_slice_id",
+    "implementation_result_id",
+    "verification_handoff",
+    "status",
+    "obligations",
+    "events",
+    "content_hash"
+  ],
+  "properties": {
+    "verification_campaign_id": {"type": "string"},
+    "organization_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "implementation_slice_id": {"type": "string"},
+    "implementation_result_id": {"type": "string"},
+    "verification_handoff": {"$ref": "handoff.schema.json"},
+    "status": {
+      "enum": [
+        "DRAFT",
+        "PLANNING",
+        "PLAN_READY",
+        "APPROVED",
+        "ENVIRONMENT_PREPARING",
+        "READY",
+        "EXECUTING",
+        "SUSPENDED",
+        "BLOCKED",
+        "ANALYZING",
+        "VERIFIED",
+        "VALIDATING",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+        "SUPERSEDED",
+        "ARCHIVED"
+      ]
+    },
+    "criticality": {"type": "string"},
+    "risk_classification": {"type": "string"},
+    "owner": {"type": "object"},
+    "obligations": {"type": "array", "items": {"$ref": "obligation.schema.json"}},
+    "procedures": {"type": "array", "items": {"$ref": "procedure.schema.json"}},
+    "environments": {"type": "array", "items": {"$ref": "environment.schema.json"}},
+    "executions": {"type": "array", "items": {"type": "object"}},
+    "results": {"type": "array", "items": {"$ref": "result.schema.json"}},
+    "findings": {"type": "array", "items": {"$ref": "finding.schema.json"}},
+    "waivers": {"type": "array", "items": {"$ref": "waiver.schema.json"}},
+    "coverage": {"type": ["object", "null"]},
+    "verdict": {"type": ["object", "null"]},
+    "satisfaction_recommendations": {"type": "array", "items": {"type": "object"}},
+    "events": {"type": "array", "items": {"type": "object"}},
+    "content_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

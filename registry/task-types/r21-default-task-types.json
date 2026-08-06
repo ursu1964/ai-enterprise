@@ -1,0 +1,13 @@
+{
+  "version": "r21-default-task-types-1.0",
+  "taskTypes": [
+    "requirements_compilation",
+    "api_contract_generation",
+    "service_code_generation",
+    "test_generation",
+    "container_generation",
+    "build_validation",
+    "release_approval",
+    "delivery_packaging"
+  ]
+}

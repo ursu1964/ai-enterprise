@@ -60,20 +60,26 @@ def upgrade() -> None:
         sa.Column("object_type", sa.String(40), nullable=False),
         sa.Column("name", sa.String(300), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
-        sa.Column("status", sa.String(30), nullable=False),
+        sa.Column("lifecycle_status", sa.String(30), nullable=False),
+        sa.Column("truth_status", sa.String(30), nullable=False),
+        sa.Column("approval_status", sa.String(30), nullable=False),
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("object_version", sa.String(40), nullable=False),
         sa.Column("source_document", jsonb, nullable=False),
+        sa.Column("source_refs", jsonb, nullable=False),
+        sa.Column("evidence_refs", jsonb, nullable=False),
+        sa.Column("relationship_refs", jsonb, nullable=False),
         sa.Column("attributes", jsonb, nullable=False),
+        sa.Column("metadata", jsonb, nullable=False),
         sa.UniqueConstraint("model_version_id", "object_id"),
         sa.UniqueConstraint("model_version_id", "id"),
-        sa.CheckConstraint(
-            "confidence >= 0 AND confidence <= 1", name="ck_aeir_object_confidence"
-        ),
+        sa.CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_aeir_object_confidence"),
     )
     op.create_index("ix_aeir_objects_model_version_id", "aeir_objects", ["model_version_id"])
     op.create_index("ix_aeir_objects_object_type", "aeir_objects", ["object_type"])
-    op.create_index("ix_aeir_objects_status", "aeir_objects", ["status"])
+    op.create_index("ix_aeir_objects_lifecycle_status", "aeir_objects", ["lifecycle_status"])
+    op.create_index("ix_aeir_objects_truth_status", "aeir_objects", ["truth_status"])
+    op.create_index("ix_aeir_objects_approval_status", "aeir_objects", ["approval_status"])
     op.create_table(
         "aeir_relationships",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -87,6 +93,12 @@ def upgrade() -> None:
         sa.Column("relationship_type", sa.String(40), nullable=False),
         sa.Column("source_object_id", sa.Uuid(), nullable=False),
         sa.Column("target_object_id", sa.Uuid(), nullable=False),
+        sa.Column("lifecycle_status", sa.String(30), nullable=False),
+        sa.Column("truth_status", sa.String(30), nullable=False),
+        sa.Column("approval_status", sa.String(30), nullable=False),
+        sa.Column("confidence", sa.Float(), nullable=False),
+        sa.Column("valid_from", sa.String(10), nullable=False),
+        sa.Column("valid_to", sa.String(10)),
         sa.Column("relationship_document", jsonb, nullable=False),
         sa.UniqueConstraint("model_version_id", "relationship_id"),
         sa.ForeignKeyConstraint(
@@ -106,6 +118,17 @@ def upgrade() -> None:
     )
     op.create_index(
         "ix_aeir_relationships_relationship_type", "aeir_relationships", ["relationship_type"]
+    )
+    op.create_index(
+        "ix_aeir_relationships_lifecycle_status",
+        "aeir_relationships",
+        ["lifecycle_status"],
+    )
+    op.create_index("ix_aeir_relationships_truth_status", "aeir_relationships", ["truth_status"])
+    op.create_index(
+        "ix_aeir_relationships_approval_status",
+        "aeir_relationships",
+        ["approval_status"],
     )
     op.create_table(
         "aeir_source_objects",
@@ -131,9 +154,7 @@ def upgrade() -> None:
         "aeir_change_events",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("project_id", sa.Uuid(), sa.ForeignKey("projects.id"), nullable=False),
-        sa.Column(
-            "model_version_id", sa.Uuid(), sa.ForeignKey("aeir_model_versions.id")
-        ),
+        sa.Column("model_version_id", sa.Uuid(), sa.ForeignKey("aeir_model_versions.id")),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("event_type", sa.String(100), nullable=False),
         sa.Column("actor_id", sa.String(200), nullable=False),

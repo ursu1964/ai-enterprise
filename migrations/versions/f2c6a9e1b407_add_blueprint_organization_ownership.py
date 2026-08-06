@@ -16,9 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "blueprint_assets", sa.Column("organization_id", sa.UUID(), nullable=True)
-    )
+    op.add_column("blueprint_assets", sa.Column("organization_id", sa.UUID(), nullable=True))
     op.execute(
         sa.text(
             """
@@ -52,12 +50,8 @@ def upgrade() -> None:
         ["id"],
         ondelete="RESTRICT",
     )
-    op.create_index(
-        "ix_blueprint_assets_organization_id", "blueprint_assets", ["organization_id"]
-    )
-    op.drop_constraint(
-        "uq_blueprint_asset_key_version", "blueprint_assets", type_="unique"
-    )
+    op.create_index("ix_blueprint_assets_organization_id", "blueprint_assets", ["organization_id"])
+    op.drop_constraint("uq_blueprint_asset_key_version", "blueprint_assets", type_="unique")
     op.create_unique_constraint(
         "uq_blueprint_asset_org_key_version",
         "blueprint_assets",
@@ -66,9 +60,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "uq_blueprint_asset_org_key_version", "blueprint_assets", type_="unique"
-    )
+    op.drop_constraint("uq_blueprint_asset_org_key_version", "blueprint_assets", type_="unique")
     op.create_unique_constraint(
         "uq_blueprint_asset_key_version",
         "blueprint_assets",

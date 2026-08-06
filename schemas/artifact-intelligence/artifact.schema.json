@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/artifact-intelligence/artifact.schema.json",
+  "title": "R22 Artifact Record",
+  "type": "object",
+  "required": ["artifact_id", "project_id", "tenant_id", "artifact_type", "artifact_class", "current_version_id", "version_ids", "artifact_hash"],
+  "properties": {
+    "artifact_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "tenant_id": {"type": "string"},
+    "artifact_type": {"type": "string"},
+    "artifact_class": {"enum": ["definition", "design", "implementation", "validation", "governance", "operational", "delivery"]},
+    "title": {"type": "string"},
+    "current_version_id": {"type": "string"},
+    "version_ids": {"type": "array", "items": {"type": "string"}},
+    "artifact_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

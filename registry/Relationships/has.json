@@ -1,0 +1,6 @@
+{
+  "id": "has",
+  "name": "Has",
+  "semantics": "Source contains, aggregates, or scopes target within the semantic graph.",
+  "directional": true
+}

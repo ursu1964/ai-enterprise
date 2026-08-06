@@ -10,6 +10,8 @@ from ai_enterprise.infrastructure.agent_runtime import (
 from ai_enterprise.infrastructure.architecture import (
     models as architecture_models,  # noqa: F401
 )
+from ai_enterprise.infrastructure.bk_r10 import models as bk_r10_models  # noqa: F401
+from ai_enterprise.infrastructure.bk_r11 import models as bk_r11_models  # noqa: F401
 from ai_enterprise.infrastructure.change_management import (
     models as change_models,  # noqa: F401
 )
@@ -40,6 +42,8 @@ from ai_enterprise.infrastructure.knowledge import (
 from ai_enterprise.infrastructure.performance import (
     models as performance_models,  # noqa: F401
 )
+from ai_enterprise.infrastructure.r21 import models as r21_models  # noqa: F401
+from ai_enterprise.infrastructure.r22 import models as r22_models  # noqa: F401
 from ai_enterprise.infrastructure.requirements_revision import (  # noqa: F401
     models as requirements_revision_models,
 )

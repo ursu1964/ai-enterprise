@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/candidate/relationship/0.1",
+  "title": "AI Candidate Relationship v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "type",
+    "source_candidate_ref",
+    "target_candidate_ref",
+    "truth_status",
+    "approval_status",
+    "confidence",
+    "source_support",
+    "interpretation_rationale"
+  ],
+  "properties": {
+    "candidate_id": {"type": "string", "pattern": "^CAND-REL-[0-9]{4}$"},
+    "type": {"type": "string", "minLength": 1},
+    "source_candidate_ref": {"type": "string", "pattern": "^CAND-OBJ-[0-9]{4}$"},
+    "target_candidate_ref": {"type": "string", "pattern": "^CAND-OBJ-[0-9]{4}$"},
+    "truth_status": {"enum": ["asserted", "inferred", "assumed", "disputed"]},
+    "approval_status": {"const": "pending"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "source_support": {"type": "array", "minItems": 1},
+    "interpretation_rationale": {"type": "string", "minLength": 1}
+  }
+}

@@ -57,6 +57,12 @@ class JobType(StrEnum):
 
 class ArtifactType(StrEnum):
     PROJECT_MANIFEST = "project_manifest"
+    PROJECT_SNAPSHOT = "project_snapshot"
+    PROJECT_BLUEPRINT = "project_blueprint"
+    TRACEABILITY_MANIFEST = "traceability_manifest"
+    CANONICAL_PROJECT_MODEL = "canonical_project_model"
+    ARTIFACT_CONTRACTS = "artifact_contracts"
+    ARTIFACT_VALIDATION_REPORT = "artifact_validation_report"
     PROJECT_BRIEF = "project_brief"
     SOLUTION_PROPOSAL = "solution_proposal"
     DELIVERY_PLAN = "delivery_plan"

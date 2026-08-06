@@ -69,9 +69,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "owner_type",
@@ -80,9 +78,7 @@ def upgrade() -> None:
             name="uq_change_evidence_owner_artifact",
         ),
     )
-    op.create_index(
-        "ix_change_evidence_proposal_id", "change_evidence", ["proposal_id"]
-    )
+    op.create_index("ix_change_evidence_proposal_id", "change_evidence", ["proposal_id"])
 
     op.create_table(
         "change_sets",
@@ -93,13 +89,9 @@ def upgrade() -> None:
         sa.Column("created_by", sa.String(200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "proposal_id", "version", name="uq_change_set_proposal_version"
-        ),
+        sa.UniqueConstraint("proposal_id", "version", name="uq_change_set_proposal_version"),
         sa.UniqueConstraint("content_hash"),
         sa.CheckConstraint("version > 0", name="ck_change_set_version_positive"),
     )
@@ -122,16 +114,10 @@ def upgrade() -> None:
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["change_set_id"], ["change_sets.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["change_set_id"], ["change_sets.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "proposal_id", "version", name="uq_change_impact_proposal_version"
-        ),
+        sa.UniqueConstraint("proposal_id", "version", name="uq_change_impact_proposal_version"),
         sa.UniqueConstraint("content_hash"),
         sa.CheckConstraint(
             "confidence >= 0 AND confidence <= 1",
@@ -156,18 +142,14 @@ def upgrade() -> None:
         sa.Column("created_by", sa.String(200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["impact_assessment_id"],
             ["change_impact_assessments.id"],
             ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "proposal_id", "version", name="uq_change_validation_proposal_version"
-        ),
+        sa.UniqueConstraint("proposal_id", "version", name="uq_change_validation_proposal_version"),
         sa.UniqueConstraint("content_hash"),
         sa.CheckConstraint("version > 0", name="ck_change_validation_version_positive"),
     )
@@ -191,12 +173,8 @@ def upgrade() -> None:
         sa.Column("validation_results", postgresql.JSONB(), nullable=False),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["change_set_id"], ["change_sets.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["proposal_id"], ["change_proposals.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["change_set_id"], ["change_sets.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["impact_assessment_id"],
             ["change_impact_assessments.id"],
@@ -215,9 +193,7 @@ def upgrade() -> None:
             name="ck_change_decision_value",
         ),
     )
-    op.create_index(
-        "ix_change_decisions_proposal_id", "change_decisions", ["proposal_id"]
-    )
+    op.create_index("ix_change_decisions_proposal_id", "change_decisions", ["proposal_id"])
 
 
 def downgrade() -> None:

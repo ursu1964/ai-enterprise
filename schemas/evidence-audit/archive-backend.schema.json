@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/evidence-audit/archive-backend.schema.json",
+  "title": "BK/R11 Archive Backend Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "archive_backend": {
+      "enum": ["filesystem", "s3", "gcs", "azure_blob", "minio", "custom"],
+      "default": "filesystem"
+    },
+    "archive_uri_ref": { "type": ["string", "null"] },
+    "credentials_reference": { "type": ["string", "null"] },
+    "encryption_required": { "type": "boolean", "default": false },
+    "kms_key_ref": { "type": ["string", "null"] },
+    "deployment_evidence_ref": { "type": ["string", "null"] },
+    "connectivity_evidence_ref": { "type": ["string", "null"] },
+    "signature_provider": {
+      "enum": ["disabled", "mock", "kms", "custom"],
+      "default": "disabled"
+    },
+    "signature_required": { "type": "boolean", "default": false },
+    "signer_key_ref": { "type": ["string", "null"] },
+    "mock_mode": { "type": "boolean", "default": true }
+  }
+}

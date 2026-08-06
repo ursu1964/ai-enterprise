@@ -184,6 +184,8 @@ def test_server_operations_artifacts_cover_later_phase_gaps() -> None:
     nginx = (root / "docker/reverse-proxy/nginx.conf.example").read_text(
         encoding="utf-8"
     )
+    web_index = (root / "apps/web/index.html").read_text(encoding="utf-8")
+    web_runtime = (root / "apps/web/app.js").read_text(encoding="utf-8")
 
     assert "backup-verify:" in makefile
     assert "server-secrets:" in makefile
@@ -210,6 +212,12 @@ def test_server_operations_artifacts_cover_later_phase_gaps() -> None:
     assert (root / "deploy/systemd/ai-enterprise-backup.service").exists()
     assert (root / "deploy/kubernetes/api-deployment.yaml").exists()
     assert (root / "deploy/kubernetes/worker-deployment.yaml").exists()
+    assert "Universal Experience Runtime" in web_index
+    assert "Bootstrap R10 Workspace" in web_index
+    assert "BroadcastChannel" in web_runtime
+    assert "EventSource" in web_runtime
+    assert "workspace-surfaces" in web_runtime
+    assert "experience-api-contracts" in web_runtime
 
 
 def test_platform_metadata_migration_is_reversible_and_linear() -> None:

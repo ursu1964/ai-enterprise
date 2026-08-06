@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,66 @@ class FormationResponse(BaseModel):
     generated_at: datetime
     artifacts: list[FormationArtifactResponse]
     traceability: dict[str, Any]
+
+
+class ClientBlueprintImportRequest(BaseModel):
+    manifest: dict[str, Any] | None = None
+    manifest_text: str | None = Field(default=None, min_length=2, max_length=200_000)
+    interpretation_output: dict[str, Any] | None = None
+    ai_operation: dict[str, Any] | None = None
+    content_type: Literal["application/json", "application/yaml", "text/yaml"] = (
+        "application/json"
+    )
+    repository_path: str | None = Field(default=None, max_length=2000)
+    repository_url: str | None = Field(default=None, max_length=2000)
+    default_branch: str = Field(default="main", min_length=1, max_length=200)
+
+
+class ClientBlueprintReviewRequest(BaseModel):
+    decision: Literal["approved", "changes_requested", "rejected"]
+    reviewer_comment: str | None = Field(default=None, max_length=5000)
+    corrected_manifest: dict[str, Any] | None = None
+    corrected_manifest_text: str | None = Field(default=None, min_length=2, max_length=200_000)
+    content_type: Literal["application/json", "application/yaml", "text/yaml"] = (
+        "application/json"
+    )
+    interpretation_output: dict[str, Any] | None = None
+    ai_operation: dict[str, Any] | None = None
+
+
+class ClientBlueprintClarificationAnswerRequest(BaseModel):
+    clarification_report: dict[str, Any]
+    answers: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    respondent_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class ClientBlueprintArtifactResponse(BaseModel):
+    artifact_id: uuid.UUID
+    artifact_type: str
+    media_type: str
+    content_hash: str
+    download_url: str | None = None
+
+
+class ClientBlueprintResponse(BaseModel):
+    project_id: uuid.UUID
+    status: str
+    review_state: str
+    project_name: str
+    source_manifest_sha256: str
+    validation_report: dict[str, Any]
+    interpretation_batch: dict[str, Any] | None
+    clarification_report: dict[str, Any]
+    missing_information: list[str]
+    assumptions: list[str]
+    canonical_model: dict[str, Any]
+    canonical_object_count: int
+    relationship_count: int
+    artifacts: list[ClientBlueprintArtifactResponse]
+    blueprint_download_url: str | None
+    traceability: dict[str, Any]
+    proof: dict[str, Any]
+    next_action: str
 
 
 class FoundryWorkspaceRequest(BaseModel):

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/external-backend.schema.json",
+  "title": "BK/R10 External Verification Backend",
+  "type": "object",
+  "required": ["backend_type", "provider", "enabled"],
+  "properties": {
+    "backend_type": {"enum": ["ci_runner", "scanner", "evidence_store", "policy_engine", "lab_environment"]},
+    "provider": {"type": "string"},
+    "enabled": {"type": "boolean"},
+    "endpoint_reference": {"type": ["string", "null"]},
+    "credential_reference": {"type": ["string", "null"]},
+    "repository_reference": {"type": ["string", "null"]},
+    "evidence_reference": {"type": ["string", "null"]},
+    "policy_reference": {"type": ["string", "null"]},
+    "timeout_seconds": {"type": "integer", "minimum": 1},
+    "mock_mode": {"type": "boolean"}
+  },
+  "additionalProperties": false
+}

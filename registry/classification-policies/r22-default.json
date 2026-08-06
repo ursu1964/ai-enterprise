@@ -1,0 +1,5 @@
+{
+  "classifications": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED", "HIGHLY_RESTRICTED"],
+  "default": "INTERNAL",
+  "sensitive_access_event_required": ["RESTRICTED", "HIGHLY_RESTRICTED"]
+}

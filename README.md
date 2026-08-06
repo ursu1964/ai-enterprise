@@ -1,5 +1,7 @@
 # AI Enterprise
 
+This repository converts an AI-Enterprise Manifest into a complete software system.
+
 Controlled, auditable software-engineering orchestration platform. Python sources remain under
 `apps/api/src`; the repository intentionally does not duplicate a root `src` tree.
 

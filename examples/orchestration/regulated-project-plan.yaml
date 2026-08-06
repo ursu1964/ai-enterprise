@@ -1,0 +1,8 @@
+project_id: regulated-project-example
+slice: governed-api-service
+approval_gates:
+  - gate-release
+evidence_required:
+  - validation_report
+  - traceability_report
+  - provenance_record

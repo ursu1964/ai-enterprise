@@ -1,0 +1,5 @@
+We need an inventory management platform for warehouse managers.
+
+The goal is to reduce inventory discrepancies by at least 50 percent.
+
+Warehouse managers own inventory tracking and receiving workflows.

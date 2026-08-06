@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/production-evidence.schema.json",
+  "title": "Production Readiness Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["environment", "reviewed_by", "proof"],
+  "properties": {
+    "environment": {
+      "const": "production"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tls",
+        "proxy_identity",
+        "server_secrets",
+        "backup_restore",
+        "object_storage",
+        "model_endpoint",
+        "prometheus",
+        "grafana",
+        "alert_routing",
+        "production_owners",
+        "pilot_results",
+        "infrastructure_credentials",
+        "production_run_artifacts",
+        "r16_graph_backend"
+      ],
+      "properties": {
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "proxy_identity": {
+          "$ref": "#/$defs/proxy_identity"
+        },
+        "server_secrets": {
+          "$ref": "#/$defs/server_secrets"
+        },
+        "backup_restore": {
+          "$ref": "#/$defs/backup_restore"
+        },
+        "object_storage": {
+          "$ref": "#/$defs/object_storage"
+        },
+        "model_endpoint": {
+          "$ref": "#/$defs/model_endpoint"
+        },
+        "prometheus": {
+          "$ref": "#/$defs/prometheus"
+        },
+        "grafana": {
+          "$ref": "#/$defs/grafana"
+        },
+        "alert_routing": {
+          "$ref": "#/$defs/alert_routing"
+        },
+        "production_owners": {
+          "$ref": "#/$defs/production_owners"
+        },
+        "pilot_results": {
+          "$ref": "#/$defs/pilot_results"
+        },
+        "infrastructure_credentials": {
+          "$ref": "#/$defs/infrastructure_credentials"
+        },
+        "production_run_artifacts": {
+          "$ref": "#/$defs/production_run_artifacts"
+        },
+        "r16_graph_backend": {
+          "$ref": "#/$defs/r16_graph_backend"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proof_value": {
+      "anyOf": [
+        { "$ref": "#/$defs/non_empty_string" },
+        { "type": "boolean" }
+      ]
+    },
+    "status": {
+      "enum": ["pending", "passed", "blocked"]
+    },
+    "base_proof": {
+      "type": "object",
+      "required": ["status", "checked_at", "valid_until", "evidence"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "checked_at": { "$ref": "#/$defs/non_empty_string" },
+        "valid_until": { "$ref": "#/$defs/non_empty_string" },
+        "evidence": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "tls": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "certificate_expires_at"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "endpoint": { "$ref": "#/$defs/non_empty_string" },
+            "certificate_expires_at": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "proxy_identity": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "signed_headers_verified"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "provider": { "$ref": "#/$defs/non_empty_string" },
+            "signed_headers_verified": { "$ref": "#/$defs/proof_value" }
+          }
+        }
+      ]
+    },
+    "server_secrets": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secret_manager", "rotation_due_at"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "secret_manager": { "$ref": "#/$defs/non_empty_string" },
+            "rotation_due_at": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "backup_restore": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["restored_database", "restore_completed_at"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "restored_database": { "$ref": "#/$defs/non_empty_string" },
+            "restore_completed_at": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "object_storage": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bucket", "read_write_delete_verified"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "bucket": { "$ref": "#/$defs/non_empty_string" },
+            "read_write_delete_verified": { "$ref": "#/$defs/proof_value" }
+          }
+        }
+      ]
+    },
+    "model_endpoint": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "model"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "endpoint": { "$ref": "#/$defs/non_empty_string" },
+            "model": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "prometheus": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "scrape_target"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "endpoint": { "$ref": "#/$defs/non_empty_string" },
+            "scrape_target": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "grafana": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "dashboard"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "endpoint": { "$ref": "#/$defs/non_empty_string" },
+            "dashboard": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "alert_routing": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["channel", "test_alert_id"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "channel": { "$ref": "#/$defs/non_empty_string" },
+            "test_alert_id": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "production_owners": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["product_owner", "technical_owner", "operations_owner", "security_owner"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "product_owner": { "$ref": "#/$defs/non_empty_string" },
+            "technical_owner": { "$ref": "#/$defs/non_empty_string" },
+            "operations_owner": { "$ref": "#/$defs/non_empty_string" },
+            "security_owner": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "pilot_results": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pilot_project", "manifest_to_project_passed", "feedback_reviewed"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "pilot_project": { "$ref": "#/$defs/non_empty_string" },
+            "manifest_to_project_passed": { "$ref": "#/$defs/proof_value" },
+            "feedback_reviewed": { "$ref": "#/$defs/proof_value" }
+          }
+        }
+      ]
+    },
+    "infrastructure_credentials": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["credential_inventory", "secret_manager", "raw_secret_values_absent"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "credential_inventory": { "$ref": "#/$defs/non_empty_string" },
+            "secret_manager": { "$ref": "#/$defs/non_empty_string" },
+            "raw_secret_values_absent": { "$ref": "#/$defs/proof_value" }
+          }
+        }
+      ]
+    },
+    "production_run_artifacts": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["release_artifact", "gate_evidence", "deployment_audit_id"],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "release_artifact": { "$ref": "#/$defs/non_empty_string" },
+            "gate_evidence": { "$ref": "#/$defs/non_empty_string" },
+            "deployment_audit_id": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    },
+    "r16_graph_backend": {
+      "allOf": [
+        { "$ref": "#/$defs/base_proof" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "backend",
+            "deployment_evidence",
+            "connectivity_evidence",
+            "credential_reference",
+            "restore_or_export_evidence",
+            "owner_approval"
+          ],
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "checked_at": { "$ref": "#/$defs/non_empty_string" },
+            "valid_until": { "$ref": "#/$defs/non_empty_string" },
+            "evidence": { "$ref": "#/$defs/non_empty_string" },
+            "backend": { "$ref": "#/$defs/non_empty_string" },
+            "deployment_evidence": { "$ref": "#/$defs/non_empty_string" },
+            "connectivity_evidence": { "$ref": "#/$defs/non_empty_string" },
+            "credential_reference": { "$ref": "#/$defs/non_empty_string" },
+            "restore_or_export_evidence": { "$ref": "#/$defs/non_empty_string" },
+            "owner_approval": { "$ref": "#/$defs/non_empty_string" }
+          }
+        }
+      ]
+    }
+  }
+}

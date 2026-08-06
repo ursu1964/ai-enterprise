@@ -16,6 +16,18 @@ ready operating system for governed software delivery.
   dashboard pages, command-line verification tools, and governed project/factory workflows.
 - The central dashboard is available at `/dashboard`, with demo, documentation, graph, factory,
   project, problems, metrics, and execution surfaces.
+- The client-facing R1 portal is available at `/client-portal`; it imports AEPM v0.1 manifests,
+  guides review of the canonical model, records approval, and downloads the traceable project
+  blueprint.
+- R1 import and review APIs accept governed `aepm-interpretation-output-0.1` model output, validate
+  the structure, bind it to the source manifest, and expose it through clarification/audit evidence.
+- R1 imports and reviews persist canonical source manifest bytes through the configured artifact
+  store and include the content-addressed source locator in traceability and audit evidence.
+- R1 imports append AEIR model versions, source metadata, object projections, relationships, and
+  hash-linked change events to PostgreSQL; review only appends a new AEIR version when the client
+  submits a corrected manifest.
+- R1 responses include a compact `r1-manifest-to-blueprint-proof-0.1` proof object covering source,
+  validation, clarification, AEIR persistence, artifact bundle, and traceability evidence.
 - The Query Platform and dashboard-manager read models now provide a strong source of business
   truth for projects, workflows, jobs, telemetry, graphs, and guidance.
 - Project Foundry workspace generation exists and can create governed project skeletons under the

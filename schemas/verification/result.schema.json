@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/result.schema.json",
+  "title": "BK/R10 Verification Result",
+  "type": "object",
+  "required": [
+    "verification_result_id",
+    "verification_execution_id",
+    "obligation_results",
+    "raw_evidence_references",
+    "normalized_evidence_references",
+    "verdict",
+    "content_hash"
+  ],
+  "properties": {
+    "verification_result_id": {"type": "string"},
+    "verification_execution_id": {"type": "string"},
+    "obligation_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["verification_obligation_id", "status", "evidence_references"],
+        "properties": {
+          "verification_obligation_id": {"type": "string"},
+          "status": {"enum": ["PASSED", "FAILED", "BLOCKED", "WAIVED", "INCONCLUSIVE", "ERROR"]},
+          "evidence_references": {"type": "array", "items": {"type": "string"}},
+          "notes": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "observed_outputs": {"type": "object"},
+    "defects_detected": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "raw_evidence_references": {"type": "array", "items": {"type": "string"}},
+    "normalized_evidence_references": {"type": "array", "items": {"type": "string"}},
+    "verdict": {"enum": ["PASSED", "FAILED", "ERROR", "BLOCKED", "INCONCLUSIVE", "WAIVED"]},
+    "confidence": {"type": ["number", "null"]},
+    "classified_by": {"type": "object"},
+    "reviewed_by": {"type": ["object", "null"]},
+    "content_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

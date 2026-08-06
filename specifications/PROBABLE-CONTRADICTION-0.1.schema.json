@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/probable-contradiction/0.1",
+  "title": "AI Probable Contradiction v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "statement_a", "statement_b", "contradiction_type", "confidence", "severity", "blocking_recommendation", "explanation", "status"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^PCON-[0-9]{3}$"},
+    "statement_a": {"type": "object"},
+    "statement_b": {"type": "object"},
+    "contradiction_type": {"type": "string", "minLength": 1},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "severity": {"enum": ["error", "warning", "information", "recommendation"]},
+    "blocking_recommendation": {"type": "boolean"},
+    "explanation": {"type": "string", "minLength": 1},
+    "status": {"const": "pending_review"}
+  }
+}

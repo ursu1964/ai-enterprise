@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/validation/finding/0.1",
+  "title": "AI Enterprise Validation Finding v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "code",
+    "rule_id",
+    "severity",
+    "category",
+    "message",
+    "path",
+    "object_refs",
+    "blocking",
+    "suggested_action"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^VAL-[0-9]{3}$"},
+    "code": {"type": "string", "pattern": "^AEPM-VAL-[0-9]{3}$"},
+    "rule_id": {"type": "string", "pattern": "^AEPM\\.[A-Z0-9_.]+$"},
+    "severity": {"enum": ["error", "warning", "information", "recommendation"]},
+    "category": {
+      "enum": [
+        "schema",
+        "completeness",
+        "consistency",
+        "traceability",
+        "security",
+        "quality",
+        "governance",
+        "ambiguity",
+        "duplication"
+      ]
+    },
+    "message": {"type": "string", "minLength": 1},
+    "path": {"type": "string", "minLength": 1},
+    "object_refs": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"}
+    },
+    "blocking": {"type": "boolean"},
+    "suggested_action": {"type": "string", "minLength": 1}
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/artifact-intelligence/evidence-package.schema.json",
+  "title": "R22 Evidence Package",
+  "type": "object",
+  "required": ["package_id", "project_id", "contents", "integrity", "package_hash"],
+  "properties": {
+    "package_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "execution_id": {"type": ["string", "null"]},
+    "contents": {"type": "object"},
+    "integrity": {"type": "object", "required": ["package_checksum"]},
+    "package_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

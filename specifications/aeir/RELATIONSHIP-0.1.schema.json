@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/aeir/relationship/0.1",
+  "title": "AI Enterprise Relationship v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "type",
+    "relationship_type",
+    "source_object_id",
+    "target_object_id",
+    "status",
+    "lifecycle_status",
+    "truth_status",
+    "approval_status",
+    "source",
+    "source_refs",
+    "evidence_refs",
+    "confidence",
+    "version",
+    "created_at",
+    "created_by",
+    "updated_at",
+    "updated_by",
+    "valid_from",
+    "valid_to",
+    "attributes",
+    "metadata"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^REL-[0-9]{3,6}$"},
+    "type": {"const": "relationship"},
+    "relationship_type": {
+      "enum": [
+        "contains",
+        "owned_by",
+        "supports",
+        "constrains",
+        "realizes",
+        "traces_to",
+        "depends_on"
+      ]
+    },
+    "source_object_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "target_object_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "status": {"enum": ["proposed", "inferred", "unverified", "approved", "rejected"]},
+    "lifecycle_status": {"enum": ["draft", "active", "deprecated", "archived"]},
+    "truth_status": {"enum": ["asserted", "inferred", "assumed", "verified", "disputed"]},
+    "approval_status": {"enum": ["not_required", "pending", "approved", "rejected"]},
+    "source": {"type": "object"},
+    "source_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "version": {"const": "0.1.0"},
+    "created_at": {"type": "string", "minLength": 1, "maxLength": 40},
+    "created_by": {"type": "string", "minLength": 1, "maxLength": 200},
+    "updated_at": {"type": "string", "minLength": 1, "maxLength": 40},
+    "updated_by": {"type": "string", "minLength": 1, "maxLength": 200},
+    "valid_from": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "valid_to": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      ]
+    },
+    "attributes": {"type": "object"},
+    "metadata": {"type": "object"}
+  }
+}

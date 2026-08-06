@@ -10,7 +10,10 @@ from ai_enterprise.domain.aeir import (
     AeirObjectType,
     AeirProjectModel,
     AeirRelationship,
-    AeirStatus,
+    ApprovalStatus,
+    LifecycleStatus,
+    RelationshipType,
+    TruthStatus,
 )
 from ai_enterprise.domain.artifact_compilers import ArtifactBundle, ArtifactSection, ArtifactType
 from ai_enterprise.domain.specification.kernel import specification_hash
@@ -23,8 +26,10 @@ class TraceabilityValue(BaseModel):
 class TraceSourceObject(TraceabilityValue):
     object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
     object_type: AeirObjectType
-    status: AeirStatus
-    source_kind: Literal["aepm_manifest", "human_clarification"]
+    lifecycle_status: LifecycleStatus
+    truth_status: TruthStatus
+    approval_status: ApprovalStatus
+    source_kind: Literal["aepm_manifest", "human_clarification", "ai_operation"]
     source_reference: str = Field(min_length=1)
     source_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence_references: tuple[str, ...] = ()
@@ -33,9 +38,12 @@ class TraceSourceObject(TraceabilityValue):
 
 class TraceSourceRelationship(TraceabilityValue):
     relationship_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
-    relationship_type: Literal["contains", "owned_by"]
+    relationship_type: RelationshipType
     source_object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
     target_object_id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{2,63}$")
+    lifecycle_status: LifecycleStatus
+    truth_status: TruthStatus
+    approval_status: ApprovalStatus
     relationship_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -225,21 +233,27 @@ def render_traceable_artifact_markdown(
         if trace.artifact_type is artifact.artifact_type
         and trace.artifact_sha256 == artifact.artifact_sha256
     }
+    entry_traces = {
+        (trace.section_key, trace.entry_index): trace
+        for trace in manifest.entry_traces
+        if trace.artifact_type is artifact.artifact_type
+        and trace.artifact_sha256 == artifact.artifact_sha256
+    }
     source_catalog = {item.object_id: item for item in manifest.source_objects}
     lines = [f"# {artifact.title}", ""]
     for section in artifact.sections:
         trace = traces[section.key]
-        source_refs = tuple(
-            source_catalog[object_id].source_reference for object_id in trace.source_object_ids
-        )
         lines.extend((f"## {section.title}", ""))
-        lines.extend(f"- {entry}" for entry in section.entries)
+        for index, entry in enumerate(section.entries):
+            entry_trace = entry_traces[(section.key, index)]
+            lines.append(f"- {entry}")
+            lines.append(
+                "  Trace: " + _trace_reference_line(entry_trace.source_object_ids, source_catalog)
+            )
         lines.append("")
         lines.append(
             "Sources: "
-            + ", ".join(trace.source_object_ids)
-            + " | Client references: "
-            + ", ".join(source_refs)
+            + _trace_reference_line(trace.source_object_ids, source_catalog)
         )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
@@ -285,7 +299,7 @@ def _section_source_mapping(
         ownership = tuple(
             relationship
             for relationship in sorted(model.relationships, key=lambda item: item.id)
-            if relationship.relationship_type == "owned_by"
+            if relationship.relationship_type is RelationshipType.OWNED_BY
             and relationship.source_object_id in entity_ids
         )
         return tuple(
@@ -354,7 +368,7 @@ def _section_object_types(
 def _active_objects(model: AeirProjectModel) -> tuple[AeirObject, ...]:
     return tuple(
         sorted(
-            (item for item in model.objects if item.status is not AeirStatus.REJECTED),
+            (item for item in model.objects if item.approval_status is not ApprovalStatus.REJECTED),
             key=lambda item: item.id,
         )
     )
@@ -386,7 +400,9 @@ def _trace_object(item: AeirObject) -> TraceSourceObject:
     return TraceSourceObject(
         object_id=item.id,
         object_type=item.type,
-        status=item.status,
+        lifecycle_status=item.lifecycle_status,
+        truth_status=item.truth_status,
+        approval_status=item.approval_status,
         source_kind=item.source.kind,
         source_reference=item.source.reference,
         source_manifest_sha256=item.source.manifest_sha256,
@@ -401,6 +417,9 @@ def _trace_relationship(item: AeirRelationship) -> TraceSourceRelationship:
         relationship_type=item.relationship_type,
         source_object_id=item.source_object_id,
         target_object_id=item.target_object_id,
+        lifecycle_status=item.lifecycle_status,
+        truth_status=item.truth_status,
+        approval_status=item.approval_status,
         relationship_sha256=specification_hash(item),
     )
 
@@ -411,6 +430,13 @@ def _section_hash(section: ArtifactSection) -> str:
 
 def _entry_hash(entry: str) -> str:
     return specification_hash({"entry": entry})
+
+
+def _trace_reference_line(
+    object_ids: tuple[str, ...], source_catalog: dict[str, TraceSourceObject]
+) -> str:
+    source_refs = tuple(source_catalog[object_id].source_reference for object_id in object_ids)
+    return ", ".join(object_ids) + " | Client references: " + ", ".join(source_refs)
 
 
 def _manifest_hash(manifest: ArtifactTraceabilityManifest) -> str:

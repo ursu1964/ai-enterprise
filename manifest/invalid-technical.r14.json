@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "id": "bad-v1",
+    "name": "Bad Manifest",
+    "version": "1.0.0",
+    "createdBy": "Customer",
+    "createdAt": "2026-08-04"
+  },
+  "organization": {"name": "Acme Ltd", "industry": "Retail"},
+  "vision": "Create React components and implement API endpoint for customers.",
+  "domain": "CRM",
+  "database": "PostgreSQL",
+  "objectives": [],
+  "users": [],
+  "businessEntities": [],
+  "capabilities": [],
+  "workflows": [],
+  "businessRules": [],
+  "policies": [],
+  "integrations": [],
+  "reporting": [],
+  "security": [],
+  "quality": [],
+  "constraints": [],
+  "deploymentPreferences": {},
+  "version": {
+    "manifestVersion": "1.0.0",
+    "schemaVersion": "ai-enterprise-manifest-1.0",
+    "registryVersion": "updl-1.0",
+    "generatorVersion": "uagf-1.0",
+    "compilerVersion": "manifest-compiler-1.0"
+  }
+}

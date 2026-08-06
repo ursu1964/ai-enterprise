@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/relationship/foundation/0.1",
+  "title": "AI Enterprise Relationship v0.1 Foundation Alias",
+  "description": "R3 foundation alias for the executable relationship schema.",
+  "$ref": "aeir/RELATIONSHIP-0.1.schema.json"
+}

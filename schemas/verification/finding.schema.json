@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/finding.schema.json",
+  "title": "BK/R10 Verification Finding",
+  "type": "object",
+  "required": ["finding_id", "finding_type", "severity", "description", "status", "finding_hash"],
+  "properties": {
+    "finding_id": {"type": "string"},
+    "finding_type": {
+      "enum": ["FAILURE", "DEFECT", "NONCONFORMANCE", "POLICY_VIOLATION", "COVERAGE_GAP", "ENVIRONMENT_ISSUE", "FLAKY_RESULT", "EVIDENCE_GAP", "WARNING"]
+    },
+    "severity": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "description": {"type": "string"},
+    "affected_requirements": {"type": "array", "items": {"type": "string"}},
+    "affected_implementation_references": {"type": "array", "items": {"type": "string"}},
+    "owner": {"type": "object"},
+    "status": {"enum": ["OPEN", "TRIAGED", "CORRECTING", "RESOLVED", "ACCEPTED_RISK", "REJECTED"]},
+    "evidence_references": {"type": "array", "items": {"type": "string"}},
+    "finding_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

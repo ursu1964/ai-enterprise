@@ -61,7 +61,14 @@ def test_production_readiness_requires_every_current_proof(tmp_path: Path) -> No
     )
 
     assert report["production_allowed"] is True
-    assert len(report["checks"]) == 9
+    assert len(report["checks"]) == 14
+    assert {
+        "production_owners",
+        "pilot_results",
+        "infrastructure_credentials",
+        "production_run_artifacts",
+        "r16_graph_backend",
+    }.issubset({item["name"] for item in report["checks"]})
 
 
 def test_production_readiness_blocks_missing_restore_proof(tmp_path: Path) -> None:
@@ -83,3 +90,61 @@ def test_production_readiness_blocks_missing_restore_proof(tmp_path: Path) -> No
 
     assert report["production_allowed"] is False
     assert any(item.startswith("backup_restore:") for item in report["findings"])
+
+
+def test_production_readiness_blocks_missing_operational_closure_proof(
+    tmp_path: Path,
+) -> None:
+    choices = _choices()
+    choices["identity_proxy"]["signed_headers"] = [
+        "X-Actor-ID",
+        "X-Actor-Type",
+        "X-Actor-Role",
+        "X-Proxy-Timestamp",
+        "X-Proxy-Signature",
+    ]
+    evidence = _evidence()
+    del evidence["proof"]["pilot_results"]
+    evidence["proof"]["infrastructure_credentials"]["credential_inventory"] = {
+        "token": "plain-secret"
+    }
+    (tmp_path / "choices.json").write_text(json.dumps(choices), encoding="utf-8")
+    (tmp_path / "evidence.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    report = production_readiness.verify(
+        tmp_path,
+        Path("evidence.json"),
+        Path("choices.json"),
+        now=datetime(2026, 8, 4, tzinfo=UTC),
+    )
+
+    assert report["production_allowed"] is False
+    assert any(item.startswith("pilot_results:") for item in report["findings"])
+    assert any("must be a reference" in item for item in report["findings"])
+
+
+def test_production_readiness_blocks_missing_r16_graph_backend_proof(
+    tmp_path: Path,
+) -> None:
+    choices = _choices()
+    choices["identity_proxy"]["signed_headers"] = [
+        "X-Actor-ID",
+        "X-Actor-Type",
+        "X-Actor-Role",
+        "X-Proxy-Timestamp",
+        "X-Proxy-Signature",
+    ]
+    evidence = _evidence()
+    del evidence["proof"]["r16_graph_backend"]
+    (tmp_path / "choices.json").write_text(json.dumps(choices), encoding="utf-8")
+    (tmp_path / "evidence.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    report = production_readiness.verify(
+        tmp_path,
+        Path("evidence.json"),
+        Path("choices.json"),
+        now=datetime(2026, 8, 4, tzinfo=UTC),
+    )
+
+    assert report["production_allowed"] is False
+    assert any(item.startswith("r16_graph_backend:") for item in report["findings"])

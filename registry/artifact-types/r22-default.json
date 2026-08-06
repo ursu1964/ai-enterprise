@@ -1,0 +1,11 @@
+{
+  "artifact_types": [
+    {"artifact_type": "manifest-snapshot", "artifact_class": "definition"},
+    {"artifact_type": "openapi-contract", "artifact_class": "implementation"},
+    {"artifact_type": "service-code", "artifact_class": "implementation"},
+    {"artifact_type": "test-suite", "artifact_class": "validation"},
+    {"artifact_type": "test-report", "artifact_class": "validation"},
+    {"artifact_type": "approval-decision", "artifact_class": "governance"},
+    {"artifact_type": "release-package", "artifact_class": "delivery"}
+  ]
+}

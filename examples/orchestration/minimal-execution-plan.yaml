@@ -1,0 +1,11 @@
+execution_plan_id: plan-crm-v1-1.0.0
+project_id: crm-v1
+execution_mode: controlled_parallel
+work_packages:
+  - wp-requirements-001
+  - wp-api-contract-001
+  - wp-service-code-001
+  - wp-test-generation-001
+  - wp-build-validation-001
+  - wp-release-approval-001
+  - wp-delivery-package-001

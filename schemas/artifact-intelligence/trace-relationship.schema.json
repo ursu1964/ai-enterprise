@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/artifact-intelligence/trace-relationship.schema.json",
+  "title": "R22 Trace Relationship",
+  "type": "object",
+  "required": ["relationship_id", "source_type", "source_id", "relationship_type", "target_type", "target_id", "verified", "relationship_hash"],
+  "properties": {
+    "relationship_id": {"type": "string"},
+    "source_type": {"type": "string"},
+    "source_id": {"type": "string"},
+    "relationship_type": {"type": "string"},
+    "target_type": {"type": "string"},
+    "target_id": {"type": "string"},
+    "verified": {"type": "boolean"},
+    "relationship_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

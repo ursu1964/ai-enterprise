@@ -14,6 +14,10 @@ from ai_enterprise.api.routes.architecture_operations import (
     router as architecture_operations_router,
 )
 from ai_enterprise.api.routes.audit import router as audit_router
+from ai_enterprise.api.routes.bk_r10_verification import router as bk_r10_verification_router
+from ai_enterprise.api.routes.bk_r11_evidence_audit import (
+    router as bk_r11_evidence_audit_router,
+)
 from ai_enterprise.api.routes.blueprints import router as blueprints_router
 from ai_enterprise.api.routes.change_management import (
     router as change_management_router,
@@ -27,6 +31,7 @@ from ai_enterprise.api.routes.enterprise_kernel import router as enterprise_kern
 from ai_enterprise.api.routes.evolution import router as evolution_router
 from ai_enterprise.api.routes.executions import router as executions_router
 from ai_enterprise.api.routes.foundation import router as foundation_router
+from ai_enterprise.api.routes.foundation_projects import router as foundation_projects_router
 from ai_enterprise.api.routes.integration import router as integration_router
 from ai_enterprise.api.routes.knowledge import router as knowledge_router
 from ai_enterprise.api.routes.operator_jobs import router as operator_jobs_router
@@ -39,6 +44,37 @@ from ai_enterprise.api.routes.project_formation import router as project_formati
 from ai_enterprise.api.routes.projects import router as projects_router
 from ai_enterprise.api.routes.provider_readiness import router as provider_readiness_router
 from ai_enterprise.api.routes.query_platform import router as query_platform_router
+from ai_enterprise.api.routes.r4_ai_interpretation import router as r4_ai_interpretation_router
+from ai_enterprise.api.routes.r5_umte import router as r5_umte_router
+from ai_enterprise.api.routes.r6_uagf import router as r6_uagf_router
+from ai_enterprise.api.routes.r7_uerm import router as r7_uerm_router
+from ai_enterprise.api.routes.r8_ugeif import router as r8_ugeif_router
+from ai_enterprise.api.routes.r9_uak import router as r9_uak_router
+from ai_enterprise.api.routes.r10_ueif import router as r10_ueif_router
+from ai_enterprise.api.routes.r11_uief import router as r11_uief_router
+from ai_enterprise.api.routes.r12_bootstrap import router as r12_bootstrap_router
+from ai_enterprise.api.routes.r13_repository_bootstrap import (
+    router as r13_repository_bootstrap_router,
+)
+from ai_enterprise.api.routes.r14_manifest_schema import router as r14_manifest_schema_router
+from ai_enterprise.api.routes.r15_manifest_compiler import (
+    router as r15_manifest_compiler_router,
+)
+from ai_enterprise.api.routes.r16_knowledge_graph import router as r16_knowledge_graph_router
+from ai_enterprise.api.routes.r17_execution_planner import (
+    router as r17_execution_planner_router,
+)
+from ai_enterprise.api.routes.r18_generator_orchestration import (
+    router as r18_generator_orchestration_router,
+)
+from ai_enterprise.api.routes.r19_project_memory import router as r19_project_memory_router
+from ai_enterprise.api.routes.r20_runtime_kernel import router as r20_runtime_kernel_router
+from ai_enterprise.api.routes.r21_execution_orchestrator import (
+    router as r21_execution_orchestrator_router,
+)
+from ai_enterprise.api.routes.r22_artifact_intelligence import (
+    router as r22_artifact_intelligence_router,
+)
 from ai_enterprise.api.routes.recovery import router as recovery_router
 from ai_enterprise.api.routes.requirements_provider import router as requirements_provider_router
 from ai_enterprise.api.routes.requirements_revisions import (
@@ -76,6 +112,28 @@ app = FastAPI(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1_000, compresslevel=5)
 
+app.include_router(foundation_projects_router, prefix="/api/v1")
+app.include_router(bk_r10_verification_router, prefix="/api/v1")
+app.include_router(bk_r11_evidence_audit_router, prefix="/api/v1")
+app.include_router(r4_ai_interpretation_router, prefix="/api/v1")
+app.include_router(r5_umte_router, prefix="/api/v1")
+app.include_router(r6_uagf_router, prefix="/api/v1")
+app.include_router(r7_uerm_router, prefix="/api/v1")
+app.include_router(r8_ugeif_router, prefix="/api/v1")
+app.include_router(r9_uak_router, prefix="/api/v1")
+app.include_router(r10_ueif_router, prefix="/api/v1")
+app.include_router(r11_uief_router, prefix="/api/v1")
+app.include_router(r12_bootstrap_router, prefix="/api/v1")
+app.include_router(r13_repository_bootstrap_router, prefix="/api/v1")
+app.include_router(r14_manifest_schema_router, prefix="/api/v1")
+app.include_router(r15_manifest_compiler_router, prefix="/api/v1")
+app.include_router(r16_knowledge_graph_router, prefix="/api/v1")
+app.include_router(r17_execution_planner_router, prefix="/api/v1")
+app.include_router(r18_generator_orchestration_router, prefix="/api/v1")
+app.include_router(r19_project_memory_router, prefix="/api/v1")
+app.include_router(r20_runtime_kernel_router, prefix="/api/v1")
+app.include_router(r21_execution_orchestrator_router, prefix="/api/v1")
+app.include_router(r22_artifact_intelligence_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(blueprints_router, prefix="/api/v1")
 app.include_router(project_formation_router, prefix="/api/v1")
@@ -124,8 +182,7 @@ async def record_http_metrics(request: Request, call_next) -> Response:  # type:
         route = request.scope.get("route")
         route_path = getattr(route, "path", request.url.path)
         route_key = (
-            route_path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
-            or "root"
+            route_path.strip("/").replace("/", "_").replace("{", "").replace("}", "") or "root"
         )
         elapsed_seconds = perf_counter() - started
         observe_duration(f"http_route_{route_key}_duration", elapsed_seconds)

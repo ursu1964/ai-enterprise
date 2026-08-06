@@ -1,0 +1,91 @@
+schema_version: aepm-0.1
+project_intent:
+  id: PRJ-001
+  name: Inventory Management Platform
+  summary: A platform for managing stock across warehouses.
+  problem: Physical stock and recorded stock are reconciled manually.
+  opportunity: Give warehouse teams one governed inventory workflow.
+  source_refs:
+    - SRC-001
+business_outcomes:
+  - id: OUT-001
+    description: Reduce monthly inventory variance.
+    indicators:
+      - Monthly inventory variance falls from 7.5% to 2.0% by 2027-06-30.
+    source_refs:
+      - SRC-001
+stakeholders:
+  - id: STK-001
+    name: Warehouse Manager
+    role: Business owner
+    decision_authority: true
+    responsibilities:
+      - Own warehouse operating policy.
+    source_refs:
+      - SRC-001
+capabilities:
+  - id: CAP-001
+    name: Inventory Tracking
+    description: Track inventory quantities by warehouse and location.
+    owner_stakeholder_id: STK-001
+    source_refs:
+      - SRC-001
+core_processes:
+  - id: PROC-001
+    name: Receive Inventory
+    description: Register goods received into a warehouse.
+    trigger: Shipment arrives.
+    outputs:
+      - Inventory receipt
+      - Updated stock quantity
+    source_refs:
+      - SRC-001
+business_rules:
+  - id: RULE-001
+    description: Received quantity must be greater than zero.
+    source_refs:
+      - SRC-001
+data_entities:
+  - id: ENT-001
+    name: Inventory Item
+    description: A stock-managed business item.
+    owner_stakeholder_id: STK-001
+    source_refs:
+      - SRC-001
+integrations:
+  - id: INT-001
+    name: ERP Purchase Order Integration
+    system: ERP
+    purpose: Imports approved purchase orders from the ERP.
+    security_rules:
+      - Use OAuth2 client credentials.
+    source_refs:
+      - SRC-001
+quality_requirements:
+  - id: QUAL-001
+    category: availability
+    description: The service remains available during warehouse operations.
+    acceptance_criteria:
+      - Monthly uptime is at least 99.9%.
+    source_refs:
+      - SRC-001
+constraints:
+  - id: CON-001
+    category: technical
+    description: Deploy only in approved European regions.
+    source_refs:
+      - SRC-001
+preferred_technology_targets:
+  frontend:
+    - React
+  backend:
+    - Python
+    - FastAPI
+  database:
+    - PostgreSQL
+  queue:
+    - Redis
+  object_storage:
+    - S3-compatible storage
+  deployment:
+    - Docker

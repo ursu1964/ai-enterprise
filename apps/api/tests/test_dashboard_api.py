@@ -1,6 +1,8 @@
+import copy
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -90,6 +92,28 @@ class DashboardSession:
 
     def add(self, row: Any) -> None:
         self.added.append(row)
+
+    async def commit(self) -> None:
+        self.commit_count += 1
+
+
+class SubmitSession:
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+        self.commit_count = 0
+        self.flush_count = 0
+
+    async def scalar(self, statement: object) -> Any:
+        return None
+
+    def add(self, row: Any) -> None:
+        self.added.append(row)
+
+    def add_all(self, rows: list[Any]) -> None:
+        self.added.extend(rows)
+
+    async def flush(self) -> None:
+        self.flush_count += 1
 
     async def commit(self) -> None:
         self.commit_count += 1
@@ -713,6 +737,107 @@ def test_project_blueprint_compiler_page_exposes_manifest_compile_surface() -> N
     assert "Download Markdown" in response.text
 
 
+def test_client_portal_serves_first_release_web_app() -> None:
+    client = TestClient(app)
+
+    response = client.get("/client-portal")
+    script = client.get("/client-portal/app.js")
+    styles = client.get("/client-portal/styles.css")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    assert "default-src 'self'" in response.headers["content-security-policy"]
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "AI Enterprise Universal Experience Runtime" in response.text
+    assert "Universal Experience Runtime" in response.text
+    assert 'id="manifestInput"' in response.text
+    assert 'id="roleSelect"' in response.text
+    assert 'id="deviceSelect"' in response.text
+    assert 'id="bootstrapExperienceButton"' in response.text
+    assert 'id="experienceRecords"' in response.text
+    assert 'id="proposalInput"' in response.text
+    assert 'id="commentInput"' in response.text
+    assert "/client-portal/app.js" in response.text
+    assert "/client-portal/styles.css" in response.text
+    assert script.status_code == 200
+    assert "stale-while-revalidate=86400" in script.headers["cache-control"]
+    assert "script-src 'self'" in script.headers["content-security-policy"]
+    assert styles.headers["x-content-type-options"] == "nosniff"
+    assert "/api/v1/project-formation/client-blueprints/import" in script.text
+    assert "/api/v1/projects/${currentProjectId}/ueif/${path}" in script.text
+    assert "Bootstrap R10 Workspace" in response.text
+    assert "BroadcastChannel" in script.text
+    assert "EventSource" in script.text
+    assert 'apiUrl("events")' in script.text
+    assert "workspace-surfaces" in script.text
+    assert "ai-interaction-policies" in script.text
+    assert "experience-api-contracts" in script.text
+    assert "collaboration-threads" in script.text
+    assert "ai-proposals" in script.text
+    assert "setInterval" in script.text
+    assert "/review" in script.text
+    assert "Submit Corrections" in response.text
+    assert "Submit Clarification Answers" in response.text
+    assert 'id="answerInput"' in response.text
+    assert "/clarifications/answers" in script.text
+    assert "clarification_report" in script.text
+    assert "currentClarificationReport" in script.text
+    assert "Clarification answers must be a JSON array." in script.text
+    assert "changes_requested" in script.text
+    assert "corrected_manifest" in script.text
+    assert "corrected_manifest_text" in script.text
+    assert "manifest_text" in script.text
+    assert "application/yaml" in script.text
+    assert "AEPM v0.1 JSON or YAML" in response.text
+    assert "R1 proof" in script.text
+    assert "traceability_manifest_sha256" in script.text
+    assert "Download Blueprint" in response.text
+    assert styles.status_code == 200
+    assert ".workspace" in styles.text
+    assert ".experience-runtime" in styles.text
+    assert ".runtime-toolbar" in styles.text
+    assert ".answer-input" in styles.text
+
+
+def test_api_container_packages_client_portal_assets() -> None:
+    dockerfile = (dashboard_routes._repo_root() / "apps/api/Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY apps/web /app/apps/web" in dockerfile
+    assert (
+        "COPY tools/production_readiness_contracts.py "
+        "/app/tools/production_readiness_contracts.py" in dockerfile
+    )
+    assert "COPY schemas/production-readiness /app/schemas/production-readiness" in dockerfile
+
+
+def test_dashboard_tool_loader_supports_sibling_tool_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "helper_tool.py").write_text(
+        "VALUE = 'loaded-from-sibling'\n",
+        encoding="utf-8",
+    )
+    (tools / "primary_tool.py").write_text(
+        "import helper_tool\n\ndef verify():\n    return helper_tool.VALUE\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(dashboard_routes, "_repo_root", lambda: tmp_path)
+
+    verify = dashboard_routes._load_tool_function("primary_tool", "verify")
+
+    assert verify() == "loaded-from-sibling"
+
+
+def test_client_portal_rejects_unregistered_assets() -> None:
+    client = TestClient(app)
+
+    response = client.get("/client-portal/../dashboard.py")
+
+    assert response.status_code == 404
+
+
 def test_sample_project_manifest_endpoint_returns_canonical_aepm_json() -> None:
     client = TestClient(app)
 
@@ -784,6 +909,172 @@ def test_project_blueprint_compiler_rejects_semantically_invalid_aepm() -> None:
     assert "markdown" not in payload
 
 
+def test_reviewed_project_blueprint_compiler_applies_scoped_corrections() -> None:
+    client = TestClient(app)
+    document = sample_aepm_document()
+    document["capabilities"].append(  # type: ignore[union-attr]
+        {
+            "id": "CAP-002",
+            "name": "Request intake",
+            "description": document["capabilities"][0]["description"],  # type: ignore[index]
+            "owner_stakeholder_id": "STK-001",
+        }
+    )
+    preview = client.post(
+        "/dashboard/project-blueprint/reviewed-compile",
+        json={"manifest": document, "respondent_id": "client-reviewer", "answers": []},
+    )
+    assert preview.status_code == 200
+    question = next(
+        item
+        for item in preview.json()["clarification_report"]["recommended_improvements"]
+        if "CAP-002" in item["target_object_ids"]
+    )
+
+    response = client.post(
+        "/dashboard/project-blueprint/reviewed-compile",
+        json={
+            "manifest": document,
+            "respondent_id": "client-reviewer",
+            "review_decisions": [
+                {
+                    "object_id": "PROJ-001",
+                    "decision": "approved",
+                    "rationale": "Client approved the reviewed project intent.",
+                }
+            ],
+            "answers": [
+                {
+                    "question_id": question["id"],
+                    "response": "The reporting capability covers leadership analytics.",
+                    "resolution": "answered",
+                    "rationale": "Confirmed during client review.",
+                    "corrections": [
+                        {
+                            "target_object_id": "CAP-002",
+                            "field": "description",
+                            "proposed_value": (
+                                "Provide leadership analytics and request trend reporting."
+                            ),
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == "project-blueprint-compiler-result-0.1"
+    assert payload["review"]["schema_version"] == "project-blueprint-review-0.1"
+    assert payload["review"]["respondent_id"] == "client-reviewer"
+    assert payload["review"]["answered_question_count"] == 1
+    assert payload["review"]["review_decision_count"] == 1
+    assert payload["review"]["reviewed_model_sha256"] == payload["proof"]["source_model_sha256"]
+    assert payload["review"]["reviewed_model_sha256"] != payload["review"]["base_model_sha256"]
+    assert "Reviewed Project Blueprint with Traceability" in payload["markdown"]
+    assert "CAP-002 [approved]" in payload["markdown"]
+    assert "Provide leadership analytics and request trend reporting." in payload["markdown"]
+
+
+def test_project_blueprint_review_package_lists_canonical_objects() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/prepare-review",
+        json=sample_aepm_document(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == "project-blueprint-review-package-0.1"
+    assert payload["valid"] is True
+    assert payload["aeir_model_sha256"]
+    assert {item["object_id"] for item in payload["review_items"]} >= {
+        "PROJ-001",
+        "CAP-001",
+        "RULE-001",
+    }
+
+
+def test_reviewed_project_blueprint_compiler_applies_human_review_decisions() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/reviewed-compile",
+        json={
+            "manifest": sample_aepm_document(),
+            "respondent_id": "client-reviewer",
+            "answers": [],
+            "review_decisions": [
+                {
+                    "object_id": "CAP-001",
+                    "decision": "approved",
+                    "rationale": "The capability is confirmed.",
+                },
+                {
+                    "object_id": "RULE-001",
+                    "decision": "corrected",
+                    "rationale": "The rule needs ownership-specific wording.",
+                    "description": (
+                        "Only authenticated customers may view their own request details."
+                    ),
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["review"]["review_decision_count"] == 2
+    assert "CAP-001 [approved]" in payload["markdown"]
+    assert "Only authenticated customers may view their own request details." in payload["markdown"]
+    assert payload["proof"]["source_model_sha256"] == payload["review"]["reviewed_model_sha256"]
+
+
+def test_reviewed_project_blueprint_download_returns_markdown_attachment() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/reviewed-download",
+        json={
+            "manifest": sample_aepm_document(),
+            "respondent_id": "client-reviewer",
+            "answers": [],
+            "review_decisions": [
+                {
+                    "object_id": "CAP-001",
+                    "decision": "approved",
+                    "rationale": "The capability is confirmed.",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="project-blueprint-traceable.md"'
+    )
+    assert "Reviewed Project Blueprint with Traceability" in response.text
+
+
+def test_reviewed_project_blueprint_compiler_returns_clarification_for_structural_gaps() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/dashboard/project-blueprint/reviewed-compile",
+        json={"manifest": {"schema_version": "aepm-0.1"}, "answers": []},
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]["message"] == (
+        "AEPM needs structural correction before canonical review can update the model."
+    )
+    assert payload["detail"]["validation_report"]["valid"] is False
+    assert payload["detail"]["clarification_report"]["critical_blockers"]
+
+
 @pytest.mark.asyncio
 async def test_local_dashboard_context_actor_can_read_query_model() -> None:
     actor = await get_actor(
@@ -829,9 +1120,7 @@ async def test_dashboard_server_readiness_reports_human_actions() -> None:
     assert any(item["name"] == "Production alert rules" for item in payload["checks"])
     assert any(item["name"] == "Reverse proxy and TLS" for item in payload["checks"])
     assert any(item["name"] == "Deployment blueprint" for item in payload["checks"])
-    assert "DASHBOARD_BASE_URL=http://127.0.0.1:8000 make dashboard-verify" in payload[
-        "commands"
-    ]
+    assert "DASHBOARD_BASE_URL=http://127.0.0.1:8000 make dashboard-verify" in payload["commands"]
     assert any(item["name"] == "Infrastructure choices gate" for item in payload["checks"])
     assert "make server-secrets" in payload["commands"]
     assert "make deployment-blueprint" in payload["commands"]
@@ -930,6 +1219,82 @@ def test_client_manifest_template_downloads_project_intake_document() -> None:
     assert "Success Criteria" in response.text
 
 
+def test_project_blueprint_reviewed_compile_applies_human_review_decisions() -> None:
+    client = TestClient(app)
+    manifest = dashboard_routes._sample_project_manifest().model_dump(mode="json")
+
+    response = client.post(
+        "/dashboard/project-blueprint/reviewed-compile",
+        json={
+            "manifest": manifest,
+            "respondent_id": "client-owner",
+            "answers": [],
+            "review_decisions": [
+                {
+                    "object_id": "PROJ-001",
+                    "decision": "corrected",
+                    "rationale": "Client clarified the project purpose.",
+                    "description": "Approved client portal for reviewed blueprint delivery.",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    project = next(
+        item for item in payload["reviewed_model"]["objects"] if item["id"] == "PROJ-001"
+    )
+    assert project["description"] == "Approved client portal for reviewed blueprint delivery."
+    assert project["status"] == "approved"
+    assert payload["review"]["review_decision_count"] == 1
+    assert payload["proof"]["source_model_sha256"] == payload["review"]["reviewed_model_sha256"]
+    assert "Approved client portal for reviewed blueprint delivery." in payload["markdown"]
+
+
+@pytest.mark.anyio
+async def test_reviewed_submit_persists_project_artifact_source_and_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    manifest = dashboard_routes._sample_project_manifest().model_dump(mode="json")
+    request = {
+        "manifest": copy.deepcopy(manifest),
+        "respondent_id": "client-owner",
+        "answers": [],
+        "review_decisions": [
+            {
+                "object_id": "PROJ-001",
+                "decision": "approved",
+                "rationale": "Client accepts the canonical project model.",
+            }
+        ],
+    }
+    session = SubmitSession()
+    monkeypatch.setattr(
+        dashboard_routes,
+        "get_settings",
+        lambda: SimpleNamespace(artifact_root=tmp_path),
+    )
+
+    payload = await dashboard_routes.submit_reviewed_project_blueprint(request, session)  # type: ignore[arg-type]
+
+    assert payload["schema_version"] == "project-blueprint-submission-0.1"
+    assert payload["audit_event_id"]
+    assert payload["audit_chain_record_hash"]
+    assert session.commit_count == 1
+    assert {type(item).__name__ for item in session.added} >= {
+        "ProjectModel",
+        "ArtifactModel",
+        "AuditEventModel",
+        "AuditChainRecordModel",
+    }
+    source = payload["source_object"]
+    stored = tmp_path / source["bucket"] / source["object_key"]
+    assert stored.exists()
+    assert source["size_bytes"] > 0
+    assert payload["blueprint_proof"]["source_manifest_sha256"]
+
+
 def test_documentation_endpoint_previews_and_downloads_registered_documents() -> None:
     client = TestClient(app)
 
@@ -1015,8 +1380,8 @@ def test_demo_story_page_explains_idea_to_reality() -> None:
     assert 'id="proofTelemetryCard" class="proof-card" href="/dashboard#metrics"' in response.text
     assert 'id="proofNextCard" class="proof-card" href="/dashboard#factory"' in response.text
     assert "loadLiveProof" in response.text
-    assert 'const demoActorHeaders = {' in response.text
-    assert 'fetch(url, { headers: demoActorHeaders })' in response.text
+    assert "const demoActorHeaders = {" in response.text
+    assert "fetch(url, { headers: demoActorHeaders })" in response.text
     assert "card.href = href" in response.text
     assert "If the proof still needs attention" in response.text
     assert "Project proof is waiting for source confirmation" in response.text

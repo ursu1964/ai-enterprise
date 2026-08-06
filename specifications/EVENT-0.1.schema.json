@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/event/0.1",
+  "title": "AI Enterprise Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "project_id",
+    "sequence",
+    "event_type",
+    "actor_id",
+    "previous_hash",
+    "event_hash",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "event_type": {"type": "string", "minLength": 1, "maxLength": 120},
+    "entity_type": {"type": ["string", "null"]},
+    "entity_id": {"type": ["string", "null"]},
+    "entity_version": {"type": ["integer", "string", "null"]},
+    "actor_type": {"type": ["string", "null"]},
+    "actor_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "previous_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "event_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "payload": {"type": "object"}
+  }
+}

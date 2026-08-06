@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/ai/extraction-response/0.1",
+  "title": "AI Extraction Response v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "source_summary",
+    "candidate_objects",
+    "candidate_relationships",
+    "ambiguities",
+    "assumptions",
+    "probable_contradictions",
+    "missing_information",
+    "clarification_candidates",
+    "unsupported_requests"
+  ],
+  "properties": {
+    "operation_id": {"type": "string", "pattern": "^AIOP-[0-9]{4}$"},
+    "source_summary": {"type": "object"},
+    "candidate_objects": {"type": "array", "items": {"$ref": "CANDIDATE-OBJECT-0.1.schema.json"}},
+    "candidate_relationships": {"type": "array", "items": {"$ref": "CANDIDATE-RELATIONSHIP-0.1.schema.json"}},
+    "ambiguities": {"type": "array", "items": {"$ref": "AMBIGUITY-0.1.schema.json"}},
+    "assumptions": {"type": "array", "items": {"$ref": "ASSUMPTION-0.1.schema.json"}},
+    "probable_contradictions": {"type": "array", "items": {"$ref": "PROBABLE-CONTRADICTION-0.1.schema.json"}},
+    "missing_information": {"type": "array", "items": {"type": "object"}},
+    "clarification_candidates": {"type": "array", "items": {"$ref": "CLARIFICATION-QUESTION-0.1.schema.json"}},
+    "unsupported_requests": {"type": "array", "items": {"type": "string"}}
+  }
+}

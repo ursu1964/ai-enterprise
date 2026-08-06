@@ -105,7 +105,9 @@ def _require_object(value: object, source: str) -> dict[str, Any]:
 
 def _validate_portfolio(preview: dict[str, Any]) -> list[dict[str, Any]]:
     raw_projects = preview.get("projects")
-    if not isinstance(raw_projects, list) or not all(isinstance(item, dict) for item in raw_projects):
+    if not isinstance(raw_projects, list) or not all(
+        isinstance(item, dict) for item in raw_projects
+    ):
         raise DemoLifecycleError("Mock-factory preview did not return a project list")
     projects: list[dict[str, Any]] = raw_projects
     actual = {(item.get("name"), item.get("repository_path")) for item in projects}
@@ -140,9 +142,7 @@ def _unhealthy_canonical_projects(
     raw_projects = manager.get("projects")
     if not isinstance(raw_projects, list):
         raise DemoLifecycleError("Dashboard manager did not return project summaries")
-    by_name = {
-        item.get("name"): item for item in raw_projects if isinstance(item, dict)
-    }
+    by_name = {item.get("name"): item for item in raw_projects if isinstance(item, dict)}
     unhealthy: list[dict[str, Any]] = []
     for name in sorted(canonical_names):
         project = by_name.get(name)
@@ -322,7 +322,9 @@ def run_lifecycle(
     ):
         report["execution"] = {"status": "invalid_or_partial", "response": result}
         evidence_path = _write_evidence(report, output_dir)
-        raise DemoLifecycleError(f"Mock-factory execution was incomplete. Evidence: {evidence_path}")
+        raise DemoLifecycleError(
+            f"Mock-factory execution was incomplete. Evidence: {evidence_path}"
+        )
     report["execution"] = {"status": "started", "response": result}
     return report, _write_evidence(report, output_dir)
 

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,8 +49,139 @@ class Settings(BaseSettings):
         default=Path("./runtime-data/decomposition-snapshots")
     )
     requirements_output_repair_enabled: bool = True
+    r4_interpretation_provider: str = "mock"
+    r4_interpretation_model: str = "ollama/gemma3:12b"
+    r4_interpretation_base_url: str = "http://localhost:11434"
+    r4_interpretation_temperature: float = Field(default=0.0, ge=0.0, le=1.0)
+    r4_interpretation_timeout_seconds: int = Field(default=120, ge=1, le=900)
+    r4_interpretation_max_tokens: int = Field(default=8192, ge=512, le=65536)
+    r4_interpretation_provider_retries: int = Field(default=2, ge=0, le=5)
+    r4_interpretation_schema_repair_attempts: int = Field(default=1, ge=0, le=1)
+    r4_interpretation_redact_secrets: bool = True
 
     artifact_root: Path = Field(default=Path("./artifacts"))
+    r6_publication_git_ssh_config_path: Path | None = None
+    r6_publication_aws_profile: str | None = None
+    r6_publication_aws_region: str | None = None
+    r6_publication_npm_token: SecretStr | None = None
+    r6_publication_npmrc_path: Path | None = None
+    r7_runtime_kubeconfig_path: Path | None = None
+    r7_runtime_opa_url: str | None = None
+    r7_runtime_openai_api_key: SecretStr | None = None
+    r7_runtime_plugin_root: Path | None = None
+    r9_event_bus_backend: str = Field(
+        default="local",
+        pattern=r"^(local|kafka|sqs|nats)$",
+    )
+    r9_event_bus_endpoint: str | None = None
+    r9_event_bus_topic: str | None = None
+    r9_event_bus_region: str | None = None
+    r9_event_bus_credentials_ref: str | None = None
+    r9_worker_fleet_manifest_path: Path | None = None
+    r9_sdk_registry_backend: str = Field(
+        default="filesystem",
+        pattern=r"^(filesystem|npm)$",
+    )
+    r9_sdk_registry_ref: str | None = None
+    r11_external_integration_mode: str = Field(
+        default="local",
+        pattern=r"^(local|configured|disabled)$",
+    )
+    r11_external_endpoint_allowlist: str = ""
+    r11_external_credential_refs: str = ""
+    r11_partner_trust_refs: str = ""
+    r11_gateway_base_url: str | None = None
+    r11_secrets_manager_ref: str | None = None
+    r16_graph_backend: str = Field(
+        default="in_process",
+        pattern=r"^(in_process|filesystem|neo4j|rdf|custom)$",
+    )
+    r16_graph_filesystem_root: Path = Field(default=Path("./runtime-data/r16-knowledge-graphs"))
+    r16_graph_backend_endpoint: str | None = None
+    r16_graph_backend_database: str | None = None
+    r16_graph_backend_credentials_ref: str | None = None
+    r16_graph_backend_deployment_evidence_ref: str | None = None
+    r16_graph_backend_connectivity_evidence_ref: str | None = None
+    r16_graph_backend_restore_evidence_ref: str | None = None
+    r16_graph_backend_owner_approval_ref: str | None = None
+    r16_graph_backend_partition_strategy: str = Field(
+        default="layer",
+        pattern=r"^(layer|domain|node_type)$",
+    )
+    r18_live_provider_calls_enabled: bool = False
+    r18_openai_api_key: SecretStr | None = None
+    r18_openai_model: str | None = None
+    r18_openai_base_url: str = "https://api.openai.com/v1/responses"
+    r18_anthropic_api_key: SecretStr | None = None
+    r18_anthropic_model: str | None = None
+    r18_anthropic_base_url: str = "https://api.anthropic.com/v1/messages"
+    r18_google_api_key: SecretStr | None = None
+    r18_google_model: str | None = None
+    r18_custom_provider_api_key: SecretStr | None = None
+    r18_custom_provider_model: str | None = None
+    r18_custom_provider_base_url: str | None = None
+    r18_provider_timeout_seconds: int = Field(default=120, ge=1, le=900)
+    r19_memory_backend: str = Field(
+        default="filesystem",
+        pattern=r"^(filesystem|postgres|vector|custom)$",
+    )
+    r19_memory_semantic_index_backend: str = Field(
+        default="deterministic",
+        pattern=r"^(deterministic|pgvector|opensearch|custom)$",
+    )
+    r19_memory_endpoint_ref: str | None = None
+    r19_memory_database_ref: str | None = None
+    r19_memory_index_ref: str | None = None
+    r19_memory_credentials_ref: str | None = None
+    r19_memory_deployment_evidence_ref: str | None = None
+    r19_memory_connectivity_evidence_ref: str | None = None
+    r19_memory_encryption_required: bool = False
+    r19_memory_kms_key_ref: str | None = None
+    r19_memory_rbac_policy_ref: str | None = None
+    r19_memory_retention_policy_ref: str | None = None
+    bk_r10_ci_runner_provider: str = "mock"
+    bk_r10_ci_runner_enabled: bool = False
+    bk_r10_ci_runner_endpoint_ref: str | None = None
+    bk_r10_ci_runner_credentials_ref: str | None = None
+    bk_r10_scanner_provider: str = "mock"
+    bk_r10_scanner_enabled: bool = False
+    bk_r10_scanner_endpoint_ref: str | None = None
+    bk_r10_scanner_credentials_ref: str | None = None
+    bk_r10_evidence_store_provider: str = "mock"
+    bk_r10_evidence_store_enabled: bool = False
+    bk_r10_evidence_store_endpoint_ref: str | None = None
+    bk_r10_evidence_store_credentials_ref: str | None = None
+    bk_r10_evidence_store_ref: str | None = None
+    bk_r10_policy_engine_provider: str = "mock"
+    bk_r10_policy_engine_enabled: bool = False
+    bk_r10_policy_engine_endpoint_ref: str | None = None
+    bk_r10_policy_engine_credentials_ref: str | None = None
+    bk_r10_policy_engine_policy_ref: str | None = None
+    bk_r10_lab_environment_provider: str = "mock"
+    bk_r10_lab_environment_enabled: bool = False
+    bk_r10_lab_environment_endpoint_ref: str | None = None
+    bk_r10_lab_environment_credentials_ref: str | None = None
+    bk_r10_backend_timeout_seconds: int = Field(default=300, ge=1, le=7200)
+    bk_r10_mock_backends_enabled: bool = True
+    bk_r11_archive_backend: str = Field(
+        default="filesystem",
+        pattern=r"^(filesystem|s3|gcs|azure_blob|minio|custom)$",
+    )
+    bk_r11_archive_filesystem_root: Path = Field(default=Path("./artifacts/bk-r11-archives"))
+    bk_r11_archive_uri_ref: str | None = None
+    bk_r11_archive_credentials_ref: str | None = None
+    bk_r11_archive_encryption_required: bool = False
+    bk_r11_archive_kms_key_ref: str | None = None
+    bk_r11_archive_deployment_evidence_ref: str | None = None
+    bk_r11_archive_connectivity_evidence_ref: str | None = None
+    bk_r11_signature_provider: str = Field(
+        default="disabled",
+        pattern=r"^(disabled|mock|kms|custom)$",
+    )
+    bk_r11_signature_required: bool = False
+    bk_r11_signer_key_ref: str | None = None
+    bk_r11_custom_signing_command: str | None = None
+    bk_r11_mock_backends_enabled: bool = True
 
     worker_poll_interval_seconds: float = 2.0
     worker_readiness_interval_seconds: float = Field(default=30.0, ge=1.0, le=300.0)

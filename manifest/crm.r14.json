@@ -1,0 +1,110 @@
+{
+  "metadata": {
+    "id": "crm-v1",
+    "name": "CRM",
+    "version": "1.0.0",
+    "createdBy": "Customer",
+    "createdAt": "2026-08-04"
+  },
+  "organization": {
+    "name": "Acme Ltd",
+    "industry": "Retail",
+    "country": "Germany",
+    "size": "Mid-Market"
+  },
+  "vision": "Provide a unified platform for managing customers, leads, opportunities, and sales reporting.",
+  "domain": "CRM",
+  "objectives": [
+    {
+      "id": "reduce-sales-cycle",
+      "name": "Reduce sales cycle",
+      "description": "Reduce the time required to move qualified opportunities to signed deals.",
+      "measures": ["Average sales-cycle duration"]
+    }
+  ],
+  "users": [
+    {
+      "id": "sales-manager",
+      "name": "Sales Manager",
+      "description": "Owns pipeline visibility and sales-team performance."
+    },
+    {
+      "id": "sales-representative",
+      "name": "Sales Representative",
+      "description": "Manages customers, leads, and opportunities."
+    }
+  ],
+  "businessEntities": [
+    {"id": "customer", "name": "Customer", "meaning": "An organization or person with a commercial relationship."},
+    {"id": "lead", "name": "Lead", "meaning": "A potential customer before qualification."},
+    {"id": "opportunity", "name": "Opportunity", "meaning": "A qualified sales possibility with expected value."}
+  ],
+  "capabilities": [
+    {
+      "id": "manage-customers",
+      "name": "Manage Customers",
+      "description": "Maintain customer records and relationship history.",
+      "userIds": ["sales-manager", "sales-representative"]
+    },
+    {
+      "id": "track-opportunities",
+      "name": "Track Opportunities",
+      "description": "Track opportunity stage, owner, value, and next action.",
+      "userIds": ["sales-manager", "sales-representative"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "qualify-lead",
+      "name": "Qualify Lead",
+      "steps": [
+        {
+          "name": "Manage customer relationship",
+          "capabilityId": "manage-customers",
+          "entityIds": ["customer", "lead"]
+        },
+        {
+          "name": "Track sales opportunity",
+          "capabilityId": "track-opportunities",
+          "entityIds": ["opportunity"]
+        }
+      ]
+    }
+  ],
+  "businessRules": [
+    {"id": "unique-customer", "name": "Unique Customer", "description": "Customer records must be uniquely identifiable."}
+  ],
+  "policies": [
+    {"id": "audit-policy", "name": "Audit Policy", "description": "Changes to sales records must be auditable."}
+  ],
+  "integrations": [
+    {"id": "workspace", "system": "Google Workspace", "purpose": "Synchronize customer meeting context."}
+  ],
+  "reporting": [
+    {"id": "pipeline-dashboard", "name": "Pipeline Dashboard", "purpose": "Show pipeline value and sales progress."}
+  ],
+  "security": [
+    {"id": "role-based-access", "requirement": "Sales records require role-based access."}
+  ],
+  "quality": [
+    {
+      "id": "availability",
+      "requirement": "The system should be available during business hours.",
+      "acceptanceCriteria": ["Availability is measurable during business hours."]
+    }
+  ],
+  "constraints": [
+    {"id": "eu-data", "description": "Customer data cannot leave the EU.", "mandatory": true}
+  ],
+  "deploymentPreferences": {
+    "preferredCloud": "EU-hosted cloud",
+    "preferredMonitoring": "Business KPI monitoring"
+  },
+  "version": {
+    "manifestVersion": "1.0.0",
+    "schemaVersion": "ai-enterprise-manifest-1.0",
+    "registryVersion": "updl-1.0",
+    "generatorVersion": "uagf-1.0",
+    "compilerVersion": "manifest-compiler-1.0"
+  }
+}

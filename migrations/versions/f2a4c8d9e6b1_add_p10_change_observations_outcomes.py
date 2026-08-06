@@ -43,9 +43,7 @@ def upgrade() -> None:
             name="ck_change_observation_window",
         ),
     )
-    op.create_index(
-        "ix_change_observations_proposal_id", "change_observations", ["proposal_id"]
-    )
+    op.create_index("ix_change_observations_proposal_id", "change_observations", ["proposal_id"])
 
     op.create_table(
         "change_outcomes",

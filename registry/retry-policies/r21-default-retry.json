@@ -1,0 +1,19 @@
+{
+  "policyId": "r21.default.retry",
+  "maximumAttempts": 3,
+  "retryableConditions": [
+    "temporary_worker_unavailability",
+    "transient_infrastructure_failure",
+    "temporary_tool_failure",
+    "validator_timeout",
+    "recoverable_output_format_error",
+    "rate_limit_response"
+  ],
+  "nonRetryableConditions": [
+    "policy_violation",
+    "invalid_authorization",
+    "missing_human_approval",
+    "security_critical_finding",
+    "corrupted_project_state"
+  ]
+}

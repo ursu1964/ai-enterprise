@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/verification/obligation.schema.json",
+  "title": "BK/R10 Verification Obligation",
+  "type": "object",
+  "required": [
+    "verification_obligation_id",
+    "obligation_type",
+    "method",
+    "criticality",
+    "mandatory",
+    "required_evidence_types",
+    "status"
+  ],
+  "properties": {
+    "verification_obligation_id": {"type": "string"},
+    "requirement_id": {"type": ["string", "null"]},
+    "acceptance_criterion_id": {"type": ["string", "null"]},
+    "architecture_element_id": {"type": ["string", "null"]},
+    "policy_reference": {"type": ["string", "null"]},
+    "obligation_type": {"type": "string"},
+    "method": {"type": "string"},
+    "criticality": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "mandatory": {"type": "boolean"},
+    "responsible_authority": {"type": "object"},
+    "required_environment_profile": {"type": ["string", "null"]},
+    "required_evidence_types": {"type": "array", "items": {"type": "string"}},
+    "pass_conditions": {"type": "array", "items": {"type": "string"}},
+    "fail_conditions": {"type": "array", "items": {"type": "string"}},
+    "status": {
+      "enum": ["PLANNED", "READY", "EXECUTING", "PASSED", "FAILED", "BLOCKED", "WAIVED", "EXPIRED", "INCONCLUSIVE"]
+    }
+  },
+  "additionalProperties": true
+}

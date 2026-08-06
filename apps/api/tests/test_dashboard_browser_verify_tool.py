@@ -32,3 +32,14 @@ def test_browser_journeys_cover_all_primary_operator_views() -> None:
         "/api/v1/operator/jobs",
         "/api/v1/operator/jobs/worker-instances",
     }
+
+
+def test_browser_verifier_covers_r10_client_runtime() -> None:
+    source = Path(browser_verify.__file__).read_text(encoding="utf-8")
+
+    assert "/client-portal" in source
+    assert "Universal Experience Runtime" in source
+    assert "Bootstrap R10 Workspace" in source
+    assert "roleSelect" in source
+    assert "deviceSelect" in source
+    assert "mobile_width" in source

@@ -72,7 +72,9 @@ def run_browser_verify(
         page.set_default_timeout(timeout_ms)
         page.on(
             "console",
-            lambda message: console_errors.append(message.text) if message.type == "error" else None,
+            lambda message: (
+                console_errors.append(message.text) if message.type == "error" else None
+            ),
         )
         page.on(
             "request",
@@ -113,8 +115,7 @@ def run_browser_verify(
             redundant = sorted(REDUNDANT_DASHBOARD_REQUESTS & set(dashboard_requests))
             if redundant:
                 raise RuntimeError(
-                    "dashboard refresh made redundant read-model requests: "
-                    + ", ".join(redundant)
+                    "dashboard refresh made redundant read-model requests: " + ", ".join(redundant)
                 )
             manager_requests = dashboard_requests.count("/api/v1/query/dashboard-manager")
             if manager_requests != 1:
@@ -189,6 +190,28 @@ def run_browser_verify(
                 page.get_by_role("heading", name=heading, exact=True).wait_for()
                 checks.append({"path": path, "heading": heading, "status": 200})
 
+            response = page.goto(f"{base_url}/client-portal", wait_until="networkidle")
+            if response is None or response.status != 200:
+                raise RuntimeError("/client-portal did not return HTTP 200")
+            page.get_by_role("heading", name="Universal Experience Runtime", exact=True).wait_for()
+            page.get_by_role("button", name="Bootstrap R10 Workspace", exact=True).wait_for()
+            page.locator("#roleSelect").select_option("operator")
+            page.locator("#deviceSelect").select_option("mobile")
+            page.locator("#experienceRecords").wait_for(state="visible")
+            page.set_viewport_size({"width": 390, "height": 900})
+            runtime_box = page.locator(".runtime-grid").bounding_box()
+            if runtime_box is None or runtime_box["width"] > 390:
+                raise RuntimeError("R10 client runtime is not responsive at mobile width")
+            checks.append(
+                {
+                    "path": "/client-portal",
+                    "heading": "Universal Experience Runtime",
+                    "r10_runtime": True,
+                    "mobile_width": 390,
+                }
+            )
+            page.set_viewport_size({"width": 1440, "height": 1000})
+
             response = page.goto(f"{base_url}/dashboard/graphify", wait_until="domcontentloaded")
             if response is None or response.status != 200:
                 raise RuntimeError("/dashboard/graphify did not return HTTP 200")
@@ -199,7 +222,9 @@ def run_browser_verify(
         except Exception:
             if screenshot_dir is not None:
                 screenshot_dir.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(screenshot_dir / "dashboard-browser-failure.png"), full_page=True)
+                page.screenshot(
+                    path=str(screenshot_dir / "dashboard-browser-failure.png"), full_page=True
+                )
             raise
         finally:
             browser.close()

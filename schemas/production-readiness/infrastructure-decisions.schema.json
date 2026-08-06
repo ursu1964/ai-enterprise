@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/infrastructure-decisions.schema.json",
+  "title": "Production Infrastructure Decisions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "domain_tls",
+    "identity_proxy",
+    "model_service",
+    "github_access",
+    "database",
+    "object_storage",
+    "kubernetes",
+    "backup_restore",
+    "notification"
+  ],
+  "properties": {
+    "domain_tls": {
+      "$ref": "#/$defs/domain_tls"
+    },
+    "identity_proxy": {
+      "$ref": "#/$defs/identity_proxy"
+    },
+    "model_service": {
+      "$ref": "#/$defs/model_service"
+    },
+    "github_access": {
+      "$ref": "#/$defs/github_access"
+    },
+    "database": {
+      "$ref": "#/$defs/database"
+    },
+    "object_storage": {
+      "$ref": "#/$defs/object_storage"
+    },
+    "kubernetes": {
+      "$ref": "#/$defs/kubernetes"
+    },
+    "backup_restore": {
+      "$ref": "#/$defs/backup_restore"
+    },
+    "notification": {
+      "$ref": "#/$defs/notification"
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operator_value": {
+      "anyOf": [
+        { "$ref": "#/$defs/non_empty_string" },
+        { "type": "boolean" },
+        { "type": "integer" }
+      ]
+    },
+    "domain_tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "tls_provider", "certificate_owner", "renewal_proof"],
+      "properties": {
+        "domain": { "$ref": "#/$defs/non_empty_string" },
+        "tls_provider": { "$ref": "#/$defs/non_empty_string" },
+        "certificate_owner": { "$ref": "#/$defs/non_empty_string" },
+        "renewal_proof": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "identity_proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "signature_owner", "hmac_secret_source", "signed_headers"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/non_empty_string" },
+        "signature_owner": { "$ref": "#/$defs/non_empty_string" },
+        "hmac_secret_source": { "$ref": "#/$defs/non_empty_string" },
+        "signed_headers": {
+          "type": "array",
+          "minItems": 5,
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      }
+    },
+    "model_service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "base_url", "model", "capacity_owner", "verification_command"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/non_empty_string" },
+        "base_url": { "$ref": "#/$defs/non_empty_string" },
+        "model": { "$ref": "#/$defs/non_empty_string" },
+        "capacity_owner": { "$ref": "#/$defs/non_empty_string" },
+        "verification_command": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "github_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "organization", "repository_policy", "secret_source"],
+      "properties": {
+        "mode": { "$ref": "#/$defs/non_empty_string" },
+        "organization": { "$ref": "#/$defs/non_empty_string" },
+        "repository_policy": { "$ref": "#/$defs/non_empty_string" },
+        "secret_source": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "connection_secret", "backup_policy", "restore_drill_frequency"],
+      "properties": {
+        "mode": { "$ref": "#/$defs/non_empty_string" },
+        "connection_secret": { "$ref": "#/$defs/non_empty_string" },
+        "backup_policy": { "$ref": "#/$defs/non_empty_string" },
+        "restore_drill_frequency": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "object_storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "bucket", "region", "encryption", "retention_policy"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/non_empty_string" },
+        "bucket": { "$ref": "#/$defs/non_empty_string" },
+        "region": { "$ref": "#/$defs/non_empty_string" },
+        "encryption": { "$ref": "#/$defs/non_empty_string" },
+        "retention_policy": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "kubernetes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "registry",
+        "namespace",
+        "ingress_class",
+        "storage_class",
+        "worker_replicas"
+      ],
+      "properties": {
+        "enabled": { "$ref": "#/$defs/operator_value" },
+        "registry": { "$ref": "#/$defs/non_empty_string" },
+        "namespace": { "$ref": "#/$defs/non_empty_string" },
+        "ingress_class": { "$ref": "#/$defs/non_empty_string" },
+        "storage_class": { "$ref": "#/$defs/non_empty_string" },
+        "worker_replicas": { "$ref": "#/$defs/operator_value" }
+      }
+    },
+    "backup_restore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schedule_owner",
+        "backup_timer",
+        "last_restore_drill",
+        "restore_drill_evidence"
+      ],
+      "properties": {
+        "schedule_owner": { "$ref": "#/$defs/non_empty_string" },
+        "backup_timer": { "$ref": "#/$defs/non_empty_string" },
+        "last_restore_drill": { "$ref": "#/$defs/non_empty_string" },
+        "restore_drill_evidence": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alert_channel", "oncall_owner", "escalation_policy"],
+      "properties": {
+        "alert_channel": { "$ref": "#/$defs/non_empty_string" },
+        "oncall_owner": { "$ref": "#/$defs/non_empty_string" },
+        "escalation_policy": { "$ref": "#/$defs/non_empty_string" }
+      }
+    }
+  }
+}

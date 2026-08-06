@@ -1,0 +1,9 @@
+# Generated dashboard/export/template JSON files do not produce AST graph nodes.
+docker/observability/grafana/dashboards/*.json
+docs/enterprise/*.template.json
+docs/enterprise/*.example.json
+docs/enterprise/mock-enterprise-factory-manifest.json
+docs/reference-architecture/catalog.json
+examples/**/*.json
+evaluation/expected/*.json
+infrastructure/generated/*.json

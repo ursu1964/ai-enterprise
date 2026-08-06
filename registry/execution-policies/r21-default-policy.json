@@ -1,0 +1,8 @@
+{
+  "policyId": "r21.default.policy",
+  "executionMode": "controlled_parallel",
+  "approvalPolicy": "explicit",
+  "failurePolicy": "pause_affected_branch",
+  "networkDefault": "denied",
+  "destructiveOperationsDefault": "denied"
+}

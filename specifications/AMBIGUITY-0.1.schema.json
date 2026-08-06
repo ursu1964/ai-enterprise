@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/ambiguity/0.1",
+  "title": "AI Ambiguity v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "category", "statement", "source_refs", "severity", "blocking", "confidence", "recommended_resolution"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^AMB-[0-9]{3}$"},
+    "category": {"type": "string", "minLength": 1},
+    "statement": {"type": "string", "minLength": 1},
+    "source_refs": {"type": "array"},
+    "affected_candidate_refs": {"type": "array", "items": {"type": "string"}},
+    "severity": {"enum": ["error", "warning", "information", "recommendation"]},
+    "blocking": {"type": "boolean"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "recommended_resolution": {"type": "string", "minLength": 1}
+  }
+}

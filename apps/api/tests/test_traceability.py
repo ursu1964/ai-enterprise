@@ -137,9 +137,36 @@ def test_traceable_markdown_adds_section_source_lines() -> None:
         bundle,
         manifest,
     )
-    assert "Sources: CAP-001, INT-001, PROC-001, RULE-001" in rendered
+    assert (
+        "- CAP-001 [unverified]: Capture and classify a customer service request.\n"
+        "  Trace: CAP-001 | Client references: capabilities/CAP-001"
+    ) in rendered
+    assert (
+        "- INT-001 [unverified]: Authenticate customers and service operators.\n"
+        "  Trace: INT-001 | Client references: integrations/INT-001"
+    ) in rendered
+    assert (
+        "Sources: CAP-001, INT-001, PROC-001, RULE-001 | Client references: "
+        "capabilities/CAP-001, integrations/INT-001, core_processes/PROC-001, "
+        "business_rules/RULE-001"
+    ) in rendered
     assert "Client references: capabilities/CAP-001" in rendered
     assert rendered.endswith("\n")
+
+
+def test_architecture_decisions_render_entry_level_source_lines() -> None:
+    _, bundle, manifest = traceability()
+
+    rendered = render_traceable_artifact_markdown(
+        ArtifactType.SOLUTION_ARCHITECTURE,
+        bundle,
+        manifest,
+    )
+
+    assert (
+        "- DEC-001 [proposed] — frontend: React\n"
+        "  Trace: DEC-001 | Client references: preferred_technology_targets/frontend"
+    ) in rendered
 
 
 def test_traceability_tampering_fails_closed() -> None:

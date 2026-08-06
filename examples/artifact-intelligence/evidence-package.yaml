@@ -1,0 +1,15 @@
+package_id: evidence-package-project-example-001
+project_id: project-example-001
+execution_id: exec-example-001
+contents:
+  registry_snapshot: registry/snapshot.json
+  artifact_inventory: artifacts/inventory.json
+  provenance_export: provenance/provenance.jsonl
+  traceability_export: traceability/graph.json
+  validation_results: validations/
+  approvals: governance/approvals.json
+  evidence_coverage: assurance/evidence-coverage.json
+integrity:
+  package_checksum: sha256:example
+  signed_by: not-configured
+package_hash: example

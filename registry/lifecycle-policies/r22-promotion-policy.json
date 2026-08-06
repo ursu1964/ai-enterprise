@@ -1,0 +1,10 @@
+{
+  "policy_id": "r22-default-promotion-policy",
+  "rules": [
+    "APPROVED, RELEASE_CANDIDATE, and RELEASED require provenance.",
+    "APPROVED, RELEASE_CANDIDATE, and RELEASED require at least one trace relationship.",
+    "APPROVED, RELEASE_CANDIDATE, and RELEASED require passing validation.",
+    "RELEASE_CANDIDATE and RELEASED require approval bound to the exact artifact version.",
+    "Open findings block promotion."
+  ]
+}

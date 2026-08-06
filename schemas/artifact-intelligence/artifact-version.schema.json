@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/artifact-intelligence/artifact-version.schema.json",
+  "title": "R22 Artifact Version",
+  "type": "object",
+  "required": ["artifact_version_id", "artifact_id", "state", "content", "provenance_id", "version_hash", "immutable"],
+  "properties": {
+    "artifact_version_id": {"type": "string"},
+    "artifact_id": {"type": "string"},
+    "version_number": {"type": "integer", "minimum": 1},
+    "state": {
+      "type": "object",
+      "required": ["lifecycle", "validation", "freshness", "integrity", "governance"]
+    },
+    "content": {
+      "type": "object",
+      "required": ["checksum", "content_address", "storage_uri", "media_type"]
+    },
+    "provenance_id": {"type": "string"},
+    "trace_relationship_ids": {"type": "array", "items": {"type": "string"}},
+    "approval_ids": {"type": "array", "items": {"type": "string"}},
+    "immutable": {"const": true},
+    "version_hash": {"type": "string"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,58 @@
+verification_campaign_id: bk-r10-campaign-example
+organization_id: org-example
+project_id: project-example
+implementation_slice_id: slice-example
+implementation_result_id: impl-result-example
+verification_handoff:
+  verification_handoff_id: bk-r10-handoff-example
+  implementation_result_id: impl-result-example
+  implementation_slice_id: slice-example
+  repository_revision: commit-example
+  requirement_baseline_id: req-baseline-example
+  architecture_baseline_id: arch-baseline-example
+  planning_baseline_id: plan-baseline-example
+  policy_refs:
+    - policy-verification-default
+  produced_by:
+    actor_type: service
+    actor_id: implementation-orchestrator
+    role: producer
+  artifact_refs:
+    - artver-example
+  handoff_hash: example
+status: DRAFT
+criticality: HIGH
+risk_classification: standard
+owner:
+  actor_type: human
+  actor_id: verification-owner
+  role: verifier
+obligations:
+  - verification_obligation_id: obl-req-api-001
+    requirement_id: REQ-API-001
+    obligation_type: REQUIREMENT
+    method: TEST
+    criticality: HIGH
+    mandatory: true
+    responsible_authority:
+      actor_type: human
+      actor_id: verification-authority
+      role: verifier
+    required_evidence_types:
+      - test-report
+    pass_conditions:
+      - all contract checks pass
+    fail_conditions:
+      - any mandatory contract check fails
+    status: PLANNED
+procedures: []
+environments: []
+executions: []
+results: []
+findings: []
+waivers: []
+coverage: null
+verdict: null
+satisfaction_recommendations: []
+events: []
+content_hash: example

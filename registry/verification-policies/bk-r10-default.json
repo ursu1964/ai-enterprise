@@ -1,0 +1,13 @@
+{
+  "policy_id": "bk-r10-default-verification-policy",
+  "rules": [
+    "Every authoritative campaign binds to one exact verification handoff.",
+    "A mandatory obligation cannot pass without evidence.",
+    "Skipped checks must be represented as BLOCKED, WAIVED, FAILED, or INCONCLUSIVE.",
+    "Verification environments must be qualified before execution.",
+    "Failed and inconclusive results remain immutable after retries.",
+    "Flaky results block positive campaign verdicts.",
+    "Waivers require authority, justification, risk acceptance, scope, expiry, and compensating controls.",
+    "Satisfaction recommendations are produced for R5; BK/R10 does not mutate requirement state directly."
+  ]
+}

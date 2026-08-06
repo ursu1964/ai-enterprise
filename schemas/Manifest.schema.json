@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/manifest/1.0",
+  "title": "AI-Enterprise Manifest",
+  "description": "R14 executable business-intent Manifest contract. The Manifest describes what system AI-Enterprise should build, not how it should be technically implemented.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metadata",
+    "organization",
+    "vision",
+    "domain",
+    "objectives",
+    "users",
+    "businessEntities",
+    "capabilities",
+    "workflows",
+    "businessRules",
+    "policies",
+    "integrations",
+    "reporting",
+    "security",
+    "quality",
+    "constraints",
+    "deploymentPreferences",
+    "version"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "createdBy", "createdAt"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 120},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "createdBy": {"type": "string", "minLength": 1, "maxLength": 200},
+        "createdAt": {"type": "string", "format": "date"}
+      }
+    },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "industry"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "industry": {"type": "string", "minLength": 1, "maxLength": 120},
+        "country": {"type": "string", "minLength": 1, "maxLength": 120},
+        "size": {"type": "string", "minLength": 1, "maxLength": 120}
+      }
+    },
+    "vision": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "domain": {"type": "string", "minLength": 1, "maxLength": 120},
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/namedStatement"}
+    },
+    "users": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/businessActor"}
+    },
+    "businessEntities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/businessEntity"}
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/capability"}
+    },
+    "workflows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/workflow"}
+    },
+    "businessRules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/namedStatement"}
+    },
+    "policies": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/policy"}
+    },
+    "integrations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/integration"}
+    },
+    "reporting": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/report"}
+    },
+    "security": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/securityRequirement"}
+    },
+    "quality": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/qualityRequirement"}
+    },
+    "constraints": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/constraint"}
+    },
+    "deploymentPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredCloud": {"type": "string", "minLength": 1},
+        "preferredFrontend": {"type": "string", "minLength": 1},
+        "preferredLanguage": {"type": "string", "minLength": 1},
+        "preferredCiCd": {"type": "string", "minLength": 1},
+        "preferredMonitoring": {"type": "string", "minLength": 1}
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestVersion",
+        "schemaVersion",
+        "registryVersion",
+        "generatorVersion",
+        "compilerVersion"
+      ],
+      "properties": {
+        "manifestVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "schemaVersion": {"const": "ai-enterprise-manifest-1.0"},
+        "registryVersion": {"type": "string", "minLength": 1},
+        "generatorVersion": {"type": "string", "minLength": 1},
+        "compilerVersion": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,80}$"},
+    "namedStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "measures": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "businessActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "businessEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "meaning"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "meaning": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "userIds"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "userIds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/identifier"}},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "steps"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/workflowStep"}
+        }
+      }
+    },
+    "workflowStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "capabilityId"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "capabilityId": {"$ref": "#/$defs/identifier"},
+        "entityIds": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "dependsOn": {"type": "array", "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "system", "purpose"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "system": {"type": "string", "minLength": 1, "maxLength": 200},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "purpose"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "securityRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requirement"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "requirement": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "qualityRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requirement", "acceptanceCriteria"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "requirement": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "acceptanceCriteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "mandatory"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "mandatory": {"type": "boolean"}
+      }
+    }
+  }
+}

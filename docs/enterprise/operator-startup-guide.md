@@ -205,6 +205,45 @@ Check database readiness:
 rtk curl -s http://localhost:8000/health/ready
 ```
 
+Check R6 artifact publication readiness before publishing generated builds:
+
+```bash
+rtk curl -s "http://localhost:8000/api/v1/projects/{project_id}/uagf/artifact-repositories/readiness?repository_kind=git&repository_ref=git@github.com:org/repo.git"
+rtk curl -s "http://localhost:8000/api/v1/projects/{project_id}/uagf/artifact-repositories/readiness?repository_kind=s3&repository_ref=s3://bucket/prefix"
+rtk curl -s "http://localhost:8000/api/v1/projects/{project_id}/uagf/artifact-repositories/readiness?repository_kind=package_registry&repository_ref=https://registry.npmjs.org"
+```
+
+Git publication requires `git` plus remote credentials, optionally through
+`R6_PUBLICATION_GIT_SSH_CONFIG_PATH`. S3 publication requires AWS CLI plus
+standard AWS credentials or `R6_PUBLICATION_AWS_PROFILE`. Package registry
+publication requires `npm` plus `R6_PUBLICATION_NPM_TOKEN`, `NPM_TOKEN`, or
+`R6_PUBLICATION_NPMRC_PATH`.
+
+Check R7 runtime provider readiness before binding deployments to live infrastructure:
+
+```bash
+rtk curl -s "http://localhost:8000/api/v1/projects/{project_id}/uerm/providers/{provider_id}/readiness"
+```
+
+R7 readiness validates provider status plus runtime-specific prerequisites:
+event bus endpoints, `kubectl` and optional `R7_RUNTIME_KUBECONFIG_PATH` for
+deployment runtimes, OPA endpoint or `opa` binary for policy engines, Ollama/OpenAI
+configuration for runtime AI, and plugin root/command configuration for plugin runtimes.
+Use `R7_RUNTIME_OPA_URL`, `R7_RUNTIME_OPENAI_API_KEY`, and
+`R7_RUNTIME_PLUGIN_ROOT` only through server-side secret/config management.
+
+Record continuous Manifest/runtime synchronization and create controlled upgrade plans:
+
+```bash
+rtk curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/{project_id}/uerm/deployments/{deployment_id}/synchronization-reports" \
+  -H "Content-Type: application/json" \
+  -d '{"current_manifest_version":"manifest-13","current_application_version":"1.1.0","observed_runtime":{}}'
+
+rtk curl -s -X POST \
+  "http://localhost:8000/api/v1/projects/{project_id}/uerm/synchronization-reports/{synchronization_report_id}/upgrade-plans"
+```
+
 Check root service identity:
 
 ```bash
@@ -254,6 +293,7 @@ Direct dashboard panel links:
 - Project inspection: `http://localhost:8000/dashboard#projects`
 - Telemetry and metrics: `http://localhost:8000/dashboard#metrics`
 - Documentation Hub: `http://localhost:8000/dashboard/documentation-hub`
+- Client Project Blueprint portal: `http://localhost:8000/client-portal`
 - Code graph: `http://localhost:8000/dashboard/graphify`; if it needs setup, run
   `graphify update .` and reopen the page.
 
@@ -262,6 +302,23 @@ links, and verification commands in one place. If a document preview cannot load
 the recovery path: check API readiness, confirm document registration, then retry preview or
 download. The same panel can preview the document, download it, or open the plain text version for
 copying into another workflow.
+
+Use the Client Project Blueprint portal for the R1 first-release path: load an AEPM v0.1 client
+manifest, import it as a governed project, review the canonical model, approve the blueprint, and
+download the traceable Markdown package.
+API clients can also include validated `aepm-interpretation-output-0.1` structured model output
+with the import or review request. The service binds it into the clarification report and audit
+evidence without letting AI-generated statements become approved truth.
+Every client manifest imported or reviewed through the R1 API is also written as canonical source
+bytes to the configured artifact store. The response and audit event include the content-addressed
+source locator and SHA-256 hash.
+Imports append an AEIR model version, source metadata row, projected objects, relationships, and a
+hash-linked AEIR change event in PostgreSQL. Reviews append a new AEIR version only when the client
+submits a corrected manifest; plain approval records review audit evidence without duplicating the
+same model hash.
+The API response includes an `r1-manifest-to-blueprint-proof-0.1` proof object so demos and clients
+can check the source hash, validation hash, clarification hash, AEIR model/version evidence,
+artifact bundle hash, traceability hash, and object/relationship/trace counts in one place.
 
 In Factory, press Preview Launch before Start Process when you want a no-risk check. Preview creates
 no records. It only explains whether the project or manifesto batch is ready and what is missing.

@@ -1,0 +1,13 @@
+{
+  "relationship_types": [
+    "DERIVED_FROM",
+    "IMPLEMENTS",
+    "SATISFIES",
+    "VALIDATES",
+    "TESTS",
+    "DEPENDS_ON",
+    "SUPERSEDES",
+    "APPROVES",
+    "EVIDENCES"
+  ]
+}

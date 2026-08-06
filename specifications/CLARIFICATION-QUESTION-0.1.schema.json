@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/clarification-question/0.1",
+  "title": "AI Clarification Question v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "origin_type", "origin_ref", "category", "priority", "blocking", "question", "explanation", "expected_answer_type", "source_refs", "status"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^QUE-[0-9]{3}$"},
+    "origin_type": {"enum": ["ambiguity", "assumption", "probable_contradiction", "missing_information"]},
+    "origin_ref": {"type": "string", "minLength": 1},
+    "category": {"type": "string", "minLength": 1},
+    "priority": {"enum": ["critical", "high", "medium", "low"]},
+    "blocking": {"type": "boolean"},
+    "question": {"type": "string", "minLength": 1},
+    "explanation": {"type": "string", "minLength": 1},
+    "expected_answer_type": {"enum": ["free_text", "boolean", "integer", "decimal", "percentage", "currency", "duration", "date", "datetime", "single_choice", "multiple_choice", "stakeholder_reference", "object_reference", "structured_metric"]},
+    "answer_options": {"type": "array", "items": {"type": "string"}},
+    "affected_candidate_refs": {"type": "array", "items": {"type": "string"}},
+    "source_refs": {"type": "array"},
+    "status": {"enum": ["open", "answered", "closed"]}
+  }
+}

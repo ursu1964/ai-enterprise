@@ -1,0 +1,20 @@
+schema_version: aepm-0.1
+project_intent:
+  name: Inventory Management Platform
+  summary: Missing the required problem field.
+business_outcomes: []
+stakeholders: []
+capabilities: []
+core_processes: []
+business_rules: []
+data_entities: []
+integrations: []
+quality_requirements: []
+constraints: []
+preferred_technology_targets:
+  frontend: []
+  backend: []
+  database: []
+  queue: []
+  object_storage: []
+  deployment: []

@@ -1,0 +1,193 @@
+{
+  "compilation_hash": "296a12e09f57c44679cc4dcf2df598db41791f0c6a3bf3f4a9124023bcc78066",
+  "compilation_id": "r21-compilation-01c1abe7004fc7cf",
+  "compiled_model": {
+    "acceptance_tests": [
+      {
+        "acceptanceCriteria": [
+          "Availability is measurable during business hours."
+        ],
+        "id": "availability",
+        "requirement": "The system should be available during business hours."
+      }
+    ],
+    "approval_gates": [
+      "gate-release"
+    ],
+    "architectural_objects": [
+      {
+        "id": "customer",
+        "meaning": "An organization or person with a commercial relationship.",
+        "name": "Customer"
+      },
+      {
+        "id": "lead",
+        "meaning": "A potential customer before qualification.",
+        "name": "Lead"
+      },
+      {
+        "id": "opportunity",
+        "meaning": "A qualified sales possibility with expected value.",
+        "name": "Opportunity"
+      }
+    ],
+    "capabilities": [
+      {
+        "description": "Maintain customer records and relationship history.",
+        "id": "manage-customers",
+        "name": "Manage Customers",
+        "userIds": [
+          "sales-manager",
+          "sales-representative"
+        ]
+      },
+      {
+        "description": "Track opportunity stage, owner, value, and next action.",
+        "id": "track-opportunities",
+        "name": "Track Opportunities",
+        "userIds": [
+          "sales-manager",
+          "sales-representative"
+        ]
+      }
+    ],
+    "compiler_hash": "3ebf46c9939bb770be8a6dc1a4ed67172ec94c9c88d670c43372f1d4041daa37",
+    "constraints": [
+      {
+        "description": "Customer data cannot leave the EU.",
+        "id": "eu-data",
+        "mandatory": true
+      }
+    ],
+    "deliverables": [
+      "compiled_requirement_specification",
+      "openapi_contract",
+      "service_source_code",
+      "unit_tests",
+      "integration_tests",
+      "container_definition",
+      "build_instructions",
+      "validation_report",
+      "traceability_report",
+      "provenance_record",
+      "delivery_archive"
+    ],
+    "dependencies": [
+      [],
+      [
+        "wp-requirements-001"
+      ],
+      [
+        "wp-api-contract-001"
+      ],
+      [
+        "wp-api-contract-001"
+      ],
+      [
+        "wp-service-code-001"
+      ],
+      [
+        "wp-service-code-001",
+        "wp-test-generation-001",
+        "wp-container-001"
+      ],
+      [
+        "wp-build-validation-001"
+      ],
+      [
+        "wp-release-approval-001"
+      ]
+    ],
+    "evidence_requirements": [
+      "validation_report",
+      "traceability_report",
+      "provenance_record"
+    ],
+    "execution_permissions": [
+      "least-privilege",
+      "network-denied-by-default"
+    ],
+    "graph_hash": "28466b8f8d796f06a458358176d5d4b18aaf264534591d9525b30d25d6a3e933",
+    "objectives": [
+      {
+        "description": "Reduce the time required to move qualified opportunities to signed deals.",
+        "id": "reduce-sales-cycle",
+        "measures": [
+          "Average sales-cycle duration"
+        ],
+        "name": "Reduce sales cycle"
+      }
+    ],
+    "policies": [
+      {
+        "description": "Changes to sales records must be auditable.",
+        "id": "audit-policy",
+        "name": "Audit Policy"
+      }
+    ],
+    "project_metadata": {
+      "createdAt": "2026-08-04",
+      "createdBy": "Customer",
+      "id": "crm-v1",
+      "name": "CRM",
+      "version": "1.0.0"
+    },
+    "r17_plan_hash": "1e48ce0bf963182e75158c986cb505d462dc08d31caafc2cdff15eb2d7042426",
+    "registry_version": "updl-1.0",
+    "requirements": {
+      "business_rules": [
+        {
+          "description": "Customer records must be uniquely identifiable.",
+          "id": "unique-customer",
+          "name": "Unique Customer"
+        }
+      ],
+      "quality": [
+        {
+          "acceptanceCriteria": [
+            "Availability is measurable during business hours."
+          ],
+          "id": "availability",
+          "requirement": "The system should be available during business hours."
+        }
+      ],
+      "security": [
+        {
+          "id": "role-based-access",
+          "requirement": "Sales records require role-based access."
+        }
+      ]
+    },
+    "stakeholders": [
+      {
+        "description": "Owns pipeline visibility and sales-team performance.",
+        "id": "sales-manager",
+        "name": "Sales Manager"
+      },
+      {
+        "description": "Manages customers, leads, and opportunities.",
+        "id": "sales-representative",
+        "name": "Sales Representative"
+      }
+    ],
+    "work_package_templates": [
+      "wp-requirements-001",
+      "wp-api-contract-001",
+      "wp-service-code-001",
+      "wp-test-generation-001",
+      "wp-container-001",
+      "wp-build-validation-001",
+      "wp-release-approval-001",
+      "wp-delivery-package-001"
+    ]
+  },
+  "compiler_result_hash": "3ebf46c9939bb770be8a6dc1a4ed67172ec94c9c88d670c43372f1d4041daa37",
+  "diagnostics": [],
+  "graph_hash": "28466b8f8d796f06a458358176d5d4b18aaf264534591d9525b30d25d6a3e933",
+  "manifest_hash": "01c1abe7004fc7cfe044ee4e6ded8f7e132f439fcf99efc3b0a2c6d160b0bb63",
+  "manifest_version": "1.0.0",
+  "project_id": "crm-v1",
+  "r17_plan_hash": "1e48ce0bf963182e75158c986cb505d462dc08d31caafc2cdff15eb2d7042426",
+  "schema_valid": true,
+  "status": "COMPILED"
+}

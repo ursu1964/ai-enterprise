@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/release-verification.schema.json",
+  "title": "Release Verification Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "release_environment",
+    "production_readiness_contracts",
+    "production_readiness",
+    "production_evidence_plan",
+    "git",
+    "gates",
+    "gate_summary",
+    "gate_evidence_file",
+    "migration_verification",
+    "artifact_policy",
+    "artifact_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["passed", "failed"] },
+    "release_environment": { "enum": ["production", "non-production"] },
+    "production_readiness_contracts": { "type": ["object", "null"] },
+    "production_readiness": { "type": ["object", "null"] },
+    "production_evidence_plan": { "type": ["object", "null"] },
+    "git": {
+      "type": "object",
+      "required": ["commit", "tree", "branch", "dirty"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "tree": { "type": "string", "minLength": 1 },
+        "branch": { "type": "string" },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "gate_summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "captured_evidence_required",
+        "captured_evidence_missing",
+        "execution_model"
+      ],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "captured_evidence_required": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "captured_evidence_missing": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "execution_model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "gate_evidence_file": { "type": "object" },
+    "migration_verification": { "type": "object" },
+    "artifact_policy": { "type": "object" },
+    "artifact_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "gate": {
+      "type": "object",
+      "required": ["name", "command", "status", "required", "evidence_required", "evidence"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed"] },
+        "required": { "type": "boolean" },
+        "evidence_required": { "type": "boolean" },
+        "evidence": { "type": "object" }
+      }
+    }
+  }
+}

@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import production_readiness_contracts
+
 REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
     "domain_tls": ("domain", "tls_provider", "certificate_owner", "renewal_proof"),
     "identity_proxy": (
@@ -98,6 +100,8 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
             "findings": [f"JSON error: {exc}"],
             "next_action": "Fix JSON syntax and run the verifier again.",
         }
+    schema_findings = production_readiness_contracts.validate_infrastructure_decisions(payload)
+    findings.extend(f"schema: {finding}" for finding in schema_findings)
     for section, fields in REQUIRED_SECTIONS.items():
         value = payload.get(section)
         if not isinstance(value, dict):
@@ -132,6 +136,8 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
         "summary": (
             "Real infrastructure choices are recorded and ready for deployment gates."
             if not findings
+            else "Infrastructure choices file does not match the published schema."
+            if schema_findings
             else f"{len(findings)} infrastructure choice item(s) need real values."
         ),
         "sections": sorted(REQUIRED_SECTIONS),
@@ -139,6 +145,11 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
         "next_action": (
             "Use these choices to generate .env.server and server/provider configuration."
             if not findings
+            else (
+                "Fix the file shape against "
+                "schemas/production-readiness/infrastructure-decisions.schema.json."
+            )
+            if schema_findings
             else (
                 "Replace placeholders with real domain, identity, model, GitHub, "
                 "database, storage, Kubernetes, backup, and alert choices."

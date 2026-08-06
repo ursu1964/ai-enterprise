@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+# ruff: noqa: I001
+
 import argparse
 import asyncio
 import json
@@ -16,19 +18,16 @@ for import_path in (str(TOOLS_ROOT), str(API_SRC)):
     if import_path not in sys.path:
         sys.path.insert(0, import_path)
 
-from configure_local_executor import local_executor_configuration  # noqa: E402
-
-from ai_enterprise.config import Settings, get_settings  # noqa: E402
-from ai_enterprise.domain.enums import JobType  # noqa: E402
-from ai_enterprise.infrastructure.jobs.profiles import (  # noqa: E402
+from ai_enterprise.config import Settings, get_settings
+from ai_enterprise.domain.enums import JobType
+from ai_enterprise.infrastructure.jobs.profiles import (
     WorkerProfile,
     allowed_job_types,
 )
-from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness  # noqa: E402
+from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
+from configure_local_executor import local_executor_configuration
 
-EXECUTOR_JOB_TYPES = frozenset(
-    {JobType.EXECUTE_WORK_PACKAGE, JobType.REVIEW_CANDIDATE_PATCH}
-)
+EXECUTOR_JOB_TYPES = frozenset({JobType.EXECUTE_WORK_PACKAGE, JobType.REVIEW_CANDIDATE_PATCH})
 
 
 def activation_env(base: dict[str, str] | None = None) -> dict[str, str]:
@@ -45,9 +44,7 @@ def activation_env(base: dict[str, str] | None = None) -> dict[str, str]:
         }
     )
     python_path = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        str(API_SRC) if not python_path else f"{API_SRC}{os.pathsep}{python_path}"
-    )
+    env["PYTHONPATH"] = str(API_SRC) if not python_path else f"{API_SRC}{os.pathsep}{python_path}"
     return env
 
 
@@ -65,9 +62,7 @@ async def readiness_report(
         review_image_id=env["REVIEW_IMAGE_ID"],
     )
     candidates = (
-        EXECUTOR_JOB_TYPES
-        if scope == "executor"
-        else allowed_job_types(WorkerProfile.GENERAL)
+        EXECUTOR_JOB_TYPES if scope == "executor" else allowed_job_types(WorkerProfile.GENERAL)
     )
     result = await assess_worker_readiness(settings, candidates)
     return {

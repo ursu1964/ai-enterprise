@@ -4,14 +4,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ai_enterprise.domain.aeir import compile_aepm
+from ai_enterprise.domain.aeir import compile_aepm, compile_project_snapshot
 from ai_enterprise.domain.aepm import AepmManifest
 from ai_enterprise.domain.artifact_compilers import (
     ArtifactBundle,
     ArtifactType,
     CompiledArtifact,
+    artifact_contracts,
     compile_artifact_bundle,
     render_artifact_markdown,
+    validate_artifact_bundle,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,7 +33,44 @@ def test_compiler_emits_exactly_five_stable_aeir_bound_outputs() -> None:
 
     assert tuple(item.artifact_type for item in first.artifacts) == tuple(ArtifactType)
     assert all(item.source_model_sha256 == source.model_sha256 for item in first.artifacts)
+    assert first.compilation_status == "draft"
+    assert tuple(contract.artifact_type for contract in first.contracts) == tuple(ArtifactType)
+    assert all(
+        artifact.contract_sha256
+        == first.contracts[index].contract_sha256
+        for index, artifact in enumerate(first.artifacts)
+    )
     assert first == second
+
+
+def test_compiler_contracts_and_consistency_report_are_deterministic() -> None:
+    source = model()
+    bundle = compile_artifact_bundle(source)
+    first = validate_artifact_bundle(source, bundle)
+    second = validate_artifact_bundle(source, bundle)
+
+    assert artifact_contracts() == bundle.contracts
+    assert first == second
+    assert first.source_model_sha256 == source.model_sha256
+    assert first.artifact_bundle_sha256 == bundle.bundle_sha256
+    assert all(contract.traceability_required for contract in bundle.contracts)
+
+
+def test_compiler_requires_approved_snapshot_when_draft_is_disallowed() -> None:
+    with pytest.raises(ValueError, match="approved AEIR snapshot"):
+        compile_artifact_bundle(model(), allow_draft=False)
+
+
+def test_compiler_marks_artifacts_from_approved_snapshot() -> None:
+    source = model()
+    snapshot = compile_project_snapshot(source, status="approved")
+
+    bundle = compile_artifact_bundle(source, snapshot, allow_draft=False)
+
+    assert bundle.compilation_status == "approved_snapshot"
+    assert bundle.source_snapshot_id == snapshot.snapshot_id
+    assert bundle.source_snapshot_sha256 == snapshot.snapshot_sha256
+    assert all(artifact.compilation_status == "approved_snapshot" for artifact in bundle.artifacts)
 
 
 def test_each_compiler_projects_relevant_canonical_information() -> None:

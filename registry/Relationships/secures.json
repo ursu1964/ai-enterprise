@@ -1,0 +1,6 @@
+{
+  "id": "secures",
+  "name": "Secures",
+  "semantics": "Source applies semantic security requirements to target.",
+  "directional": true
+}

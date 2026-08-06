@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/evidence-audit/archive-publication.schema.json",
+  "title": "BK/R11 Archive Publication",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "publication_id",
+    "archive_backend",
+    "archive_uri",
+    "metadata_uri",
+    "project_id",
+    "evidence_package_id",
+    "manifest_hash",
+    "archive_hash",
+    "signature_hash",
+    "status",
+    "publication_hash"
+  ],
+  "properties": {
+    "publication_id": { "type": "string", "minLength": 1 },
+    "archive_backend": { "enum": ["filesystem", "s3", "gcs", "azure_blob", "minio", "custom"] },
+    "archive_uri": { "type": "string", "minLength": 1 },
+    "metadata_uri": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "evidence_package_id": { "type": "string", "minLength": 1 },
+    "manifest_hash": { "$ref": "#/$defs/sha256" },
+    "archive_hash": { "$ref": "#/$defs/sha256" },
+    "signature_hash": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "status": { "enum": ["published", "publication_failed", "recorded"] },
+    "publication_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

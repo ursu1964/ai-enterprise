@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/ai/operation/0.1",
+  "title": "AI Enterprise AI Operation Provenance v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_provider",
+    "model_name",
+    "operation_type",
+    "prompt_version",
+    "output_schema_version",
+    "aeir_schema_version",
+    "generated_at",
+    "input_source_refs",
+    "review_required",
+    "operation_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-operation-0.1"},
+    "model_provider": {"type": "string", "minLength": 1, "maxLength": 200},
+    "model_name": {"type": "string", "minLength": 1, "maxLength": 200},
+    "operation_type": {
+      "enum": [
+        "extraction",
+        "ambiguity_detection",
+        "classification",
+        "contradiction_detection",
+        "question_drafting",
+        "candidate_requirement_generation"
+      ]
+    },
+    "prompt_version": {"type": "string", "minLength": 1, "maxLength": 80},
+    "output_schema_version": {"const": "aepm-interpretation-output-0.1"},
+    "aeir_schema_version": {"const": "AEIR-0.1"},
+    "generated_at": {"type": "string", "minLength": 1, "maxLength": 40},
+    "input_source_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1
+    },
+    "review_required": {"const": true},
+    "operation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
