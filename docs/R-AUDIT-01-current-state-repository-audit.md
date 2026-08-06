@@ -19,7 +19,7 @@ The repository contains R2–R22 implementation evidence under the existing AI-E
 - application Python files: 508
 - test files: 162
 - migration files: 70
-- schema files: 37
+- schema files: 38
 - registry files: 34
 
 ## Reconciliation verdict

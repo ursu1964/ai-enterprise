@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 RANGE = tuple(range(2, 23))
+ALIGNMENT_REPORT_SCHEMA_REF = "schemas/architecture-baseline/r-series-alignment-report.schema.json"
 IR_SPECIFICATIONS: dict[str, tuple[str, str]] = {
     "R10-IR-01": (
         "Verification and Validation Engine",
@@ -819,6 +820,7 @@ def _report(alignments: list[RAlignment]) -> dict[str, Any]:
     )
     payload: dict[str, Any] = {
         "schema_version": "1.0",
+        "schema_ref": ALIGNMENT_REPORT_SCHEMA_REF,
         "r_range": "R2-R22",
         "package_count": len(alignments),
         "complete_count": sum(1 for item in alignments if item.complete),

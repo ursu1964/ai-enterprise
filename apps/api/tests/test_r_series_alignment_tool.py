@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _load_r_series_alignment():
     root = Path(__file__).resolve().parents[3]
@@ -20,8 +22,16 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     root = Path(__file__).resolve().parents[3]
 
     report = module._report(module.build_alignment(root))
+    schema = json.loads(
+        (
+            root / "schemas" / "architecture-baseline" / "r-series-alignment-report.schema.json"
+        ).read_text(encoding="utf-8")
+    )
 
     assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/architecture-baseline/r-series-alignment-report.schema.json"
+    )
     assert report["r_range"] == "R2-R22"
     assert report["package_count"] == 21
     assert report["complete_count"] == 21
@@ -41,6 +51,8 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     assert ir_specs["R22-IR-01"]["path"] == (
         "docs/ir/R22-IR-01-constitutional-kernel-evolution-framework.md"
     )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(report, schema)
 
 
 def test_r_series_alignment_generates_required_package_structure(tmp_path: Path) -> None:
@@ -79,6 +91,9 @@ def test_r_series_alignment_generates_required_package_structure(tmp_path: Path)
 
     payload = json.loads((tmp_path / "artifacts/r-series-alignment-report.json").read_text())
     assert payload["alignment_hash"] == report["alignment_hash"]
+    assert payload["schema_ref"] == (
+        "schemas/architecture-baseline/r-series-alignment-report.schema.json"
+    )
     index = (tmp_path / "docs/R-INDEX.md").read_text(encoding="utf-8")
     assert "R22-IR-01" in index
     assert "product-platform R-series modules" in index
