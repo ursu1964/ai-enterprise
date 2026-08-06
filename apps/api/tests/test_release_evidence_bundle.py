@@ -227,6 +227,50 @@ def test_release_evidence_bundle_rejects_invalid_schema_backed_artifact(
         raise AssertionError("invalid schema-backed release artifact was accepted")
 
 
+def test_release_evidence_bundle_rejects_invalid_present_artifact_even_when_blocked(
+    tmp_path: Path,
+) -> None:
+    _copy_schema_refs(tmp_path, release_evidence_bundle.RELEASE_ARTIFACTS)
+    _write(tmp_path / "artifacts" / "release-verification.json", '{"status":"passed"}\n')
+
+    try:
+        release_evidence_bundle.build_manifest(
+            tmp_path,
+            generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert "release-verification.json does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid present schema-backed artifact was accepted")
+
+
+def test_release_evidence_bundle_requires_schema_files_for_complete_bundle(
+    tmp_path: Path,
+) -> None:
+    release_payload = _release_verification_payload()
+    _write(
+        tmp_path / "artifacts" / "release-verification.json",
+        json.dumps(release_payload, sort_keys=True) + "\n",
+    )
+    _write(tmp_path / "artifacts" / "release-verification.md", "# Release\n")
+    _write(
+        tmp_path / "artifacts" / "release-verification-check.json",
+        json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
+    )
+    _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
+    _write_architecture_artifacts(tmp_path)
+
+    try:
+        release_evidence_bundle.build_manifest(
+            tmp_path,
+            generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert "schema file is missing" in str(exc)
+    else:
+        raise AssertionError("complete bundle without schema files was accepted")
+
+
 def test_write_manifest_returns_non_complete_document_when_artifacts_missing(
     tmp_path: Path,
 ) -> None:

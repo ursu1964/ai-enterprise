@@ -203,7 +203,12 @@ def _artifact_record(root: Path, spec: ArtifactSpec) -> dict[str, Any]:
     }
 
 
-def _validate_schema_backed_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
+def _validate_schema_backed_artifacts(
+    root: Path,
+    specs: tuple[ArtifactSpec, ...],
+    *,
+    require_schema: bool,
+) -> None:
     for spec in specs:
         if spec.schema_ref is None or spec.content_type != "application/json":
             continue
@@ -211,6 +216,10 @@ def _validate_schema_backed_artifacts(root: Path, specs: tuple[ArtifactSpec, ...
         if not target.is_file():
             continue
         schema_path = root / spec.schema_ref
+        if not schema_path.is_file():
+            if require_schema:
+                raise RuntimeError(f"{spec.schema_ref} schema file is missing")
+            continue
         try:
             payload = json.loads(target.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
@@ -281,8 +290,7 @@ def build_manifest(
     _ensure_derived_artifacts(root, specs)
     artifacts = [_artifact_record(root, spec) for spec in specs]
     missing = [item["path"] for item in artifacts if item["required"] and not item["present"]]
-    if not missing:
-        _validate_schema_backed_artifacts(root, specs)
+    _validate_schema_backed_artifacts(root, specs, require_schema=not missing)
     document: dict[str, Any] = {
         "schema_version": "1.0",
         "generated_at": generated_at.isoformat(),
