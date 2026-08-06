@@ -45,7 +45,9 @@ product-platform R-series where names collide:
   `docs/ir/R12-IR-01-policy-governance-engine.md`
 - `R13-IR-01` — AI Orchestration Engine:
   `docs/ir/R13-IR-01-ai-orchestration-engine.md`
+- `R14-IR-01` — Agent Framework:
+  `docs/ir/R14-IR-01-agent-framework.md`
 
 These IR modules reconcile to existing repository implementation paths and do
-not replace the existing R10 UEIF, R11 UIEF, R12 bootstrap, or R13 repository
-bootstrap modules.
+not replace the existing R10 UEIF, R11 UIEF, R12 bootstrap, R13 repository
+bootstrap, or R14 manifest schema modules.
