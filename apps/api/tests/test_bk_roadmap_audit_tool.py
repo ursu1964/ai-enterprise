@@ -15,20 +15,26 @@ def _load_bk_roadmap_audit():
     return module
 
 
-def test_bk_roadmap_audit_reports_bk_evidence_and_missing_canonical_next_spec_body() -> None:
+def test_bk_roadmap_audit_reports_bk_evidence_and_canonical_ir_specs() -> None:
     module = _load_bk_roadmap_audit()
     root = Path(__file__).resolve().parents[3]
 
     report = module.audit_bk_roadmap(root, Path("1/bk.txt"))
 
-    assert report["status"] == "r11_core_runtime_ready_canonical_spec_missing"
+    assert report["status"] == "pass"
     assert report["documents_detected"] == ["R10-IR-01"]
+    canonical = {item["document_id"]: item for item in report["canonical_specifications"]}
+    assert canonical["R10-IR-01"]["status"] == "canonical_ir_specification"
+    assert canonical["R11-IR-01"]["status"] == "canonical_ir_specification"
     assert report["derived_specifications"][0]["document_id"] == "R11-IR-01"
+    assert (
+        report["derived_specifications"][0]["status"] == "superseded_by_canonical_ir_specification"
+    )
     assert report["next_required_specification"] == {
         "document_id": "R11-IR-01",
         "title": "Evidence and Audit Engine",
     }
-    assert report["gaps"] == ["BK_NEXT_CANONICAL_SPEC_BODY_MISSING"]
+    assert report["gaps"] == []
     assert len(report["source_hash"]) == 64
     assert len(report["audit_hash"]) == 64
     modules = {item["module"]: item for item in report["implemented_modules"]}
@@ -68,4 +74,4 @@ def test_bk_roadmap_audit_has_ci_friendly_json_output(capsys) -> None:
 
     output = json.loads(capsys.readouterr().out)
     assert output["schema_version"] == "1.0"
-    assert output["status"] == "r11_core_runtime_ready_canonical_spec_missing"
+    assert output["status"] == "pass"

@@ -1,10 +1,11 @@
 # BK/R11 Evidence and Audit Engine specification
 
-Status: derived implementation specification.
+Status: superseded derived implementation specification.
 
 Source boundary: `1/bk.txt` names `R11-IR-01 — Evidence and Audit Engine`,
-but does not include its body. This document records the explicit local
-specification used for implementation until a canonical BK/R11 body is supplied.
+but does not include its body. The canonical repository-controlled body now
+exists at `docs/ir/R11-IR-01-evidence-audit-engine.md`. This document remains as
+historical implementation context.
 
 ## Purpose
 

@@ -28,6 +28,7 @@ NEXT_SPEC_PATTERN = re.compile(
 )
 
 BK_R10_EVIDENCE_PATHS: tuple[str, ...] = (
+    "docs/ir/R10-IR-01-verification-validation-engine.md",
     "apps/api/src/ai_enterprise/application/bk_r10_verification_runtime.py",
     "apps/api/src/ai_enterprise/application/bk_r10_persistence_service.py",
     "apps/api/src/ai_enterprise/api/bk_r10_verification_schemas.py",
@@ -48,8 +49,13 @@ BK_R10_EVIDENCE_PATHS: tuple[str, ...] = (
 )
 
 BK_R11_DERIVED_SPEC_PATH = "docs/bk-r11-evidence-audit-engine-spec.md"
+BK_IR_SPEC_PATHS: dict[str, str] = {
+    "R10-IR-01": "docs/ir/R10-IR-01-verification-validation-engine.md",
+    "R11-IR-01": "docs/ir/R11-IR-01-evidence-audit-engine.md",
+}
 
 BK_R11_CORE_EVIDENCE_PATHS: tuple[str, ...] = (
+    BK_IR_SPEC_PATHS["R11-IR-01"],
     BK_R11_DERIVED_SPEC_PATH,
     "apps/api/src/ai_enterprise/application/bk_r11_evidence_audit_runtime.py",
     "apps/api/src/ai_enterprise/application/bk_r11_persistence_service.py",
@@ -101,9 +107,10 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
     document_ids = tuple(
         match.group("document_id") for match in DOCUMENT_ID_PATTERN.finditer(source_text)
     )
+    canonical_specifications = _canonical_specifications(root)
     next_spec = _next_spec(source_text)
     implemented_modules = (_bk_r10_module(root), _bk_r11_module(root))
-    gaps = _gaps(document_ids, next_spec, implemented_modules)
+    gaps = _gaps(document_ids, canonical_specifications, next_spec, implemented_modules)
     status = _status(gaps, implemented_modules)
 
     payload_without_hash: dict[str, Any] = {
@@ -111,6 +118,7 @@ def audit_bk_roadmap(root: Path, source: Path) -> dict[str, Any]:
         "source_path": str(source_path),
         "source_hash": _sha256_text(source_text),
         "documents_detected": list(document_ids),
+        "canonical_specifications": canonical_specifications,
         "derived_specifications": _derived_specifications(root),
         "next_required_specification": next_spec,
         "implemented_modules": [
@@ -159,6 +167,22 @@ def _bk_r11_module(root: Path) -> ImplementedModule:
     )
 
 
+def _canonical_specifications(root: Path) -> list[dict[str, str]]:
+    specifications: list[dict[str, str]] = []
+    for document_id, path in sorted(BK_IR_SPEC_PATHS.items()):
+        candidate = root / path
+        if candidate.exists():
+            specifications.append(
+                {
+                    "document_id": document_id,
+                    "path": path,
+                    "status": "canonical_ir_specification",
+                    "source_hash": _sha256_text(candidate.read_text(encoding="utf-8")),
+                }
+            )
+    return specifications
+
+
 def _derived_specifications(root: Path) -> list[dict[str, str]]:
     if not (root / BK_R11_DERIVED_SPEC_PATH).exists():
         return []
@@ -167,7 +191,11 @@ def _derived_specifications(root: Path) -> list[dict[str, str]]:
             "document_id": "R11-IR-01",
             "title": "Evidence and Audit Engine",
             "path": BK_R11_DERIVED_SPEC_PATH,
-            "status": "derived_local_specification",
+            "status": (
+                "superseded_by_canonical_ir_specification"
+                if (root / BK_IR_SPEC_PATHS["R11-IR-01"]).exists()
+                else "derived_local_specification"
+            ),
         }
     ]
 
@@ -185,17 +213,26 @@ def _next_spec(source_text: str) -> dict[str, str] | None:
 
 def _gaps(
     document_ids: tuple[str, ...],
+    canonical_specifications: list[dict[str, str]],
     next_spec: dict[str, str] | None,
     implemented_modules: tuple[ImplementedModule, ...],
 ) -> list[str]:
     gaps: list[str] = []
+    canonical_ids = {item["document_id"] for item in canonical_specifications}
     for module in implemented_modules:
-        if module.source_document_id not in document_ids and module.module != "BK-R11":
+        if (
+            module.source_document_id not in document_ids
+            and module.source_document_id not in canonical_ids
+        ):
             gaps.append(f"{module.module}_SOURCE_DOCUMENT_MISSING")
         if not module.complete:
             gaps.append(f"{module.module}_IMPLEMENTATION_EVIDENCE_MISSING")
 
-    if next_spec is not None and next_spec["document_id"] not in document_ids:
+    if (
+        next_spec is not None
+        and next_spec["document_id"] not in document_ids
+        and next_spec["document_id"] not in canonical_ids
+    ):
         gaps.append("BK_NEXT_CANONICAL_SPEC_BODY_MISSING")
     return gaps
 

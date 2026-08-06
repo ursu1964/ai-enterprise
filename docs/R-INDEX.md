@@ -31,3 +31,16 @@ R-INDEX is the navigation layer between the R-series architecture documents and 
 R2–R22 define what must exist. P12 onward records how each requirement is implemented in the existing repository.
 
 Application code remains under `apps/api/src`; implementation packages contain audit, planning, and acceptance evidence only.
+
+## IR constitutional specifications
+
+The BK/IR constitutional modules are tracked separately from the numbered
+product-platform R-series where names collide:
+
+- `R10-IR-01` — Verification and Validation Engine:
+  `docs/ir/R10-IR-01-verification-validation-engine.md`
+- `R11-IR-01` — Evidence and Audit Engine:
+  `docs/ir/R11-IR-01-evidence-audit-engine.md`
+
+These IR modules reconcile to the existing BK/R10 and BK/R11 implementation
+paths and do not replace the existing R10 UEIF or R11 UIEF modules.
