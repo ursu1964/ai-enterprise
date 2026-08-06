@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 
 @dataclass(frozen=True)
 class ArtifactSpec:
@@ -202,14 +204,28 @@ def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> No
     if "artifacts/r-series-alignment-report.json" not in paths:
         return
     target = root / "artifacts" / "r-series-alignment-report.json"
-    if target.is_file():
-        return
     if not (root / "tools" / "r_series_alignment.py").is_file():
         return
     module = _load_r_series_alignment(root)
     report = module._report(module.build_alignment(root))
+    _validate_alignment_report(root, module, report)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _validate_alignment_report(root: Path, module: Any, report: dict[str, Any]) -> None:
+    expected_hash = module._stable_hash(
+        {key: value for key, value in report.items() if key != "alignment_hash"}
+    )
+    if report.get("alignment_hash") != expected_hash:
+        raise RuntimeError("R-series alignment report hash verification failed")
+    schema_ref = report.get("schema_ref")
+    if not isinstance(schema_ref, str):
+        raise TypeError("R-series alignment report schema reference is missing")
+    schema_path = root / schema_ref
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(report, schema)
 
 
 def _load_r_series_alignment(root: Path) -> Any:

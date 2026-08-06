@@ -189,7 +189,56 @@ def test_release_evidence_bundle_derives_alignment_report_without_rewriting_docs
 
     artifacts = {item["name"]: item for item in document["artifacts"]}
     assert artifacts["r-series-alignment-report"]["present"] is True
-    assert (root / "artifacts" / "r-series-alignment-report.json").is_file()
+    report_path = root / "artifacts" / "r-series-alignment-report.json"
+    assert report_path.is_file()
+    assert json.loads(report_path.read_text(encoding="utf-8"))["reconciliation_verdict"] == (
+        "complete"
+    )
+
+
+def test_release_evidence_bundle_regenerates_stale_alignment_report() -> None:
+    root = _repo_root()
+    report_path = root / "artifacts" / "r-series-alignment-report.json"
+    previous = report_path.read_text(encoding="utf-8") if report_path.exists() else None
+    try:
+        _write(report_path, '{"schema_version":"stale"}\n')
+        release_evidence_bundle.build_manifest(
+            root,
+            generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+        )
+        regenerated = json.loads(report_path.read_text(encoding="utf-8"))
+        assert regenerated["schema_version"] == "1.0"
+        assert regenerated["reconciliation_verdict"] == "complete"
+    finally:
+        if previous is not None:
+            report_path.write_text(previous, encoding="utf-8")
+
+
+def test_release_evidence_bundle_rejects_invalid_generated_alignment_hash(
+    monkeypatch,
+) -> None:
+    root = _repo_root()
+    module = release_evidence_bundle._load_r_series_alignment(root)
+    original_report = module._report
+
+    def broken_report(alignments):
+        report = original_report(alignments)
+        return {**report, "alignment_hash": "0" * 64}
+
+    monkeypatch.setattr(module, "_report", broken_report)
+
+    try:
+        try:
+            release_evidence_bundle.build_manifest(
+                root,
+                generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+            )
+        except RuntimeError as exc:
+            assert "hash verification failed" in str(exc)
+        else:
+            raise AssertionError("invalid generated alignment hash was accepted")
+    finally:
+        monkeypatch.setattr(module, "_report", original_report)
 
 
 def _write_architecture_artifacts(root: Path) -> None:
