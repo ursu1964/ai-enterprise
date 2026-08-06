@@ -120,6 +120,30 @@ def test_release_evidence_bundle_blocks_when_required_artifact_is_missing(
     jsonschema.validate(document, SCHEMA)
 
 
+def test_release_evidence_bundle_fails_closed_when_bundle_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    original_schema = release_evidence_bundle._bundle_schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(release_evidence_bundle, "_bundle_schema", stricter_schema)
+
+    try:
+        release_evidence_bundle.build_manifest(
+            tmp_path,
+            generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert release_evidence_bundle.RELEASE_BUNDLE_SCHEMA in str(exc)
+        assert "generated release evidence bundle does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid release evidence bundle was accepted")
+
+
 def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     tmp_path: Path,
 ) -> None:

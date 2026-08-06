@@ -12,6 +12,9 @@ from typing import Any
 
 import jsonschema
 
+RELEASE_BUNDLE_SCHEMA = "schemas/release-artifacts/release-evidence-bundle.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "release-artifacts"
+
 
 @dataclass(frozen=True)
 class ArtifactSpec:
@@ -234,6 +237,22 @@ def _validate_schema_backed_artifacts(
             ) from exc
 
 
+def _bundle_schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / "release-evidence-bundle.schema.json").read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_bundle_manifest(document: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(document, _bundle_schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{RELEASE_BUNDLE_SCHEMA}: generated release evidence bundle does not validate: "
+            f"{exc.message}"
+        ) from exc
+
+
 def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
     paths = {spec.path.as_posix() for spec in specs}
     if "artifacts/r-series-alignment-report.json" not in paths:
@@ -315,6 +334,7 @@ def build_manifest(
         ),
     }
     document["bundle_hash"] = _stable_hash(document)
+    _validate_bundle_manifest(document)
     return document
 
 
