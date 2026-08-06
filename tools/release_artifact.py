@@ -9,10 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import migration_verify
 import production_evidence_plan
 import production_readiness
 import production_readiness_contracts
+
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "release-artifacts"
 
 DEFAULT_GATES = (
     ("compose-check", "docker compose config --quiet"),
@@ -62,6 +65,21 @@ def _recomputed_artifact_hash(document: dict[str, Any]) -> str:
     return _artifact_hash(payload)
 
 
+def _schema(name: str) -> dict[str, Any]:
+    return json.loads((SCHEMA_ROOT / name).read_text(encoding="utf-8"))
+
+
+def _validate_schema_document(document: dict[str, Any], *, schema_name: str) -> None:
+    schema = _schema(schema_name)
+    jsonschema.Draft202012Validator.check_schema(schema)
+    try:
+        jsonschema.validate(document, schema)
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{schema_name}: generated document does not validate: {exc.message}"
+        ) from exc
+
+
 def _load_gate_evidence(root: Path, evidence_file: Path | None) -> dict[str, Any]:
     if evidence_file is None:
         return {"loaded": False, "path": None, "sha256": None, "git": {}, "gates": {}}
@@ -89,9 +107,7 @@ def _load_gate_evidence(root: Path, evidence_file: Path | None) -> dict[str, Any
         "provenance_valid": payload.get("provenance_valid"),
         "git": payload.get("git", {}) if isinstance(payload.get("git", {}), dict) else {},
         "gates": {
-            str(name): evidence
-            for name, evidence in gates.items()
-            if isinstance(evidence, dict)
+            str(name): evidence for name, evidence in gates.items() if isinstance(evidence, dict)
         },
     }
 
@@ -144,9 +160,7 @@ def build_artifact(
     require_evidence_for: tuple[str, ...] = (),
     production: bool = False,
     archive_path: Path = Path("artifacts/release-verification.json"),
-    production_readiness_file: Path = Path(
-        "docs/enterprise/production-readiness-evidence.json"
-    ),
+    production_readiness_file: Path = Path("docs/enterprise/production-readiness-evidence.json"),
     infrastructure_choices_file: Path = Path(
         "docs/enterprise/real-world-infrastructure-decisions.json"
     ),
@@ -157,27 +171,19 @@ def build_artifact(
     gate_evidence = evidence_payload["gates"]
     current_git = _git_identity(root)
     evidence_git = evidence_payload["git"]
-    missing_required_evidence = [
-        name for name in require_evidence_for if name not in gate_evidence
-    ]
+    missing_required_evidence = [name for name in require_evidence_for if name not in gate_evidence]
     evidence_commit_matches = (
-        not evidence_payload["loaded"]
-        or evidence_git.get("commit") == current_git["commit"]
+        not evidence_payload["loaded"] or evidence_git.get("commit") == current_git["commit"]
     )
     evidence_tree_matches = (
         not evidence_payload["loaded"] or evidence_git.get("tree") == current_git["tree"]
     )
     current_git_valid = _git_identity_valid(current_git)
-    evidence_git_valid = (
-        not evidence_payload["loaded"]
-        or (
-            _git_identity_valid(evidence_git)
-            and evidence_payload.get("provenance_valid") is True
-        )
+    evidence_git_valid = not evidence_payload["loaded"] or (
+        _git_identity_valid(evidence_git) and evidence_payload.get("provenance_valid") is True
     )
     gate_log_integrity = {
-        name: _gate_log_integrity(root, evidence)
-        for name, evidence in gate_evidence.items()
+        name: _gate_log_integrity(root, evidence) for name, evidence in gate_evidence.items()
     }
     gate_status = status if migration_report["conformant"] else "failed"
     gates = [
@@ -273,8 +279,7 @@ def build_artifact(
             "captured_evidence_required": sorted(require_evidence_for),
             "captured_evidence_missing": missing_required_evidence,
             "execution_model": (
-                "Release gates are executed by make check-release before this "
-                "artifact is written."
+                "Release gates are executed by make check-release before this artifact is written."
             ),
         },
         "gate_evidence_file": {
@@ -304,6 +309,7 @@ def build_artifact(
         },
     }
     document["artifact_hash"] = _artifact_hash(document)
+    _validate_schema_document(document, schema_name="release-verification.schema.json")
     return document
 
 
@@ -403,7 +409,7 @@ def verify_markdown_summary(json_path: Path, markdown_path: Path) -> dict[str, A
     if expected_fragment and expected_fragment not in markdown:
         findings.append("markdown: artifact hash reference is missing or stale")
 
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "valid" if not findings else "invalid",
         "valid": not findings,
@@ -418,6 +424,8 @@ def verify_markdown_summary(json_path: Path, markdown_path: Path) -> dict[str, A
             else "Regenerate the release artifact JSON and Markdown summary together."
         ),
     }
+    _validate_schema_document(report, schema_name="release-verification-check.schema.json")
+    return report
 
 
 def write_artifact(
@@ -428,9 +436,7 @@ def write_artifact(
     evidence_file: Path | None = None,
     require_evidence_for: tuple[str, ...] = (),
     production: bool = False,
-    production_readiness_file: Path = Path(
-        "docs/enterprise/production-readiness-evidence.json"
-    ),
+    production_readiness_file: Path = Path("docs/enterprise/production-readiness-evidence.json"),
     infrastructure_choices_file: Path = Path(
         "docs/enterprise/real-world-infrastructure-decisions.json"
     ),

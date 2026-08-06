@@ -70,8 +70,7 @@ def test_release_artifact_records_release_gates_and_migration_summary(tmp_path: 
     }
     assert all(gate["required"] is True for gate in document["gates"])
     assert all(
-        gate["evidence"]["source"] == "make check-release dependency"
-        for gate in document["gates"]
+        gate["evidence"]["source"] == "make check-release dependency" for gate in document["gates"]
     )
     assert document["artifact_policy"]["fails_when_migration_verification_fails"] is True
     assert document["artifact_policy"]["fails_when_required_gate_evidence_missing"] is True
@@ -125,9 +124,7 @@ def test_production_release_fails_closed_without_readiness_evidence(tmp_path: Pa
     assert document["production_readiness"]["production_allowed"] is False
     assert document["production_evidence_plan"]["production_allowed"] is False
     assert document["production_evidence_plan"]["status"] == "blocked"
-    assert (
-        document["artifact_policy"]["fails_when_production_readiness_contracts_invalid"] is True
-    )
+    assert document["artifact_policy"]["fails_when_production_readiness_contracts_invalid"] is True
     assert document["artifact_policy"]["fails_when_production_readiness_is_blocked"] is True
     assert document["artifact_policy"]["records_production_readiness_contracts"] is True
     assert document["artifact_policy"]["records_production_evidence_plan"] is True
@@ -207,9 +204,7 @@ def test_release_artifact_fails_when_required_captured_evidence_is_missing(
     evidence_file = root / "artifacts" / "gate-evidence.json"
     evidence_file.parent.mkdir()
     evidence_file.write_text(
-        json_document(
-            _evidence_document(root, {"lint": {"status": "passed", "return_code": 0}})
-        ),
+        json_document(_evidence_document(root, {"lint": {"status": "passed", "return_code": 0}})),
         encoding="utf-8",
     )
 
@@ -265,10 +260,7 @@ def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
         json_document(
             _evidence_document(
                 root,
-                {
-                    name: {"status": "passed", "return_code": 0}
-                    for name in required
-                },
+                {name: {"status": "passed", "return_code": 0} for name in required},
             )
         ),
         encoding="utf-8",
@@ -285,10 +277,7 @@ def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
     assert document["gate_summary"]["captured_evidence_missing"] == []
     assert document["gate_summary"]["captured_evidence_required"] == sorted(required)
     assert all(gates[name]["evidence_required"] is True for name in required)
-    assert all(
-        gates[name]["evidence"]["missing_required_evidence"] is False
-        for name in required
-    )
+    assert all(gates[name]["evidence"]["missing_required_evidence"] is False for name in required)
 
 
 def test_release_artifact_writes_json_file(tmp_path: Path) -> None:
@@ -310,6 +299,57 @@ def test_release_artifact_writes_json_file(tmp_path: Path) -> None:
     assert verification["valid"] is True
     assert verification["stored_artifact_hash"] == document["artifact_hash"]
     jsonschema.validate(verification, _schema("release-verification-check.schema.json"))
+
+
+def test_release_artifact_build_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = _release_root(tmp_path)
+    original_schema = release_artifact._schema
+
+    def stricter_schema(name: str) -> dict:
+        schema = original_schema(name)
+        if name == "release-verification.schema.json":
+            schema = {**schema, "required": [*schema["required"], "impossible_field"]}
+        return schema
+
+    monkeypatch.setattr(release_artifact, "_schema", stricter_schema)
+
+    try:
+        release_artifact.build_artifact(root)
+    except RuntimeError as exc:
+        assert "release-verification.schema.json" in str(exc)
+        assert "generated document does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid release artifact schema output was accepted")
+
+
+def test_release_artifact_markdown_verification_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = _release_root(tmp_path)
+    output = Path("artifacts/release-verification.json")
+    markdown_output = Path("artifacts/release-verification.md")
+    release_artifact.write_artifact(root, output, markdown_output=markdown_output)
+    original_schema = release_artifact._schema
+
+    def stricter_schema(name: str) -> dict:
+        schema = original_schema(name)
+        if name == "release-verification-check.schema.json":
+            schema = {**schema, "required": [*schema["required"], "impossible_field"]}
+        return schema
+
+    monkeypatch.setattr(release_artifact, "_schema", stricter_schema)
+
+    try:
+        release_artifact.verify_markdown_summary(root / output, root / markdown_output)
+    except RuntimeError as exc:
+        assert "release-verification-check.schema.json" in str(exc)
+        assert "generated document does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid release verification check output was accepted")
 
 
 def test_release_artifact_markdown_verification_detects_stale_summary(
@@ -511,9 +551,7 @@ def _evidence_document(
     root: Path, gates: dict[str, object], *, status: str = "passed"
 ) -> dict[str, object]:
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    tree = subprocess.check_output(
-        ["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True
-    ).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True).strip()
     return {
         "status": status,
         "provenance_valid": True,
