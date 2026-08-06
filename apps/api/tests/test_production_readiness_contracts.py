@@ -77,6 +77,7 @@ def test_contract_cli_report_is_valid_for_current_templates() -> None:
     assert report["conformant"] is True
     assert report["status"] == "valid"
     assert report["next_action"] == "Run rtk make production-readiness for semantic validation."
+    jsonschema.validate(report, _load_schema("production-readiness-contracts-report.schema.json"))
 
 
 def test_infrastructure_choices_fail_before_semantics_when_shape_is_invalid(tmp_path: Path) -> None:

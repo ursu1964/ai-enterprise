@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/production-evidence-plan.schema.json",
+  "title": "Production Evidence Collection Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "production_allowed",
+    "evidence_file",
+    "choices_file",
+    "proof_requirements",
+    "infrastructure_choice_requirements",
+    "readiness_findings",
+    "validation_commands",
+    "next_action",
+    "readiness_report",
+    "plan_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["ready", "blocked"] },
+    "production_allowed": { "type": "boolean" },
+    "evidence_file": { "type": "string", "minLength": 1 },
+    "choices_file": { "type": "string", "minLength": 1 },
+    "proof_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/proof_requirement" }
+    },
+    "infrastructure_choice_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/choice_requirement" }
+    },
+    "readiness_findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "validation_commands": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "next_action": { "type": "string", "minLength": 1 },
+    "readiness_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "production_allowed", "choices_status", "choices_conformant"],
+      "properties": {
+        "status": { "enum": ["ready", "blocked"] },
+        "production_allowed": { "type": "boolean" },
+        "choices_status": { "type": "string", "minLength": 1 },
+        "choices_conformant": { "type": "boolean" }
+      }
+    },
+    "plan_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "string_array": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "proof_requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "owner_hint",
+        "required_fields",
+        "required_metadata",
+        "current_status",
+        "present_fields",
+        "missing_fields",
+        "validation_findings",
+        "blocked",
+        "evidence_action",
+        "completion_rule"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "owner_hint": { "type": "string", "minLength": 1 },
+        "required_fields": { "$ref": "#/$defs/string_array" },
+        "required_metadata": { "$ref": "#/$defs/string_array" },
+        "current_status": { "type": "string", "minLength": 1 },
+        "present_fields": { "$ref": "#/$defs/string_array" },
+        "missing_fields": { "$ref": "#/$defs/string_array" },
+        "validation_findings": { "$ref": "#/$defs/string_array" },
+        "blocked": { "type": "boolean" },
+        "evidence_action": { "type": "string", "minLength": 1 },
+        "completion_rule": { "type": "string", "minLength": 1 }
+      }
+    },
+    "choice_requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "required_fields",
+        "present_fields",
+        "missing_fields",
+        "validation_findings",
+        "blocked",
+        "evidence_action"
+      ],
+      "properties": {
+        "section": { "type": "string", "minLength": 1 },
+        "required_fields": { "$ref": "#/$defs/string_array" },
+        "present_fields": { "$ref": "#/$defs/string_array" },
+        "missing_fields": { "$ref": "#/$defs/string_array" },
+        "validation_findings": { "$ref": "#/$defs/string_array" },
+        "blocked": { "type": "boolean" },
+        "evidence_action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

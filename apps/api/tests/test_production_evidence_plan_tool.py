@@ -4,6 +4,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import jsonschema
+
 
 def _load(name: str):
     root = Path(__file__).resolve().parents[3]
@@ -19,6 +21,14 @@ _load("production_readiness_contracts")
 _load("infrastructure_choices")
 production_readiness = _load("production_readiness")
 production_evidence_plan = _load("production_evidence_plan")
+SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "schemas"
+        / "production-readiness"
+        / "production-evidence-plan.schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _choices() -> dict:
@@ -64,6 +74,7 @@ def test_production_evidence_plan_lists_operational_closure_items(
     assert plan["production_allowed"] is False
     assert plan["status"] == "blocked"
     assert len(plan["plan_hash"]) == 64
+    jsonschema.validate(plan, SCHEMA)
     assert "rtk make production-readiness-contracts" in plan["validation_commands"]
     assert "rtk make production-readiness" in plan["validation_commands"]
     assert {
@@ -102,13 +113,9 @@ def test_production_evidence_plan_is_ready_when_real_references_are_valid(
     assert all(not item["missing_fields"] for item in plan["proof_requirements"])
     assert all(not item["validation_findings"] for item in plan["proof_requirements"])
     assert all(not item["blocked"] for item in plan["proof_requirements"])
+    assert all(not item["missing_fields"] for item in plan["infrastructure_choice_requirements"])
     assert all(
-        not item["missing_fields"]
-        for item in plan["infrastructure_choice_requirements"]
-    )
-    assert all(
-        not item["validation_findings"]
-        for item in plan["infrastructure_choice_requirements"]
+        not item["validation_findings"] for item in plan["infrastructure_choice_requirements"]
     )
     assert all(not item["blocked"] for item in plan["infrastructure_choice_requirements"])
 

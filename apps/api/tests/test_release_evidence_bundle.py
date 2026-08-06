@@ -140,6 +140,18 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     assert "artifacts/production-evidence-status.md" in artifacts
     assert "docs/ARCHITECTURE-BASELINE-v1.0.md" in artifacts
     assert "artifacts/r-series-alignment-report.json" in artifacts
+    assert artifacts["artifacts/production-readiness-contracts.json"]["schema_ref"] == (
+        "schemas/production-readiness/production-readiness-contracts-report.schema.json"
+    )
+    assert artifacts["artifacts/production-readiness.json"]["schema_ref"] == (
+        "schemas/production-readiness/production-readiness-report.schema.json"
+    )
+    assert artifacts["artifacts/production-evidence-plan.json"]["schema_ref"] == (
+        "schemas/production-readiness/production-evidence-plan.schema.json"
+    )
+    assert artifacts["artifacts/production-evidence-status.json"]["schema_ref"] == (
+        "schemas/production-readiness/production-evidence-status.schema.json"
+    )
     assert artifacts["artifacts/production-release-verification.json"]["schema_ref"] == (
         "schemas/release-artifacts/release-verification.schema.json"
     )

@@ -4,6 +4,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import jsonschema
+
 
 def _load(name: str):
     root = Path(__file__).resolve().parents[3]
@@ -20,6 +22,14 @@ _load("infrastructure_choices")
 _load("production_readiness")
 _load("production_evidence_plan")
 production_evidence_status = _load("production_evidence_status")
+SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "schemas"
+        / "production-readiness"
+        / "production-evidence-status.schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _choices() -> dict:
@@ -75,6 +85,7 @@ def test_production_evidence_status_summarizes_blocked_items(
     assert any(item["section"] == "domain_tls" for item in status["blocked_choices"])
     assert "rtk make production-readiness-contracts" in status["next_commands"]
     assert "rtk make production-readiness" in status["next_commands"]
+    jsonschema.validate(status, SCHEMA)
 
     markdown = production_evidence_status.render_markdown(status)
     assert "# Production Evidence Status" in markdown

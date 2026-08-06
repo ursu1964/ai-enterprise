@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/production-readiness-contracts-report.schema.json",
+  "title": "Production Readiness Contracts Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "conformant", "checks", "findings", "next_action"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "status": { "enum": ["valid", "invalid"] },
+    "conformant": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "schema", "status", "findings"],
+      "properties": {
+        "name": { "enum": ["infrastructure_decisions", "production_evidence"] },
+        "path": { "type": "string", "minLength": 1 },
+        "schema": { "type": "string", "pattern": "^[a-z0-9-]+\\.schema\\.json$" },
+        "status": { "enum": ["valid", "invalid", "missing"] },
+        "findings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

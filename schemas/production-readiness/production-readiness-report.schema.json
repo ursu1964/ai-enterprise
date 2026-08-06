@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/production-readiness-report.schema.json",
+  "title": "Production Readiness Semantic Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "production_allowed",
+    "environment",
+    "reviewed_by",
+    "evidence_file",
+    "choices",
+    "checks",
+    "findings",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "status": { "enum": ["ready", "blocked"] },
+    "production_allowed": { "type": "boolean" },
+    "environment": { "type": ["string", "null"] },
+    "reviewed_by": { "type": ["string", "null"] },
+    "evidence_file": { "type": "string", "minLength": 1 },
+    "choices": { "type": "object" },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "checked_at", "valid_until", "evidence", "findings"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "blocked"] },
+        "checked_at": { "type": ["string", "null"] },
+        "valid_until": { "type": ["string", "null"] },
+        "evidence": { "type": ["string", "null"] },
+        "findings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

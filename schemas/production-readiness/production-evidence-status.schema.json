@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/production-evidence-status.schema.json",
+  "title": "Production Evidence Status Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "production_allowed",
+    "evidence_file",
+    "choices_file",
+    "blocked_proof_count",
+    "blocked_choice_count",
+    "blocked_proofs",
+    "blocked_choices",
+    "readiness_finding_count",
+    "next_commands",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "status": { "enum": ["ready", "blocked"] },
+    "production_allowed": { "type": "boolean" },
+    "evidence_file": { "type": "string", "minLength": 1 },
+    "choices_file": { "type": "string", "minLength": 1 },
+    "blocked_proof_count": { "type": "integer", "minimum": 0 },
+    "blocked_choice_count": { "type": "integer", "minimum": 0 },
+    "blocked_proofs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocked_proof" }
+    },
+    "blocked_choices": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocked_choice" }
+    },
+    "readiness_finding_count": { "type": "integer", "minimum": 0 },
+    "next_commands": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "next_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "string_array": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocked_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "owner_hint", "current_status", "findings", "action"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "owner_hint": { "type": "string", "minLength": 1 },
+        "current_status": { "type": "string", "minLength": 1 },
+        "findings": { "$ref": "#/$defs/string_array" },
+        "action": { "type": "string", "minLength": 1 }
+      }
+    },
+    "blocked_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "findings", "action"],
+      "properties": {
+        "section": { "type": "string", "minLength": 1 },
+        "findings": { "$ref": "#/$defs/string_array" },
+        "action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

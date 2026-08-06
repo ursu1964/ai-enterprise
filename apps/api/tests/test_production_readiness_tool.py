@@ -4,6 +4,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import jsonschema
+
 
 def _load(name: str):
     root = Path(__file__).resolve().parents[3]
@@ -17,6 +19,14 @@ def _load(name: str):
 
 _load("infrastructure_choices")
 production_readiness = _load("production_readiness")
+SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "schemas"
+        / "production-readiness"
+        / "production-readiness-report.schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _choices() -> dict:
@@ -36,10 +46,7 @@ def _evidence(status: str = "passed") -> dict:
             "evidence": f"artifacts/{name}.json",
         }
         item.update(
-            {
-                field: True if field.endswith("verified") else f"real-{field}"
-                for field in fields
-            }
+            {field: True if field.endswith("verified") else f"real-{field}" for field in fields}
         )
         proof[name] = item
     return {"environment": "production", "reviewed_by": "release-owner", "proof": proof}
@@ -48,7 +55,11 @@ def _evidence(status: str = "passed") -> dict:
 def test_production_readiness_requires_every_current_proof(tmp_path: Path) -> None:
     choices = _choices()
     choices["identity_proxy"]["signed_headers"] = [
-        "X-Actor-ID", "X-Actor-Type", "X-Actor-Role", "X-Proxy-Timestamp", "X-Proxy-Signature"
+        "X-Actor-ID",
+        "X-Actor-Type",
+        "X-Actor-Role",
+        "X-Proxy-Timestamp",
+        "X-Proxy-Signature",
     ]
     (tmp_path / "choices.json").write_text(json.dumps(choices), encoding="utf-8")
     (tmp_path / "evidence.json").write_text(json.dumps(_evidence()), encoding="utf-8")
@@ -69,12 +80,17 @@ def test_production_readiness_requires_every_current_proof(tmp_path: Path) -> No
         "production_run_artifacts",
         "r16_graph_backend",
     }.issubset({item["name"] for item in report["checks"]})
+    jsonschema.validate(report, SCHEMA)
 
 
 def test_production_readiness_blocks_missing_restore_proof(tmp_path: Path) -> None:
     choices = _choices()
     choices["identity_proxy"]["signed_headers"] = [
-        "X-Actor-ID", "X-Actor-Type", "X-Actor-Role", "X-Proxy-Timestamp", "X-Proxy-Signature"
+        "X-Actor-ID",
+        "X-Actor-Type",
+        "X-Actor-Role",
+        "X-Proxy-Timestamp",
+        "X-Proxy-Signature",
     ]
     evidence = _evidence()
     del evidence["proof"]["backup_restore"]

@@ -128,6 +128,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="production_readiness_contracts",
         content_type="application/json",
         bk_r11_evidence_type="readiness-contract-validation",
+        schema_ref="schemas/production-readiness/production-readiness-contracts-report.schema.json",
     ),
     ArtifactSpec(
         name="production-readiness",
@@ -135,6 +136,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="production_readiness",
         content_type="application/json",
         bk_r11_evidence_type="semantic-readiness-validation",
+        schema_ref="schemas/production-readiness/production-readiness-report.schema.json",
     ),
     ArtifactSpec(
         name="production-evidence-plan",
@@ -142,6 +144,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="production_evidence_plan",
         content_type="application/json",
         bk_r11_evidence_type="readiness-remediation-plan",
+        schema_ref="schemas/production-readiness/production-evidence-plan.schema.json",
     ),
     ArtifactSpec(
         name="production-evidence-status-json",
@@ -149,6 +152,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="production_evidence_status",
         content_type="application/json",
         bk_r11_evidence_type="readiness-status",
+        schema_ref="schemas/production-readiness/production-evidence-status.schema.json",
     ),
     ArtifactSpec(
         name="production-evidence-status-markdown",
