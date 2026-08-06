@@ -110,3 +110,43 @@ def test_r_series_alignment_generates_required_package_structure(tmp_path: Path)
     audit_02 = (tmp_path / "docs/R-AUDIT-02-r1-r22-alignment-matrix.md").read_text(encoding="utf-8")
     assert "Total repository evidence references:" in audit_02
     assert "| R | P phase | Title | Evidence areas | Evidence refs | Status |" in audit_02
+
+
+def test_r_series_alignment_generation_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = _load_r_series_alignment()
+    root = Path(__file__).resolve().parents[3]
+
+    # Copy only the evidence paths required for a deterministic smoke generation.
+    for alignment in module.build_alignment(root):
+        source = root / alignment.spec_path
+        target = tmp_path / alignment.spec_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        for capability in alignment.capabilities:
+            for evidence in capability.evidence:
+                evidence_source = root / evidence
+                evidence_target = tmp_path / evidence
+                evidence_target.parent.mkdir(parents=True, exist_ok=True)
+                evidence_target.write_text(
+                    evidence_source.read_text(encoding="utf-8", errors="replace"),
+                    encoding="utf-8",
+                )
+
+    original_schema = module._alignment_report_schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "_alignment_report_schema", stricter_schema)
+
+    try:
+        module.generate_alignment(tmp_path)
+    except RuntimeError as exc:
+        assert module.ALIGNMENT_REPORT_SCHEMA_REF in str(exc)
+        assert "generated alignment report does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid R-series alignment report was accepted")

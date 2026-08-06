@@ -16,8 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 RANGE = tuple(range(2, 23))
 ALIGNMENT_REPORT_SCHEMA_REF = "schemas/architecture-baseline/r-series-alignment-report.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "architecture-baseline"
 IR_SPECIFICATIONS: dict[str, tuple[str, str]] = {
     "R02-IR-01": (
         "Foundational Domain and Manifest Concepts",
@@ -216,6 +219,7 @@ def generate_alignment(root: Path) -> dict[str, Any]:
     _write_master_docs(root, alignments)
     alignments = build_alignment(root)
     report = _report(alignments)
+    _validate_alignment_report(report)
     report_path = root / "artifacts" / "r-series-alignment-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -887,6 +891,24 @@ def _report(alignments: list[RAlignment]) -> dict[str, Any]:
         ],
     }
     return {**payload, "alignment_hash": _stable_hash(payload)}
+
+
+def _alignment_report_schema() -> dict[str, Any]:
+    return json.loads(
+        (SCHEMA_ROOT / "r-series-alignment-report.schema.json").read_text(encoding="utf-8")
+    )
+
+
+def _validate_alignment_report(report: dict[str, Any]) -> None:
+    schema = _alignment_report_schema()
+    jsonschema.Draft202012Validator.check_schema(schema)
+    try:
+        jsonschema.validate(report, schema)
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{ALIGNMENT_REPORT_SCHEMA_REF}: generated alignment report does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def _sha256_file(path: Path) -> str:
