@@ -59,10 +59,13 @@ product-platform R-series where names collide:
   `docs/ir/R19-IR-01-security-identity-engine.md`
 - `R20-IR-01` — Organizational Knowledge Engine:
   `docs/ir/R20-IR-01-organizational-knowledge-engine.md`
+- `R21-IR-01` — Platform Administration and Operations:
+  `docs/ir/R21-IR-01-platform-administration-operations.md`
 
 These IR modules reconcile to existing repository implementation paths and do
 not replace the existing R10 UEIF, R11 UIEF, R12 bootstrap, R13 repository
 bootstrap, R14 manifest schema, R15 manifest compiler, R16 knowledge graph, or
 R17 execution planner modules. R18-IR additionally preserves the existing R18
 generator orchestration module. R19-IR preserves the existing R19 project memory
-module. R20-IR preserves the existing R20 runtime kernel module.
+module. R20-IR preserves the existing R20 runtime kernel module. R21-IR
+preserves the existing R21 execution orchestrator module.
