@@ -39,9 +39,15 @@ def _write(path: Path, payload: str) -> None:
 
 
 def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: Path) -> None:
-    _write(tmp_path / "artifacts" / "release-verification.json", '{"status":"passed"}\n')
+    _copy_schema_refs(tmp_path, release_evidence_bundle.RELEASE_ARTIFACTS)
+    release_payload = _release_verification_payload()
+    release_rendered = json.dumps(release_payload, sort_keys=True) + "\n"
+    _write(tmp_path / "artifacts" / "release-verification.json", release_rendered)
     _write(tmp_path / "artifacts" / "release-verification.md", "# Release\n")
-    _write(tmp_path / "artifacts" / "release-verification-check.json", '{"valid":true}\n')
+    _write(
+        tmp_path / "artifacts" / "release-verification-check.json",
+        json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
+    )
     _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
     _write_architecture_artifacts(tmp_path)
 
@@ -63,7 +69,7 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
         "schemas/release-artifacts/release-verification.schema.json"
     )
     assert verification["bk_r11_evidence_type"] == "release-verification"
-    assert verification["sha256"] == hashlib.sha256(b'{"status":"passed"}\n').hexdigest()
+    assert verification["sha256"] == hashlib.sha256(release_rendered.encode()).hexdigest()
     assert artifacts["release-verification-markdown"]["schema_ref"] is None
     alignment = artifacts["r-series-alignment-report"]
     assert alignment["schema_ref"] == (
@@ -117,10 +123,45 @@ def test_release_evidence_bundle_blocks_when_required_artifact_is_missing(
 def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     tmp_path: Path,
 ) -> None:
+    _copy_schema_refs(tmp_path, release_evidence_bundle.PRODUCTION_ARTIFACTS)
     for spec in release_evidence_bundle.PRODUCTION_ARTIFACTS:
-        if spec.name != "r-series-alignment-report":
+        if spec.name == "production-release-verification-json":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_release_verification_payload(production=True), sort_keys=True) + "\n",
+            )
+        elif spec.name == "production-release-verification-check":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
+            )
+        elif spec.name == "production-readiness-contracts":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_production_readiness_contracts_payload(), sort_keys=True) + "\n",
+            )
+        elif spec.name == "production-readiness":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_production_readiness_payload(), sort_keys=True) + "\n",
+            )
+        elif spec.name == "production-evidence-plan":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_production_evidence_plan_payload(), sort_keys=True) + "\n",
+            )
+        elif spec.name == "production-evidence-status-json":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_production_evidence_status_payload(), sort_keys=True) + "\n",
+            )
+        elif spec.name == "r-series-alignment-report":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_alignment_report_payload(), sort_keys=True) + "\n",
+            )
+        else:
             _write(tmp_path / spec.path, f"{spec.name}\n")
-    _write(tmp_path / "artifacts" / "r-series-alignment-report.json", "{}\n")
 
     document = release_evidence_bundle.build_manifest(
         tmp_path,
@@ -160,6 +201,30 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
         == "schemas/release-artifacts/release-verification-check.schema.json"
     )
     jsonschema.validate(document, SCHEMA)
+
+
+def test_release_evidence_bundle_rejects_invalid_schema_backed_artifact(
+    tmp_path: Path,
+) -> None:
+    _copy_schema_refs(tmp_path, release_evidence_bundle.RELEASE_ARTIFACTS)
+    _write(tmp_path / "artifacts" / "release-verification.json", '{"status":"passed"}\n')
+    _write(tmp_path / "artifacts" / "release-verification.md", "# Release\n")
+    _write(
+        tmp_path / "artifacts" / "release-verification-check.json",
+        json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
+    )
+    _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
+    _write_architecture_artifacts(tmp_path)
+
+    try:
+        release_evidence_bundle.build_manifest(
+            tmp_path,
+            generated_at=datetime(2026, 8, 6, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert "release-verification.json does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid schema-backed release artifact was accepted")
 
 
 def test_write_manifest_returns_non_complete_document_when_artifacts_missing(
@@ -258,4 +323,218 @@ def _write_architecture_artifacts(root: Path) -> None:
     _write(root / "docs" / "R-AUDIT-01-current-state-repository-audit.md", "# Audit 01\n")
     _write(root / "docs" / "R-AUDIT-02-r1-r22-alignment-matrix.md", "# Audit 02\n")
     _write(root / "docs" / "R-REV-01-corrected-r-series-baseline.md", "# Rev 01\n")
-    _write(root / "artifacts" / "r-series-alignment-report.json", "{}\n")
+    _write(
+        root / "artifacts" / "r-series-alignment-report.json",
+        json.dumps(_alignment_report_payload(), sort_keys=True) + "\n",
+    )
+
+
+def _copy_schema_refs(root: Path, specs: tuple[release_evidence_bundle.ArtifactSpec, ...]) -> None:
+    repo = _repo_root()
+    for spec in specs:
+        if spec.schema_ref is None:
+            continue
+        source = repo / spec.schema_ref
+        target = root / spec.schema_ref
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _release_verification_payload(*, production: bool = False) -> dict:
+    return {
+        "schema_version": "1.0",
+        "generated_at": "2026-08-06T00:00:00+00:00",
+        "status": "passed",
+        "release_environment": "production" if production else "non-production",
+        "production_readiness_contracts": {} if production else None,
+        "production_readiness": {} if production else None,
+        "production_evidence_plan": {} if production else None,
+        "git": {
+            "commit": "a" * 40,
+            "tree": "b" * 40,
+            "branch": "main",
+            "dirty": False,
+        },
+        "gates": [],
+        "gate_summary": {
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "captured_evidence_required": [],
+            "captured_evidence_missing": [],
+            "execution_model": "test fixture",
+        },
+        "gate_evidence_file": {},
+        "migration_verification": {},
+        "artifact_policy": {},
+        "artifact_hash": "c" * 64,
+    }
+
+
+def _release_verification_check_payload() -> dict:
+    return {
+        "schema_version": "1.0",
+        "status": "valid",
+        "valid": True,
+        "json_path": "artifacts/release-verification.json",
+        "markdown_path": "artifacts/release-verification.md",
+        "stored_artifact_hash": "d" * 64,
+        "recomputed_artifact_hash": "d" * 64,
+        "findings": [],
+        "next_action": "Archive JSON and Markdown together.",
+    }
+
+
+def _production_readiness_contracts_payload() -> dict:
+    return {
+        "schema_version": "1.0",
+        "status": "valid",
+        "conformant": True,
+        "checks": [
+            {
+                "name": "infrastructure_decisions",
+                "path": "docs/enterprise/real-world-infrastructure-decisions.json",
+                "schema": "infrastructure-decisions.schema.json",
+                "status": "valid",
+                "findings": [],
+            },
+            {
+                "name": "production_evidence",
+                "path": "docs/enterprise/production-readiness-evidence.json",
+                "schema": "production-evidence.schema.json",
+                "status": "valid",
+                "findings": [],
+            },
+        ],
+        "findings": [],
+        "next_action": "Run rtk make production-readiness for semantic validation.",
+    }
+
+
+def _production_readiness_payload() -> dict:
+    return {
+        "schema_version": "1.0",
+        "status": "blocked",
+        "production_allowed": False,
+        "environment": "production",
+        "reviewed_by": "release-owner",
+        "evidence_file": "docs/enterprise/production-readiness-evidence.json",
+        "choices": {},
+        "checks": [
+            {
+                "name": "tls",
+                "status": "blocked",
+                "checked_at": None,
+                "valid_until": None,
+                "evidence": None,
+                "findings": ["proof record is missing"],
+            }
+        ],
+        "findings": ["tls: proof record is missing"],
+        "next_action": "Complete every blocked proof and rerun make production-readiness.",
+    }
+
+
+def _production_evidence_plan_payload() -> dict:
+    payload = {
+        "schema_version": "1.0",
+        "generated_at": "2026-08-06T00:00:00Z",
+        "status": "blocked",
+        "production_allowed": False,
+        "evidence_file": "docs/enterprise/production-readiness-evidence.json",
+        "choices_file": "docs/enterprise/real-world-infrastructure-decisions.json",
+        "proof_requirements": [],
+        "infrastructure_choice_requirements": [],
+        "readiness_findings": ["tls: proof record is missing"],
+        "validation_commands": ["rtk make production-readiness"],
+        "next_action": "Assign blocked proof items to real owners.",
+        "readiness_report": {
+            "status": "blocked",
+            "production_allowed": False,
+            "choices_status": "invalid",
+            "choices_conformant": False,
+        },
+    }
+    return {
+        **payload,
+        "plan_hash": hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
+    }
+
+
+def _production_evidence_status_payload() -> dict:
+    return {
+        "schema_version": "1.0",
+        "status": "blocked",
+        "production_allowed": False,
+        "evidence_file": "docs/enterprise/production-readiness-evidence.json",
+        "choices_file": "docs/enterprise/real-world-infrastructure-decisions.json",
+        "blocked_proof_count": 1,
+        "blocked_choice_count": 0,
+        "blocked_proofs": [
+            {
+                "name": "tls",
+                "owner_hint": "platform owner",
+                "current_status": "missing",
+                "findings": ["proof record is missing"],
+                "action": "Run the TLS/certificate probe and archive the endpoint evidence.",
+            }
+        ],
+        "blocked_choices": [],
+        "readiness_finding_count": 1,
+        "next_commands": ["rtk make production-readiness"],
+        "next_action": "Assign blocked proof items to real owners.",
+    }
+
+
+def _alignment_report_payload() -> dict:
+    packages = [
+        {
+            "r": f"R{number}",
+            "p_phase": f"P{number + 10}",
+            "title": f"R{number}",
+            "spec_path": f"1/r{number}.txt",
+            "spec_hash": "0" * 64,
+            "package_path": f"implementation/r{number:02d}",
+            "complete": True,
+            "capabilities": [
+                {"category": category, "status": "implemented", "evidence_count": 1}
+                for category in (
+                    "source_specification",
+                    "domain_or_runtime",
+                    "api_contract",
+                    "api_route",
+                    "persistence_or_migration",
+                    "schema_or_registry",
+                    "tests",
+                    "status_documentation",
+                )
+            ],
+        }
+        for number in range(2, 23)
+    ]
+    payload = {
+        "schema_version": "1.0",
+        "schema_ref": "schemas/architecture-baseline/r-series-alignment-report.schema.json",
+        "r_range": "R2-R22",
+        "package_count": 21,
+        "complete_count": 21,
+        "incomplete": [],
+        "capability_area_count": 168,
+        "reconciled_capability_area_count": 168,
+        "evidence_reference_count": 168,
+        "reconciliation_verdict": "complete",
+        "ir_specification_count": 21,
+        "ir_specifications": [
+            {
+                "document_id": f"R{number:02d}-IR-01",
+                "title": f"R{number} IR",
+                "path": f"docs/ir/R{number:02d}-IR-01-test.md",
+            }
+            for number in range(2, 23)
+        ],
+        "packages": packages,
+    }
+    return {
+        **payload,
+        "alignment_hash": hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
+    }

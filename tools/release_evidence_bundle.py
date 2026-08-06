@@ -203,6 +203,28 @@ def _artifact_record(root: Path, spec: ArtifactSpec) -> dict[str, Any]:
     }
 
 
+def _validate_schema_backed_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
+    for spec in specs:
+        if spec.schema_ref is None or spec.content_type != "application/json":
+            continue
+        target = root / spec.path
+        if not target.is_file():
+            continue
+        schema_path = root / spec.schema_ref
+        try:
+            payload = json.loads(target.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"{spec.path} is not valid JSON: {exc}") from exc
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+        try:
+            jsonschema.validate(payload, schema)
+        except jsonschema.ValidationError as exc:
+            raise RuntimeError(
+                f"{spec.path} does not validate against {spec.schema_ref}: {exc.message}"
+            ) from exc
+
+
 def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
     paths = {spec.path.as_posix() for spec in specs}
     if "artifacts/r-series-alignment-report.json" not in paths:
@@ -259,6 +281,8 @@ def build_manifest(
     _ensure_derived_artifacts(root, specs)
     artifacts = [_artifact_record(root, spec) for spec in specs]
     missing = [item["path"] for item in artifacts if item["required"] and not item["present"]]
+    if not missing:
+        _validate_schema_backed_artifacts(root, specs)
     document: dict[str, Any] = {
         "schema_version": "1.0",
         "generated_at": generated_at.isoformat(),
