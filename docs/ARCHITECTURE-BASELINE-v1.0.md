@@ -7,6 +7,7 @@ Status: FREEZE CANDIDATE
 - Product R-series: R2–R22
 - Implementation phases: P12–P32
 - IR constitutional specifications: R10-IR-01–R22-IR-01
+- Audit reconciliation: R-AUDIT-01 and R-AUDIT-02
 - Application source root: `apps/api/src`
 - Evidence packages: `implementation/r02` through `implementation/r22`
 

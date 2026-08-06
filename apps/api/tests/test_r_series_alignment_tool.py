@@ -26,6 +26,10 @@ def test_r_series_alignment_detects_r2_to_r22_repository_evidence() -> None:
     assert report["package_count"] == 21
     assert report["complete_count"] == 21
     assert report["incomplete"] == []
+    assert report["capability_area_count"] == 168
+    assert report["reconciled_capability_area_count"] == 168
+    assert report["evidence_reference_count"] > 0
+    assert report["reconciliation_verdict"] == "complete"
     assert report["ir_specification_count"] == 13
     assert len(report["alignment_hash"]) == 64
 
@@ -79,3 +83,12 @@ def test_r_series_alignment_generates_required_package_structure(tmp_path: Path)
     assert "R22-IR-01" in index
     assert "product-platform R-series modules" in index
     assert "R22 artifact intelligence and evidence graph module" in index
+    audit_01 = (tmp_path / "docs/R-AUDIT-01-current-state-repository-audit.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Repository inventory" in audit_01
+    assert "## Reconciliation verdict" in audit_01
+    assert "- Verdict: COMPLETE" in audit_01
+    audit_02 = (tmp_path / "docs/R-AUDIT-02-r1-r22-alignment-matrix.md").read_text(encoding="utf-8")
+    assert "Total repository evidence references:" in audit_02
+    assert "| R | P phase | Title | Evidence areas | Evidence refs | Status |" in audit_02

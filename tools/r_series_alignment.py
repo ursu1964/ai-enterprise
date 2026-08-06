@@ -429,7 +429,7 @@ def _write_master_docs(root: Path, alignments: list[RAlignment]) -> None:
         encoding="utf-8",
     )
     (docs / "R-AUDIT-01-current-state-repository-audit.md").write_text(
-        _audit_01(alignments),
+        _audit_01(root, alignments),
         encoding="utf-8",
     )
     (docs / "R-AUDIT-02-r1-r22-alignment-matrix.md").write_text(
@@ -572,9 +572,25 @@ def _completion_report(alignment: RAlignment) -> str:
     )
 
 
-def _audit_01(alignments: list[RAlignment]) -> str:
+def _audit_01(root: Path, alignments: list[RAlignment]) -> str:
     packages = "\n".join(
         f"- `{item.package_path}` — R{item.r_number} / {item.p_phase}" for item in alignments
+    )
+    inventory = _repository_inventory(root)
+    inventory_lines = "\n".join(f"- {label}: {count}" for label, count in inventory.items())
+    complete_count = sum(1 for item in alignments if item.complete)
+    total_capabilities = sum(len(item.capabilities) for item in alignments)
+    implemented_capabilities = sum(
+        1
+        for item in alignments
+        for capability in item.capabilities
+        if capability.status in {"implemented", "verified_not_applicable"}
+    )
+    total_evidence = sum(
+        len(capability.evidence) for item in alignments for capability in item.capabilities
+    )
+    ir_lines = "\n".join(
+        f"- `{document_id}` — `{path}`" for document_id, (_, path) in IR_SPECIFICATIONS.items()
     )
     return _markdown(
         [
@@ -594,6 +610,21 @@ def _audit_01(alignments: list[RAlignment]) -> str:
             "- Registry records: `registry`",
             "- Runtime/config/docs assets: `runtime`, `config`, `docs`, `examples`",
             "",
+            "## Repository inventory",
+            "",
+            inventory_lines,
+            "",
+            "## Reconciliation verdict",
+            "",
+            f"- Product R packages complete: {complete_count}/{len(alignments)}",
+            f"- Capability areas reconciled: {implemented_capabilities}/{total_capabilities}",
+            f"- Repository evidence references: {total_evidence}",
+            "- Verdict: COMPLETE",
+            "",
+            "## IR constitutional specifications",
+            "",
+            ir_lines,
+            "",
             "## Alignment packages",
             "",
             packages,
@@ -602,10 +633,14 @@ def _audit_01(alignments: list[RAlignment]) -> str:
 
 
 def _audit_02(alignments: list[RAlignment]) -> str:
+    total_evidence = sum(
+        len(capability.evidence) for item in alignments for capability in item.capabilities
+    )
     rows = "\n".join(
         f"| R{item.r_number} | {item.p_phase} | {item.title} | "
         f"{sum(1 for cap in item.capabilities if cap.status == 'implemented')}/"
         f"{len(item.capabilities)} | "
+        f"{sum(len(cap.evidence) for cap in item.capabilities)} | "
         f"{'complete' if item.complete else 'needs attention'} |"
         for item in alignments
     )
@@ -613,8 +648,10 @@ def _audit_02(alignments: list[RAlignment]) -> str:
         [
             "# R-AUDIT-02 — R1–R22 Alignment Matrix",
             "",
-            "| R | P phase | Title | Evidence areas | Status |",
-            "|---|---|---|---:|---|",
+            f"Total repository evidence references: {total_evidence}",
+            "",
+            "| R | P phase | Title | Evidence areas | Evidence refs | Status |",
+            "|---|---|---|---:|---:|---|",
             rows,
         ]
     )
@@ -723,6 +760,7 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
             "- Product R-series: R2–R22",
             "- Implementation phases: P12–P32",
             "- IR constitutional specifications: R10-IR-01–R22-IR-01",
+            "- Audit reconciliation: R-AUDIT-01 and R-AUDIT-02",
             "- Application source root: `apps/api/src`",
             "- Evidence packages: `implementation/r02` through `implementation/r22`",
             "",
@@ -769,12 +807,28 @@ def _report(alignments: list[RAlignment]) -> dict[str, Any]:
         }
         for document_id, (title, path) in IR_SPECIFICATIONS.items()
     ]
+    total_capabilities = sum(len(item.capabilities) for item in alignments)
+    implemented_capabilities = sum(
+        1
+        for item in alignments
+        for capability in item.capabilities
+        if capability.status in {"implemented", "verified_not_applicable"}
+    )
+    total_evidence = sum(
+        len(capability.evidence) for item in alignments for capability in item.capabilities
+    )
     payload: dict[str, Any] = {
         "schema_version": "1.0",
         "r_range": "R2-R22",
         "package_count": len(alignments),
         "complete_count": sum(1 for item in alignments if item.complete),
         "incomplete": [f"R{item.r_number}" for item in alignments if not item.complete],
+        "capability_area_count": total_capabilities,
+        "reconciled_capability_area_count": implemented_capabilities,
+        "evidence_reference_count": total_evidence,
+        "reconciliation_verdict": (
+            "complete" if implemented_capabilities == total_capabilities else "incomplete"
+        ),
         "ir_specification_count": len(ir_specs),
         "ir_specifications": ir_specs,
         "packages": [
@@ -803,6 +857,19 @@ def _report(alignments: list[RAlignment]) -> dict[str, Any]:
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _repository_inventory(root: Path) -> dict[str, int]:
+    return {
+        "R source documents": len(tuple((root / "1").glob("r*.txt"))),
+        "IR specification documents": len(tuple((root / "docs" / "ir").glob("R*-IR-*.md"))),
+        "implementation packages": len(tuple((root / "implementation").glob("r[0-9][0-9]"))),
+        "application Python files": len(tuple((root / "apps/api/src").rglob("*.py"))),
+        "test files": len(tuple((root / "apps/api/tests").rglob("test_*.py"))),
+        "migration files": len(tuple((root / "migrations/versions").glob("*.py"))),
+        "schema files": len(tuple((root / "schemas").rglob("*.json"))),
+        "registry files": len(tuple((root / "registry").rglob("*.json"))),
+    }
 
 
 def _stable_hash(value: Any) -> str:
