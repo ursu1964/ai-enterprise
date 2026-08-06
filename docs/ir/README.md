@@ -14,12 +14,13 @@ number with the product-platform R-series. They are intentionally tracked in
 | R15-IR-01 | Workflow and Process Engine | IMPLEMENTATION READY | `docs/ir/R15-IR-01-workflow-process-engine.md` |
 | R16-IR-01 | Repository Integration Engine | IMPLEMENTATION READY | `docs/ir/R16-IR-01-repository-integration-engine.md` |
 | R17-IR-01 | Deployment and Runtime Engine | IMPLEMENTATION READY | `docs/ir/R17-IR-01-deployment-runtime-engine.md` |
+| R18-IR-01 | Observability and Telemetry Engine | IMPLEMENTATION READY | `docs/ir/R18-IR-01-observability-telemetry-engine.md` |
 
 ## Collision rule
 
 `R10-IR-01`, `R11-IR-01`, and later IR documents are not replacements for
 existing `1/r10.txt`, `1/r11.txt`, `1/r13.txt`, `1/r14.txt`, `1/r15.txt`,
-`1/r16.txt`, `1/r17.txt`, or other product-platform R documents.
+`1/r16.txt`, `1/r17.txt`, `1/r18.txt`, or other product-platform R documents.
 
 Implementation must reconcile IR modules into existing repository boundaries and
 must not create a second AI-Enterprise source tree.

@@ -19,6 +19,7 @@ def test_ir_catalog_tracks_r10_to_r12_without_r_series_collision() -> None:
         "R15-IR-01": IR_DIR / "R15-IR-01-workflow-process-engine.md",
         "R16-IR-01": IR_DIR / "R16-IR-01-repository-integration-engine.md",
         "R17-IR-01": IR_DIR / "R17-IR-01-deployment-runtime-engine.md",
+        "R18-IR-01": IR_DIR / "R18-IR-01-observability-telemetry-engine.md",
     }
 
     for document_id, path in expected.items():

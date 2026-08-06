@@ -53,8 +53,11 @@ product-platform R-series where names collide:
   `docs/ir/R16-IR-01-repository-integration-engine.md`
 - `R17-IR-01` — Deployment and Runtime Engine:
   `docs/ir/R17-IR-01-deployment-runtime-engine.md`
+- `R18-IR-01` — Observability and Telemetry Engine:
+  `docs/ir/R18-IR-01-observability-telemetry-engine.md`
 
 These IR modules reconcile to existing repository implementation paths and do
 not replace the existing R10 UEIF, R11 UIEF, R12 bootstrap, R13 repository
 bootstrap, R14 manifest schema, R15 manifest compiler, R16 knowledge graph, or
-R17 execution planner modules.
+R17 execution planner modules. R18-IR additionally preserves the existing R18
+generator orchestration module.
