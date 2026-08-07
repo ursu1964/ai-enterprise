@@ -75,7 +75,7 @@ Export bundles cannot silently omit required evidence or validation findings.
 
 This IR specification is implemented through the existing R5 UMTE boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r5_umte.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r5_umte.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r5_umte.py`
 - API schemas: `apps/api/src/ai_enterprise/api/r5_umte_schemas.py`
 - Migrations: `migrations/versions/*r5*.py`
