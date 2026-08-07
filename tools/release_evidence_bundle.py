@@ -63,6 +63,14 @@ ARCHITECTURE_BASELINE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         bk_r11_evidence_type="machine-verifiable-alignment-report",
         schema_ref="schemas/architecture-baseline/r-series-alignment-report.schema.json",
     ),
+    ArtifactSpec(
+        name="roadmap-sequence-gate",
+        path=Path("artifacts/roadmap-sequence-gate.json"),
+        kind="roadmap_sequence_gate",
+        content_type="application/json",
+        bk_r11_evidence_type="roadmap-sequence-governance",
+        schema_ref="schemas/architecture-baseline/roadmap-sequence-gate.schema.json",
+    ),
 )
 
 
@@ -255,16 +263,27 @@ def _validate_bundle_manifest(document: dict[str, Any]) -> None:
 
 def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> None:
     paths = {spec.path.as_posix() for spec in specs}
-    if "artifacts/r-series-alignment-report.json" not in paths:
-        return
-    target = root / "artifacts" / "r-series-alignment-report.json"
-    if not (root / "tools" / "r_series_alignment.py").is_file():
-        return
-    module = _load_r_series_alignment(root)
-    report = module._report(module.build_alignment(root))
-    _validate_alignment_report(root, module, report)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if "artifacts/r-series-alignment-report.json" in paths:
+        target = root / "artifacts" / "r-series-alignment-report.json"
+        if (root / "tools" / "r_series_alignment.py").is_file():
+            module = _load_r_series_alignment(root)
+            report = module._report(module.build_alignment(root))
+            _validate_alignment_report(root, module, report)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    if "artifacts/roadmap-sequence-gate.json" in paths:
+        target = root / "artifacts" / "roadmap-sequence-gate.json"
+        if (root / "tools" / "roadmap_sequence_gate.py").is_file():
+            module = _load_roadmap_sequence_gate(root)
+            report = module.verify_roadmap_sequence(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
 
 
 def _validate_alignment_report(root: Path, module: Any, report: dict[str, Any]) -> None:
@@ -292,6 +311,25 @@ def _load_r_series_alignment(root: Path) -> Any:
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("r_series_alignment.py could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_roadmap_sequence_gate(root: Path) -> Any:
+    tools_path = str(root / "tools")
+    if tools_path not in sys.path:
+        sys.path.insert(0, tools_path)
+    module_name = "_release_evidence_bundle_roadmap_sequence_gate"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        root / "tools" / "roadmap_sequence_gate.py",
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("roadmap_sequence_gate.py could not be loaded")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)

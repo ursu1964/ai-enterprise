@@ -60,8 +60,8 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
     assert document["bundle_type"] == "release"
     assert document["status"] == "complete"
     assert document["missing_artifacts"] == []
-    assert document["artifact_count"] == 9
-    assert document["present_artifact_count"] == 9
+    assert document["artifact_count"] == 10
+    assert document["present_artifact_count"] == 10
     assert len(document["bundle_hash"]) == 64
     artifacts = {item["name"]: item for item in document["artifacts"]}
     verification = artifacts["release-verification-json"]
@@ -76,6 +76,11 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
         "schemas/architecture-baseline/r-series-alignment-report.schema.json"
     )
     assert alignment["bk_r11_evidence_type"] == "machine-verifiable-alignment-report"
+    roadmap_gate = artifacts["roadmap-sequence-gate"]
+    assert roadmap_gate["schema_ref"] == (
+        "schemas/architecture-baseline/roadmap-sequence-gate.schema.json"
+    )
+    assert roadmap_gate["bk_r11_evidence_type"] == "roadmap-sequence-governance"
     assert artifacts["architecture-baseline-v1"]["bk_r11_evidence_type"] == (
         "architecture-baseline-freeze-candidate"
     )
@@ -110,6 +115,7 @@ def test_release_evidence_bundle_blocks_when_required_artifact_is_missing(
         "docs/R-AUDIT-02-r1-r22-alignment-matrix.md",
         "docs/R-REV-01-corrected-r-series-baseline.md",
         "artifacts/r-series-alignment-report.json",
+        "artifacts/roadmap-sequence-gate.json",
     ]
     missing = [
         item for item in document["artifacts"] if item["path"] in document["missing_artifacts"]
@@ -184,6 +190,11 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
                 tmp_path / spec.path,
                 json.dumps(_alignment_report_payload(), sort_keys=True) + "\n",
             )
+        elif spec.name == "roadmap-sequence-gate":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_roadmap_sequence_gate_payload(), sort_keys=True) + "\n",
+            )
         else:
             _write(tmp_path / spec.path, f"{spec.name}\n")
 
@@ -195,7 +206,7 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
 
     assert document["bundle_type"] == "production"
     assert document["status"] == "complete"
-    assert document["artifact_count"] == 14
+    assert document["artifact_count"] == 15
     assert document["missing_artifacts"] == []
     artifacts = {item["path"]: item for item in document["artifacts"]}
     assert "artifacts/production-readiness-contracts.json" in artifacts
@@ -205,6 +216,7 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     assert "artifacts/production-evidence-status.md" in artifacts
     assert "docs/ARCHITECTURE-BASELINE-v1.0.md" in artifacts
     assert "artifacts/r-series-alignment-report.json" in artifacts
+    assert "artifacts/roadmap-sequence-gate.json" in artifacts
     assert artifacts["artifacts/production-readiness-contracts.json"]["schema_ref"] == (
         "schemas/production-readiness/production-readiness-contracts-report.schema.json"
     )
@@ -317,6 +329,7 @@ def test_release_evidence_bundle_derives_alignment_report_without_rewriting_docs
             "release-verification-markdown",
             "release-verification-check",
             "release-gate-evidence",
+            "roadmap-sequence-gate",
         }:
             _write(tmp_path / spec.path, spec.name + "\n")
         elif spec.name != "r-series-alignment-report":
@@ -334,11 +347,15 @@ def test_release_evidence_bundle_derives_alignment_report_without_rewriting_docs
 
     artifacts = {item["name"]: item for item in document["artifacts"]}
     assert artifacts["r-series-alignment-report"]["present"] is True
+    assert artifacts["roadmap-sequence-gate"]["present"] is True
     report_path = root / "artifacts" / "r-series-alignment-report.json"
+    gate_path = root / "artifacts" / "roadmap-sequence-gate.json"
     assert report_path.is_file()
+    assert gate_path.is_file()
     assert json.loads(report_path.read_text(encoding="utf-8"))["reconciliation_verdict"] == (
         "complete"
     )
+    assert json.loads(gate_path.read_text(encoding="utf-8"))["status"] == "passed"
 
 
 def test_release_evidence_bundle_regenerates_stale_alignment_report() -> None:
@@ -394,6 +411,10 @@ def _write_architecture_artifacts(root: Path) -> None:
     _write(
         root / "artifacts" / "r-series-alignment-report.json",
         json.dumps(_alignment_report_payload(), sort_keys=True) + "\n",
+    )
+    _write(
+        root / "artifacts" / "roadmap-sequence-gate.json",
+        json.dumps(_roadmap_sequence_gate_payload(), sort_keys=True) + "\n",
     )
 
 
@@ -605,4 +626,25 @@ def _alignment_report_payload() -> dict:
     return {
         **payload,
         "alignment_hash": hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
+    }
+
+
+def _roadmap_sequence_gate_payload() -> dict:
+    return {
+        "schema_version": "1.0",
+        "schema_ref": "schemas/architecture-baseline/roadmap-sequence-gate.schema.json",
+        "status": "passed",
+        "generated_at": "2026-08-06T00:00:00+00:00",
+        "r_range": "R2-R22",
+        "implementation_phase_range": "P12-P32",
+        "alignment_report_hash": "a" * 64,
+        "checks": [
+            {
+                "name": "alignment-report",
+                "status": "passed",
+                "summary": "R-series alignment report is schema-valid and complete",
+            }
+        ],
+        "findings": [],
+        "next_action": "Proceed only with ADR-backed post-R22 roadmap work.",
     }
