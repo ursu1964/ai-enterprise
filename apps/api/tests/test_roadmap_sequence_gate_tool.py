@@ -40,6 +40,27 @@ def test_roadmap_sequence_gate_passes_for_current_baseline() -> None:
     jsonschema.validate(report, schema)
 
 
+def test_roadmap_sequence_gate_proves_p12_r2_is_not_blocked() -> None:
+    module = _load_roadmap_sequence_gate()
+    root = Path(__file__).resolve().parents[3]
+
+    report = module.verify_roadmap_sequence(root)
+
+    assert report["status"] == "passed"
+    assert (root / "1" / "r2.txt").is_file()
+    assert (root / "implementation" / "r02" / "clause-verification.md").is_file()
+
+    r2_clause_verification = (
+        root / "implementation" / "r02" / "clause-verification.md"
+    ).read_text(encoding="utf-8")
+    assert "P12/R2 is implemented" in r2_clause_verification
+    assert "No exact R2 clause remains blocked or missing" in r2_clause_verification
+
+    for r_number in range(2, 23):
+        package = root / "implementation" / f"r{r_number:02d}"
+        assert (package / "clause-verification.md").is_file()
+
+
 def test_roadmap_sequence_gate_fails_closed_for_premature_r23(tmp_path: Path) -> None:
     module = _load_roadmap_sequence_gate()
     root = Path(__file__).resolve().parents[3]
