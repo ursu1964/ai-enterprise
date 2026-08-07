@@ -19,6 +19,9 @@ FAST_GATE_COMMANDS: dict[str, str] = {
 CI_GATE_COMMANDS: dict[str, str] = {
     **FAST_GATE_COMMANDS,
     "docker-smoke": "python tools/docker_smoke.py --require-worker",
+    "roadmap-sequence-gate": (
+        "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json"
+    ),
     "engineering-static": "python tools/engineering_verify.py --static --json",
     "evolution-check": "python tools/evolution_verify.py --json",
     "federation-check": "python tools/federation_verify.py --json",
@@ -37,6 +40,9 @@ RELEASE_GATE_COMMANDS: dict[str, str] = {
     **FAST_GATE_COMMANDS,
     "secret-scan": "python tools/secret_scan.py --all",
     "docker-smoke": "python tools/docker_smoke.py --require-worker",
+    "roadmap-sequence-gate": (
+        "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json"
+    ),
     "dashboard-verify": (
         'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"'
     ),
@@ -85,9 +91,9 @@ def run_gate(
         check=False,
     )
     duration = round(time.monotonic() - started, 3)
-    output_content = result.stdout + (
-        "\n" if result.stdout and result.stderr else ""
-    ) + result.stderr
+    output_content = (
+        result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr
+    )
     output_path.write_text(output_content, encoding="utf-8")
     return {
         "status": "passed" if result.returncode == 0 else "failed",
@@ -130,8 +136,7 @@ def write_evidence(
         "generated_at": datetime.now(UTC).isoformat(),
         "status": (
             "passed"
-            if provenance_valid
-            and all(gate["status"] == "passed" for gate in gates.values())
+            if provenance_valid and all(gate["status"] == "passed" for gate in gates.values())
             else "failed"
         ),
         "git": git_after,
@@ -195,9 +200,7 @@ def _resolve_gate_commands(
         resolved.update(GATE_COMMAND_PROFILES[profile])
     resolved.update(dict(gate_commands or []))
     if not resolved:
-        raise argparse.ArgumentTypeError(
-            "at least one --profile or --gate-command is required"
-        )
+        raise argparse.ArgumentTypeError("at least one --profile or --gate-command is required")
     return resolved
 
 
@@ -209,8 +212,7 @@ def main() -> int:
         action="append",
         choices=sorted(GATE_COMMAND_PROFILES),
         help=(
-            "Named gate command profile. May be repeated; explicit gate commands "
-            "override profiles."
+            "Named gate command profile. May be repeated; explicit gate commands override profiles."
         ),
     )
     parser.add_argument(

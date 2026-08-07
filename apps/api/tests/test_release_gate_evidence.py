@@ -41,9 +41,9 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     assert "--evidence-file artifacts/gate-evidence.json" in makefile
     assert (
         "--require-evidence-for compose-check,migration-check,lint,typecheck,test,"
-        "secret-scan,docker-smoke,dashboard-verify,dashboard-browser-verify,"
-        "engineering-static,evolution-check,federation-check,intelligence-check,"
-        "engineering-full,etra-check" in makefile
+        "secret-scan,docker-smoke,roadmap-sequence-gate,dashboard-verify,"
+        "dashboard-browser-verify,engineering-static,evolution-check,"
+        "federation-check,intelligence-check,engineering-full,etra-check" in makefile
     )
     assert "dashboard-verify:" in makefile
     assert "dashboard-browser-verify:" in makefile
@@ -73,6 +73,10 @@ def test_makefile_exposes_release_gate_evidence_target() -> None:
     ci_commands = {
         "engineering-static=python tools/engineering_verify.py --static --json",
         "docker-smoke=python tools/docker_smoke.py --require-worker",
+        (
+            "roadmap-sequence-gate=python tools/roadmap_sequence_gate.py "
+            "--output artifacts/roadmap-sequence-gate.json"
+        ),
         "evolution-check=python tools/evolution_verify.py --json",
         "federation-check=python tools/federation_verify.py --json",
         "intelligence-check=python tools/intelligence_verify.py --json",
@@ -171,6 +175,9 @@ def test_release_gate_profiles_capture_expected_commands() -> None:
     )
     assert release_gate_evidence.CI_GATE_COMMANDS["docker-smoke"] == (
         "python tools/docker_smoke.py --require-worker"
+    )
+    assert release_gate_evidence.CI_GATE_COMMANDS["roadmap-sequence-gate"] == (
+        "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json"
     )
 
 

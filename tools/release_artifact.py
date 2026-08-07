@@ -26,6 +26,10 @@ DEFAULT_GATES = (
     ("secret-scan", "python tools/secret_scan.py --all"),
     ("docker-smoke", "python tools/docker_smoke.py --require-worker"),
     (
+        "roadmap-sequence-gate",
+        "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json",
+    ),
+    (
         "dashboard-verify",
         'python tools/dashboard_verify.py --base-url "${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}"',
     ),
