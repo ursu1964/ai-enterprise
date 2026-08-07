@@ -26,6 +26,13 @@ Implemented scope:
   on the source object.
 - Relationship changes create a new source-object revision and ordinary updates
   preserve existing relationships.
+- StateMachineDefinition registration with applies-to-kind validation, unique
+  state validation, initial-state validation, transition endpoint validation,
+  terminal-state protection, and version metadata.
+- Non-mutating lifecycle transition evaluation with structured denial reasons.
+- Governed lifecycle transition execution that requires a declared transition,
+  matching source state, optional action binding, expected revision, and creates
+  a new object revision with the target lifecycle state.
 - Policy evaluation with deterministic effect precedence:
   `DENY > ESCALATE > REQUIRE > WARN > ALLOW`.
 - Policy obligation accumulation across matched policies.
@@ -35,6 +42,9 @@ Intentionally deferred:
 - Persistent storage.
 - Snapshot materialization.
 - Independent relationship-object revisioning and relationship removal.
+- Transition guards, required evidence, transition-specific authorization,
+  entry/exit conditions, postconditions, side effects, audit events, and
+  idempotency.
 - Full invariant language.
 - Full command/event store.
 - Authorization adapters.

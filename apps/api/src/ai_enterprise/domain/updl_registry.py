@@ -83,6 +83,18 @@ class AdditionalPropertiesPolicy(StrEnum):
     WARN = "warn"
 
 
+class TransitionClassification(StrEnum):
+    NORMAL = "normal"
+    APPROVAL = "approval"
+    REJECTION = "rejection"
+    ROLLBACK = "rollback"
+    RECOVERY = "recovery"
+    TIMEOUT = "timeout"
+    AUTOMATIC = "automatic"
+    ADMINISTRATIVE = "administrative"
+    MIGRATION = "migration"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -158,6 +170,36 @@ class RelationshipInstance:
         if self.target.resolution is not ResolutionMode.LATEST:
             document["target"]["$ref"]["resolution"] = self.target.resolution.value
         return document
+
+
+@dataclass(frozen=True, slots=True)
+class StateDefinition:
+    name: str
+    label: str | None = None
+    terminal: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StateTransitionDefinition:
+    name: str
+    source_states: tuple[str, ...]
+    target_state: str
+    action_id: str | None = None
+    classification: TransitionClassification = TransitionClassification.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class StateMachineDefinition:
+    id: str
+    applies_to_kind: str
+    initial_state: str
+    states: tuple[StateDefinition, ...]
+    transitions: tuple[StateTransitionDefinition, ...]
+    version: str = "1.0.0"
+
+    @property
+    def terminal_states(self) -> frozenset[str]:
+        return frozenset(state.name for state in self.states if state.terminal)
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,6 +332,22 @@ class PolicyDecision:
     context_hash: str
 
 
+@dataclass(frozen=True, slots=True)
+class StateTransitionFinding:
+    code: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class StateTransitionDecision:
+    permitted: bool
+    state_machine_id: str | None
+    transition: str
+    current_state: str
+    target_state: str | None
+    reasons: tuple[StateTransitionFinding, ...]
+
+
 class InMemoryUPDLRegistry:
     def __init__(self) -> None:
         self._types: dict[str, TypeDefinition] = {}
@@ -297,6 +355,7 @@ class InMemoryUPDLRegistry:
         self._policies: dict[str, PolicyDefinition] = {}
         self._namespaces: dict[str, NamespaceDefinition] = {}
         self._relationship_types: dict[str, RelationshipTypeDefinition] = {}
+        self._state_machines: dict[str, StateMachineDefinition] = {}
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -325,6 +384,36 @@ class InMemoryUPDLRegistry:
                 raise RegistryError("RELATIONSHIP_KIND_UNKNOWN", kind)
         self._relationship_types[definition.id] = definition
 
+    def register_state_machine(self, definition: StateMachineDefinition) -> None:
+        require_identifier(definition.id)
+        if definition.applies_to_kind not in self._types:
+            raise RegistryError("STATE_MACHINE_KIND_UNKNOWN", definition.applies_to_kind)
+        states = tuple(state.name for state in definition.states)
+        if not states:
+            raise RegistryError("STATE_MACHINE_NO_STATES", definition.id)
+        if len(set(states)) != len(states):
+            raise RegistryError("STATE_MACHINE_DUPLICATE_STATE", definition.id)
+        if definition.initial_state not in states:
+            raise RegistryError("INITIAL_STATE_INVALID", definition.initial_state)
+        state_set = set(states)
+        for transition in definition.transitions:
+            if not transition.source_states:
+                raise RegistryError("TRANSITION_SOURCE_REQUIRED", transition.name)
+            unknown_sources = sorted(set(transition.source_states) - state_set)
+            if unknown_sources:
+                raise RegistryError(
+                    "SOURCE_STATE_INVALID",
+                    f"{transition.name}: {unknown_sources}",
+                )
+            if transition.target_state not in state_set:
+                raise RegistryError("TARGET_STATE_INVALID", transition.target_state)
+            if (
+                transition.classification is TransitionClassification.NORMAL
+                and definition.terminal_states.intersection(transition.source_states)
+            ):
+                raise RegistryError("TERMINAL_STATE_REACHED", transition.name)
+        self._state_machines[definition.id] = definition
+
     def register_policy(self, definition: PolicyDefinition) -> None:
         require_identifier(definition.id)
         self._policies[definition.id] = definition
@@ -346,6 +435,7 @@ class InMemoryUPDLRegistry:
         if object_id in self._objects:
             raise RegistryError("IDENTITY_CONFLICT", f"object already exists: {object_id}")
         self._require_valid_spec(kind, spec)
+        self._require_valid_initial_lifecycle(kind, lifecycle_state)
         now = datetime.now(UTC)
         envelope = self._object_envelope(
             kind=kind,
@@ -415,6 +505,139 @@ class InMemoryUPDLRegistry:
             relationships=(*source.relationships, relationship.canonical_document()),
         )
         self._objects[source_id].append(updated)
+        return updated
+
+    def evaluate_state_transition(
+        self,
+        *,
+        object_id: str,
+        transition_name: str,
+        expected_revision: int | None = None,
+        action_id: str | None = None,
+    ) -> StateTransitionDecision:
+        current = self.get_object(object_id)
+        state_machine = self._state_machine_for_kind(current.kind)
+        current_state = current.lifecycle.state
+        if state_machine is None:
+            return StateTransitionDecision(
+                permitted=False,
+                state_machine_id=None,
+                transition=transition_name,
+                current_state=current_state,
+                target_state=None,
+                reasons=(
+                    StateTransitionFinding(
+                        "STATE_MACHINE_NOT_FOUND",
+                        f"No state machine is registered for kind '{current.kind}'.",
+                    ),
+                ),
+            )
+        if current_state not in {state.name for state in state_machine.states}:
+            return StateTransitionDecision(
+                permitted=False,
+                state_machine_id=state_machine.id,
+                transition=transition_name,
+                current_state=current_state,
+                target_state=None,
+                reasons=(
+                    StateTransitionFinding(
+                        "STATE_UNKNOWN",
+                        f"Current state '{current_state}' is not defined.",
+                    ),
+                ),
+            )
+        if expected_revision is not None and current.metadata.revision != expected_revision:
+            return StateTransitionDecision(
+                permitted=False,
+                state_machine_id=state_machine.id,
+                transition=transition_name,
+                current_state=current_state,
+                target_state=None,
+                reasons=(
+                    StateTransitionFinding(
+                        "STATE_VERSION_CONFLICT",
+                        "Expected revision "
+                        f"{expected_revision}, found {current.metadata.revision}.",
+                    ),
+                ),
+            )
+        transition = self._find_transition(state_machine, transition_name, current_state)
+        if transition is None:
+            terminal_code = (
+                "TERMINAL_STATE_REACHED"
+                if current_state in state_machine.terminal_states
+                else "TRANSITION_NOT_FOUND"
+            )
+            return StateTransitionDecision(
+                permitted=False,
+                state_machine_id=state_machine.id,
+                transition=transition_name,
+                current_state=current_state,
+                target_state=None,
+                reasons=(
+                    StateTransitionFinding(
+                        terminal_code,
+                        f"Transition '{transition_name}' is not allowed from '{current_state}'.",
+                    ),
+                ),
+            )
+        if action_id is not None and transition.action_id != action_id:
+            return StateTransitionDecision(
+                permitted=False,
+                state_machine_id=state_machine.id,
+                transition=transition_name,
+                current_state=current_state,
+                target_state=transition.target_state,
+                reasons=(
+                    StateTransitionFinding(
+                        "TRANSITION_ACTION_MISMATCH",
+                        f"Transition '{transition_name}' is not bound to action '{action_id}'.",
+                    ),
+                ),
+            )
+        return StateTransitionDecision(
+            permitted=True,
+            state_machine_id=state_machine.id,
+            transition=transition.name,
+            current_state=current_state,
+            target_state=transition.target_state,
+            reasons=(),
+        )
+
+    def transition_object(
+        self,
+        *,
+        object_id: str,
+        expected_revision: int,
+        transition_name: str,
+        actor: ActorReference,
+        action_id: str | None = None,
+    ) -> ObjectEnvelope:
+        decision = self.evaluate_state_transition(
+            object_id=object_id,
+            transition_name=transition_name,
+            expected_revision=expected_revision,
+            action_id=action_id,
+        )
+        if not decision.permitted:
+            first_reason = decision.reasons[0]
+            raise RegistryError(first_reason.code, first_reason.message)
+        current = self.get_object(object_id)
+        if decision.target_state is None:
+            raise RegistryError("TARGET_STATE_INVALID", transition_name)
+        updated = self._object_envelope(
+            kind=current.kind,
+            object_id=current.metadata.id,
+            namespace=current.metadata.namespace,
+            revision=current.metadata.revision + 1,
+            spec=current.spec,
+            actor=actor,
+            created_at=current.metadata.created_at,
+            updated_at=datetime.now(UTC),
+            lifecycle_state=decision.target_state,
+            relationships=current.relationships,
+        )
+        self._objects[object_id].append(updated)
         return updated
 
     def update_object(
@@ -691,12 +914,45 @@ class InMemoryUPDLRegistry:
             first_error = result.errors[0]
             raise RegistryError(first_error.code, first_error.message)
 
+    def _require_valid_initial_lifecycle(self, kind: str, lifecycle_state: str) -> None:
+        state_machine = self._state_machine_for_kind(kind)
+        if state_machine is None:
+            return
+        if lifecycle_state != state_machine.initial_state:
+            raise RegistryError(
+                "INITIAL_STATE_INVALID",
+                f"expected initial state '{state_machine.initial_state}', "
+                f"received '{lifecycle_state}'",
+            )
+
     def _require_active_namespace(self, namespace: str) -> None:
         definition = self._namespaces.get(namespace)
         if definition is None:
             raise RegistryError("NAMESPACE_NOT_FOUND", namespace)
         if not definition.active:
             raise RegistryError("NAMESPACE_INACTIVE", namespace)
+
+    def _state_machine_for_kind(self, kind: str) -> StateMachineDefinition | None:
+        type_definition = self._types.get(kind)
+        if type_definition is None or type_definition.lifecycle is None:
+            return None
+        return self._state_machines.get(type_definition.lifecycle.id)
+
+    @staticmethod
+    def _find_transition(
+        state_machine: StateMachineDefinition,
+        transition_name: str,
+        current_state: str,
+    ) -> StateTransitionDefinition | None:
+        return next(
+            (
+                transition
+                for transition in state_machine.transitions
+                if transition.name == transition_name
+                and current_state in transition.source_states
+            ),
+            None,
+        )
 
     def _object_envelope(
         self,
