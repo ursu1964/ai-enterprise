@@ -1,5 +1,9 @@
 import importlib.util
+import json
 from pathlib import Path
+
+import jsonschema
+import pytest
 
 
 def _load():
@@ -43,3 +47,34 @@ def test_browser_verifier_covers_r10_client_runtime() -> None:
     assert "roleSelect" in source
     assert "deviceSelect" in source
     assert "mobile_width" in source
+
+
+def test_browser_verifier_failure_report_matches_schema() -> None:
+    report = browser_verify._failure_report("browser unavailable")
+
+    assert report["conformant"] is False
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/release-artifacts/dashboard-browser-verification-report.schema.json"
+    )
+    root = Path(browser_verify.__file__).resolve().parents[1]
+    schema = json.loads((root / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
+
+
+def test_browser_verifier_report_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_schema = browser_verify._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(browser_verify, "_schema", stricter_schema)
+
+    with pytest.raises(
+        RuntimeError,
+        match="dashboard-browser-verification-report.schema.json",
+    ):
+        browser_verify._failure_report("boom")

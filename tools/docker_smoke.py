@@ -9,11 +9,15 @@ import os
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
+
+import jsonschema
 
 DEFAULT_ACTOR_ID = "local-dashboard-admin"
 DEFAULT_ACTOR_TYPE = "human"
 DEFAULT_ACTOR_ROLE = "platform-admin"
+DOCKER_SMOKE_SCHEMA_REF = "schemas/release-artifacts/docker-smoke-report.schema.json"
 
 
 def _sign_identity_assertion(
@@ -158,11 +162,46 @@ def run_smoke(
     checks.append(_wait_for("health_ready", ready, attempts=attempts, interval=interval))
     checks.append(_wait_for("metrics", metrics, attempts=attempts, interval=interval))
     checks.append(_wait_for("worker_visibility", workers, attempts=attempts, interval=interval))
-    return {
+    report = {
         "conformant": True,
         "base_url": base_url,
         "checks": checks,
+        "schema_version": "1.0",
+        "schema_ref": DOCKER_SMOKE_SCHEMA_REF,
     }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / DOCKER_SMOKE_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{DOCKER_SMOKE_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{DOCKER_SMOKE_SCHEMA_REF}: generated Docker smoke report does not validate: "
+            f"{exc.message}"
+        ) from exc
+
+
+def _failure_report(error: str) -> dict[str, Any]:
+    report = {
+        "conformant": False,
+        "error": error,
+        "schema_version": "1.0",
+        "schema_ref": DOCKER_SMOKE_SCHEMA_REF,
+    }
+    _validate_report(report)
+    return report
 
 
 def main() -> int:
@@ -200,7 +239,7 @@ def main() -> int:
             trusted_proxy_secret=args.trusted_proxy_secret,
         )
     except (RuntimeError, urllib.error.URLError, TimeoutError) as exc:
-        print(json.dumps({"conformant": False, "error": str(exc)}, sort_keys=True))
+        print(json.dumps(_failure_report(str(exc)), sort_keys=True))
         return 1
     print(json.dumps(report, sort_keys=True))
     return 0

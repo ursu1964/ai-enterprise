@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/docker-smoke-report.schema.json",
+  "title": "Docker Smoke Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["conformant", "schema_version", "schema_ref"],
+  "properties": {
+    "conformant": { "type": "boolean" },
+    "base_url": { "type": "string", "minLength": 1 },
+    "checks": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "error": { "type": "string", "minLength": 1 },
+    "schema_version": { "const": "1.0" },
+    "schema_ref": { "const": "schemas/release-artifacts/docker-smoke-report.schema.json" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "conformant": { "const": true } } },
+      "then": { "required": ["base_url", "checks"], "not": { "required": ["error"] } }
+    },
+    {
+      "if": { "properties": { "conformant": { "const": false } } },
+      "then": { "required": ["error"] }
+    }
+  ]
+}

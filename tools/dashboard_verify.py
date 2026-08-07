@@ -6,11 +6,15 @@ import json
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
+
+import jsonschema
 
 DEFAULT_ACTOR_ID = "local-dashboard-admin"
 DEFAULT_ACTOR_TYPE = "human"
 DEFAULT_ACTOR_ROLE = "platform-admin"
+DASHBOARD_SCHEMA_REF = "schemas/release-artifacts/dashboard-verification-report.schema.json"
 
 CRITICAL_DASHBOARD_TEXT = [
     "AI Enterprise Command Center",
@@ -162,8 +166,7 @@ def _assert_manager(
     if not isinstance(next_step, dict) or not next_step.get("target"):
         raise RuntimeError("business_board next action needs a dashboard target")
     card_text = " ".join(
-        " ".join(str(card.get(key, "")) for key in ("title", "message", "effect"))
-        for card in cards
+        " ".join(str(card.get(key, "")) for key in ("title", "message", "effect")) for card in cards
     )
     cryptic = _present(card_text, CRYPTIC_PRIMARY_TEXT)
     if cryptic:
@@ -238,7 +241,46 @@ def run_dashboard_verify(
             interval=interval,
         ),
     ]
-    return {"conformant": True, "base_url": base_url, "checks": checks}
+    report = {
+        "conformant": True,
+        "base_url": base_url,
+        "checks": checks,
+        "schema_version": "1.0",
+        "schema_ref": DASHBOARD_SCHEMA_REF,
+    }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / DASHBOARD_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{DASHBOARD_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{DASHBOARD_SCHEMA_REF}: generated dashboard verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
+
+
+def _failure_report(error: str) -> dict[str, Any]:
+    report = {
+        "conformant": False,
+        "error": error,
+        "schema_version": "1.0",
+        "schema_ref": DASHBOARD_SCHEMA_REF,
+    }
+    _validate_report(report)
+    return report
 
 
 def main() -> int:
@@ -265,7 +307,7 @@ def main() -> int:
             actor_role=args.actor_role,
         )
     except (RuntimeError, urllib.error.URLError, TimeoutError) as exc:
-        print(json.dumps({"conformant": False, "error": str(exc)}, sort_keys=True))
+        print(json.dumps(_failure_report(str(exc)), sort_keys=True))
         return 1
     print(json.dumps(report, sort_keys=True))
     return 0

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 
 
@@ -71,6 +72,10 @@ def test_docker_smoke_reports_health_metrics_and_workers(monkeypatch: pytest.Mon
     )
 
     assert report["conformant"] is True
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == "schemas/release-artifacts/docker-smoke-report.schema.json"
+    schema = json.loads((_repo_root() / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
     worker_check = _check(report, "worker_visibility")
     assert worker_check["worker_count"] == 1
     assert worker_check["worker_statuses"] == ["online"]
@@ -119,6 +124,21 @@ def test_docker_smoke_requires_visible_worker(monkeypatch: pytest.MonkeyPatch) -
             timeout=1,
             require_worker=True,
         )
+
+
+def test_docker_smoke_report_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_schema = docker_smoke._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(docker_smoke, "_schema", stricter_schema)
+
+    with pytest.raises(RuntimeError, match="docker-smoke-report.schema.json"):
+        docker_smoke._failure_report("boom")
 
 
 def _check(report: dict[str, Any], name: str) -> dict[str, Any]:

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 
 
@@ -108,6 +109,12 @@ def test_dashboard_verify_checks_pages_and_manager_contract(
     )
 
     assert report["conformant"] is True
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/release-artifacts/dashboard-verification-report.schema.json"
+    )
+    schema = json.loads((_repo_root() / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
     assert _check(report, "dashboard_manager_business_board")["card_count"] == 4
     assert _check(report, "dashboard_manager_business_board")["next_target"] == "execution"
 
@@ -189,6 +196,21 @@ def test_dashboard_verify_rejects_invalid_business_board(
             interval=0,
             timeout=1,
         )
+
+
+def test_dashboard_verify_report_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_schema = dashboard_verify._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(dashboard_verify, "_schema", stricter_schema)
+
+    with pytest.raises(RuntimeError, match="dashboard-verification-report.schema.json"):
+        dashboard_verify._failure_report("boom")
 
 
 def _check(report: dict[str, Any], name: str) -> dict[str, Any]:

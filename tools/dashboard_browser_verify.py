@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import jsonschema
+
 TAB_JOURNEYS = {
     "overview": "Living Enterprise Pulse",
     "execution": "Project Execution Control",
@@ -25,6 +27,9 @@ REDUNDANT_DASHBOARD_REQUESTS = {
     "/api/v1/operator/jobs",
     "/api/v1/operator/jobs/worker-instances",
 }
+DASHBOARD_BROWSER_SCHEMA_REF = (
+    "schemas/release-artifacts/dashboard-browser-verification-report.schema.json"
+)
 
 
 def _require_playwright() -> Any:
@@ -161,11 +166,37 @@ def run_browser_verify(
                 }
             )
             recovery_groups = page.evaluate(
-                """groupedRecoveryItems([
-                  {job_id: "job-1", status: "dead_letter", failure_class: "retry_exhausted", explanation: "Retry exhausted", likely_cause: "Repeated failure", next_action: "Review", raw_diagnostic: "proof-a"},
-                  {job_id: "job-2", status: "dead_letter", failure_class: "retry_exhausted", explanation: "Retry exhausted", likely_cause: "Repeated failure", next_action: "Review", raw_diagnostic: "proof-b"},
-                  {job_id: "job-3", status: "dead_letter", failure_class: "missing_artifact", explanation: "Artifact missing", likely_cause: "Result contract", next_action: "Repair", raw_diagnostic: "proof-c"}
-                ])"""
+                """
+                groupedRecoveryItems([
+                  {
+                    job_id: "job-1",
+                    status: "dead_letter",
+                    failure_class: "retry_exhausted",
+                    explanation: "Retry exhausted",
+                    likely_cause: "Repeated failure",
+                    next_action: "Review",
+                    raw_diagnostic: "proof-a"
+                  },
+                  {
+                    job_id: "job-2",
+                    status: "dead_letter",
+                    failure_class: "retry_exhausted",
+                    explanation: "Retry exhausted",
+                    likely_cause: "Repeated failure",
+                    next_action: "Review",
+                    raw_diagnostic: "proof-b"
+                  },
+                  {
+                    job_id: "job-3",
+                    status: "dead_letter",
+                    failure_class: "missing_artifact",
+                    explanation: "Artifact missing",
+                    likely_cause: "Result contract",
+                    next_action: "Repair",
+                    raw_diagnostic: "proof-c"
+                  }
+                ])
+                """
             )
             if len(recovery_groups) != 2 or recovery_groups[0]["occurrence_count"] != 2:
                 raise RuntimeError("repeated recovery items were not grouped by failure pattern")
@@ -229,7 +260,46 @@ def run_browser_verify(
         finally:
             browser.close()
 
-    return {"conformant": True, "base_url": base_url, "checks": checks}
+    report = {
+        "conformant": True,
+        "base_url": base_url,
+        "checks": checks,
+        "schema_version": "1.0",
+        "schema_ref": DASHBOARD_BROWSER_SCHEMA_REF,
+    }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / DASHBOARD_BROWSER_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{DASHBOARD_BROWSER_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{DASHBOARD_BROWSER_SCHEMA_REF}: generated dashboard browser report "
+            f"does not validate: {exc.message}"
+        ) from exc
+
+
+def _failure_report(error: str) -> dict[str, Any]:
+    report = {
+        "conformant": False,
+        "error": error,
+        "schema_version": "1.0",
+        "schema_ref": DASHBOARD_BROWSER_SCHEMA_REF,
+    }
+    _validate_report(report)
+    return report
 
 
 def main() -> int:
@@ -247,9 +317,9 @@ def main() -> int:
             screenshot_dir=args.screenshot_dir,
         )
     except Exception as exc:  # noqa: BLE001 - CLI must provide one actionable failure.
-        print(json.dumps({"conformant": False, "error": str(exc)}, indent=2))
+        print(json.dumps(_failure_report(str(exc)), indent=2, sort_keys=True))
         return 1
-    print(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 
