@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/evidence-audit/runtime-baseline.schema.json",
+  "title": "Local Runtime Baseline Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "captured_at",
+    "proof_level",
+    "source",
+    "git",
+    "manager",
+    "failure_patterns",
+    "route_metrics",
+    "evidence_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "captured_at": { "type": "string", "minLength": 1 },
+    "proof_level": { "const": "local_demo" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url", "read_only"],
+      "properties": {
+        "base_url": { "type": "string", "minLength": 1 },
+        "read_only": { "const": true }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "dirty"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "tree": { "type": "string", "minLength": 1 },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "manager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headline",
+        "totals",
+        "runtime",
+        "response_bytes",
+        "server_timing"
+      ],
+      "properties": {
+        "headline": {},
+        "totals": {},
+        "runtime": {},
+        "response_bytes": { "type": "integer", "minimum": 0 },
+        "server_timing": { "type": ["string", "null"] }
+      }
+    },
+    "failure_patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "failure_class",
+          "diagnostic",
+          "count",
+          "job_ids",
+          "job_types"
+        ],
+        "properties": {
+          "failure_class": { "type": "string", "minLength": 1 },
+          "diagnostic": { "type": "string" },
+          "count": { "type": "integer", "minimum": 1 },
+          "job_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "job_types": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "route_metrics": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "evidence_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

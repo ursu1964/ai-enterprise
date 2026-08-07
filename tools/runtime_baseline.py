@@ -14,6 +14,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
+RUNTIME_BASELINE_SCHEMA = "runtime-baseline.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "evidence-audit"
+
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 PROBLEM_STATUSES = {"failed", "dead_letter", "abandoned"}
 
@@ -135,7 +140,24 @@ def build_baseline(root: Path, base_url: str) -> dict[str, Any]:
         "route_metrics": _metric_snapshot(metrics_raw.decode("utf-8")),
     }
     document["evidence_hash"] = _canonical_hash(document)
+    _validate_baseline(document)
     return document
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / RUNTIME_BASELINE_SCHEMA).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_baseline(document: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(document, _schema())
+    except jsonschema.ValidationError as exc:
+        raise BaselineError(
+            f"{RUNTIME_BASELINE_SCHEMA}: generated runtime baseline does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def main() -> int:
