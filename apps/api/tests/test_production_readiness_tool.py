@@ -17,6 +17,7 @@ def _load(name: str):
     return module
 
 
+_load("production_readiness_contracts")
 _load("infrastructure_choices")
 production_readiness = _load("production_readiness")
 SCHEMA = json.loads(
@@ -81,6 +82,42 @@ def test_production_readiness_requires_every_current_proof(tmp_path: Path) -> No
         "r16_graph_backend",
     }.issubset({item["name"] for item in report["checks"]})
     jsonschema.validate(report, SCHEMA)
+
+
+def test_production_readiness_fails_closed_when_report_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    choices = _choices()
+    choices["identity_proxy"]["signed_headers"] = [
+        "X-Actor-ID",
+        "X-Actor-Type",
+        "X-Actor-Role",
+        "X-Proxy-Timestamp",
+        "X-Proxy-Signature",
+    ]
+    (tmp_path / "choices.json").write_text(json.dumps(choices), encoding="utf-8")
+    (tmp_path / "evidence.json").write_text(json.dumps(_evidence()), encoding="utf-8")
+    original_schema = production_readiness._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(production_readiness, "_schema", stricter_schema)
+
+    try:
+        production_readiness.verify(
+            tmp_path,
+            Path("evidence.json"),
+            Path("choices.json"),
+            now=datetime(2026, 8, 4, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert "production-readiness-report.schema.json" in str(exc)
+        assert "generated production readiness report does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid production readiness report was accepted")
 
 
 def test_production_readiness_blocks_missing_restore_proof(tmp_path: Path) -> None:

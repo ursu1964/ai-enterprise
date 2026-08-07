@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import infrastructure_choices
+import jsonschema
 import production_readiness_contracts
+
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "production-readiness"
 
 REQUIRED_PROOF: dict[str, tuple[str, ...]] = {
     "tls": ("endpoint", "certificate_expires_at"),
@@ -145,7 +148,7 @@ def verify(
         )
 
     ready = not findings
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready" if ready else "blocked",
         "production_allowed": ready,
@@ -161,6 +164,24 @@ def verify(
             else "Complete every blocked proof and rerun make production-readiness."
         ),
     }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / "production-readiness-report.schema.json").read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    schema_name = "production-readiness-report.schema.json"
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{schema_name}: generated production readiness report does not validate: {exc.message}"
+        ) from exc
 
 
 def _contains_inline_secret_value(value: Any) -> bool:
