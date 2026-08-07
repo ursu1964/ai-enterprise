@@ -27,6 +27,7 @@ def test_semantic_platform_04_generates_all_targets_atomically(tmp_path: Path) -
         "database/mapping.json",
         "database/enforcement.json",
         "database/migration-plan.json",
+        "database/migration.sql",
         "openapi/openapi.json",
         "ui/model.json",
         "tests/semantic-contracts.generated.md",
@@ -48,6 +49,8 @@ def test_semantic_platform_04_generates_all_targets_atomically(tmp_path: Path) -
     )
     assert migration_plan["mode"] == "baseline"
     assert migration_plan["blocked"] is False
+    migration_sql = (output / "database/migration.sql").read_text(encoding="utf-8")
+    assert "Baseline generation: no previous registry was supplied." in migration_sql
 
     openapi = json.loads((output / "openapi/openapi.json").read_text(encoding="utf-8"))
     assert openapi["paths"]["/requests/{id}/submit"]["post"]["x-semantic-command"] == (
@@ -132,9 +135,12 @@ def test_semantic_platform_04_blocks_required_property_without_backfill(
     migration_plan = json.loads(
         (tmp_path / "generated/database/migration-plan.json").read_text(encoding="utf-8")
     )
+    migration_sql = (tmp_path / "generated/database/migration.sql").read_text(encoding="utf-8")
     assert migration_plan["mode"] == "semantic_diff"
     assert migration_plan["status"] == "blocked"
     assert migration_plan["blocked"] is True
+    assert "Migration blocked: unsafe semantic changes require manual action." in migration_sql
+    assert "ALTER TABLE" not in migration_sql
     assert migration_plan["changes"] == [
         {
             "action": "declare_backfill",
@@ -194,7 +200,40 @@ def test_semantic_platform_04_allows_required_property_with_declared_backfill(
     migration_plan = json.loads(
         (tmp_path / "generated/database/migration-plan.json").read_text(encoding="utf-8")
     )
+    migration_sql = (tmp_path / "generated/database/migration.sql").read_text(encoding="utf-8")
     assert migration_plan["status"] == "ready"
     assert migration_plan["blocked"] is False
     assert migration_plan["changes"][0]["classification"] == "breaking_with_backfill"
     assert migration_plan["changes"][0]["migration"] == "approval.migration.add_title"
+    assert "ALTER TABLE approval_request ADD COLUMN title TEXT;" in migration_sql
+    assert (
+        "UPDATE approval_request SET title = 'Legacy request title unavailable.' "
+        "WHERE title IS NULL;" in migration_sql
+    )
+    assert "ALTER TABLE approval_request ALTER COLUMN title SET NOT NULL;" in migration_sql
+
+
+def test_semantic_platform_04_generates_safe_optional_property_sql(
+    tmp_path: Path,
+) -> None:
+    current = json.loads(
+        (ROOT / semantic_platform_generate.DEFAULT_REGISTRY).read_text(encoding="utf-8")
+    )
+    previous = json.loads(json.dumps(current))
+    del previous["objects"]["approval.object.request"]["properties"]["submitted_at"]
+    previous_path = tmp_path / "previous.json"
+    previous_path.write_text(json.dumps(previous), encoding="utf-8")
+
+    semantic_platform_generate.write_generation(
+        ROOT,
+        tmp_path / "generated",
+        previous_registry_path=previous_path,
+    )
+
+    migration_plan = json.loads(
+        (tmp_path / "generated/database/migration-plan.json").read_text(encoding="utf-8")
+    )
+    migration_sql = (tmp_path / "generated/database/migration.sql").read_text(encoding="utf-8")
+    assert migration_plan["status"] == "ready"
+    assert migration_plan["changes"][0]["classification"] == "additive"
+    assert "ALTER TABLE approval_request ADD COLUMN submitted_at TIMESTAMPTZ;" in migration_sql

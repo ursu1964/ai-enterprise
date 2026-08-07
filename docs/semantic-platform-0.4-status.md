@@ -16,6 +16,7 @@ Implemented:
   - PostgreSQL mapping metadata
   - database enforcement report
   - semantic database migration plan
+  - semantic database migration SQL
   - OpenAPI
   - UI metadata
   - test scaffolding
@@ -28,6 +29,8 @@ Implemented:
 - Semantic migration planning that compares a previous registry with the current
   registry and blocks unsafe required-property additions until a backfill
   strategy is declared.
+- Migration SQL generation that emits SQL only from an unblocked semantic
+  migration plan. Blocked plans produce an explicit no-SQL blocked artifact.
 - Atomic output replacement through a staging directory.
 
 Operational rule:

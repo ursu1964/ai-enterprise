@@ -71,6 +71,7 @@ SEMANTIC_PLATFORM_REQUIRED_ARTIFACTS = {
     "database/mapping.json",
     "database/enforcement.json",
     "database/migration-plan.json",
+    "database/migration.sql",
     "openapi/openapi.json",
     "ui/model.json",
     "tests/semantic-contracts.generated.md",
