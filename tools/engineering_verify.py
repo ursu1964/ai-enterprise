@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import importlib
 import json
 import re
 import subprocess
@@ -64,6 +65,27 @@ EXPECTED_GATE_COMMANDS = {
     "performance-validation": "pytest performance",
     "independent-review": "review evidence",
     "promotion-eligibility": "verify signed evidence",
+}
+SEMANTIC_PLATFORM_REQUIRED_ARTIFACTS = {
+    "database/schema.sql",
+    "database/mapping.json",
+    "database/enforcement.json",
+    "openapi/openapi.json",
+    "ui/model.json",
+    "tests/semantic-contracts.generated.md",
+    "docs/index.md",
+    "docs/objects/approval.object.request.md",
+    "diagrams/request-lifecycle.mmd",
+    "ai/context.json",
+}
+SEMANTIC_PLATFORM_REQUIRED_COVERAGE = {
+    ("approval.object.request", "postgresql", "fully_enforced"),
+    ("approval.object.request", "openapi", "fully_enforced"),
+    ("approval.constraint.description_required", "postgresql", "runtime_required"),
+    ("approval.constraint.description_required", "openapi", "runtime_required"),
+    ("approval.constraint.description_required", "ui", "runtime_required"),
+    ("approval.transition.submit_request", "openapi", "partially_enforced"),
+    ("approval.transition.submit_request", "ui", "documented_only"),
 }
 
 
@@ -209,6 +231,76 @@ def _unmigrated_models(root: Path) -> tuple[str, ...]:
             if table_name and node.name not in migration_text and table_name not in migration_text:
                 missing.append(f"{node.name}:{table_name}")
     return tuple(missing)
+
+
+def _semantic_platform_generator(root: Path) -> Any:
+    for import_root in (root / "tools", root / "apps/api/src"):
+        import_path = str(import_root)
+        if import_path not in sys.path:
+            sys.path.insert(0, import_path)
+    return importlib.import_module("semantic_platform_generate")
+
+
+def _verify_semantic_platform_generation(root: Path, findings: list[Finding]) -> int:
+    checks = 0
+    try:
+        generator = _semantic_platform_generator(root)
+        first = generator.build_generation(root)
+        second = generator.build_generation(root)
+    except Exception as exc:  # noqa: BLE001 - verifier reports deterministic failures.
+        findings.append(
+            Finding(
+                "semantic-platform-generation",
+                "registry/updl-semantic-platform-0.4/reference-approval.json",
+                f"semantic platform generation failed: {exc}",
+            )
+        )
+        return 1
+
+    checks += 1
+    if first != second:
+        findings.append(
+            Finding(
+                "semantic-platform-determinism",
+                str(generator.DEFAULT_REGISTRY),
+                "semantic platform generation differs across identical runs",
+            )
+        )
+    checks += 1
+    artifact_paths = {artifact["path"] for artifact in first.get("artifacts", [])}
+    missing_artifacts = sorted(SEMANTIC_PLATFORM_REQUIRED_ARTIFACTS - artifact_paths)
+    if missing_artifacts:
+        findings.append(
+            Finding(
+                "semantic-platform-artifacts",
+                str(generator.DEFAULT_REGISTRY),
+                f"missing generated targets: {missing_artifacts}",
+            )
+        )
+    checks += 1
+    coverage = {
+        (item["semanticElementId"], item["target"], item["status"])
+        for item in first.get("coverage", [])
+    }
+    missing_coverage = sorted(SEMANTIC_PLATFORM_REQUIRED_COVERAGE - coverage)
+    if missing_coverage:
+        findings.append(
+            Finding(
+                "semantic-platform-coverage",
+                str(generator.DEFAULT_REGISTRY),
+                f"missing coverage declarations: {missing_coverage}",
+            )
+        )
+    checks += 1
+    if first.get("diagnostics"):
+        findings.append(
+            Finding(
+                "semantic-platform-diagnostics",
+                str(generator.DEFAULT_REGISTRY),
+                f"unexpected diagnostics: {first['diagnostics']}",
+            )
+        )
+    return checks
 
 
 def verify(root: Path) -> VerificationReport:
@@ -513,6 +605,7 @@ def verify(root: Path) -> VerificationReport:
                 "regeneration required",
             )
         )
+    checks += _verify_semantic_platform_generation(root, findings)
 
     cycles = _dependency_cycles(root)
     checks += 1

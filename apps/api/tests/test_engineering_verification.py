@@ -34,6 +34,7 @@ def _isolated_root(tmp_path: Path) -> Path:
         (tmp_path / name).symlink_to(source / name, target_is_directory=(source / name).is_dir())
     shutil.copytree(source / "specifications", tmp_path / "specifications")
     shutil.copytree(source / "infrastructure", tmp_path / "infrastructure")
+    shutil.copytree(source / "registry", tmp_path / "registry")
     return tmp_path
 
 
@@ -91,6 +92,20 @@ def test_infrastructure_spec_change_requires_regeneration(tmp_path) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
     report = verifier.verify(root)
     assert any(item.check == "generated-artifact-drift" for item in report.findings)
+
+
+def test_semantic_platform_generator_drift_is_an_engineering_failure(tmp_path) -> None:
+    verifier = _load("engineering_verify")
+    root = _isolated_root(tmp_path)
+    path = root / "registry" / "updl-semantic-platform-0.4" / "reference-approval.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    del document["constraints"]["approval.constraint.description_required"]
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    report = verifier.verify(root)
+
+    assert any(item.check == "semantic-platform-coverage" for item in report.findings)
+    assert not report.conformant
 
 
 def test_dependency_cycle_detection_is_deterministic(tmp_path) -> None:
