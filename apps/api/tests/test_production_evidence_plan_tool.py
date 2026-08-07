@@ -149,6 +149,32 @@ def test_production_evidence_plan_marks_present_but_invalid_template_values_bloc
     assert any("replace placeholder" in item for item in domain_plan["validation_findings"])
 
 
+def test_production_evidence_plan_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    original_schema = production_evidence_plan._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(production_evidence_plan, "_schema", stricter_schema)
+
+    try:
+        production_evidence_plan.build_plan(
+            tmp_path,
+            Path("missing-evidence.json"),
+            Path("missing-choices.json"),
+            now=datetime(2026, 8, 4, tzinfo=UTC),
+        )
+    except RuntimeError as exc:
+        assert "production-evidence-plan.schema.json" in str(exc)
+        assert "generated production evidence plan does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid production evidence plan was accepted")
+
+
 def _find(items: list[dict], key: str, value: str) -> dict:
     return next(item for item in items if item[key] == value)
 

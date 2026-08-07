@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import infrastructure_choices
+import jsonschema
 import production_readiness
+
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "production-readiness"
+PLAN_SCHEMA = "production-evidence-plan.schema.json"
 
 OWNER_HINTS: dict[str, str] = {
     "tls": "platform owner",
@@ -121,10 +125,12 @@ def build_plan(
             "choices_conformant": choice_report["conformant"],
         },
     }
-    return {
+    plan = {
         **plan_without_hash,
         "plan_hash": _stable_hash(plan_without_hash),
     }
+    _validate_plan(plan)
+    return plan
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -229,6 +235,21 @@ def _missing(value: Any) -> bool:
 def _stable_hash(payload: dict[str, Any]) -> str:
     rendered = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / PLAN_SCHEMA).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_plan(plan: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(plan, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{PLAN_SCHEMA}: generated production evidence plan does not validate: {exc.message}"
+        ) from exc
 
 
 def main() -> int:
