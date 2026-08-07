@@ -4,6 +4,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _load(name: str):
     if name == "intelligence_verify":
@@ -44,6 +46,31 @@ def test_intelligence_baseline_is_deterministic_ranked_and_ci_enforced() -> None
     assert first.conformant and first == second
     assert [item["investment_id"] for item in first.investment_ranking] == ["INV-001", "INV-002"]
     assert len(first.evidence_hash) == 64
+    assert first.schema_version == "1.0"
+    assert first.schema_ref == (
+        "schemas/release-artifacts/intelligence-verification-report.schema.json"
+    )
+    schema = json.loads((root / first.schema_ref).read_text(encoding="utf-8"))
+    jsonschema.validate(verifier._report_document(first), schema)
+
+
+def test_intelligence_report_fails_closed_when_schema_validation_fails(monkeypatch) -> None:
+    verifier = _load("intelligence_verify")
+    original_schema = verifier._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(verifier, "_schema", stricter_schema)
+
+    try:
+        verifier.verify(Path(__file__).resolve().parents[3])
+    except RuntimeError as exc:
+        assert "intelligence-verification-report.schema.json" in str(exc)
+        assert "does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid intelligence verification report was accepted")
 
 
 def test_optimizer_cannot_fund_execute_or_hide_zero_capacity(tmp_path) -> None:

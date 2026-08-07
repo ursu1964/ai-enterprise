@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import engineering_verify
+import jsonschema
 
+INTELLIGENCE_REPORT_SCHEMA_REF = (
+    "schemas/release-artifacts/intelligence-verification-report.schema.json"
+)
 SPEC_FILES = (
     "evidence.v1.json",
     "objective-optimizer.v1.json",
@@ -60,6 +64,8 @@ class IntelligenceReport:
     evidence_hash: str
     investment_ranking: tuple[dict[str, Any], ...]
     findings: tuple[Finding, ...]
+    schema_version: str = "1.0"
+    schema_ref: str = INTELLIGENCE_REPORT_SCHEMA_REF
 
 
 def _load(root: Path, findings: list[Finding]) -> dict[str, dict[str, Any]]:
@@ -251,9 +257,15 @@ def verify(root: Path) -> IntelligenceReport:
             separators=(",", ":"),
             ensure_ascii=False,
         )
-        return IntelligenceReport(
-            False, checks, hashlib.sha256(canonical.encode()).hexdigest(), (), tuple(findings)
+        report = IntelligenceReport(
+            False,
+            checks,
+            hashlib.sha256(canonical.encode()).hexdigest(),
+            (),
+            tuple(findings),
         )
+        _validate_report(report)
+        return report
     specification_ids: set[str] = set()
     for name, document in specs.items():
         identifier = document.get("specification_id")
@@ -746,13 +758,39 @@ def verify(root: Path) -> IntelligenceReport:
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return IntelligenceReport(
+    report = IntelligenceReport(
         not findings,
         checks,
         hashlib.sha256(canonical.encode()).hexdigest(),
         tuple(ranking),
         tuple(findings),
     )
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / INTELLIGENCE_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{INTELLIGENCE_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _report_document(report: IntelligenceReport) -> dict[str, Any]:
+    return json.loads(json.dumps(asdict(report), sort_keys=True))
+
+
+def _validate_report(report: IntelligenceReport) -> None:
+    try:
+        jsonschema.validate(_report_document(report), _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{INTELLIGENCE_REPORT_SCHEMA_REF}: generated intelligence verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -762,7 +800,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = verify(args.root)
     print(
-        json.dumps(asdict(report), sort_keys=True)
+        json.dumps(_report_document(report), sort_keys=True)
         if args.as_json
         else f"P16 governed intelligence: {'PASS' if report.conformant else 'FAIL'} "
         f"({report.checks} checks, evidence {report.evidence_hash})"

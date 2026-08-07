@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import engineering_verify
+import jsonschema
 
+EVOLUTION_REPORT_SCHEMA_REF = "schemas/release-artifacts/evolution-verification-report.schema.json"
 SPEC_FILES = (
     "evidence.v1.json",
     "capabilities.v1.json",
@@ -65,6 +67,8 @@ class EvolutionReport:
     maturity: dict[str, int]
     benchmark_opportunities: tuple[dict[str, Any], ...]
     findings: tuple[Finding, ...]
+    schema_version: str = "1.0"
+    schema_ref: str = EVOLUTION_REPORT_SCHEMA_REF
 
 
 def _load(root: Path, findings: list[Finding]) -> dict[str, dict[str, Any]]:
@@ -81,9 +85,7 @@ def _load(root: Path, findings: list[Finding]) -> dict[str, dict[str, Any]]:
 
 
 def _roadmap_cycles(proposals: list[dict[str, Any]]) -> tuple[str, ...]:
-    graph = {
-        item["proposal_id"]: tuple(item.get("dependencies", ())) for item in proposals
-    }
+    graph = {item["proposal_id"]: tuple(item.get("dependencies", ())) for item in proposals}
     cycles: set[str] = set()
     visiting: list[str] = []
     visited: set[str] = set()
@@ -115,9 +117,7 @@ def verify(root: Path) -> EvolutionReport:
     for name, document in specs.items():
         identifier = document.get("specification_id")
         if not isinstance(identifier, str) or identifier in identifiers:
-            findings.append(
-                Finding("identity", name, "missing or duplicate specification ID")
-            )
+            findings.append(Finding("identity", name, "missing or duplicate specification ID"))
         else:
             identifiers.add(identifier)
         if document.get("status") != "approved":
@@ -154,9 +154,7 @@ def verify(root: Path) -> EvolutionReport:
     capability_ids = [item.get("capability_id") for item in capabilities]
     checks += len(capabilities) + 1
     if len(capability_ids) != len(set(capability_ids)):
-        findings.append(
-            Finding("capability", "capabilities.v1.json", "duplicate capability ID")
-        )
+        findings.append(Finding("capability", "capabilities.v1.json", "duplicate capability ID"))
     for item in capabilities:
         history = item.get("history", [])
         indexes = [lifecycle.index(state) for state in history if state in lifecycle]
@@ -211,9 +209,7 @@ def verify(root: Path) -> EvolutionReport:
         valid = (
             scores
             and all(
-                isinstance(score, int)
-                and not isinstance(score, bool)
-                and 0 <= score <= 5
+                isinstance(score, int) and not isinstance(score, bool) and 0 <= score <= 5
                 for score in scores
             )
             and len(evidence_ids) == len(set(evidence_ids))
@@ -237,9 +233,7 @@ def verify(root: Path) -> EvolutionReport:
                 )
             )
     if set(maturity) != required_dimensions:
-        findings.append(
-            Finding("maturity", "maturity.v1.json", "required dimensions missing")
-        )
+        findings.append(Finding("maturity", "maturity.v1.json", "required dimensions missing"))
 
     benchmark_spec = specs.get("benchmarks.v1.json", {})
     metric_ids: set[str] = set()
@@ -272,17 +266,11 @@ def verify(root: Path) -> EvolutionReport:
                 for value in values
             )
         ):
-            findings.append(
-                Finding("benchmark", str(metric_id), "invalid metric or evidence")
-            )
+            findings.append(Finding("benchmark", str(metric_id), "invalid metric or evidence"))
             continue
         metric_ids.add(metric_id)
         current, objective = float(metric["current"]), float(metric["objective"])
-        remaining = (
-            objective - current
-            if metric["direction"] == "higher"
-            else current - objective
-        )
+        remaining = objective - current if metric["direction"] == "higher" else current - objective
         denominator = max(abs(objective), 1.0)
         opportunities.append(
             {
@@ -348,16 +336,14 @@ def verify(root: Path) -> EvolutionReport:
         if (
             proposal.get("dependency_attestation") is not True
             or proposal.get("dependency_evidence_id") not in catalog
-            or catalog_types.get(str(proposal.get("dependency_evidence_id")))
-            != "review-report"
+            or catalog_types.get(str(proposal.get("dependency_evidence_id"))) != "review-report"
             or (
                 approved
                 and (
                     not isinstance(approval, dict)
                     or approval.get("actor_type") != "human"
                     or approval.get("evidence_id") not in catalog
-                    or catalog_types.get(str(approval.get("evidence_id")))
-                    != "human-approval"
+                    or catalog_types.get(str(approval.get("evidence_id"))) != "human-approval"
                 )
             )
         ):
@@ -417,8 +403,7 @@ def verify(root: Path) -> EvolutionReport:
             or len(rollback.get("artifact_hash", "")) != 64
             or not rollback.get("steps")
             or rollback.get("tested_evidence_id") not in catalog
-            or catalog_types.get(str(rollback.get("tested_evidence_id")))
-            != "recovery-test"
+            or catalog_types.get(str(rollback.get("tested_evidence_id"))) != "recovery-test"
             or not isinstance(rollback.get("maximum_recovery_minutes"), int)
             or rollback.get("maximum_recovery_minutes") <= 0
         ):
@@ -522,7 +507,7 @@ def verify(root: Path) -> EvolutionReport:
         ensure_ascii=False,
     )
     evidence_hash = hashlib.sha256(canonical.encode()).hexdigest()
-    return EvolutionReport(
+    report = EvolutionReport(
         not findings,
         checks,
         evidence_hash,
@@ -530,18 +515,42 @@ def verify(root: Path) -> EvolutionReport:
         tuple(opportunities),
         tuple(findings),
     )
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / EVOLUTION_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{EVOLUTION_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _report_document(report: EvolutionReport) -> dict[str, Any]:
+    return json.loads(json.dumps(asdict(report), sort_keys=True))
+
+
+def _validate_report(report: EvolutionReport) -> None:
+    try:
+        jsonschema.validate(_report_document(report), _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{EVOLUTION_REPORT_SCHEMA_REF}: generated evolution verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--root", type=Path, default=Path(__file__).resolve().parents[1]
-    )
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
     report = verify(args.root)
     if args.as_json:
-        print(json.dumps(asdict(report), sort_keys=True))
+        print(json.dumps(_report_document(report), sort_keys=True))
     else:
         print(
             f"P14 governed evolution: {'PASS' if report.conformant else 'FAIL'} "

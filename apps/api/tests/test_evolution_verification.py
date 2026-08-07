@@ -4,6 +4,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _load(name: str):
     if name == "evolution_verify":
@@ -43,6 +45,29 @@ def test_governed_evolution_assessment_is_deterministic_and_evidence_based() -> 
     assert first.maturity["architecture"] == 4
     assert first.benchmark_opportunities[0]["metric_id"] == "mean-recovery-minutes"
     assert len(first.evidence_hash) == 64
+    assert first.schema_version == "1.0"
+    assert first.schema_ref == "schemas/release-artifacts/evolution-verification-report.schema.json"
+    schema = json.loads((root / first.schema_ref).read_text(encoding="utf-8"))
+    jsonschema.validate(verifier._report_document(first), schema)
+
+
+def test_evolution_report_fails_closed_when_schema_validation_fails(monkeypatch) -> None:
+    verifier = _load("evolution_verify")
+    original_schema = verifier._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(verifier, "_schema", stricter_schema)
+
+    try:
+        verifier.verify(Path(__file__).resolve().parents[3])
+    except RuntimeError as exc:
+        assert "evolution-verification-report.schema.json" in str(exc)
+        assert "does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid evolution verification report was accepted")
 
 
 def test_capability_cannot_skip_lifecycle_or_self_authorize(tmp_path) -> None:

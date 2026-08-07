@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 
 import engineering_verify
+import jsonschema
 
+FEDERATION_REPORT_SCHEMA_REF = (
+    "schemas/release-artifacts/federation-verification-report.schema.json"
+)
 SPEC_FILES = (
     "evidence.v1.json",
     "regulatory.v1.json",
@@ -85,6 +89,8 @@ class FederationReport:
     checks: int
     evidence_hash: str
     findings: tuple[Finding, ...]
+    schema_version: str = "1.0"
+    schema_ref: str = FEDERATION_REPORT_SCHEMA_REF
 
 
 def _load(root: Path, findings: list[Finding]) -> dict[str, dict[str, Any]]:
@@ -109,9 +115,7 @@ def verify(root: Path) -> FederationReport:
     for name, document in specs.items():
         identifier = document.get("specification_id")
         if not isinstance(identifier, str) or identifier in ids:
-            findings.append(
-                Finding("identity", name, "missing or duplicate specification ID")
-            )
+            findings.append(Finding("identity", name, "missing or duplicate specification ID"))
         else:
             ids.add(identifier)
         if document.get("status") != "approved":
@@ -130,9 +134,7 @@ def verify(root: Path) -> FederationReport:
             or any(character not in "0123456789abcdef" for character in digest)
             or not item.get("type")
         ):
-            findings.append(
-                Finding("evidence", str(key), "invalid identity, type, or hash")
-            )
+            findings.append(Finding("evidence", str(key), "invalid identity, type, or hash"))
         else:
             evidence[key] = item["type"]
 
@@ -189,9 +191,7 @@ def verify(root: Path) -> FederationReport:
                 )
             )
     if regulatory.get("default") != "deny-unclassified-deployment":
-        findings.append(
-            Finding("regulatory-default", "regulatory.v1.json", "default is not deny")
-        )
+        findings.append(Finding("regulatory-default", "regulatory.v1.json", "default is not deny"))
 
     cloud = specs.get("multi-cloud.v1.json", {})
     providers = {item.get("provider_id"): item for item in cloud.get("providers", [])}
@@ -209,9 +209,7 @@ def verify(root: Path) -> FederationReport:
             *workload.get("fallback_providers", []),
         ]
         required = set(workload.get("required_jurisdictions", []))
-        regulatory_deployment = regulatory_deployments.get(
-            workload.get("regulatory_deployment_id")
-        )
+        regulatory_deployment = regulatory_deployments.get(workload.get("regulatory_deployment_id"))
         if (
             len(selected) != len(set(selected))
             or any(item not in providers for item in selected)
@@ -336,9 +334,7 @@ def verify(root: Path) -> FederationReport:
         event_identities.add(identity)
 
     if len(nodes) != len(node_items):
-        findings.append(
-            Finding("graph-node", "ecosystem-graph.v1.json", "duplicate node identity")
-        )
+        findings.append(Finding("graph-node", "ecosystem-graph.v1.json", "duplicate node identity"))
     edge_ids: set[str] = set()
     for node in nodes.values():
         checks += 1
@@ -347,9 +343,7 @@ def verify(root: Path) -> FederationReport:
             or node.get("classification") not in CLASSIFICATION
             or not node.get("visibility_scope")
         ):
-            findings.append(
-                Finding("graph-node", str(node.get("node_id")), "evidence missing")
-            )
+            findings.append(Finding("graph-node", str(node.get("node_id")), "evidence missing"))
     for edge in graph.get("edges", []):
         checks += 1
         edge_id = edge.get("edge_id")
@@ -390,19 +384,15 @@ def verify(root: Path) -> FederationReport:
     views = dashboard.get("views", [])
     if {item.get("view_id") for item in views} != REQUIRED_VIEWS:
         findings.append(
-            Finding(
-                "dashboard", "dashboard.v1.json", "required executive views missing"
-            )
+            Finding("dashboard", "dashboard.v1.json", "required executive views missing")
         )
     metric_ids: set[tuple[str, str]] = set()
     for view in views:
         view_id = str(view.get("view_id"))
-        if {
-            item.get("metric_id") for item in view.get("metrics", [])
-        } != REQUIRED_VIEW_METRICS.get(view_id, set()):
-            findings.append(
-                Finding("dashboard", view_id, "required view metrics missing or added")
-            )
+        if {item.get("metric_id") for item in view.get("metrics", [])} != REQUIRED_VIEW_METRICS.get(
+            view_id, set()
+        ):
+            findings.append(Finding("dashboard", view_id, "required view metrics missing or added"))
         for metric in view.get("metrics", []):
             checks += 1
             identity = (str(view.get("view_id")), str(metric.get("metric_id")))
@@ -523,24 +513,48 @@ def verify(root: Path) -> FederationReport:
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return FederationReport(
+    report = FederationReport(
         not findings,
         checks,
         hashlib.sha256(canonical.encode()).hexdigest(),
         tuple(findings),
     )
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / FEDERATION_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{FEDERATION_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _report_document(report: FederationReport) -> dict[str, Any]:
+    return json.loads(json.dumps(asdict(report), sort_keys=True))
+
+
+def _validate_report(report: FederationReport) -> None:
+    try:
+        jsonschema.validate(_report_document(report), _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{FEDERATION_REPORT_SCHEMA_REF}: generated federation verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--root", type=Path, default=Path(__file__).resolve().parents[1]
-    )
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
     report = verify(args.root)
     print(
-        json.dumps(asdict(report), sort_keys=True)
+        json.dumps(_report_document(report), sort_keys=True)
         if args.as_json
         else f"P15 governed federation: {'PASS' if report.conformant else 'FAIL'} "
         f"({report.checks} checks, evidence {report.evidence_hash})"
