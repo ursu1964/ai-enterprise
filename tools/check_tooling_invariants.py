@@ -10,6 +10,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
+TOOLING_INVARIANTS_SCHEMA_REF = "schemas/production-readiness/tooling-invariants-report.schema.json"
+
 ACTION_MINIMUM_MAJORS = {
     "actions/checkout": 5,
     "actions/setup-python": 6,
@@ -46,11 +50,33 @@ def check_tooling_invariants(root: Path) -> dict[str, Any]:
                 )
 
     return {
+        "schema_version": "1.0",
+        "schema_ref": TOOLING_INVARIANTS_SCHEMA_REF,
         "conformant": not findings,
         "checked_tools": checked_tools,
         "checked_actions": checked_actions,
         "findings": findings,
     }
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / TOOLING_INVARIANTS_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{TOOLING_INVARIANTS_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{TOOLING_INVARIANTS_SCHEMA_REF}: generated tooling invariants report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main() -> int:
@@ -59,6 +85,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     report = check_tooling_invariants(args.root)
+    _validate_report(report)
 
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))

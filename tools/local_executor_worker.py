@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any, Literal
 
+import jsonschema
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_ROOT = REPO_ROOT / "tools"
 API_SRC = REPO_ROOT / "apps/api/src"
@@ -28,6 +30,9 @@ from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
 from configure_local_executor import local_executor_configuration
 
 EXECUTOR_JOB_TYPES = frozenset({JobType.EXECUTE_WORK_PACKAGE, JobType.REVIEW_CANDIDATE_PATCH})
+LOCAL_EXECUTOR_WORKER_SCHEMA_REF = (
+    "schemas/production-readiness/local-executor-worker-report.schema.json"
+)
 
 
 def activation_env(base: dict[str, str] | None = None) -> dict[str, str]:
@@ -65,7 +70,9 @@ async def readiness_report(
         EXECUTOR_JOB_TYPES if scope == "executor" else allowed_job_types(WorkerProfile.GENERAL)
     )
     result = await assess_worker_readiness(settings, candidates)
-    return {
+    report = {
+        "schema_version": "1.0",
+        "schema_ref": LOCAL_EXECUTOR_WORKER_SCHEMA_REF,
         "ok": not result.blockers,
         "scope": scope,
         "permitted_job_types": sorted(job_type.value for job_type in result.permitted_job_types),
@@ -80,6 +87,28 @@ async def readiness_report(
             for blocker in result.blockers
         ],
     }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / LOCAL_EXECUTOR_WORKER_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{LOCAL_EXECUTOR_WORKER_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{LOCAL_EXECUTOR_WORKER_SCHEMA_REF}: generated local executor worker report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def worker_command() -> list[str]:
@@ -127,6 +156,7 @@ def main() -> int:
             "WORKER_PROFILE",
         )
     }
+    _validate_report(report)
     if args.json or not args.run:
         print(json.dumps(report, sort_keys=True))
     if not report["ok"]:

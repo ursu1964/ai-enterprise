@@ -1,6 +1,10 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
+
+import jsonschema
+import pytest
 
 
 def _load_tool():
@@ -14,6 +18,7 @@ def _load_tool():
 
 
 tooling = _load_tool()
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _repository(tmp_path: Path, *, action: str = "actions/checkout@v5") -> Path:
@@ -35,6 +40,10 @@ def test_tooling_invariants_accept_current_actions_and_executable_tools(tmp_path
 
     assert report["conformant"] is True
     assert report["findings"] == []
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == tooling.TOOLING_INVARIANTS_SCHEMA_REF
+    schema = json.loads((REPO_ROOT / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
 
 
 def test_tooling_invariants_reject_non_executable_shebang_tool(tmp_path: Path) -> None:
@@ -57,3 +66,17 @@ def test_tooling_invariants_reject_outdated_known_action(tmp_path: Path) -> None
 
     assert report["conformant"] is False
     assert "required v6" in report["findings"][0]
+
+
+def test_tooling_invariants_report_validation_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _repository(tmp_path)
+    report = tooling.check_tooling_invariants(root)
+    schema = dict(tooling._schema())
+    schema["required"] = [*schema["required"], "impossible_field"]
+    monkeypatch.setattr(tooling, "_schema", lambda: schema)
+
+    with pytest.raises(RuntimeError, match="tooling invariants report does not validate"):
+        tooling._validate_report(report)

@@ -1,8 +1,10 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import jsonschema
 import pytest
 
 from ai_enterprise.domain.enums import JobType
@@ -27,6 +29,7 @@ def _repo_root() -> Path:
 
 
 local_executor_worker = _load("local_executor_worker")
+REPO_ROOT = _repo_root()
 
 
 def test_activation_env_uses_generated_image_ids(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,6 +79,10 @@ async def test_executor_readiness_report_is_limited_to_execution_job_types(
     )
 
     assert report["ok"] is True
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == local_executor_worker.LOCAL_EXECUTOR_WORKER_SCHEMA_REF
+    schema = json.loads((REPO_ROOT / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
     assert seen_candidates == [
         frozenset({JobType.EXECUTE_WORK_PACKAGE, JobType.REVIEW_CANDIDATE_PATCH})
     ]
@@ -117,3 +124,28 @@ async def test_readiness_report_preserves_blocker_evidence(
     assert report["blockers"][0]["next_action"] == (
         "Run the host worker only where Docker is approved."
     )
+
+
+@pytest.mark.asyncio
+async def test_local_executor_worker_report_validation_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_readiness(_settings: object, candidates: frozenset[JobType]) -> WorkerReadiness:
+        return WorkerReadiness(permitted_job_types=candidates, blockers=())
+
+    monkeypatch.setattr(local_executor_worker, "assess_worker_readiness", fake_readiness)
+    schema = dict(local_executor_worker._schema())
+    schema["required"] = [*schema["required"], "impossible_field"]
+    monkeypatch.setattr(local_executor_worker, "_schema", lambda: schema)
+
+    with pytest.raises(RuntimeError, match="local executor worker report does not validate"):
+        await local_executor_worker.readiness_report(
+            {
+                "EXECUTION_CONTAINER_PROVIDER": "restricted-local-docker",
+                "EXECUTION_IMAGE": "execution:local",
+                "EXECUTION_IMAGE_ID": "sha256:" + "a" * 64,
+                "REVIEW_IMAGE": "review:local",
+                "REVIEW_IMAGE_ID": "sha256:" + "b" * 64,
+            },
+            scope="executor",
+        )

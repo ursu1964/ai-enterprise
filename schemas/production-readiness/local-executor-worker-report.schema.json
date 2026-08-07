@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/local-executor-worker-report.schema.json",
+  "title": "Local Executor Worker Readiness Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_ref",
+    "ok",
+    "scope",
+    "permitted_job_types",
+    "blockers"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/production-readiness/local-executor-worker-report.schema.json"
+    },
+    "ok": { "type": "boolean" },
+    "scope": { "enum": ["executor", "general"] },
+    "permitted_job_types": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "worker_command": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "activation_env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "EXECUTION_CONTAINER_PROVIDER",
+        "EXECUTION_IMAGE",
+        "EXECUTION_IMAGE_ID",
+        "REVIEW_IMAGE",
+        "REVIEW_IMAGE_ID",
+        "WORKER_PROFILE"
+      ],
+      "properties": {
+        "EXECUTION_CONTAINER_PROVIDER": { "type": "string", "minLength": 1 },
+        "EXECUTION_IMAGE": { "type": "string", "minLength": 1 },
+        "EXECUTION_IMAGE_ID": { "type": "string", "minLength": 1 },
+        "REVIEW_IMAGE": { "type": "string", "minLength": 1 },
+        "REVIEW_IMAGE_ID": { "type": "string", "minLength": 1 },
+        "WORKER_PROFILE": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "capability", "job_types", "detail", "next_action"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "capability": { "type": "string", "minLength": 1 },
+        "job_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "detail": { "type": "string", "minLength": 1 },
+        "next_action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
