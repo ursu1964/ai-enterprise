@@ -3,6 +3,9 @@
 Production readiness is an evidence decision, not a claim based on configuration templates. A
 production release must have both real infrastructure decisions and current operational proof.
 
+Current unresolved operational actions are tracked in
+`docs/enterprise/production-readiness-remaining-actions.md`.
+
 ## Prepare the bundle
 
 1. Copy `real-world-infrastructure-decisions.template.json` to
