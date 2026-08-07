@@ -82,9 +82,9 @@ promotion review. AI cannot approve its own high-risk canonical writes.
 This IR specification is implemented through the existing R4 AI interpretation
 boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r4_ai_interpretation.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r4_interpretation.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r4_ai_interpretation.py`
-- API schemas: `apps/api/src/ai_enterprise/api/r4_ai_interpretation_schemas.py`
+- API schemas: `apps/api/src/ai_enterprise/api/r4_ai_schemas.py`
 - Migrations: `migrations/versions/*r4*.py`
 - Schemas: `specifications/AI-INTERPRETATION-0.1.md`
 - Evidence package: `implementation/r04`
