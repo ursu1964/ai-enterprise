@@ -80,7 +80,8 @@ or external package registries require real deployment configuration.
 
 This IR specification is implemented through the existing R9 UAK boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r9_uak.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r9_uak.py`
+- Runtime services: `apps/api/src/ai_enterprise/application/r9_uak_runtime.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r9_uak.py`
 - API schemas: `apps/api/src/ai_enterprise/api/r9_uak_schemas.py`
 - Migrations: `migrations/versions/*r9*.py`
