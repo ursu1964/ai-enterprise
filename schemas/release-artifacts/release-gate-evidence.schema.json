@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/release-gate-evidence.schema.json",
+  "title": "Release Gate Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "git",
+    "git_before",
+    "provenance_valid",
+    "gates"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "git": {
+      "$ref": "#/$defs/gitIdentity"
+    },
+    "git_before": {
+      "$ref": "#/$defs/gitIdentity"
+    },
+    "provenance_valid": {
+      "type": "boolean"
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/gateEvidence"
+      }
+    }
+  },
+  "$defs": {
+    "gitIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "branch",
+        "dirty"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tree": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      }
+    },
+    "gateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "command",
+        "return_code",
+        "duration_seconds",
+        "output_path",
+        "output_sha256",
+        "recorded_at"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "return_code": {
+          "type": "integer"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "output_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "recorded_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

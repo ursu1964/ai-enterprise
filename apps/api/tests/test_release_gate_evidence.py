@@ -1,7 +1,10 @@
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
+
+import jsonschema
 
 
 def _repo_root() -> Path:
@@ -29,6 +32,11 @@ def _load(name: str):
 
 release_gate_evidence = _load("release_gate_evidence")
 release_artifact = _load("release_artifact")
+GATE_EVIDENCE_SCHEMA = json.loads(
+    (
+        _repo_root() / "schemas" / "release-artifacts" / "release-gate-evidence.schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def test_makefile_exposes_release_gate_evidence_target() -> None:
@@ -218,6 +226,34 @@ def test_release_gate_evidence_captures_outputs_and_statuses(tmp_path: Path) -> 
     assert len(document["gates"]["passing-gate"]["output_sha256"]) == 64
     assert failing_output.read_text(encoding="utf-8").strip() == "bad gate"
     assert (tmp_path / "artifacts/gate-evidence.json").exists()
+    jsonschema.validate(document, GATE_EVIDENCE_SCHEMA)
+
+
+def test_release_gate_evidence_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    original_schema = release_gate_evidence._schema  # noqa: SLF001
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(release_gate_evidence, "_schema", stricter_schema)
+
+    try:
+        release_gate_evidence.write_evidence(
+            root=tmp_path,
+            gate_commands={"passing-gate": "python -c \"print('ok gate')\""},
+            output=Path("artifacts/gate-evidence.json"),
+            output_dir=Path("artifacts/release-gates"),
+            timeout=30,
+        )
+    except RuntimeError as exc:
+        assert release_gate_evidence.GATE_EVIDENCE_SCHEMA in str(exc)
+        assert "generated release gate evidence does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid release gate evidence was accepted")
 
 
 def test_release_artifact_consumes_captured_gate_evidence(tmp_path: Path) -> None:

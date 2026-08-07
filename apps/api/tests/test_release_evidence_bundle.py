@@ -48,7 +48,10 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
         tmp_path / "artifacts" / "release-verification-check.json",
         json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
     )
-    _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
+    _write(
+        tmp_path / "artifacts" / "gate-evidence.json",
+        json.dumps(_release_gate_evidence_payload(), sort_keys=True) + "\n",
+    )
     _write_architecture_artifacts(tmp_path)
 
     document = release_evidence_bundle.build_manifest(
@@ -71,6 +74,9 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
     assert verification["bk_r11_evidence_type"] == "release-verification"
     assert verification["sha256"] == hashlib.sha256(release_rendered.encode()).hexdigest()
     assert artifacts["release-verification-markdown"]["schema_ref"] is None
+    assert artifacts["release-gate-evidence"]["schema_ref"] == (
+        "schemas/release-artifacts/release-gate-evidence.schema.json"
+    )
     alignment = artifacts["r-series-alignment-report"]
     assert alignment["schema_ref"] == (
         "schemas/architecture-baseline/r-series-alignment-report.schema.json"
@@ -195,6 +201,11 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
                 tmp_path / spec.path,
                 json.dumps(_roadmap_sequence_gate_payload(), sort_keys=True) + "\n",
             )
+        elif spec.name == "release-gate-evidence":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_release_gate_evidence_payload(), sort_keys=True) + "\n",
+            )
         else:
             _write(tmp_path / spec.path, f"{spec.name}\n")
 
@@ -236,6 +247,9 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
         artifacts["artifacts/production-release-verification-check.json"]["schema_ref"]
         == "schemas/release-artifacts/release-verification-check.schema.json"
     )
+    assert artifacts["artifacts/gate-evidence.json"]["schema_ref"] == (
+        "schemas/release-artifacts/release-gate-evidence.schema.json"
+    )
     jsonschema.validate(document, SCHEMA)
 
 
@@ -249,7 +263,10 @@ def test_release_evidence_bundle_rejects_invalid_schema_backed_artifact(
         tmp_path / "artifacts" / "release-verification-check.json",
         json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
     )
-    _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
+    _write(
+        tmp_path / "artifacts" / "gate-evidence.json",
+        json.dumps(_release_gate_evidence_payload(), sort_keys=True) + "\n",
+    )
     _write_architecture_artifacts(tmp_path)
 
     try:
@@ -293,7 +310,10 @@ def test_release_evidence_bundle_requires_schema_files_for_complete_bundle(
         tmp_path / "artifacts" / "release-verification-check.json",
         json.dumps(_release_verification_check_payload(), sort_keys=True) + "\n",
     )
-    _write(tmp_path / "artifacts" / "gate-evidence.json", '{"gates":{}}\n')
+    _write(
+        tmp_path / "artifacts" / "gate-evidence.json",
+        json.dumps(_release_gate_evidence_payload(), sort_keys=True) + "\n",
+    )
     _write_architecture_artifacts(tmp_path)
 
     try:
@@ -471,6 +491,24 @@ def _release_verification_check_payload() -> dict:
         "recomputed_artifact_hash": "d" * 64,
         "findings": [],
         "next_action": "Archive JSON and Markdown together.",
+    }
+
+
+def _release_gate_evidence_payload() -> dict:
+    git_identity = {
+        "commit": "a" * 40,
+        "tree": "b" * 40,
+        "branch": "main",
+        "dirty": False,
+    }
+    return {
+        "schema_version": "1.0",
+        "generated_at": "2026-08-06T00:00:00+00:00",
+        "status": "passed",
+        "git": git_identity,
+        "git_before": git_identity,
+        "provenance_valid": True,
+        "gates": {},
     }
 
 

@@ -104,6 +104,7 @@ RELEASE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="release_gate_evidence",
         content_type="application/json",
         bk_r11_evidence_type="gate-execution-evidence",
+        schema_ref="schemas/release-artifacts/release-gate-evidence.schema.json",
     ),
     *ARCHITECTURE_BASELINE_ARTIFACTS,
 )
@@ -178,6 +179,7 @@ PRODUCTION_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         kind="release_gate_evidence",
         content_type="application/json",
         bk_r11_evidence_type="gate-execution-evidence",
+        schema_ref="schemas/release-artifacts/release-gate-evidence.schema.json",
     ),
     *ARCHITECTURE_BASELINE_ARTIFACTS,
 )

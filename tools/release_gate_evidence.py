@@ -10,6 +10,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
+GATE_EVIDENCE_SCHEMA = "release-gate-evidence.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "release-artifacts"
+
 FAST_GATE_COMMANDS: dict[str, str] = {
     "lint": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
     "typecheck": "cd apps/api && .venv/bin/mypy src",
@@ -144,10 +149,27 @@ def write_evidence(
         "provenance_valid": provenance_valid,
         "gates": gates,
     }
+    _validate_evidence(document)
     target = output if output.is_absolute() else root / output
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return document
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / GATE_EVIDENCE_SCHEMA).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_evidence(document: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(document, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{GATE_EVIDENCE_SCHEMA}: generated release gate evidence does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def _git(args: list[str], root: Path) -> str:
