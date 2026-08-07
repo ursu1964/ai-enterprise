@@ -1,5 +1,6 @@
 from ai_enterprise.domain.updl_registry import (
     ActorReference,
+    AdditionalPropertiesPolicy,
     InMemoryUPDLRegistry,
     NamespaceDefinition,
     ObjectReference,
@@ -192,6 +193,76 @@ def test_updl_registry_validates_required_enum_and_reference_properties() -> Non
             assert exc.code == code
         else:
             raise AssertionError(f"{code} case was accepted")
+
+
+def test_updl_registry_returns_deterministic_schema_validation_result() -> None:
+    registry = _registry()
+    result = registry.validate_spec(
+        "Requirement",
+        {
+            "statement": 17,
+            "priority": "REQUIRED",
+            "unknownField": True,
+        },
+    )
+
+    assert not result.valid
+    assert result.type_ref == "Requirement"
+    assert result.schema_version == "1.0.0"
+    assert result.validator_version == "0.1.0"
+    assert [error.code for error in result.errors] == [
+        "PROPERTY_UNKNOWN",
+        "PROPERTY_TYPE_INVALID",
+        "ENUM_VALUE_INVALID",
+        "PROPERTY_REQUIRED",
+    ]
+    assert [error.path for error in result.errors] == [
+        "spec.unknownField",
+        "spec.statement",
+        "spec.priority",
+        "spec.owner",
+    ]
+    assert result.errors[1].expected == "string"
+    assert result.errors[1].actual == "integer"
+    assert result.warnings == ()
+
+
+def test_updl_registry_unknown_property_policy_can_warn_or_allow() -> None:
+    registry = InMemoryUPDLRegistry()
+    registry.register_namespace(NamespaceDefinition("commerce"))
+    registry.register_type(
+        TypeDefinition(
+            kind_name="Capability",
+            properties={"name": PropertyDefinition("string", required=True)},
+            additional_properties=AdditionalPropertiesPolicy.WARN,
+        )
+    )
+
+    warning_result = registry.validate_spec(
+        "Capability",
+        {"name": "Billing", "extra": True},
+    )
+
+    assert warning_result.valid
+    assert [warning.code for warning in warning_result.warnings] == ["PROPERTY_UNKNOWN"]
+    assert warning_result.warnings[0].path == "spec.extra"
+
+    registry.register_type(
+        TypeDefinition(
+            kind_name="OpenCapability",
+            properties={"name": PropertyDefinition("string", required=True)},
+            additional_properties=AdditionalPropertiesPolicy.ALLOW,
+        )
+    )
+
+    allow_result = registry.validate_spec(
+        "OpenCapability",
+        {"name": "Billing", "extra": True},
+    )
+
+    assert allow_result.valid
+    assert allow_result.errors == ()
+    assert allow_result.warnings == ()
 
 
 def test_updl_registry_enforces_revision_concurrency_and_system_field_boundary() -> None:

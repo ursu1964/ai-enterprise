@@ -9,6 +9,7 @@ from typing import Any
 from ai_enterprise.domain.specification.kernel import specification_hash
 
 API_VERSION = "updl.ai-enterprise/v1alpha1"
+VALIDATOR_VERSION = "0.1.0"
 IDENTIFIER = re.compile(
     r"^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+\.[A-Za-z0-9][A-Za-z0-9_-]*$"
 )
@@ -76,6 +77,12 @@ class ValidationStatus(StrEnum):
     INVALID = "INVALID"
 
 
+class AdditionalPropertiesPolicy(StrEnum):
+    FORBID = "forbid"
+    ALLOW = "allow"
+    WARN = "warn"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -105,6 +112,8 @@ class TypeDefinition:
     properties: dict[str, PropertyDefinition]
     lifecycle: ObjectReference | None = None
     allowed_relationships: tuple[str, ...] = ()
+    schema_version: str = "1.0.0"
+    additional_properties: AdditionalPropertiesPolicy = AdditionalPropertiesPolicy.FORBID
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +239,28 @@ class ResolutionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ValidationFinding:
+    code: str
+    path: str
+    message: str
+    expected: Any = None
+    actual: Any = None
+    constraint: str | None = None
+    schema_ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationResult:
+    valid: bool
+    type_ref: str
+    schema_version: str
+    errors: tuple[ValidationFinding, ...]
+    warnings: tuple[ValidationFinding, ...]
+    validated_at: datetime
+    validator_version: str = VALIDATOR_VERSION
+
+
+@dataclass(frozen=True, slots=True)
 class PolicyObligation:
     type: str
     authority: str | None = None
@@ -314,7 +345,7 @@ class InMemoryUPDLRegistry:
         self._require_active_namespace(namespace)
         if object_id in self._objects:
             raise RegistryError("IDENTITY_CONFLICT", f"object already exists: {object_id}")
-        self._validate_spec(kind, spec)
+        self._require_valid_spec(kind, spec)
         now = datetime.now(UTC)
         envelope = self._object_envelope(
             kind=kind,
@@ -408,7 +439,7 @@ class InMemoryUPDLRegistry:
                 f"ordinary update cannot modify system fields: {sorted(forged)}",
             )
         spec = {**current.spec, **semantic_patch.get("spec", {})}
-        self._validate_spec(current.kind, spec)
+        self._require_valid_spec(current.kind, spec)
         updated = self._object_envelope(
             kind=current.kind,
             object_id=current.metadata.id,
@@ -545,21 +576,90 @@ class InMemoryUPDLRegistry:
             context_hash=f"sha256:{context_hash}",
         )
 
-    def _validate_spec(self, kind: str, spec: dict[str, Any]) -> None:
+    def validate_spec(self, kind: str, spec: dict[str, Any]) -> ValidationResult:
         type_definition = self._types.get(kind)
         if type_definition is None:
-            raise RegistryError("TYPE_NOT_REGISTERED", kind)
+            return ValidationResult(
+                valid=False,
+                type_ref=kind,
+                schema_version="unknown",
+                errors=(
+                    ValidationFinding(
+                        code="TYPE_NOT_REGISTERED",
+                        path="kind",
+                        message=f"Type '{kind}' is not registered.",
+                        expected="registered TypeDefinition",
+                        actual=kind,
+                    ),
+                ),
+                warnings=(),
+                validated_at=datetime.now(UTC),
+            )
+        errors: list[ValidationFinding] = []
+        warnings: list[ValidationFinding] = []
+        known_properties = set(type_definition.properties)
+        unknown_properties = sorted(set(spec) - known_properties)
+        if type_definition.additional_properties is AdditionalPropertiesPolicy.FORBID:
+            errors.extend(
+                ValidationFinding(
+                    code="PROPERTY_UNKNOWN",
+                    path=f"spec.{name}",
+                    message=f"Property '{name}' is not declared by type '{kind}'.",
+                    expected="declared property",
+                    actual=name,
+                )
+                for name in unknown_properties
+            )
+        elif type_definition.additional_properties is AdditionalPropertiesPolicy.WARN:
+            warnings.extend(
+                ValidationFinding(
+                    code="PROPERTY_UNKNOWN",
+                    path=f"spec.{name}",
+                    message=f"Property '{name}' is not declared by type '{kind}'.",
+                    expected="declared property",
+                    actual=name,
+                )
+                for name in unknown_properties
+            )
         for name, property_definition in type_definition.properties.items():
             if name not in spec:
                 if property_definition.required and property_definition.default is None:
-                    raise RegistryError("PROPERTY_REQUIRED", name)
+                    errors.append(
+                        ValidationFinding(
+                            code="PROPERTY_REQUIRED",
+                            path=f"spec.{name}",
+                            message=f"Required property '{name}' is missing.",
+                            expected=property_definition.type,
+                            actual="absent",
+                        )
+                    )
                 continue
             value = spec[name]
             if value is None:
                 if not property_definition.nullable:
-                    raise RegistryError("PROPERTY_TYPE_INVALID", f"{name} cannot be null")
+                    errors.append(
+                        ValidationFinding(
+                            code="PROPERTY_TYPE_INVALID",
+                            path=f"spec.{name}",
+                            message=f"Property '{name}' cannot be null.",
+                            expected=property_definition.type,
+                            actual="null",
+                        )
+                    )
                 continue
-            _validate_value_type(name, value, property_definition)
+            try:
+                _validate_value_type(name, value, property_definition)
+            except RegistryError as exc:
+                errors.append(
+                    ValidationFinding(
+                        code=exc.code,
+                        path=f"spec.{name}",
+                        message=_validation_message(name, value, property_definition, exc),
+                        expected=_expected_type(property_definition),
+                        actual=_actual_type(value),
+                    )
+                )
+                continue
             if property_definition.type == "reference":
                 reference = _reference_from_value(name, value)
                 resolution = self.resolve_reference(
@@ -567,7 +667,29 @@ class InMemoryUPDLRegistry:
                     target_kinds=property_definition.target_kinds,
                 )
                 if resolution.status is not ResolutionStatus.RESOLVED:
-                    raise RegistryError(resolution.status.value, f"{name}: {resolution.code}")
+                    errors.append(
+                        ValidationFinding(
+                            code=resolution.status.value,
+                            path=f"spec.{name}",
+                            message=f"Reference property '{name}' could not be resolved.",
+                            expected=property_definition.target_kinds or "resolvable reference",
+                            actual=reference.id,
+                        )
+                    )
+        return ValidationResult(
+            valid=not errors,
+            type_ref=kind,
+            schema_version=type_definition.schema_version,
+            errors=tuple(errors),
+            warnings=tuple(warnings),
+            validated_at=datetime.now(UTC),
+        )
+
+    def _require_valid_spec(self, kind: str, spec: dict[str, Any]) -> None:
+        result = self.validate_spec(kind, spec)
+        if not result.valid:
+            first_error = result.errors[0]
+            raise RegistryError(first_error.code, first_error.message)
 
     def _require_active_namespace(self, namespace: str) -> None:
         definition = self._namespaces.get(namespace)
@@ -652,6 +774,52 @@ def _validate_value_type(
         raise RegistryError("PROPERTY_TYPE_INVALID", name)
     if property_type not in PRIMITIVE_TYPES | {"enum", "reference", "list"}:
         raise RegistryError("PROPERTY_TYPE_UNKNOWN", property_type)
+
+
+def _expected_type(property_definition: PropertyDefinition) -> Any:
+    if property_definition.type == "enum":
+        return tuple(property_definition.enum)
+    if property_definition.type == "reference" and property_definition.target_kinds:
+        return {"type": "reference", "targetKinds": tuple(property_definition.target_kinds)}
+    if property_definition.type == "list" and property_definition.item_type is not None:
+        return {"type": "list", "items": property_definition.item_type}
+    return property_definition.type
+
+
+def _actual_type(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "decimal"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, dict):
+        return "map"
+    return type(value).__name__
+
+
+def _validation_message(
+    name: str,
+    value: Any,
+    property_definition: PropertyDefinition,
+    error: RegistryError,
+) -> str:
+    if error.code == "ENUM_VALUE_INVALID":
+        return f"Property '{name}' must be one of {tuple(property_definition.enum)}."
+    if error.code == "REFERENCE_INVALID":
+        return f"Property '{name}' must be a valid registry reference."
+    if error.code == "PROPERTY_TYPE_UNKNOWN":
+        return f"Property '{name}' has unknown type '{property_definition.type}'."
+    return (
+        f"Property '{name}' must be {_expected_type(property_definition)}; "
+        f"received {_actual_type(value)}."
+    )
 
 
 def _reference_from_value(name: str, value: Any) -> ObjectReference:

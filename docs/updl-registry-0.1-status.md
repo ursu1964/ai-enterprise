@@ -11,8 +11,13 @@ Implemented scope:
   enforcement, and reserved-root protection.
 - System-managed revision, timestamps, actor attribution, and content hashes.
 - TypeDefinition-backed object creation.
+- Deterministic `ValidationResult` output for type-schema validation, including
+  machine-readable errors, warnings, property paths, schema version, validation
+  timestamp, and validator version.
 - Required, enum, primitive, nullable, list, map, and reference property
   validation.
+- TypeDefinition `additional_properties` policy with `forbid`, `warn`, and
+  `allow` behavior.
 - Type-safe reference resolution with structured resolution status.
 - Object revisions with optimistic concurrency through `expected_revision`.
 - Direct lifecycle/system-field mutation protection on ordinary updates.
@@ -40,5 +45,6 @@ Verification:
 ```bash
 cd apps/api
 .venv/bin/pytest -q tests/test_updl_registry_kernel.py
+.venv/bin/ruff check src/ai_enterprise/domain/updl_registry.py tests/test_updl_registry_kernel.py
 .venv/bin/mypy src/ai_enterprise/domain/updl_registry.py
 ```
