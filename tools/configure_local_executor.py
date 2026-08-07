@@ -9,8 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 EXECUTION_IMAGE = "ai-enterprise-execution-agent:local"
 REVIEW_IMAGE = "ai-enterprise-review-agent:local"
+LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF = (
+    "schemas/production-readiness/local-executor-configuration-report.schema.json"
+)
 
 
 class LocalExecutorConfigurationError(RuntimeError):
@@ -36,8 +41,11 @@ class LocalExecutorConfiguration:
             )
         )
 
-    def json(self) -> dict[str, str]:
+    def json(self) -> dict[str, Any]:
         return {
+            "schema_version": "1.0",
+            "schema_ref": LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF,
+            "ok": True,
             "execution_container_provider": "restricted-local-docker",
             "execution_image": self.execution_image,
             "execution_image_id": self.execution_image_id,
@@ -90,9 +98,7 @@ def local_executor_configuration(
 
 def write_env_file(path: Path, content: str, *, force: bool) -> None:
     if path.exists() and not force:
-        raise LocalExecutorConfigurationError(
-            f"{path} already exists; pass --force to replace it"
-        )
+        raise LocalExecutorConfigurationError(f"{path} already exists; pass --force to replace it")
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         "w",
@@ -117,6 +123,37 @@ def _is_sha256_image_id(value: str) -> bool:
     return True
 
 
+def _failure_report(error: str) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "schema_version": "1.0",
+        "schema_ref": LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF,
+        "ok": False,
+        "error": error,
+    }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{LOCAL_EXECUTOR_CONFIGURATION_SCHEMA_REF}: generated local executor "
+            f"configuration report does not validate: {exc.message}"
+        ) from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -137,7 +174,9 @@ def main() -> int:
             review_image=args.review_image,
         )
         if args.json:
-            print(json.dumps(config.json(), sort_keys=True))
+            report = config.json()
+            _validate_report(report)
+            print(json.dumps(report, sort_keys=True))
             return 0
         content = config.dotenv()
         if args.output is not None:
@@ -147,7 +186,7 @@ def main() -> int:
         print(content, end="")
         return 0
     except LocalExecutorConfigurationError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, sort_keys=True))
+        print(json.dumps(_failure_report(str(exc)), sort_keys=True))
         return 1
 
 

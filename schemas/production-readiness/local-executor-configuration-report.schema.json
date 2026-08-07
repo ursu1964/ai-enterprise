@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/local-executor-configuration-report.schema.json",
+  "title": "Local Executor Configuration Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "schema_ref", "ok"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/production-readiness/local-executor-configuration-report.schema.json"
+    },
+    "ok": { "type": "boolean" },
+    "execution_container_provider": { "const": "restricted-local-docker" },
+    "execution_image": { "type": "string", "minLength": 1 },
+    "execution_image_id": { "$ref": "#/$defs/sha256_image_id" },
+    "review_image": { "type": "string", "minLength": 1 },
+    "review_image_id": { "$ref": "#/$defs/sha256_image_id" },
+    "error": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "ok": { "const": true } },
+        "required": ["ok"]
+      },
+      "then": {
+        "required": [
+          "execution_container_provider",
+          "execution_image",
+          "execution_image_id",
+          "review_image",
+          "review_image_id"
+        ],
+        "not": { "required": ["error"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "ok": { "const": false } },
+        "required": ["ok"]
+      },
+      "then": {
+        "required": ["error"],
+        "not": {
+          "anyOf": [
+            { "required": ["execution_container_provider"] },
+            { "required": ["execution_image"] },
+            { "required": ["execution_image_id"] },
+            { "required": ["review_image"] },
+            { "required": ["review_image_id"] }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256_image_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}
