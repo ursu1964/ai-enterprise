@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 from ai_enterprise.domain.hashing import hash_json
 from ai_enterprise.domain.r4_interpretation import (
     EvaluationMetrics,
@@ -18,6 +20,8 @@ from ai_enterprise.domain.r4_interpretation import (
     validate_extraction_response,
 )
 from ai_enterprise.infrastructure.knowledge.models import R4EvaluationRecordModel
+
+R4_EVALUATION_REPORT_SCHEMA_REF = "schemas/evidence-audit/r4-evaluation-report.schema.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +173,9 @@ def run_evaluation_suite(
         for case_path in sorted((evaluation_root / "cases").glob("*.txt"))
         if (evaluation_root / "expected" / f"{case_path.stem}.json").exists()
     ]
-    report = {
+    report_without_hash = {
+        "schema_version": "1.0",
+        "schema_ref": R4_EVALUATION_REPORT_SCHEMA_REF,
         "run_id": run_id,
         "case_count": len(results),
         "passed_count": sum(1 for result in results if result.passed),
@@ -177,10 +183,32 @@ def run_evaluation_suite(
         "cases": [result.result_document for result in results],
         "passed": all(result.passed for result in results) if results else False,
     }
+    report = {**report_without_hash, "report_hash": hash_json(report_without_hash)}
+    _validate_report(report)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
     return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / R4_EVALUATION_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{R4_EVALUATION_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{R4_EVALUATION_REPORT_SCHEMA_REF}: generated R4 evaluation report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def evaluation_record(result: R4EvaluationCaseResult) -> R4EvaluationRecordModel:
