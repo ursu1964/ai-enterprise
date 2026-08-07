@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/release-artifacts/etra-conformance-report.schema.json",
+  "title": "ETRA Conformance Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "standard_version",
+    "conformant",
+    "checks",
+    "findings",
+    "schema_version",
+    "schema_ref"
+  ],
+  "properties": {
+    "standard_version": {
+      "const": "1.0"
+    },
+    "conformant": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "schema_ref": {
+      "const": "schemas/release-artifacts/etra-conformance-report.schema.json"
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "path",
+        "message"
+      ],
+      "properties": {
+        "check": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

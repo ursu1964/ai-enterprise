@@ -11,7 +11,10 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import jsonschema
+
 ETRA_VERSION = "1.0"
+ETRA_REPORT_SCHEMA_REF = "schemas/release-artifacts/etra-conformance-report.schema.json"
 REQUIRED_PATHS = (
     "apps",
     "apps/api/src",
@@ -147,6 +150,8 @@ class Report:
     conformant: bool
     checks: int
     findings: tuple[Finding, ...]
+    schema_version: str = "1.0"
+    schema_ref: str = ETRA_REPORT_SCHEMA_REF
 
 
 def _python_imports(path: Path) -> tuple[set[str], str | None]:
@@ -161,9 +166,7 @@ def _python_imports(path: Path) -> tuple[set[str], str | None]:
         elif isinstance(node, ast.ImportFrom):
             imports.add(f"{'.' * node.level}{node.module or ''}")
         elif isinstance(node, ast.Call):
-            dynamic_import = (
-                isinstance(node.func, ast.Name) and node.func.id == "__import__"
-            ) or (
+            dynamic_import = (isinstance(node.func, ast.Name) and node.func.id == "__import__") or (
                 isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
                 and node.func.value.id == "importlib"
@@ -263,11 +266,7 @@ def _migration_graph(revision_dir: Path) -> tuple[set[str], tuple[str, ...]]:
 
 
 def _has_exact_env_ignore(lines: list[str]) -> bool:
-    rules = {
-        line.strip()
-        for line in lines
-        if line.strip() and not line.lstrip().startswith("#")
-    }
+    rules = {line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")}
     return bool({".env", "/.env"} & rules)
 
 
@@ -311,15 +310,11 @@ def validate(root: Path) -> Report:
     for relative in REQUIRED_PATHS:
         checks += 1
         if not (root / relative).is_dir():
-            findings.append(
-                Finding("repository-layout", relative, "required directory is absent")
-            )
+            findings.append(Finding("repository-layout", relative, "required directory is absent"))
 
     standards = root / "docs" / "etra"
     docs_index = root / "docs" / "README.md"
-    docs_index_text = (
-        docs_index.read_text(encoding="utf-8") if docs_index.is_file() else ""
-    )
+    docs_index_text = docs_index.read_text(encoding="utf-8") if docs_index.is_file() else ""
     checks += 1
     if len(docs_index_text.strip()) < 300:
         findings.append(
@@ -536,10 +531,7 @@ def validate(root: Path) -> Report:
 
     checklist = standards / "engineering-review-checklist.md"
     checks += 1
-    if (
-        checklist.is_file()
-        and checklist.read_text(encoding="utf-8").count("- [ ]") < 10
-    ):
+    if checklist.is_file() and checklist.read_text(encoding="utf-8").count("- [ ]") < 10:
         findings.append(
             Finding(
                 "review-checklist",
@@ -577,12 +569,8 @@ def validate(root: Path) -> Report:
         imports, parse_error = _python_imports(path)
         checks += 1
         if parse_error:
-            findings.append(
-                Finding("domain-parse", str(path.relative_to(root)), parse_error)
-            )
-        violations = sorted(
-            name for name in imports if _is_forbidden_domain_import(name)
-        )
+            findings.append(Finding("domain-parse", str(path.relative_to(root)), parse_error))
+        violations = sorted(name for name in imports if _is_forbidden_domain_import(name))
         if violations:
             findings.append(
                 Finding(
@@ -626,18 +614,12 @@ def validate(root: Path) -> Report:
 
     gitignore = root / ".gitignore"
     checks += 1
-    ignored = (
-        gitignore.read_text(encoding="utf-8").splitlines()
-        if gitignore.is_file()
-        else []
-    )
+    ignored = gitignore.read_text(encoding="utf-8").splitlines() if gitignore.is_file() else []
     if not _has_exact_env_ignore(ignored):
         findings.append(Finding("secret-hygiene", ".gitignore", ".env is not excluded"))
 
     workflow_path = root / ".github" / "workflows" / "etra-conformance.yml"
-    workflow_text = (
-        workflow_path.read_text(encoding="utf-8") if workflow_path.is_file() else ""
-    )
+    workflow_text = workflow_path.read_text(encoding="utf-8") if workflow_path.is_file() else ""
     for required in (
         "contents: read",
         "actions/checkout@",
@@ -654,19 +636,43 @@ def validate(root: Path) -> Report:
                 )
             )
 
-    return Report(ETRA_VERSION, not findings, checks, tuple(findings))
+    report = Report(ETRA_VERSION, not findings, checks, tuple(findings))
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / ETRA_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{ETRA_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _report_document(report: Report) -> dict:
+    return json.loads(json.dumps(asdict(report), sort_keys=True))
+
+
+def _validate_report(report: Report) -> None:
+    try:
+        jsonschema.validate(_report_document(report), _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{ETRA_REPORT_SCHEMA_REF}: generated ETRA conformance report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--root", type=Path, default=Path(__file__).resolve().parents[1]
-    )
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
     report = validate(args.root)
     if args.as_json:
-        print(json.dumps(asdict(report), sort_keys=True))
+        print(json.dumps(_report_document(report), sort_keys=True))
     else:
         status = "PASS" if report.conformant else "FAIL"
         print(f"ETRA {report.standard_version}: {status} ({report.checks} checks)")

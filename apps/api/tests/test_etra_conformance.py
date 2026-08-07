@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _validator_module():
     root = Path(__file__).resolve().parents[3]
@@ -21,15 +23,20 @@ def test_repository_conforms_to_enterprise_reference_architecture() -> None:
     report = module.validate(root)
     assert report.conformant, report.findings
     assert report.checks >= 100
+    assert report.schema_version == "1.0"
+    assert report.schema_ref == "schemas/release-artifacts/etra-conformance-report.schema.json"
+    schema = json.loads((root / report.schema_ref).read_text(encoding="utf-8"))
+    jsonschema.validate(module._report_document(report), schema)
 
 
 def test_validator_has_ci_friendly_json_and_exit_status(capsys) -> None:
     module = _validator_module()
     root = Path(__file__).resolve().parents[3]
     assert module.main(["--root", str(root), "--json"]) == 0
-    output = capsys.readouterr().out
-    assert '"conformant": true' in output
-    assert '"standard_version": "1.0"' in output
+    output = json.loads(capsys.readouterr().out)
+    assert output["conformant"] is True
+    assert output["standard_version"] == "1.0"
+    assert output["schema_ref"] == "schemas/release-artifacts/etra-conformance-report.schema.json"
 
 
 def test_default_root_is_independent_of_working_directory(monkeypatch, tmp_path, capsys) -> None:
@@ -37,6 +44,25 @@ def test_default_root_is_independent_of_working_directory(monkeypatch, tmp_path,
     monkeypatch.chdir(tmp_path)
     assert module.main(["--json"]) == 0
     assert json.loads(capsys.readouterr().out)["conformant"] is True
+
+
+def test_etra_report_fails_closed_when_schema_validation_fails(monkeypatch) -> None:
+    module = _validator_module()
+    original_schema = module._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "_schema", stricter_schema)
+
+    try:
+        module.validate(Path(__file__).resolve().parents[3])
+    except RuntimeError as exc:
+        assert "etra-conformance-report.schema.json" in str(exc)
+        assert "does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid ETRA conformance report was accepted")
 
 
 def test_domain_import_detection_rejects_relative_dynamic_and_invalid_source(tmp_path) -> None:
