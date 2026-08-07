@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib
 import json
 import os
 import sys
@@ -20,14 +21,19 @@ for import_path in (str(TOOLS_ROOT), str(API_SRC)):
     if import_path not in sys.path:
         sys.path.insert(0, import_path)
 
-from ai_enterprise.config import Settings, get_settings
-from ai_enterprise.domain.enums import JobType
-from ai_enterprise.infrastructure.jobs.profiles import (
-    WorkerProfile,
-    allowed_job_types,
-)
-from ai_enterprise.infrastructure.jobs.readiness import assess_worker_readiness
-from configure_local_executor import local_executor_configuration
+_config_module = importlib.import_module("ai_enterprise.config")
+_enums_module = importlib.import_module("ai_enterprise.domain.enums")
+_profiles_module = importlib.import_module("ai_enterprise.infrastructure.jobs.profiles")
+_readiness_module = importlib.import_module("ai_enterprise.infrastructure.jobs.readiness")
+_local_executor_module = importlib.import_module("configure_local_executor")
+
+Settings = _config_module.Settings
+get_settings = _config_module.get_settings
+JobType = _enums_module.JobType
+WorkerProfile = _profiles_module.WorkerProfile
+allowed_job_types = _profiles_module.allowed_job_types
+assess_worker_readiness = _readiness_module.assess_worker_readiness
+local_executor_configuration = _local_executor_module.local_executor_configuration
 
 EXECUTOR_JOB_TYPES = frozenset({JobType.EXECUTE_WORK_PACKAGE, JobType.REVIEW_CANDIDATE_PATCH})
 LOCAL_EXECUTOR_WORKER_SCHEMA_REF = (

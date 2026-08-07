@@ -1,0 +1,207 @@
+{
+  "registry": {
+    "id": "org.reference.approval",
+    "version": "0.4.0",
+    "name": "Reference Approval Registry"
+  },
+  "types": {
+    "approval.type.request_status": {
+      "kind": "enumeration",
+      "name": "RequestStatus",
+      "values": ["approved", "cancelled", "draft", "rejected", "submitted"]
+    }
+  },
+  "objects": {
+    "approval.object.person": {
+      "name": "Person",
+      "description": "A person who can request or approve organizational work.",
+      "properties": {
+        "active": {"type": "Boolean", "required": true},
+        "display_name": {"type": "Text", "required": true},
+        "email": {"type": "String", "required": true, "unique": true}
+      }
+    },
+    "approval.object.request": {
+      "name": "Request",
+      "description": "A formal request submitted for organizational review.",
+      "properties": {
+        "description": {"type": "Text", "required": true},
+        "request_number": {"type": "String", "required": true, "unique": true},
+        "requester": {"type": "Reference<approval.object.person>", "required": true},
+        "status": {"type": "approval.type.request_status", "required": true},
+        "submitted_at": {"type": "Timestamp", "required": false},
+        "title": {"type": "Text", "required": true}
+      }
+    }
+  },
+  "relationships": {
+    "approval.relationship.requested_by": {
+      "name": "RequestedBy",
+      "source": "approval.object.request",
+      "target": "approval.object.person",
+      "type": "references"
+    }
+  },
+  "constraints": {
+    "approval.constraint.description_required": {
+      "name": "DescriptionRequired",
+      "scope": "approval.object.request",
+      "expression": "status != \"draft\" implies length(description) >= 20",
+      "severity": "error",
+      "message": "A request must contain a description of at least 20 characters before leaving the draft state.",
+      "dependencies": [
+        "approval.object.request",
+        "approval.object.request.property.description",
+        "approval.object.request.property.status",
+        "approval.type.request_status"
+      ]
+    },
+    "approval.constraint.requester_active": {
+      "name": "RequesterActive",
+      "scope": "approval.object.request",
+      "expression": "requester.active == true",
+      "severity": "error",
+      "message": "A request must reference an active requester.",
+      "dependencies": [
+        "approval.object.request",
+        "approval.object.request.property.requester",
+        "approval.object.person",
+        "approval.object.person.property.active"
+      ]
+    },
+    "approval.constraint.submitted_at_required": {
+      "name": "SubmittedAtRequired",
+      "scope": "approval.object.request",
+      "expression": "(status == \"submitted\" or status == \"approved\" or status == \"rejected\") implies exists(submitted_at)",
+      "severity": "error",
+      "message": "Requests beyond draft state must record their submission timestamp.",
+      "dependencies": [
+        "approval.object.request",
+        "approval.object.request.property.status",
+        "approval.object.request.property.submitted_at",
+        "approval.type.request_status"
+      ]
+    }
+  },
+  "permissions": {
+    "approval.permission.approve_request": {
+      "name": "ApproveRequest",
+      "action": "execute",
+      "target": "approval.command.approve_request"
+    },
+    "approval.permission.reject_request": {
+      "name": "RejectRequest",
+      "action": "execute",
+      "target": "approval.command.reject_request"
+    }
+  },
+  "commands": {
+    "approval.command.approve_request": {
+      "name": "ApproveRequest",
+      "target": "approval.object.request",
+      "authorization": "permission:approval.permission.approve_request",
+      "preconditions": ["target.status == \"submitted\""]
+    },
+    "approval.command.cancel_request": {
+      "name": "CancelRequest",
+      "target": "approval.object.request",
+      "authorization": "actor.id == target.requester.id",
+      "preconditions": ["target.status == \"draft\" or target.status == \"submitted\""]
+    },
+    "approval.command.reject_request": {
+      "name": "RejectRequest",
+      "target": "approval.object.request",
+      "authorization": "permission:approval.permission.reject_request",
+      "preconditions": ["target.status == \"submitted\""]
+    },
+    "approval.command.submit_request": {
+      "name": "SubmitRequest",
+      "target": "approval.object.request",
+      "authorization": "actor.id == target.requester.id",
+      "preconditions": ["target.status == \"draft\""]
+    }
+  },
+  "events": {
+    "approval.event.request_approved": {
+      "name": "RequestApproved",
+      "subject": "approval.object.request",
+      "version": 1
+    },
+    "approval.event.request_cancelled": {
+      "name": "RequestCancelled",
+      "subject": "approval.object.request",
+      "version": 1
+    },
+    "approval.event.request_rejected": {
+      "name": "RequestRejected",
+      "subject": "approval.object.request",
+      "version": 1
+    },
+    "approval.event.request_submitted": {
+      "name": "RequestSubmitted",
+      "subject": "approval.object.request",
+      "version": 1
+    }
+  },
+  "behaviors": {
+    "approval.behavior.request_lifecycle": {
+      "name": "RequestLifecycle",
+      "type": "lifecycle",
+      "subject": "approval.object.request",
+      "state_property": "status",
+      "initial_state": "draft",
+      "states": {
+        "approved": {"label": "Approved", "terminal": true},
+        "cancelled": {"label": "Cancelled", "terminal": true},
+        "draft": {"label": "Draft", "terminal": false},
+        "rejected": {"label": "Rejected", "terminal": true},
+        "submitted": {"label": "Submitted", "terminal": false}
+      },
+      "transitions": [
+        "approval.transition.approve_request",
+        "approval.transition.cancel_request",
+        "approval.transition.reject_request",
+        "approval.transition.submit_request"
+      ]
+    }
+  },
+  "transitions": {
+    "approval.transition.approve_request": {
+      "name": "ApproveRequestTransition",
+      "behavior": "approval.behavior.request_lifecycle",
+      "from": ["submitted"],
+      "to": "approved",
+      "command": "approval.command.approve_request",
+      "permissions": ["approval.permission.approve_request"],
+      "emits": ["approval.event.request_approved"]
+    },
+    "approval.transition.cancel_request": {
+      "name": "CancelRequestTransition",
+      "behavior": "approval.behavior.request_lifecycle",
+      "from": ["draft", "submitted"],
+      "to": "cancelled",
+      "command": "approval.command.cancel_request",
+      "emits": ["approval.event.request_cancelled"]
+    },
+    "approval.transition.reject_request": {
+      "name": "RejectRequestTransition",
+      "behavior": "approval.behavior.request_lifecycle",
+      "from": ["submitted"],
+      "to": "rejected",
+      "command": "approval.command.reject_request",
+      "guards": [{"expression": "exists(command.reason)"}],
+      "permissions": ["approval.permission.reject_request"],
+      "emits": ["approval.event.request_rejected"]
+    },
+    "approval.transition.submit_request": {
+      "name": "SubmitRequestTransition",
+      "behavior": "approval.behavior.request_lifecycle",
+      "from": ["draft"],
+      "to": "submitted",
+      "command": "approval.command.submit_request",
+      "guards": [{"constraint": "approval.constraint.requester_active"}],
+      "effects": [{"set": {"property": "submitted_at", "value": {"system": "now"}}}],
+      "emits": ["approval.event.request_submitted"]
+    }
+  }
+}

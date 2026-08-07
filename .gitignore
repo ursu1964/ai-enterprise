@@ -13,6 +13,7 @@ docs/enterprise/production-readiness-evidence.json
 ai-enterprise/
 runtime-data/
 apps/api/runtime-data/
+generated/
 *.local.env
 .bootstrap-state/
 graphify-out/

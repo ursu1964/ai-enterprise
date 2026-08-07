@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check local-executor-env local-executor-check local-executor-worker demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan architecture-baseline-manifest roadmap-sequence-gate check check-fast check-ci check-release check-production-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-evidence-init production-readiness-contracts production-evidence-status production-evidence-plan production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact release-artifact-verify release-evidence-bundle production-release-artifact production-release-artifact-verify production-release-evidence-bundle
+.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check local-executor-env local-executor-check local-executor-worker demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan semantic-platform-generate architecture-baseline-manifest roadmap-sequence-gate check check-fast check-ci check-release check-production-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-evidence-init production-readiness-contracts production-evidence-status production-evidence-plan production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact release-artifact-verify release-evidence-bundle production-release-artifact production-release-artifact-verify production-release-evidence-bundle
 
 build:
 	docker compose build
@@ -74,6 +74,9 @@ tooling-invariants:
 
 secret-scan:
 	python tools/secret_scan.py --all
+
+semantic-platform-generate:
+	PYTHONPATH=apps/api/src python tools/semantic_platform_generate.py --output-root generated/semantic-platform-0.4
 
 architecture-baseline-manifest:
 	python tools/architecture_baseline_manifest.py --output artifacts/architecture-baseline-manifest.json
