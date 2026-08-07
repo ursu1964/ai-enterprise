@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/backup-verification-report.schema.json",
+  "title": "Backup Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conformant",
+    "backup_root",
+    "checks",
+    "findings",
+    "schema_version",
+    "schema_ref"
+  ],
+  "properties": {
+    "conformant": { "type": "boolean" },
+    "backup_root": { "type": "string", "minLength": 1 },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/production-readiness/backup-verification-report.schema.json"
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "status", "message", "action"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pass", "fail"] },
+        "message": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

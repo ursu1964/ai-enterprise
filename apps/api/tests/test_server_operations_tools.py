@@ -1,6 +1,10 @@
 import importlib.util
 import json
+import sys
 from pathlib import Path
+
+import jsonschema
+import pytest
 
 
 def repo_root() -> Path:
@@ -17,7 +21,11 @@ def _load(name: str, path: Path):
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(path.parent))
     return module
 
 
@@ -52,14 +60,49 @@ def test_model_endpoint_verifier_reports_missing_model_with_mocked_urlopen(monke
 
     assert report["conformant"] is False
     assert report["findings"] == ["model_service: model required:latest not listed"]
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/production-readiness/model-endpoint-verification-report.schema.json"
+    )
+    schema = json.loads((root / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
+
+
+def test_model_endpoint_report_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = repo_root()
+    module = _load("model_endpoint_verify", root / "tools/model_endpoint_verify.py")
+    original_schema = module._schema
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps({"models": [{"name": "required:latest"}]}).encode()
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "urlopen", lambda *args, **kwargs: Response())
+    monkeypatch.setattr(module, "_schema", stricter_schema)
+
+    with pytest.raises(
+        RuntimeError,
+        match="model-endpoint-verification-report.schema.json",
+    ):
+        module.verify("http://ollama:11434", "required:latest")
 
 
 def test_proxy_signer_and_kubernetes_templates_are_present() -> None:
     root = repo_root()
     api = (root / "deploy/kubernetes/api-deployment.yaml").read_text(encoding="utf-8")
-    worker = (root / "deploy/kubernetes/worker-deployment.yaml").read_text(
-        encoding="utf-8"
-    )
+    worker = (root / "deploy/kubernetes/worker-deployment.yaml").read_text(encoding="utf-8")
     signer = (root / "tools/sign_proxy_assertion.py").read_text(encoding="utf-8")
 
     assert "kind: Deployment" in api

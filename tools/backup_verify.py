@@ -7,10 +7,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 
-def _check(
-    checks: list[dict[str, Any]], key: str, ok: bool, message: str, action: str
-) -> None:
+BACKUP_REPORT_SCHEMA_REF = "schemas/production-readiness/backup-verification-report.schema.json"
+
+
+def _check(checks: list[dict[str, Any]], key: str, ok: bool, message: str, action: str) -> None:
     checks.append(
         {
             "key": key,
@@ -98,12 +100,36 @@ def verify(root: Path, backup_root: Path, *, docker: bool = True) -> dict[str, A
             "Start Postgres and verify credentials before scheduling database backups.",
         )
     failures = [item for item in checks if item["status"] == "fail"]
-    return {
+    report = {
         "conformant": not failures,
         "backup_root": str(backup_root),
         "checks": checks,
         "findings": [f"{item['key']}: {item['action']}" for item in failures],
+        "schema_version": "1.0",
+        "schema_ref": BACKUP_REPORT_SCHEMA_REF,
     }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / BACKUP_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{BACKUP_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{BACKUP_REPORT_SCHEMA_REF}: generated backup verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main() -> int:
