@@ -95,6 +95,38 @@ def test_production_evidence_status_summarizes_blocked_items(
     assert "`rtk make production-readiness`" in markdown
 
 
+def test_production_evidence_status_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        production_evidence_status.production_evidence_plan,
+        "datetime",
+        _FrozenDatetime,
+    )
+    (tmp_path / "choices.json").write_text(json.dumps(_choices()), encoding="utf-8")
+    (tmp_path / "evidence.json").write_text(json.dumps(_evidence()), encoding="utf-8")
+    original_schema = production_evidence_status._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(production_evidence_status, "_schema", stricter_schema)
+
+    try:
+        production_evidence_status.build_status(
+            tmp_path,
+            evidence_file=Path("evidence.json"),
+            choices_file=Path("choices.json"),
+        )
+    except RuntimeError as exc:
+        assert "production-evidence-status.schema.json" in str(exc)
+        assert "generated production evidence status does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid production evidence status report was accepted")
+
+
 class _FrozenDatetime(datetime):
     @classmethod
     def now(cls, tz=None):  # noqa: ANN001

@@ -7,7 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import production_evidence_plan
+
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "production-readiness"
+STATUS_SCHEMA = "production-evidence-status.schema.json"
 
 
 def build_status(
@@ -29,7 +33,7 @@ def build_status(
         for item in plan["infrastructure_choice_requirements"]
         if item["blocked"]
     ]
-    return {
+    status = {
         "schema_version": "1.0",
         "status": plan["status"],
         "production_allowed": plan["production_allowed"],
@@ -43,6 +47,8 @@ def build_status(
         "next_commands": plan["validation_commands"],
         "next_action": plan["next_action"],
     }
+    _validate_status(status)
+    return status
 
 
 def render_markdown(status: dict[str, Any]) -> str:
@@ -111,6 +117,22 @@ def _choice_summary(item: dict[str, Any]) -> dict[str, Any]:
         "findings": findings,
         "action": item["evidence_action"],
     }
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / STATUS_SCHEMA).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_status(status: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(status, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{STATUS_SCHEMA}: generated production evidence status does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def main() -> int:
