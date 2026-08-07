@@ -82,7 +82,7 @@ ready without validation and publication evidence.
 
 This IR specification is implemented through the existing R6 UAGF boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r6_uagf.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r6_uagf.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r6_uagf.py`
 - API schemas: `apps/api/src/ai_enterprise/api/r6_uagf_schemas.py`
 - Migrations: `migrations/versions/*r6*.py`
