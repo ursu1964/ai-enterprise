@@ -70,6 +70,7 @@ SEMANTIC_PLATFORM_REQUIRED_ARTIFACTS = {
     "database/schema.sql",
     "database/mapping.json",
     "database/enforcement.json",
+    "database/migration-plan.json",
     "openapi/openapi.json",
     "ui/model.json",
     "tests/semantic-contracts.generated.md",
@@ -81,6 +82,7 @@ SEMANTIC_PLATFORM_REQUIRED_ARTIFACTS = {
 SEMANTIC_PLATFORM_REQUIRED_COVERAGE = {
     ("approval.object.request", "postgresql", "fully_enforced"),
     ("approval.object.request", "openapi", "fully_enforced"),
+    ("approval.object.request", "migration", "partially_enforced"),
     ("approval.constraint.description_required", "postgresql", "runtime_required"),
     ("approval.constraint.description_required", "openapi", "runtime_required"),
     ("approval.constraint.description_required", "ui", "runtime_required"),

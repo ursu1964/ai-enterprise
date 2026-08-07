@@ -36,10 +36,15 @@ def build_generation(
     root: Path,
     *,
     registry_path: Path = DEFAULT_REGISTRY,
+    previous_registry_path: Path | None = None,
 ) -> dict[str, Any]:
     registry = _load_registry(root, registry_path)
+    previous_registry = (
+        _load_registry(root, previous_registry_path) if previous_registry_path is not None else None
+    )
     artifacts: list[GeneratedArtifact] = []
     artifacts.extend(_postgresql_artifacts(registry))
+    artifacts.extend(_migration_artifacts(registry, previous_registry))
     artifacts.extend(_openapi_artifacts(registry))
     artifacts.extend(_ui_artifacts(registry))
     artifacts.extend(_test_artifacts(registry))
@@ -54,6 +59,15 @@ def build_generation(
             "version": registry["registry"]["version"],
             "semantic_hash": _semantic_hash(registry),
         },
+        "previous_registry": (
+            {
+                "id": previous_registry["registry"]["id"],
+                "version": previous_registry["registry"]["version"],
+                "semantic_hash": _semantic_hash(previous_registry),
+            }
+            if previous_registry is not None
+            else None
+        ),
         "compiler": {"version": GENERATOR_VERSION},
         "generators": _generator_records(artifacts),
         "artifacts": [
@@ -82,12 +96,17 @@ def write_generation(
     output_root: Path,
     *,
     registry_path: Path = DEFAULT_REGISTRY,
+    previous_registry_path: Path | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
     target = output_root if output_root.is_absolute() else root / output_root
     if target == root or target.parent == target:
         raise RuntimeError("Refusing to replace a broad generation target")
-    build = build_generation(root, registry_path=registry_path)
+    build = build_generation(
+        root,
+        registry_path=registry_path,
+        previous_registry_path=previous_registry_path,
+    )
     artifacts: list[GeneratedArtifact] = build.pop("_artifacts")
     staging_root = target.parent / ".generated-tmp" / build["generation_hash"]
     if staging_root.exists():
@@ -176,6 +195,193 @@ def _validate_registry(registry: dict[str, Any]) -> None:
         for permission_id in transition.get("permissions", []):
             if permission_id not in registry["permissions"]:
                 raise RuntimeError(f"{transition_id}: unknown permission {permission_id}")
+
+
+def _migration_artifacts(
+    registry: dict[str, Any],
+    previous_registry: dict[str, Any] | None,
+) -> tuple[GeneratedArtifact, ...]:
+    plan = _migration_plan(registry, previous_registry)
+    source_elements = tuple(
+        sorted(
+            {
+                *registry["objects"],
+                *(previous_registry or {"objects": {}})["objects"],
+                *(
+                    migration["id"]
+                    for migration in registry.get("migrations", {}).values()
+                    if isinstance(migration, dict) and isinstance(migration.get("id"), str)
+                ),
+            }
+        )
+    )
+    return (
+        _artifact(
+            "semantic.migrations",
+            "database/migration-plan.json",
+            "application/json",
+            _json(plan),
+            source_elements,
+        ),
+    )
+
+
+def _migration_plan(
+    registry: dict[str, Any],
+    previous_registry: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if previous_registry is None:
+        return {
+            "schema_version": "1.0",
+            "mode": "baseline",
+            "status": "no_previous_registry",
+            "blocked": False,
+            "changes": [],
+            "required_actions": [],
+        }
+
+    changes: list[dict[str, Any]] = []
+    current_objects = registry["objects"]
+    previous_objects = previous_registry["objects"]
+    for object_id in sorted(current_objects.keys() - previous_objects.keys()):
+        changes.append(
+            {
+                "semanticElementId": object_id,
+                "kind": "object_added",
+                "classification": "additive",
+                "blocked": False,
+                "action": "create_table",
+            }
+        )
+    for object_id in sorted(previous_objects.keys() - current_objects.keys()):
+        changes.append(
+            {
+                "semanticElementId": object_id,
+                "kind": "object_removed",
+                "classification": "destructive",
+                "blocked": True,
+                "action": "manual_review",
+                "reason": "Removing an object can destroy persisted data.",
+            }
+        )
+    for object_id in sorted(current_objects.keys() & previous_objects.keys()):
+        changes.extend(
+            _property_migration_changes(
+                registry,
+                previous_registry,
+                object_id,
+            )
+        )
+
+    blocked_changes = [change for change in changes if change["blocked"]]
+    return {
+        "schema_version": "1.0",
+        "mode": "semantic_diff",
+        "status": "blocked" if blocked_changes else "ready",
+        "blocked": bool(blocked_changes),
+        "changes": changes,
+        "required_actions": [
+            {
+                "semanticElementId": change["semanticElementId"],
+                "action": change["action"],
+                "reason": change.get("reason", "Manual migration review is required."),
+            }
+            for change in blocked_changes
+        ],
+    }
+
+
+def _property_migration_changes(
+    registry: dict[str, Any],
+    previous_registry: dict[str, Any],
+    object_id: str,
+) -> list[dict[str, Any]]:
+    changes: list[dict[str, Any]] = []
+    current_properties = registry["objects"][object_id]["properties"]
+    previous_properties = previous_registry["objects"][object_id]["properties"]
+    for property_name in sorted(current_properties.keys() - previous_properties.keys()):
+        property_definition = current_properties[property_name]
+        migration = _declared_property_migration(registry, object_id, property_name)
+        required = bool(property_definition.get("required"))
+        blocked = required and migration is None
+        changes.append(
+            {
+                "semanticElementId": f"{object_id}.property.{property_name}",
+                "kind": "property_added",
+                "objectId": object_id,
+                "property": property_name,
+                "type": property_definition["type"],
+                "required": required,
+                "classification": (
+                    "manual_review"
+                    if blocked
+                    else "breaking_with_backfill"
+                    if required
+                    else "additive"
+                ),
+                "blocked": blocked,
+                "action": "declare_backfill" if blocked else "add_column",
+                "reason": (
+                    "Required property added without default or backfill strategy."
+                    if blocked
+                    else "Declared backfill makes required property migration explicit."
+                    if required
+                    else "Optional property can be added without rewriting existing rows."
+                ),
+                "migration": migration["id"] if migration is not None else None,
+            }
+        )
+    for property_name in sorted(previous_properties.keys() - current_properties.keys()):
+        changes.append(
+            {
+                "semanticElementId": f"{object_id}.property.{property_name}",
+                "kind": "property_removed",
+                "objectId": object_id,
+                "property": property_name,
+                "classification": "destructive",
+                "blocked": True,
+                "action": "manual_review",
+                "reason": "Removing a property can destroy persisted data.",
+            }
+        )
+    for property_name in sorted(current_properties.keys() & previous_properties.keys()):
+        current_type = current_properties[property_name]["type"]
+        previous_type = previous_properties[property_name]["type"]
+        if current_type != previous_type:
+            changes.append(
+                {
+                    "semanticElementId": f"{object_id}.property.{property_name}",
+                    "kind": "property_type_changed",
+                    "objectId": object_id,
+                    "property": property_name,
+                    "from": previous_type,
+                    "to": current_type,
+                    "classification": "breaking",
+                    "blocked": True,
+                    "action": "manual_review",
+                    "reason": "Type changes require explicit compatibility and data migration.",
+                }
+            )
+    return changes
+
+
+def _declared_property_migration(
+    registry: dict[str, Any],
+    object_id: str,
+    property_name: str,
+) -> dict[str, Any] | None:
+    for migration in registry.get("migrations", {}).values():
+        for operation in migration.get("operations", []):
+            property_operation = operation.get("property")
+            if not isinstance(property_operation, dict):
+                continue
+            if (
+                property_operation.get("object") == object_id
+                and property_operation.get("name") == property_name
+                and "backfill" in operation
+            ):
+                return migration
+    return None
 
 
 def _postgresql_artifacts(registry: dict[str, Any]) -> tuple[GeneratedArtifact, ...]:
@@ -551,6 +757,14 @@ def _coverage(registry: dict[str, Any]) -> list[dict[str, str]]:
                 "notes": "Object schema is projected with semantic traceability extensions.",
             }
         )
+        coverage.append(
+            {
+                "semanticElementId": object_id,
+                "target": "migration",
+                "status": "partially_enforced",
+                "notes": "Semantic diff classifies object/property changes before SQL changes.",
+            }
+        )
     for constraint_id in sorted(registry["constraints"]):
         for target in ("postgresql", "openapi", "ui"):
             coverage.append(
@@ -717,6 +931,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    parser.add_argument("--previous-registry", type=Path)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -724,6 +939,7 @@ def main() -> int:
         args.root,
         args.output_root,
         registry_path=args.registry,
+        previous_registry_path=args.previous_registry,
     )
     print(json.dumps(manifest, sort_keys=True))
     return 0

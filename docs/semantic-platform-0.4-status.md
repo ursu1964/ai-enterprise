@@ -15,6 +15,7 @@ Implemented:
   - PostgreSQL schema
   - PostgreSQL mapping metadata
   - database enforcement report
+  - semantic database migration plan
   - OpenAPI
   - UI metadata
   - test scaffolding
@@ -24,6 +25,9 @@ Implemented:
   - generation manifest
 - Coverage reporting so each generator declares whether it fully enforces,
   partially enforces, documents, or delegates semantics to runtime enforcement.
+- Semantic migration planning that compares a previous registry with the current
+  registry and blocks unsafe required-property additions until a backfill
+  strategy is declared.
 - Atomic output replacement through a staging directory.
 
 Operational rule:
@@ -37,5 +41,8 @@ Verification:
 
 ```bash
 rtk make semantic-platform-generate
+PYTHONPATH=apps/api/src python tools/semantic_platform_generate.py \
+  --previous-registry registry/updl-semantic-platform-0.4/reference-approval.json \
+  --output-root generated/semantic-platform-0.4
 cd apps/api && .venv/bin/pytest -q tests/test_semantic_platform_generation.py
 ```
