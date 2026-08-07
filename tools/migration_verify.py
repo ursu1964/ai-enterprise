@@ -7,6 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
+MIGRATION_GRAPH_SCHEMA_REF = "schemas/release-artifacts/migration-graph-report.schema.json"
+SERVER_READINESS_SCHEMA_REF = "schemas/production-readiness/server-readiness-report.schema.json"
+
 
 class MigrationFinding(Exception):
     pass
@@ -146,7 +151,9 @@ def verify(migrations_dir: Path) -> dict[str, Any]:
     for revision in sorted(revisions):
         visit(revision)
 
-    return {
+    report = {
+        "schema_version": "1.0",
+        "schema_ref": MIGRATION_GRAPH_SCHEMA_REF,
         "conformant": not findings,
         "migration_count": len(rows),
         "base_revisions": bases,
@@ -154,11 +161,12 @@ def verify(migrations_dir: Path) -> dict[str, Any]:
         "rollback_feasible_count": sum(
             1
             for row in rows
-            if f"{row['revision']}: downgrade() is missing or not feasible"
-            not in findings
+            if f"{row['revision']}: downgrade() is missing or not feasible" not in findings
         ),
         "findings": sorted(set(findings)),
     }
+    _validate_report(report, MIGRATION_GRAPH_SCHEMA_REF)
+    return report
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -444,7 +452,9 @@ def verify_server_readiness(
         "Add the infrastructure choices template and verifier before production deployment.",
     )
     failures = [item for item in checks if item["status"] == "fail"]
-    return {
+    report = {
+        "schema_version": "1.0",
+        "schema_ref": SERVER_READINESS_SCHEMA_REF,
         "conformant": not failures,
         "mode": "server_readiness",
         "env_file": str(env_file),
@@ -453,6 +463,28 @@ def verify_server_readiness(
         "checks": checks,
         "findings": [f"{item['key']}: {item['action']}" for item in failures],
     }
+    _validate_report(report, SERVER_READINESS_SCHEMA_REF)
+    return report
+
+
+def _schema(schema_ref: str) -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / schema_ref
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{schema_ref} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any], schema_ref: str) -> None:
+    try:
+        jsonschema.validate(report, _schema(schema_ref))
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{schema_ref}: generated migration verification report does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def main() -> int:

@@ -1,6 +1,9 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
+
+import jsonschema
 
 
 def _repo_root() -> Path:
@@ -21,6 +24,11 @@ def _load(name: str):
 
 
 migration_verify = _load("migration_verify")
+MIGRATION_GRAPH_SCHEMA = json.loads(
+    (
+        _repo_root() / "schemas" / "release-artifacts" / "migration-graph-report.schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def test_migration_verify_accepts_linear_reversible_chain(tmp_path: Path) -> None:
@@ -31,12 +39,15 @@ def test_migration_verify_accepts_linear_reversible_chain(tmp_path: Path) -> Non
 
     report = migration_verify.verify(versions)
 
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == "schemas/release-artifacts/migration-graph-report.schema.json"
     assert report["conformant"] is True
     assert report["migration_count"] == 2
     assert report["base_revisions"] == ["one"]
     assert report["head_revisions"] == ["two"]
     assert report["rollback_feasible_count"] == 2
     assert report["findings"] == []
+    jsonschema.validate(report, MIGRATION_GRAPH_SCHEMA)
 
 
 def test_migration_verify_rejects_dangling_parent_and_empty_downgrade(
@@ -60,6 +71,31 @@ def test_migration_verify_rejects_dangling_parent_and_empty_downgrade(
     assert report["conformant"] is False
     assert "two: dangling down_revision missing" in report["findings"]
     assert "two: downgrade() is missing or not feasible" in report["findings"]
+    jsonschema.validate(report, MIGRATION_GRAPH_SCHEMA)
+
+
+def test_migration_verify_fails_closed_when_schema_validation_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    _migration(versions / "one.py", "one", None)
+    original_schema = migration_verify._schema
+
+    def stricter_schema(schema_ref: str) -> dict:
+        schema = original_schema(schema_ref)
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(migration_verify, "_schema", stricter_schema)
+
+    try:
+        migration_verify.verify(versions)
+    except RuntimeError as exc:
+        assert "migration-graph-report.schema.json" in str(exc)
+        assert "does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid migration verification report was accepted")
 
 
 def _migration(path: Path, revision: str, down_revision: str | None) -> None:

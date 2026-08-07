@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/production-readiness/server-readiness-report.schema.json",
+  "title": "Server Readiness Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_ref",
+    "conformant",
+    "mode",
+    "env_file",
+    "compose_file",
+    "allow_placeholders",
+    "checks",
+    "findings"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/production-readiness/server-readiness-report.schema.json"
+    },
+    "conformant": { "type": "boolean" },
+    "mode": { "const": "server_readiness" },
+    "env_file": { "type": "string", "minLength": 1 },
+    "compose_file": { "type": "string", "minLength": 1 },
+    "allow_placeholders": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "status", "message", "action"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pass", "fail"] },
+        "message": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
