@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 
 
@@ -26,6 +27,11 @@ def _load():
 
 
 demo_lifecycle = _load()
+DEMO_LIFECYCLE_SCHEMA = json.loads(
+    (_repo_root() / "schemas" / "evidence-audit" / "demo-lifecycle-evidence.schema.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _context() -> dict[str, Any]:
@@ -63,9 +69,7 @@ def _manager(*, unhealthy: bool = False) -> dict[str, Any]:
                 "name": name,
                 "status": "execution_running",
                 "workflow": {
-                    "state": (
-                        "manual_intervention" if unhealthy and index == 1 else "execution"
-                    )
+                    "state": ("manual_intervention" if unhealthy and index == 1 else "execution")
                 },
                 "tasks": {"problems": 0},
             }
@@ -81,9 +85,7 @@ def _start() -> dict[str, Any]:
         "blocked_count": 0,
         "projects": [
             {"name": name, "project_id": str(index)}
-            for index, (name, _path) in enumerate(
-                demo_lifecycle.CANONICAL_PORTFOLIO, start=1
-            )
+            for index, (name, _path) in enumerate(demo_lifecycle.CANONICAL_PORTFOLIO, start=1)
         ],
     }
 
@@ -153,6 +155,8 @@ def test_unresolved_job_blocks_before_start_and_writes_hashed_evidence(monkeypat
     digest = evidence.pop("integrity_sha256")
     canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":"), default=str).encode()
     assert hashlib.sha256(canonical).hexdigest() == digest
+    evidence["integrity_sha256"] = digest
+    jsonschema.validate(evidence, DEMO_LIFECYCLE_SCHEMA)
     assert evidence["preflight"]["unresolved_jobs"][0]["id"] == "job-1"
     assert "secret diagnostic" not in evidence_file.read_text(encoding="utf-8")
 
@@ -173,6 +177,8 @@ def test_execute_posts_once_and_records_exact_portfolio(monkeypatch, tmp_path):
     )
     assert report["execution"]["status"] == "started"
     assert evidence_path is not None and evidence_path.exists()
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    jsonschema.validate(evidence, DEMO_LIFECYCLE_SCHEMA)
     assert [call for call in calls if call[0] == "POST"] == [
         ("POST", "/api/v1/project-formation/mock-factory/start")
     ]
@@ -212,3 +218,51 @@ def test_partial_execution_is_failure_with_evidence(monkeypatch, tmp_path):
             base_url="http://localhost:8000", execute=True, output_dir=tmp_path
         )
     assert len(list(tmp_path.glob("demo-lifecycle-*.json"))) == 1
+
+
+def test_evidence_write_fails_closed_when_schema_validation_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    report = _valid_evidence_report()
+    original_schema = demo_lifecycle._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(demo_lifecycle, "_schema", stricter_schema)
+
+    with pytest.raises(demo_lifecycle.DemoLifecycleError, match="does not validate"):
+        demo_lifecycle._write_evidence(report, tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def _valid_evidence_report() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "generated_at": "2026-08-06T00:00:00+00:00",
+        "mode": "execute",
+        "base_url": "http://localhost:8000",
+        "policy": {
+            "non_destructive": True,
+            "deletes_records": False,
+            "acknowledges_jobs": False,
+            "local_context_required": True,
+        },
+        "portfolio": [
+            {
+                "name": name,
+                "repository_path": path,
+                "action": "reuse",
+                "existing_project_id": str(index),
+            }
+            for index, (name, path) in enumerate(demo_lifecycle.CANONICAL_PORTFOLIO, start=1)
+        ],
+        "preflight": {
+            "status": "ready",
+            "unresolved_jobs": [],
+            "unhealthy_canonical_projects": [],
+        },
+        "execution": {"status": "started", "response": _start()},
+    }

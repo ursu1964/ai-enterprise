@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/evidence-audit/demo-lifecycle-evidence.schema.json",
+  "title": "Local Demo Lifecycle Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "mode",
+    "base_url",
+    "policy",
+    "portfolio",
+    "preflight",
+    "execution",
+    "integrity_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["preview", "execute"] },
+    "base_url": { "type": "string", "minLength": 1 },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "non_destructive",
+        "deletes_records",
+        "acknowledges_jobs",
+        "local_context_required"
+      ],
+      "properties": {
+        "non_destructive": { "const": true },
+        "deletes_records": { "const": false },
+        "acknowledges_jobs": { "const": false },
+        "local_context_required": { "const": true }
+      }
+    },
+    "portfolio": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/portfolioItem" }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "unresolved_jobs",
+        "unhealthy_canonical_projects"
+      ],
+      "properties": {
+        "status": { "enum": ["ready", "blocked"] },
+        "unresolved_jobs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jobEvidence" }
+        },
+        "unhealthy_canonical_projects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/unhealthyProject" }
+        }
+      }
+    },
+    "execution": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "response"],
+          "properties": {
+            "status": { "enum": ["started", "invalid_or_partial"] },
+            "response": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "integrity_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "portfolioItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "repository_path",
+        "action",
+        "existing_project_id"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "repository_path": { "type": "string", "minLength": 1 },
+        "action": { "$ref": "#/$defs/nullableString" },
+        "existing_project_id": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "jobEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "project_id",
+        "job_type",
+        "status",
+        "failure_class"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "project_id": { "type": "string" },
+        "job_type": { "$ref": "#/$defs/nullableString" },
+        "status": { "$ref": "#/$defs/nullableString" },
+        "failure_class": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "unhealthyProject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "name",
+        "project_status",
+        "workflow_state",
+        "problem_tasks"
+      ],
+      "properties": {
+        "project_id": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "project_status": { "$ref": "#/$defs/nullableString" },
+        "workflow_state": { "$ref": "#/$defs/nullableString" },
+        "problem_tasks": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

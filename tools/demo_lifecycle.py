@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import jsonschema
+
+DEMO_LIFECYCLE_SCHEMA = "demo-lifecycle-evidence.schema.json"
+SCHEMA_ROOT = Path(__file__).resolve().parents[1] / "schemas" / "evidence-audit"
+
 CANONICAL_PORTFOLIO = (
     (
         "AI Enterprise Product Factory Demo",
@@ -116,7 +121,8 @@ def _validate_portfolio(preview: dict[str, Any]) -> list[dict[str, Any]]:
         missing = sorted(expected - actual)
         extra = sorted(actual - expected, key=str)
         raise DemoLifecycleError(
-            f"Mock portfolio differs from the canonical definition; missing={missing}, extra={extra}"
+            "Mock portfolio differs from the canonical definition; "
+            f"missing={missing}, extra={extra}"
         )
     blocked = [item["name"] for item in projects if item.get("ready") is not True]
     if blocked or preview.get("status") != "ready":
@@ -191,6 +197,7 @@ def _write_evidence(document: dict[str, Any], output_dir: Path) -> Path:
     unsigned.pop("integrity_sha256", None)
     digest = hashlib.sha256(_canonical_json(unsigned)).hexdigest()
     document["integrity_sha256"] = digest
+    _validate_evidence(document)
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = str(document["generated_at"]).replace(":", "").replace("+00:00", "Z")
     destination = output_dir / f"demo-lifecycle-{timestamp}-{digest[:12]}.json"
@@ -204,6 +211,22 @@ def _write_evidence(document: dict[str, Any], output_dir: Path) -> Path:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)
     return destination
+
+
+def _schema() -> dict[str, Any]:
+    schema = json.loads((SCHEMA_ROOT / DEMO_LIFECYCLE_SCHEMA).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _validate_evidence(document: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(document, _schema())
+    except jsonschema.ValidationError as exc:
+        raise DemoLifecycleError(
+            f"{DEMO_LIFECYCLE_SCHEMA}: generated demo lifecycle evidence does not validate: "
+            f"{exc.message}"
+        ) from exc
 
 
 def run_lifecycle(
