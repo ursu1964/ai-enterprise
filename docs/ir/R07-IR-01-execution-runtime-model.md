@@ -79,7 +79,7 @@ credentials, or deployment references are missing.
 
 This IR specification is implemented through the existing R7 UERM boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r7_uerm.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r7_uerm.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r7_uerm.py`
 - API schemas: `apps/api/src/ai_enterprise/api/r7_uerm_schemas.py`
 - Migrations: `migrations/versions/*r7*.py`
