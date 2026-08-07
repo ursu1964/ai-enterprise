@@ -108,6 +108,50 @@ class TypeDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class NamespaceDefinition:
+    id: str
+    parent: str | None = None
+    active: bool = True
+    owners: tuple[ActorReference, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipTypeDefinition:
+    id: str
+    name: str
+    source_kinds: tuple[str, ...]
+    target_kinds: tuple[str, ...]
+    symmetric: bool = False
+    transitive: bool = False
+    inverse_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipInstance:
+    id: str
+    type_id: str
+    source: ObjectReference
+    target: ObjectReference
+
+    def canonical_document(self) -> dict[str, Any]:
+        document: dict[str, Any] = {
+            "id": self.id,
+            "type": {"$ref": {"id": self.type_id}},
+            "source": {"$ref": {"id": self.source.id}},
+            "target": {"$ref": {"id": self.target.id}},
+        }
+        if self.source.revision is not None:
+            document["source"]["$ref"]["revision"] = self.source.revision
+        if self.target.revision is not None:
+            document["target"]["$ref"]["revision"] = self.target.revision
+        if self.source.resolution is not ResolutionMode.LATEST:
+            document["source"]["$ref"]["resolution"] = self.source.resolution.value
+        if self.target.resolution is not ResolutionMode.LATEST:
+            document["target"]["$ref"]["resolution"] = self.target.resolution.value
+        return document
+
+
+@dataclass(frozen=True, slots=True)
 class Metadata:
     id: str
     namespace: str
@@ -220,11 +264,35 @@ class InMemoryUPDLRegistry:
         self._types: dict[str, TypeDefinition] = {}
         self._objects: dict[str, list[ObjectEnvelope]] = {}
         self._policies: dict[str, PolicyDefinition] = {}
+        self._namespaces: dict[str, NamespaceDefinition] = {}
+        self._relationship_types: dict[str, RelationshipTypeDefinition] = {}
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
             raise RegistryError("TYPE_INVALID", "type kindName is required")
         self._types[definition.kind_name] = definition
+
+    def register_namespace(self, definition: NamespaceDefinition) -> None:
+        require_namespace(definition.id)
+        if definition.id.split(".", 1)[0] in RESERVED_NAMESPACE_ROOTS:
+            raise RegistryError("NAMESPACE_RESERVED", f"reserved namespace: {definition.id}")
+        if definition.parent is not None:
+            require_namespace(definition.parent)
+            if definition.parent not in self._namespaces:
+                raise RegistryError("NAMESPACE_PARENT_NOT_FOUND", definition.parent)
+            parent: str | None = definition.parent
+            while parent is not None:
+                if parent == definition.id:
+                    raise RegistryError("NAMESPACE_CYCLE", definition.id)
+                parent = self._namespaces[parent].parent
+        self._namespaces[definition.id] = definition
+
+    def register_relationship_type(self, definition: RelationshipTypeDefinition) -> None:
+        require_identifier(definition.id)
+        for kind in (*definition.source_kinds, *definition.target_kinds):
+            if kind not in self._types:
+                raise RegistryError("RELATIONSHIP_KIND_UNKNOWN", kind)
+        self._relationship_types[definition.id] = definition
 
     def register_policy(self, definition: PolicyDefinition) -> None:
         require_identifier(definition.id)
@@ -243,8 +311,7 @@ class InMemoryUPDLRegistry:
         object_id = f"{namespace}.{local_id}"
         require_identifier(object_id)
         require_namespace(namespace)
-        if namespace.split(".", 1)[0] in RESERVED_NAMESPACE_ROOTS:
-            raise RegistryError("NAMESPACE_RESERVED", f"reserved namespace: {namespace}")
+        self._require_active_namespace(namespace)
         if object_id in self._objects:
             raise RegistryError("IDENTITY_CONFLICT", f"object already exists: {object_id}")
         self._validate_spec(kind, spec)
@@ -262,6 +329,62 @@ class InMemoryUPDLRegistry:
         )
         self._objects[object_id] = [envelope]
         return envelope
+
+    def create_relationship(
+        self,
+        *,
+        relationship_id: str,
+        type_id: str,
+        source_id: str,
+        target: ObjectReference,
+        actor: ActorReference,
+    ) -> ObjectEnvelope:
+        require_identifier(relationship_id)
+        relationship_type = self._relationship_types.get(type_id)
+        if relationship_type is None:
+            raise RegistryError("RELATIONSHIP_TYPE_NOT_REGISTERED", type_id)
+        source = self.get_object(source_id)
+        target_resolution = self.resolve_reference(
+            target,
+            target_kinds=relationship_type.target_kinds,
+        )
+        if target_resolution.status is not ResolutionStatus.RESOLVED:
+            raise RegistryError(target_resolution.status.value, f"target: {target_resolution.code}")
+        if target_resolution.resolved is None:
+            raise RegistryError("REFERENCE_NOT_FOUND", f"target: {target.id}")
+        if source.kind not in relationship_type.source_kinds:
+            raise RegistryError(
+                "RELATIONSHIP_SOURCE_KIND_INVALID",
+                f"{source.kind} is not valid for {type_id}",
+            )
+        if any(item["id"] == relationship_id for item in source.relationships):
+            raise RegistryError(
+                "RELATIONSHIP_IDENTITY_CONFLICT",
+                f"relationship already exists on source: {relationship_id}",
+            )
+        relationship = RelationshipInstance(
+            id=relationship_id,
+            type_id=type_id,
+            source=ObjectReference(source.metadata.id, revision=source.metadata.revision),
+            target=ObjectReference(
+                target_resolution.resolved.metadata.id,
+                revision=target_resolution.resolved.metadata.revision,
+            ),
+        )
+        updated = self._object_envelope(
+            kind=source.kind,
+            object_id=source.metadata.id,
+            namespace=source.metadata.namespace,
+            revision=source.metadata.revision + 1,
+            spec=source.spec,
+            actor=actor,
+            created_at=source.metadata.created_at,
+            updated_at=datetime.now(UTC),
+            lifecycle_state=source.lifecycle.state,
+            relationships=(*source.relationships, relationship.canonical_document()),
+        )
+        self._objects[source_id].append(updated)
+        return updated
 
     def update_object(
         self,
@@ -296,6 +419,7 @@ class InMemoryUPDLRegistry:
             created_at=current.metadata.created_at,
             updated_at=datetime.now(UTC),
             lifecycle_state=current.lifecycle.state,
+            relationships=current.relationships,
         )
         self._objects[object_id].append(updated)
         return updated
@@ -445,6 +569,13 @@ class InMemoryUPDLRegistry:
                 if resolution.status is not ResolutionStatus.RESOLVED:
                     raise RegistryError(resolution.status.value, f"{name}: {resolution.code}")
 
+    def _require_active_namespace(self, namespace: str) -> None:
+        definition = self._namespaces.get(namespace)
+        if definition is None:
+            raise RegistryError("NAMESPACE_NOT_FOUND", namespace)
+        if not definition.active:
+            raise RegistryError("NAMESPACE_INACTIVE", namespace)
+
     def _object_envelope(
         self,
         *,
@@ -457,6 +588,7 @@ class InMemoryUPDLRegistry:
         created_at: datetime,
         updated_at: datetime,
         lifecycle_state: str,
+        relationships: tuple[dict[str, Any], ...] = (),
     ) -> ObjectEnvelope:
         metadata_without_hash = Metadata(
             id=object_id,
@@ -472,6 +604,7 @@ class InMemoryUPDLRegistry:
             kind=kind,
             metadata=metadata_without_hash,
             spec=spec,
+            relationships=relationships,
             lifecycle=LifecycleState(lifecycle_state),
             status={"validation": ValidationStatus.VALID.value},
         )
