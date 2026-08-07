@@ -15,6 +15,7 @@ def test_production_deployment_verification_runbook_publishes_exact_fail_closed_
         "rtk make production-readiness",
         "rtk make release-gate-evidence-release",
         "rtk make production-release-artifact",
+        "artifacts/roadmap-sequence-gate.json",
     )
     for command in required_commands:
         assert command in text
@@ -23,6 +24,7 @@ def test_production_deployment_verification_runbook_publishes_exact_fail_closed_
     assert "Do not hand-edit the artifact to pass." in text
     assert "`blocked`, not `ready`" in text
     assert "intentionally ignored by Git" in text
+    assert "The roadmap sequence gate must pass before release evidence is acceptable" in text
 
 
 def test_production_evidence_inputs_are_ignored_to_avoid_committing_real_references() -> None:

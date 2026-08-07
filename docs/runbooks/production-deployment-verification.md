@@ -202,9 +202,14 @@ rtk make release-gate-evidence-release
 Expected result:
 
 - `artifacts/gate-evidence.json` is written.
+- `artifacts/roadmap-sequence-gate.json` is written and included as required
+  release evidence.
 - Per-gate logs are written under `artifacts/release-gates/`.
 - The command passes only when every release gate passes and Git provenance is
   clean/stable.
+- The roadmap sequence gate must pass before release evidence is acceptable; it
+  proves R2–R22, R-INDEX, R-AUDIT-01, R-AUDIT-02, R-REV-01, and P12–P32
+  implementation packages remain reconciled before post-R22 work proceeds.
 
 Correction rule:
 
@@ -257,9 +262,9 @@ Correction rule:
   ```
 
   This writes `artifacts/production-release-evidence-bundle.json`, including the
-  required release/readiness artifacts, each artifact hash, content type, and
-  schema reference when one exists. The target fails closed when any required
-  artifact is missing.
+  required release/readiness artifacts, the roadmap sequence gate report, each
+  artifact hash, content type, and schema reference when one exists. The target
+  fails closed when any required artifact is missing.
 
 ### 7. Archive evidence with BK/R11
 
@@ -304,6 +309,7 @@ If production gates currently report:
 - missing `docs/enterprise/real-world-infrastructure-decisions.json`
 - missing `docs/enterprise/production-readiness-evidence.json`
 - missing `artifacts/gate-evidence.json`
+- missing `artifacts/roadmap-sequence-gate.json`
 - dirty Git tree
 
 then the correct state is `blocked`, not `ready`. Complete the real operational
