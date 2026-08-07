@@ -77,7 +77,7 @@ expiry.
 
 This IR specification is implemented through the existing R8 UGEIF boundary:
 
-- Runtime/domain: `apps/api/src/ai_enterprise/application/r8_ugeif.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/r8_ugeif.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/r8_ugeif.py`
 - API schemas: `apps/api/src/ai_enterprise/api/r8_ugeif_schemas.py`
 - Migrations: `migrations/versions/*r8*.py`
