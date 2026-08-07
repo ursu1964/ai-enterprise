@@ -35,6 +35,7 @@ def test_roadmap_sequence_gate_passes_for_current_baseline() -> None:
     checks = {item["name"]: item for item in report["checks"]}
     assert checks["baseline-documents"]["status"] == "passed"
     assert checks["implementation-packages"]["status"] == "passed"
+    assert checks["post-r22-governance-adr"]["status"] == "passed"
     assert checks["no-premature-r23"]["status"] == "passed"
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(report, schema)
@@ -79,6 +80,35 @@ def test_roadmap_sequence_gate_fails_closed_for_premature_r23(tmp_path: Path) ->
     assert "R23 artifact exists before an ADR-backed post-R22 module decision" in (
         findings[0].message
     )
+
+
+def test_roadmap_sequence_gate_fails_closed_without_post_r22_governance_adr(
+    tmp_path: Path,
+) -> None:
+    module = _load_roadmap_sequence_gate()
+    findings: list = []
+
+    check = module._check_post_r22_governance_adr(tmp_path, findings)
+
+    assert check["status"] == "failed"
+    assert findings[0].check == "post-r22-governance-adr"
+    assert "Post-R22 roadmap work requires an accepted governance ADR" in findings[0].message
+
+
+def test_roadmap_sequence_gate_rejects_incomplete_post_r22_governance_adr(
+    tmp_path: Path,
+) -> None:
+    module = _load_roadmap_sequence_gate()
+    adr = tmp_path / module.POST_R22_GOVERNANCE_ADR
+    adr.parent.mkdir(parents=True)
+    adr.write_text("# ADR-0007\n\n- Status: proposed\n", encoding="utf-8")
+    findings: list = []
+
+    check = module._check_post_r22_governance_adr(tmp_path, findings)
+
+    assert check["status"] == "failed"
+    assert {finding.check for finding in findings} == {"post-r22-governance-adr"}
+    assert any("missing required marker" in finding.message for finding in findings)
 
 
 def test_roadmap_sequence_gate_fails_closed_when_report_schema_validation_fails(

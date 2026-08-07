@@ -26,6 +26,13 @@ DEFAULT_GATES = (
     ("secret-scan", "python tools/secret_scan.py --all"),
     ("docker-smoke", "python tools/docker_smoke.py --require-worker"),
     (
+        "architecture-baseline-manifest",
+        (
+            "python tools/architecture_baseline_manifest.py "
+            "--output artifacts/architecture-baseline-manifest.json"
+        ),
+    ),
+    (
         "roadmap-sequence-gate",
         "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json",
     ),

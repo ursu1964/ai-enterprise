@@ -27,6 +27,7 @@ REQUIRED_BASELINE_DOCS = (
     "docs/R-AUDIT-02-r1-r22-alignment-matrix.md",
     "docs/R-REV-01-corrected-r-series-baseline.md",
 )
+POST_R22_GOVERNANCE_ADR = "docs/adrs/0007-post-r22-roadmap-governance.md"
 REQUIRED_PACKAGE_FILES = r_series_alignment.PACKAGE_FILES
 R_RANGE = tuple(range(2, 23))
 
@@ -59,6 +60,7 @@ def verify_roadmap_sequence(root: Path) -> dict[str, Any]:
         _check_implementation_packages(root, findings),
         _check_phase_sequence(alignments, findings),
         _check_alignment_report(alignment_report, findings),
+        _check_post_r22_governance_adr(root, findings),
         _check_no_premature_r23(root, findings),
     ]
     status = "failed" if findings else "passed"
@@ -232,6 +234,47 @@ def _check_alignment_report(
         "alignment-report",
         not failed,
         "R-series alignment report is schema-valid and complete",
+    )
+
+
+def _check_post_r22_governance_adr(root: Path, findings: list[Finding]) -> dict[str, str]:
+    path = root / POST_R22_GOVERNANCE_ADR
+    if not path.is_file():
+        findings.append(
+            Finding(
+                check="post-r22-governance-adr",
+                severity="critical",
+                message=(
+                    "Post-R22 roadmap work requires an accepted governance ADR: "
+                    f"{POST_R22_GOVERNANCE_ADR}"
+                ),
+            )
+        )
+        return _check(
+            "post-r22-governance-adr",
+            False,
+            "Post-R22 roadmap governance ADR is missing",
+        )
+
+    content = path.read_text(encoding="utf-8", errors="replace")
+    required_markers = (
+        "- Status: accepted",
+        "Until such an ADR exists, R23 is not authorized.",
+        "Post-R22 roadmap expansion requires an accepted ADR",
+    )
+    missing_markers = [marker for marker in required_markers if marker not in content]
+    for marker in missing_markers:
+        findings.append(
+            Finding(
+                check="post-r22-governance-adr",
+                severity="critical",
+                message=f"Post-R22 governance ADR is missing required marker: {marker}",
+            )
+        )
+    return _check(
+        "post-r22-governance-adr",
+        not missing_markers,
+        "Accepted post-R22 roadmap governance ADR is present",
     )
 
 

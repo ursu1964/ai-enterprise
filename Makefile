@@ -1,6 +1,6 @@
 manifest ?= docs/enterprise/enterprise-manifest.example.json
 
-.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check local-executor-env local-executor-check local-executor-worker demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan roadmap-sequence-gate check check-fast check-ci check-release check-production-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-evidence-init production-readiness-contracts production-evidence-status production-evidence-plan production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact release-artifact-verify release-evidence-bundle production-release-artifact production-release-artifact-verify production-release-evidence-bundle
+.PHONY: build up down restart logs ps migrate migration enterprise-start laptop-worker-up laptop-compose-check local-executor-env local-executor-check local-executor-worker demo-preview demo-reset runtime-baseline test docker-test lint format typecheck tooling-invariants secret-scan architecture-baseline-manifest roadmap-sequence-gate check check-fast check-ci check-release check-production-release shell db-shell compose-check docker-smoke dashboard-verify dashboard-browser-install dashboard-browser-verify migration-check migration-verify server-secrets model-verify server-readiness-template server-readiness infrastructure-choices-template infrastructure-choices-verify backup-verify deployment-blueprint production-evidence-init production-readiness-contracts production-evidence-status production-evidence-plan production-readiness observability-check observability-up observability-down engineering-static evolution-check federation-check intelligence-check etra-check engineering-full release-gate-evidence-fast release-gate-evidence-ci release-gate-evidence-release release-artifact release-artifact-verify release-evidence-bundle production-release-artifact production-release-artifact-verify production-release-evidence-bundle
 
 build:
 	docker compose build
@@ -74,6 +74,9 @@ tooling-invariants:
 
 secret-scan:
 	python tools/secret_scan.py --all
+
+architecture-baseline-manifest:
+	python tools/architecture_baseline_manifest.py --output artifacts/architecture-baseline-manifest.json
 
 roadmap-sequence-gate:
 	python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json
@@ -169,7 +172,7 @@ engineering-full:
 	python tools/engineering_verify.py --full --json
 
 release-artifact:
-	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,roadmap-sequence-gate,dashboard-verify,dashboard-browser-verify,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json --markdown-output artifacts/release-verification.md
+	python tools/release_artifact.py --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,architecture-baseline-manifest,roadmap-sequence-gate,dashboard-verify,dashboard-browser-verify,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/release-verification.json --markdown-output artifacts/release-verification.md
 
 release-artifact-verify:
 	python tools/release_artifact.py --verify-json artifacts/release-verification.json --verify-markdown artifacts/release-verification.md --verify-output artifacts/release-verification-check.json
@@ -178,7 +181,7 @@ release-evidence-bundle:
 	python tools/release_evidence_bundle.py --output artifacts/release-evidence-bundle.json
 
 production-release-artifact:
-	python tools/release_artifact.py --production --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,roadmap-sequence-gate,dashboard-verify,dashboard-browser-verify,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/production-release-verification.json --markdown-output artifacts/production-release-verification.md
+	python tools/release_artifact.py --production --evidence-file artifacts/gate-evidence.json --require-evidence-for compose-check,migration-check,lint,typecheck,test,secret-scan,docker-smoke,architecture-baseline-manifest,roadmap-sequence-gate,dashboard-verify,dashboard-browser-verify,engineering-static,evolution-check,federation-check,intelligence-check,engineering-full,etra-check --output artifacts/production-release-verification.json --markdown-output artifacts/production-release-verification.md
 
 production-release-artifact-verify:
 	python tools/release_artifact.py --verify-json artifacts/production-release-verification.json --verify-markdown artifacts/production-release-verification.md --verify-output artifacts/production-release-verification-check.json

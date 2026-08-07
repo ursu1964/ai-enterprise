@@ -248,6 +248,7 @@ def test_release_artifact_passes_when_all_release_gate_evidence_is_present(
         "test",
         "secret-scan",
         "docker-smoke",
+        "architecture-baseline-manifest",
         "dashboard-verify",
         "engineering-static",
         "evolution-check",

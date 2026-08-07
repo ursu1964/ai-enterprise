@@ -63,8 +63,8 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
     assert document["bundle_type"] == "release"
     assert document["status"] == "complete"
     assert document["missing_artifacts"] == []
-    assert document["artifact_count"] == 10
-    assert document["present_artifact_count"] == 10
+    assert document["artifact_count"] == 11
+    assert document["present_artifact_count"] == 11
     assert len(document["bundle_hash"]) == 64
     artifacts = {item["name"]: item for item in document["artifacts"]}
     verification = artifacts["release-verification-json"]
@@ -89,6 +89,13 @@ def test_release_evidence_bundle_records_hashes_and_schema_references(tmp_path: 
     assert roadmap_gate["bk_r11_evidence_type"] == "roadmap-sequence-governance"
     assert artifacts["architecture-baseline-v1"]["bk_r11_evidence_type"] == (
         "architecture-baseline-freeze-candidate"
+    )
+    baseline_manifest = artifacts["architecture-baseline-manifest"]
+    assert baseline_manifest["schema_ref"] == (
+        "schemas/architecture-baseline/architecture-baseline-manifest.schema.json"
+    )
+    assert baseline_manifest["bk_r11_evidence_type"] == (
+        "architecture-baseline-root-fingerprint"
     )
     assert document["archive_policy"] == {
         "target_runtime": "BK/R11 evidence audit",
@@ -121,6 +128,7 @@ def test_release_evidence_bundle_blocks_when_required_artifact_is_missing(
         "docs/R-AUDIT-02-r1-r22-alignment-matrix.md",
         "docs/R-REV-01-corrected-r-series-baseline.md",
         "artifacts/r-series-alignment-report.json",
+        "artifacts/architecture-baseline-manifest.json",
         "artifacts/roadmap-sequence-gate.json",
     ]
     missing = [
@@ -201,6 +209,11 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
                 tmp_path / spec.path,
                 json.dumps(_roadmap_sequence_gate_payload(), sort_keys=True) + "\n",
             )
+        elif spec.name == "architecture-baseline-manifest":
+            _write(
+                tmp_path / spec.path,
+                json.dumps(_architecture_baseline_manifest_payload(), sort_keys=True) + "\n",
+            )
         elif spec.name == "release-gate-evidence":
             _write(
                 tmp_path / spec.path,
@@ -217,7 +230,7 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
 
     assert document["bundle_type"] == "production"
     assert document["status"] == "complete"
-    assert document["artifact_count"] == 15
+    assert document["artifact_count"] == 16
     assert document["missing_artifacts"] == []
     artifacts = {item["path"]: item for item in document["artifacts"]}
     assert "artifacts/production-readiness-contracts.json" in artifacts
@@ -227,6 +240,7 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     assert "artifacts/production-evidence-status.md" in artifacts
     assert "docs/ARCHITECTURE-BASELINE-v1.0.md" in artifacts
     assert "artifacts/r-series-alignment-report.json" in artifacts
+    assert "artifacts/architecture-baseline-manifest.json" in artifacts
     assert "artifacts/roadmap-sequence-gate.json" in artifacts
     assert artifacts["artifacts/production-readiness-contracts.json"]["schema_ref"] == (
         "schemas/production-readiness/production-readiness-contracts-report.schema.json"
@@ -249,6 +263,9 @@ def test_production_evidence_bundle_includes_readiness_and_status_outputs(
     )
     assert artifacts["artifacts/gate-evidence.json"]["schema_ref"] == (
         "schemas/release-artifacts/release-gate-evidence.schema.json"
+    )
+    assert artifacts["artifacts/architecture-baseline-manifest.json"]["schema_ref"] == (
+        "schemas/architecture-baseline/architecture-baseline-manifest.schema.json"
     )
     jsonschema.validate(document, SCHEMA)
 
@@ -435,6 +452,10 @@ def _write_architecture_artifacts(root: Path) -> None:
     _write(
         root / "artifacts" / "roadmap-sequence-gate.json",
         json.dumps(_roadmap_sequence_gate_payload(), sort_keys=True) + "\n",
+    )
+    _write(
+        root / "artifacts" / "architecture-baseline-manifest.json",
+        json.dumps(_architecture_baseline_manifest_payload(), sort_keys=True) + "\n",
     )
 
 
@@ -685,4 +706,55 @@ def _roadmap_sequence_gate_payload() -> dict:
         ],
         "findings": [],
         "next_action": "Proceed only with ADR-backed post-R22 roadmap work.",
+    }
+
+
+def _architecture_baseline_manifest_payload() -> dict:
+    artifact_hash = "b" * 64
+    return {
+        "schema_version": "1.0",
+        "schema_ref": (
+            "schemas/architecture-baseline/architecture-baseline-manifest.schema.json"
+        ),
+        "baseline_id": "AEB-1.0",
+        "baseline_version": "1.0.0",
+        "status": "frozen",
+        "generated_at": "2026-08-06T00:00:00Z",
+        "scope": {
+            "requirements": {"first": "R1", "last": "R22", "count": 22},
+            "r_index": "docs/R-INDEX.md",
+            "architecture_baseline": "docs/ARCHITECTURE-BASELINE-v1.0.md",
+        },
+        "governance": {
+            "immutable": True,
+            "change_process": "R-REV",
+            "direct_modification": "prohibited",
+        },
+        "implementation": {
+            "first_slice": "P12",
+            "first_target": "R2",
+            "phase_range": "P12-P32",
+        },
+        "future_modules": {
+            "R23": {
+                "allowed": False,
+                "authorization": "requires accepted ADR after post-R22 governance",
+            }
+        },
+        "artifact_count": 1,
+        "artifacts": [
+            {
+                "id": "R1",
+                "type": "requirement_specification",
+                "version": "1.0.0",
+                "baseline_id": "AEB-1.0",
+                "owner": "enterprise-architecture",
+                "source_path": "1/r1.txt",
+                "content_hash": {"algorithm": "SHA-256", "value": artifact_hash},
+                "status": "frozen",
+            }
+        ],
+        "root_hash": {"algorithm": "SHA-256", "value": "c" * 64},
+        "findings": [],
+        "next_action": "Use AEB-1.0 as the immutable architecture reference.",
     }

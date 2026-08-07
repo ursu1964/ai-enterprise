@@ -783,9 +783,7 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
         if release_bundle.is_file()
         else "- Latest release evidence bundle: not present in this checkout"
     )
-    verdict = (
-        "FREEZE CANDIDATE" if complete_count == len(alignments) and not ir_missing else "NOT READY"
-    )
+    verdict = "FROZEN" if complete_count == len(alignments) and not ir_missing else "NOT READY"
     return _markdown(
         [
             "# Architecture Baseline v1.0",
@@ -794,7 +792,9 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
             "",
             "## Scope",
             "",
-            "- Product R-series: R2–R22",
+            "- Baseline identifier: `AEB-1.0`",
+            "- Baseline version: `1.0.0`",
+            "- Product R-series: R1–R22",
             "- Implementation phases: P12–P32",
             "- IR constitutional specifications: R02-IR-01–R22-IR-01",
             "- Audit reconciliation: R-AUDIT-01 and R-AUDIT-02",
@@ -813,6 +813,7 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
             "",
             "## Baseline evidence",
             "",
+            "- Machine-readable baseline manifest: `artifacts/architecture-baseline-manifest.json`",
             "- R-INDEX: `docs/R-INDEX.md`",
             "- R-AUDIT-01: `docs/R-AUDIT-01-current-state-repository-audit.md`",
             "- R-AUDIT-02: `docs/R-AUDIT-02-r1-r22-alignment-matrix.md`",
@@ -822,10 +823,18 @@ def _architecture_baseline(root: Path, alignments: list[RAlignment]) -> str:
             "## Freeze rule",
             "",
             (
-                "This document is a freeze candidate, not a fabricated production "
-                "approval. A production baseline freeze still requires real owner "
-                "approval, release evidence archival, and any environment-specific "
-                "operational evidence required by policy."
+                "This document freezes the architecture reference. It is not "
+                "fabricated production approval. Production release still requires "
+                "real owner approval, release evidence archival, and any "
+                "environment-specific operational evidence required by policy."
+            ),
+            "",
+            (
+                "The baseline manifest records SHA-256 content hashes for R1–R22, "
+                "R-INDEX, audit/revision artifacts, ADR-0007 post-R22 governance, "
+                "and P12–P32 clause-verification evidence. Its root hash is the "
+                "machine-verifiable fingerprint for the architecture baseline "
+                "artifact set."
             ),
         ]
     )

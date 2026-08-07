@@ -64,6 +64,14 @@ ARCHITECTURE_BASELINE_ARTIFACTS: tuple[ArtifactSpec, ...] = (
         schema_ref="schemas/architecture-baseline/r-series-alignment-report.schema.json",
     ),
     ArtifactSpec(
+        name="architecture-baseline-manifest",
+        path=Path("artifacts/architecture-baseline-manifest.json"),
+        kind="architecture_baseline_manifest",
+        content_type="application/json",
+        bk_r11_evidence_type="architecture-baseline-root-fingerprint",
+        schema_ref="schemas/architecture-baseline/architecture-baseline-manifest.schema.json",
+    ),
+    ArtifactSpec(
         name="roadmap-sequence-gate",
         path=Path("artifacts/roadmap-sequence-gate.json"),
         kind="roadmap_sequence_gate",
@@ -276,6 +284,18 @@ def _ensure_derived_artifacts(root: Path, specs: tuple[ArtifactSpec, ...]) -> No
                 json.dumps(report, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    if "artifacts/architecture-baseline-manifest.json" in paths:
+        target = root / "artifacts" / "architecture-baseline-manifest.json"
+        if (root / "tools" / "architecture_baseline_manifest.py").is_file():
+            module = _load_architecture_baseline_manifest(root)
+            report = module.build_manifest(root)
+            if report.get("status") != "frozen":
+                raise RuntimeError("Architecture baseline manifest is not frozen")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     if "artifacts/roadmap-sequence-gate.json" in paths:
         target = root / "artifacts" / "roadmap-sequence-gate.json"
         if (root / "tools" / "roadmap_sequence_gate.py").is_file():
@@ -313,6 +333,22 @@ def _load_r_series_alignment(root: Path) -> Any:
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("r_series_alignment.py could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_architecture_baseline_manifest(root: Path) -> Any:
+    module_name = "_release_evidence_bundle_architecture_baseline_manifest"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        root / "tools" / "architecture_baseline_manifest.py",
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("architecture_baseline_manifest.py could not be loaded")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)

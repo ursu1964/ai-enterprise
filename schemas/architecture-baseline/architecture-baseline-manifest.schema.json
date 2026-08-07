@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-enterprise.local/schemas/architecture-baseline/architecture-baseline-manifest.schema.json",
+  "title": "Architecture Baseline Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_ref",
+    "baseline_id",
+    "baseline_version",
+    "status",
+    "generated_at",
+    "scope",
+    "governance",
+    "implementation",
+    "future_modules",
+    "artifact_count",
+    "artifacts",
+    "root_hash",
+    "findings",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "schema_ref": {
+      "const": "schemas/architecture-baseline/architecture-baseline-manifest.schema.json"
+    },
+    "baseline_id": { "const": "AEB-1.0" },
+    "baseline_version": { "const": "1.0.0" },
+    "status": { "enum": ["frozen", "incomplete"] },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirements", "r_index", "architecture_baseline"],
+      "properties": {
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["first", "last", "count"],
+          "properties": {
+            "first": { "const": "R1" },
+            "last": { "const": "R22" },
+            "count": { "const": 22 }
+          }
+        },
+        "r_index": { "const": "docs/R-INDEX.md" },
+        "architecture_baseline": { "const": "docs/ARCHITECTURE-BASELINE-v1.0.md" }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["immutable", "change_process", "direct_modification"],
+      "properties": {
+        "immutable": { "const": true },
+        "change_process": { "const": "R-REV" },
+        "direct_modification": { "const": "prohibited" }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_slice", "first_target", "phase_range"],
+      "properties": {
+        "first_slice": { "const": "P12" },
+        "first_target": { "const": "R2" },
+        "phase_range": { "const": "P12-P32" }
+      }
+    },
+    "future_modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["R23"],
+      "properties": {
+        "R23": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowed", "authorization"],
+          "properties": {
+            "allowed": { "const": false },
+            "authorization": { "const": "requires accepted ADR after post-R22 governance" }
+          }
+        }
+      }
+    },
+    "artifact_count": { "type": "integer", "minimum": 1 },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "root_hash": { "$ref": "#/$defs/hash" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "next_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "const": "SHA-256" },
+        "value": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "version",
+        "baseline_id",
+        "owner",
+        "source_path",
+        "content_hash",
+        "status"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": [
+            "requirement_specification",
+            "control_artifact",
+            "audit_artifact",
+            "revision_artifact",
+            "governance_adr",
+            "implementation_evidence"
+          ]
+        },
+        "version": { "type": "string", "minLength": 1 },
+        "baseline_id": { "const": "AEB-1.0" },
+        "owner": { "type": "string", "minLength": 1 },
+        "source_path": { "type": "string", "minLength": 1 },
+        "content_hash": { "$ref": "#/$defs/hash" },
+        "status": { "enum": ["frozen", "missing"] }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "message", "path"],
+      "properties": {
+        "severity": { "enum": ["low", "medium", "high", "critical"] },
+        "message": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
