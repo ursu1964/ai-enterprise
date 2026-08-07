@@ -91,7 +91,7 @@ This IR specification is implemented through the existing R2 repository
 boundary instead of replacing it:
 
 - Runtime/domain: `apps/api/src/ai_enterprise/application/project_formation_service.py`
-- Runtime/domain: `apps/api/src/ai_enterprise/application/aeir.py`
+- Runtime/domain: `apps/api/src/ai_enterprise/domain/aeir.py`
 - API routes: `apps/api/src/ai_enterprise/api/routes/project_formation.py`
 - Schemas: `specifications/*.schema.json`
 - Migrations: `migrations/versions/*r2*.py`
