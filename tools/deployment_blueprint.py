@@ -6,6 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
+DEPLOYMENT_BLUEPRINT_SCHEMA_REF = (
+    "schemas/production-readiness/deployment-blueprint-report.schema.json"
+)
+
 
 def _present(path: Path) -> dict[str, Any]:
     return {
@@ -89,7 +95,7 @@ def build_blueprint(root: Path) -> dict[str, Any]:
         },
     ]
     missing = [name for name, item in artifacts.items() if not item["exists"]]
-    return {
+    report = {
         "name": "AI Enterprise Deployment Blueprint",
         "status": "ready" if not missing else "needs_setup",
         "business_meaning": (
@@ -108,7 +114,31 @@ def build_blueprint(root: Path) -> dict[str, Any]:
         "phases": phases,
         "artifacts": artifacts,
         "missing": missing,
+        "schema_version": "1.0",
+        "schema_ref": DEPLOYMENT_BLUEPRINT_SCHEMA_REF,
     }
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / DEPLOYMENT_BLUEPRINT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{DEPLOYMENT_BLUEPRINT_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{DEPLOYMENT_BLUEPRINT_SCHEMA_REF}: generated deployment blueprint report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def main() -> int:

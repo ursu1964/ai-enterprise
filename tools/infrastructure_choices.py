@@ -6,8 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import production_readiness_contracts
 
+INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF = (
+    "schemas/production-readiness/infrastructure-choices-report.schema.json"
+)
 REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
     "domain_tls": ("domain", "tls_provider", "certificate_owner", "renewal_proof"),
     "identity_proxy": (
@@ -73,7 +77,7 @@ def load_choices(path: Path) -> dict[str, Any]:
 def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
     findings: list[str] = []
     if not path.exists():
-        return {
+        report = {
             "status": "needs_setup",
             "conformant": False,
             "path": str(path),
@@ -88,18 +92,26 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
                 "Copy the template, fill real provider values, then run "
                 "make infrastructure-choices-verify."
             ),
+            "schema_version": "1.0",
+            "schema_ref": INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF,
         }
+        _validate_report(report)
+        return report
     try:
         payload = load_choices(path)
     except json.JSONDecodeError as exc:
-        return {
+        report = {
             "status": "needs_setup",
             "conformant": False,
             "path": str(path),
             "summary": "Infrastructure choices file is not valid JSON.",
             "findings": [f"JSON error: {exc}"],
             "next_action": "Fix JSON syntax and run the verifier again.",
+            "schema_version": "1.0",
+            "schema_ref": INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF,
         }
+        _validate_report(report)
+        return report
     schema_findings = production_readiness_contracts.validate_infrastructure_decisions(payload)
     findings.extend(f"schema: {finding}" for finding in schema_findings)
     for section, fields in REQUIRED_SECTIONS.items():
@@ -125,11 +137,8 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
         }
         missing_headers = sorted(required_headers - headers)
         if missing_headers:
-            findings.append(
-                "identity_proxy.signed_headers: missing "
-                + ", ".join(missing_headers)
-            )
-    return {
+            findings.append("identity_proxy.signed_headers: missing " + ", ".join(missing_headers))
+    report = {
         "status": "ready" if not findings else "needs_setup",
         "conformant": not findings,
         "path": str(path),
@@ -155,7 +164,11 @@ def verify(path: Path, *, allow_placeholders: bool = False) -> dict[str, Any]:
                 "database, storage, Kubernetes, backup, and alert choices."
             )
         ),
+        "schema_version": "1.0",
+        "schema_ref": INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF,
     }
+    _validate_report(report)
+    return report
 
 
 def _contains_placeholder(value: Any) -> bool:
@@ -167,6 +180,26 @@ def _contains_placeholder(value: Any) -> bool:
     if isinstance(value, dict):
         return any(_contains_placeholder(item) for item in value.values())
     return value is None
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _validate_report(report: dict[str, Any]) -> None:
+    try:
+        jsonschema.validate(report, _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{INFRASTRUCTURE_CHOICES_REPORT_SCHEMA_REF}: generated infrastructure choices "
+            f"report does not validate: {exc.message}"
+        ) from exc
 
 
 def main() -> int:

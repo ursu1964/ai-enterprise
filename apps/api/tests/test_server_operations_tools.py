@@ -118,8 +118,31 @@ def test_deployment_blueprint_reports_all_migration_phases() -> None:
     report = module.build_blueprint(root)
 
     assert report["status"] == "ready"
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/production-readiness/deployment-blueprint-report.schema.json"
+    )
+    schema = json.loads((root / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
     assert [phase["phase"] for phase in report["phases"]] == [1, 2, 3, 4, 5, 6]
     assert report["artifacts"]["prometheus_alerts"]["exists"] is True
+
+
+def test_deployment_blueprint_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = repo_root()
+    module = _load("deployment_blueprint", root / "tools/deployment_blueprint.py")
+    original_schema = module._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "_schema", stricter_schema)
+
+    with pytest.raises(RuntimeError, match="deployment-blueprint-report.schema.json"):
+        module.build_blueprint(root)
 
 
 def test_infrastructure_choices_template_is_verifiable_with_placeholders() -> None:
@@ -132,4 +155,30 @@ def test_infrastructure_choices_template_is_verifiable_with_placeholders() -> No
     )
 
     assert report["status"] == "ready"
+    assert report["schema_version"] == "1.0"
+    assert report["schema_ref"] == (
+        "schemas/production-readiness/infrastructure-choices-report.schema.json"
+    )
+    schema = json.loads((root / report["schema_ref"]).read_text(encoding="utf-8"))
+    jsonschema.validate(report, schema)
     assert "domain_tls" in report["sections"]
+
+
+def test_infrastructure_choices_report_fails_closed_when_schema_validation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = repo_root()
+    module = _load("infrastructure_choices", root / "tools/infrastructure_choices.py")
+    original_schema = module._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(module, "_schema", stricter_schema)
+
+    with pytest.raises(RuntimeError, match="infrastructure-choices-report.schema.json"):
+        module.verify(
+            root / "docs/enterprise/real-world-infrastructure-decisions.template.json",
+            allow_placeholders=True,
+        )
