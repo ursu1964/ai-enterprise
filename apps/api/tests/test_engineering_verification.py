@@ -4,6 +4,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import jsonschema
+
 
 def _repo_root() -> Path:
     for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
@@ -42,6 +44,12 @@ def test_engineering_specifications_and_generated_artifacts_are_current() -> Non
     assert report.conformant, report.findings
     assert report.checks >= 200
     assert len(report.evidence_hash) == 64
+    assert report.schema_version == "1.0"
+    assert report.schema_ref == (
+        "schemas/release-artifacts/engineering-verification-report.schema.json"
+    )
+    schema = json.loads((root / report.schema_ref).read_text(encoding="utf-8"))
+    jsonschema.validate(verifier._report_document(report), schema)
     generator = _load("generate_engineering_artifacts")
     assert generator.render(root) == generator.render(root)
     assert (root / generator.OUTPUT).read_text(encoding="utf-8") == generator.render(root)
@@ -122,6 +130,25 @@ def test_duplicate_json_keys_fail_closed(tmp_path) -> None:
         assert "duplicate JSON key" in str(exc)
     else:
         raise AssertionError("duplicate JSON key was accepted")
+
+
+def test_engineering_report_fails_closed_when_schema_validation_fails(monkeypatch) -> None:
+    verifier = _load("engineering_verify")
+    original_schema = verifier._schema
+
+    def stricter_schema() -> dict:
+        schema = original_schema()
+        return {**schema, "required": [*schema["required"], "impossible_field"]}
+
+    monkeypatch.setattr(verifier, "_schema", stricter_schema)
+
+    try:
+        verifier.verify(_repo_root())
+    except RuntimeError as exc:
+        assert "engineering-verification-report.schema.json" in str(exc)
+        assert "does not validate" in str(exc)
+    else:
+        raise AssertionError("invalid engineering verification report was accepted")
 
 
 def test_evidence_hash_binds_contract_implementation_content(tmp_path) -> None:

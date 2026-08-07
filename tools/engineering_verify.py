@@ -16,7 +16,11 @@ from typing import Any
 
 import etra_conformance
 import generate_engineering_artifacts
+import jsonschema
 
+ENGINEERING_REPORT_SCHEMA_REF = (
+    "schemas/release-artifacts/engineering-verification-report.schema.json"
+)
 SPEC_FILES = (
     "infrastructure.v1.json",
     "configuration.v1.json",
@@ -76,6 +80,8 @@ class VerificationReport:
     checks: int
     evidence_hash: str
     findings: tuple[Finding, ...]
+    schema_version: str = "1.0"
+    schema_ref: str = ENGINEERING_REPORT_SCHEMA_REF
 
 
 def _inside(root: Path, path: Path) -> bool:
@@ -98,9 +104,7 @@ def _strict_json(path: Path) -> dict[str, Any]:
     value = json.loads(
         path.read_text(encoding="utf-8"),
         object_pairs_hook=pairs,
-        parse_constant=lambda value: (_ for _ in ()).throw(
-            ValueError(f"invalid number: {value}")
-        ),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f"invalid number: {value}")),
     )
     if not isinstance(value, dict):
         raise TypeError("specification must be an object")
@@ -116,9 +120,7 @@ def _load_specs(root: Path, findings: list[Finding]) -> dict[str, dict[str, Any]
                 raise ValueError("specification must be a regular in-repository file")
             document = _strict_json(path)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            findings.append(
-                Finding("specification", str(path.relative_to(root)), str(exc))
-            )
+            findings.append(Finding("specification", str(path.relative_to(root)), str(exc)))
             continue
         specs[name] = document
     return specs
@@ -139,9 +141,7 @@ def _dependency_cycles(root: Path) -> tuple[str, ...]:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 if node.level:
-                    package_parts = (
-                        module.split(".") if is_package else module.split(".")[:-1]
-                    )
+                    package_parts = module.split(".") if is_package else module.split(".")[:-1]
                     keep = max(1, len(package_parts) - node.level + 1)
                     imported = ".".join(
                         package_parts[:keep] + (node.module or "").split(".")
@@ -151,15 +151,11 @@ def _dependency_cycles(root: Path) -> tuple[str, ...]:
                 if imported.startswith("ai_enterprise"):
                     graph[module].add(imported)
                     graph[module].update(
-                        f"{imported}.{alias.name}"
-                        for alias in node.names
-                        if alias.name != "*"
+                        f"{imported}.{alias.name}" for alias in node.names if alias.name != "*"
                     )
             elif isinstance(node, ast.Import):
                 graph[module].update(
-                    alias.name
-                    for alias in node.names
-                    if alias.name.startswith("ai_enterprise")
+                    alias.name for alias in node.names if alias.name.startswith("ai_enterprise")
                 )
     cycles: set[str] = set()
     visiting: list[str] = []
@@ -210,11 +206,7 @@ def _unmigrated_models(root: Path) -> tuple[str, ...]:
                     and isinstance(statement.value.value, str)
                 ):
                     table_name = statement.value.value
-            if (
-                table_name
-                and node.name not in migration_text
-                and table_name not in migration_text
-            ):
+            if table_name and node.name not in migration_text and table_name not in migration_text:
                 missing.append(f"{node.name}:{table_name}")
     return tuple(missing)
 
@@ -225,18 +217,14 @@ def verify(root: Path) -> VerificationReport:
     checks = 0
     etra = etra_conformance.validate(root)
     checks += etra.checks
-    findings.extend(
-        Finding(item.check, item.path, item.message) for item in etra.findings
-    )
+    findings.extend(Finding(item.check, item.path, item.message) for item in etra.findings)
     specs = _load_specs(root, findings)
     checks += len(SPEC_FILES)
     identifiers: set[str] = set()
     for name, document in specs.items():
         identifier = document.get("specification_id")
         if not isinstance(identifier, str) or identifier in identifiers:
-            findings.append(
-                Finding("specification-identity", name, "missing or duplicate ID")
-            )
+            findings.append(Finding("specification-identity", name, "missing or duplicate ID"))
         else:
             identifiers.add(identifier)
         if document.get("status") != "approved":
@@ -246,15 +234,11 @@ def verify(root: Path) -> VerificationReport:
         if not isinstance(document.get("version"), str) or not SEMVER.fullmatch(
             document["version"]
         ):
-            findings.append(
-                Finding("specification-version", name, "invalid semantic version")
-            )
+            findings.append(Finding("specification-version", name, "invalid semantic version"))
 
     infrastructure = specs.get("infrastructure.v1.json", {})
     services = infrastructure.get("services", [])
-    service_ids = [
-        service.get("service_id") for service in services if isinstance(service, dict)
-    ]
+    service_ids = [service.get("service_id") for service in services if isinstance(service, dict)]
     checks += 1
     if len(service_ids) != len(set(service_ids)) or not service_ids:
         findings.append(
@@ -312,9 +296,7 @@ def verify(root: Path) -> VerificationReport:
             or service["replicas"] < 1
             or not service["health_checks"]
             or any(
-                not isinstance(port, int)
-                or isinstance(port, bool)
-                or not 1 <= port <= 65535
+                not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535
                 for port in service["ports"]
             )
         ):
@@ -381,13 +363,9 @@ def verify(root: Path) -> VerificationReport:
                     f"{protected} profile must fail closed",
                 )
             )
-    config_implementation = (
-        root / "apps" / "api" / "src" / "ai_enterprise" / "config.py"
-    )
+    config_implementation = root / "apps" / "api" / "src" / "ai_enterprise" / "config.py"
     config_text = (
-        config_implementation.read_text(encoding="utf-8")
-        if config_implementation.is_file()
-        else ""
+        config_implementation.read_text(encoding="utf-8") if config_implementation.is_file() else ""
     )
     missing_config = [key.lower() for key in keys if key.lower() not in config_text]
     checks += 1
@@ -411,9 +389,7 @@ def verify(root: Path) -> VerificationReport:
     for role in security.get("roles", []):
         permissions = role.get("permissions", [])
         if len(permissions) != len(set(permissions)):
-            findings.append(
-                Finding("security", "security.v1.json", "duplicate role permission")
-            )
+            findings.append(Finding("security", "security.v1.json", "duplicate role permission"))
         if set(permissions) & human_only and role.get("role_id") != "human-authority":
             findings.append(
                 Finding(
@@ -427,15 +403,11 @@ def verify(root: Path) -> VerificationReport:
     contract_ids = [contract.get("contract_id") for contract in contracts]
     checks += len(contracts)
     if len(contract_ids) != len(set(contract_ids)):
-        findings.append(
-            Finding("contracts", "contracts.v1.json", "duplicate contract ID")
-        )
+        findings.append(Finding("contracts", "contracts.v1.json", "duplicate contract ID"))
     for contract in contracts:
         relative_implementation = contract.get("implementation", "")
         implementation = (
-            root / relative_implementation
-            if isinstance(relative_implementation, str)
-            else root
+            root / relative_implementation if isinstance(relative_implementation, str) else root
         )
         safe_implementation = (
             isinstance(relative_implementation, str)
@@ -453,9 +425,7 @@ def verify(root: Path) -> VerificationReport:
                 )
             )
         text = implementation.read_text(encoding="utf-8") if safe_implementation else ""
-        missing = [
-            token for token in contract.get("required_tokens", []) if token not in text
-        ]
+        missing = [token for token in contract.get("required_tokens", []) if token not in text]
         if missing:
             findings.append(
                 Finding(
@@ -547,21 +517,15 @@ def verify(root: Path) -> VerificationReport:
     cycles = _dependency_cycles(root)
     checks += 1
     for cycle in cycles:
-        findings.append(
-            Finding("dependency-cycle", "apps/api/src/ai_enterprise", cycle)
-        )
+        findings.append(Finding("dependency-cycle", "apps/api/src/ai_enterprise", cycle))
     unmigrated = _unmigrated_models(root)
     checks += 1
     for model in unmigrated:
-        findings.append(
-            Finding("schema-drift", "apps/api/src/ai_enterprise/infrastructure", model)
-        )
+        findings.append(Finding("schema-drift", "apps/api/src/ai_enterprise/infrastructure", model))
 
     workflow_path = root / ".github" / "workflows" / "engineering-verification.yml"
     safe_workflow = (
-        _inside(root, workflow_path)
-        and workflow_path.is_file()
-        and not workflow_path.is_symlink()
+        _inside(root, workflow_path) and workflow_path.is_file() and not workflow_path.is_symlink()
     )
     workflow_text = workflow_path.read_text(encoding="utf-8") if safe_workflow else ""
     for command in (
@@ -584,9 +548,7 @@ def verify(root: Path) -> VerificationReport:
         if isinstance(relative, str):
             path = root / relative
             if _inside(root, path) and path.is_file() and not path.is_symlink():
-                implementation_hashes[relative] = hashlib.sha256(
-                    path.read_bytes()
-                ).hexdigest()
+                implementation_hashes[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     canonical = json.dumps(
         {
             "specifications": specs,
@@ -598,12 +560,38 @@ def verify(root: Path) -> VerificationReport:
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return VerificationReport(
+    report = VerificationReport(
         not findings,
         checks,
         hashlib.sha256(canonical.encode()).hexdigest(),
         tuple(findings),
     )
+    _validate_report(report)
+    return report
+
+
+def _schema() -> dict[str, Any]:
+    for candidate in Path(__file__).resolve().parents:
+        schema_path = candidate / ENGINEERING_REPORT_SCHEMA_REF
+        if schema_path.is_file():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator.check_schema(schema)
+            return schema
+    raise RuntimeError(f"{ENGINEERING_REPORT_SCHEMA_REF} schema file is missing")
+
+
+def _report_document(report: VerificationReport) -> dict[str, Any]:
+    return json.loads(json.dumps(asdict(report), sort_keys=True))
+
+
+def _validate_report(report: VerificationReport) -> None:
+    try:
+        jsonschema.validate(_report_document(report), _schema())
+    except jsonschema.ValidationError as exc:
+        raise RuntimeError(
+            f"{ENGINEERING_REPORT_SCHEMA_REF}: generated engineering verification report "
+            f"does not validate: {exc.message}"
+        ) from exc
 
 
 def _run_full_gates(root: Path) -> int:
@@ -627,8 +615,7 @@ def _run_full_gates(root: Path) -> int:
             print(
                 "::error file=tools/engineering_verify.py::"
                 + annotation_text(
-                    f"full gate failed: {' '.join(command)} "
-                    f"[cwd={cwd.relative_to(root)}]\n{detail}"
+                    f"full gate failed: {' '.join(command)} [cwd={cwd.relative_to(root)}]\n{detail}"
                 )
             )
             return 1
@@ -686,13 +673,11 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--static", action="store_true")
     mode.add_argument("--full", action="store_true")
     parser.add_argument("--json", action="store_true", dest="as_json")
-    parser.add_argument(
-        "--root", type=Path, default=Path(__file__).resolve().parents[1]
-    )
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args(argv)
     report = verify(args.root)
     if args.as_json:
-        print(json.dumps(asdict(report), sort_keys=True))
+        print(json.dumps(_report_document(report), sort_keys=True))
     else:
         print(
             f"P9 engineering verification: {'PASS' if report.conformant else 'FAIL'} "
