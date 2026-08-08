@@ -58,7 +58,7 @@ jobs:
       - name: Start dashboard stack
         run: |
           cp .env.example .env
-          docker compose up --build -d api
+          POSTGRES_HOST_PORT=15432 REPOSITORY_ALLOWED_ROOT="$GITHUB_WORKSPACE" docker compose up --build -d api
       - name: Browser dashboard journeys
         run: python tools/dashboard_browser_verify.py
       - name: Preserve browser failure evidence

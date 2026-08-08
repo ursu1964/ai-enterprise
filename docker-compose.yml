@@ -71,7 +71,7 @@ services:
       POSTGRES_USER: ai_enterprise
       POSTGRES_PASSWORD: ai_enterprise_dev
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - ai_enterprise_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -129,7 +129,7 @@ services:
       - ./artifacts:/app/artifacts
       - ./graphify-out:/app/graphify-out:ro
       - ./runtime-data:/app/runtime-data
-      - /home/user/projects:/home/user/projects
+      - ${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}:${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}
     depends_on:
       runtime-init:
         condition: service_completed_successfully
@@ -179,7 +179,7 @@ services:
       - ./apps/api/src:/app/src
       - ./artifacts:/app/artifacts
       - ./runtime-data:/app/runtime-data
-      - /home/user/projects:/home/user/projects
+      - ${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}:${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}
     depends_on:
       runtime-init:
         condition: service_completed_successfully
@@ -218,7 +218,7 @@ services:
       - integration-work:/integration-work
       - ./artifacts:/artifacts:ro
       - ./apps/api/src:/app/src:ro
-      - /home/user/projects:/home/user/projects
+      - ${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}:${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}
     read_only: true
     tmpfs:
       - /tmp:size=512m,mode=1777
@@ -267,7 +267,7 @@ services:
       - recovery-work:/recovery-work
       - ./artifacts:/artifacts:ro
       - ./apps/api/src:/app/src:ro
-      - /home/user/projects:/home/user/projects
+      - ${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}:${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}
     read_only: true
     tmpfs:
       - /tmp:size=512m,mode=1777

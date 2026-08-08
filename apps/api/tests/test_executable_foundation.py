@@ -51,7 +51,11 @@ def test_container_foundation_is_non_root_and_read_only() -> None:
     assert "read_only: true" in compose
     assert "condition: service_completed_successfully" in compose
     assert "127.0.0.1:8000:8000" in compose
-    assert "127.0.0.1:5432:5432" in compose
+    assert "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432" in compose
+    assert (
+        "${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}:"
+        "${REPOSITORY_ALLOWED_ROOT:-/home/user/projects}" in compose
+    )
     assert 'ARG UV_SYNC_ARGS="--no-dev"' in dockerfile
     assert "uv sync --frozen ${UV_SYNC_ARGS}" in dockerfile
     assert (
