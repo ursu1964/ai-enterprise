@@ -2,6 +2,14 @@ from ai_enterprise.domain.updl_registry import (
     ActorReference,
     AdditionalPropertiesPolicy,
     ConditionClauseType,
+    ConditionDependency,
+    ConditionDependencyType,
+    ConditionFailureDetectionMode,
+    ConditionFailureEffect,
+    ConditionFailurePolicy,
+    ConditionFailureScope,
+    ConditionFailureSeverity,
+    ConditionFailureTransitionType,
     ConditionOutcome,
     ConstraintDefinition,
     ConstraintEvaluationResult,
@@ -60,6 +68,16 @@ from ai_enterprise.domain.updl_registry import (
     RegistryError,
     RelationshipCardinality,
     RelationshipTypeDefinition,
+    RemediationAcceptanceResult,
+    RemediationDeadlines,
+    RemediationDefinition,
+    RemediationEffectivenessResult,
+    RemediationPriority,
+    RemediationSeverity,
+    RemediationStatus,
+    RemediationTrigger,
+    RemediationTriggerType,
+    RemediationVerificationResult,
     ReservationDefinition,
     ReservationLifecycleState,
     ResolutionMode,
@@ -1937,6 +1955,244 @@ def test_updl_registry_decision_definition_preserves_contract_semantics() -> Non
     ]
     assert document["authorityRequirement"]["operator"] == "ALL_OF"
     assert document["evidenceRequirement"]["missingEvidenceEffect"] == "DEFER"
+
+
+def test_updl_registry_records_condition_failure_transition_and_impact() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.owner-active",
+            name="ownerActive",
+            subject_kinds=("Person",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="active",
+                    expected=True,
+                ),
+            ),
+        )
+    )
+    registry.register_condition_failure_policy(
+        ConditionFailurePolicy(
+            id="commerce.orders.condition-failure-policy.owner-active",
+            condition_ids=("commerce.orders.condition.owner-active",),
+            transitions_from=(ConditionOutcome.SATISFIED,),
+            transitions_to=(ConditionOutcome.NOT_SATISFIED, ConditionOutcome.UNKNOWN),
+            effects=(
+                ConditionFailureEffect.DECISION_SUSPENDED,
+                ConditionFailureEffect.EXECUTION_BLOCKED,
+                ConditionFailureEffect.REMEDIATION_REQUIRED,
+            ),
+            scope=ConditionFailureScope(type="SUBJECT"),
+            severity=ConditionFailureSeverity.HIGH,
+        )
+    )
+    person = _person(registry)
+    previous = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.owner-active",
+        subject_id=person.metadata.id,
+    )
+    updated = registry.update_object(
+        object_id=person.metadata.id,
+        expected_revision=person.metadata.revision,
+        semantic_patch={"spec": {"active": False}},
+        actor=_actor(),
+    )
+    current = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.owner-active",
+        subject_id=updated.metadata.id,
+    )
+
+    failure = registry.record_condition_failure(
+        previous_evaluation=previous,
+        current_evaluation=current,
+        transition_type=ConditionFailureTransitionType.BECAME_FALSE,
+        detection_mode=ConditionFailureDetectionMode.EVENT_DRIVEN,
+        cause="UNDERLYING_FACT_CHANGED",
+    )
+    duplicate = registry.record_condition_failure(
+        previous_evaluation=previous,
+        current_evaluation=current,
+        transition_type=ConditionFailureTransitionType.BECAME_FALSE,
+    )
+    impact = registry.calculate_condition_failure_impact(
+        failure_id=failure.id,
+        decisions=("decision.release-038",),
+        executions=("workflow-run.038",),
+        states=("Requirement:ACTIVE",),
+    )
+
+    assert previous.outcome is ConditionOutcome.SATISFIED
+    assert current.outcome is ConditionOutcome.NOT_SATISFIED
+    assert duplicate.id == failure.id
+    assert failure.effects == (
+        ConditionFailureEffect.DECISION_SUSPENDED,
+        ConditionFailureEffect.EXECUTION_BLOCKED,
+        ConditionFailureEffect.REMEDIATION_REQUIRED,
+    )
+    assert failure.policy_ref == "commerce.orders.condition-failure-policy.owner-active"
+    assert impact.failure_ref == failure.id
+    assert impact.decisions == ("decision.release-038",)
+
+
+def test_updl_registry_rejects_condition_dependency_cycle() -> None:
+    registry = _relationship_registry()
+    for condition_id, path in (
+        ("commerce.orders.condition.a", "a"),
+        ("commerce.orders.condition.b", "b"),
+    ):
+        registry.register_condition(
+            SemanticConditionDefinition(
+                id=condition_id,
+                name=path,
+                subject_kinds=("Requirement",),
+                clauses=(
+                    SemanticConditionClause(
+                        ConditionClauseType.SPEC_EQUALS,
+                        path=path,
+                        expected=True,
+                    ),
+                ),
+            )
+        )
+    registry.register_condition_dependency(
+        ConditionDependency(
+            id="commerce.orders.condition-dependency.a-on-b",
+            dependent_condition_id="commerce.orders.condition.a",
+            dependency_condition_id="commerce.orders.condition.b",
+            dependency_type=ConditionDependencyType.REQUIRES,
+        )
+    )
+
+    try:
+        registry.register_condition_dependency(
+            ConditionDependency(
+                id="commerce.orders.condition-dependency.b-on-a",
+                dependent_condition_id="commerce.orders.condition.b",
+                dependency_condition_id="commerce.orders.condition.a",
+                dependency_type=ConditionDependencyType.REQUIRES,
+            )
+        )
+    except RegistryError as exc:
+        assert exc.code == "CONDITION_FAILURE_CIRCULAR_DEPENDENCY"
+    else:
+        raise AssertionError("cyclic condition dependency was accepted")
+
+
+def test_updl_registry_remediation_closure_requires_effectiveness_proof() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-039",
+        spec={
+            "statement": "Critical condition failure must be remediated.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    evidence = registry.create_object(
+        kind="Evidence",
+        namespace="commerce.orders",
+        local_id="EVIDENCE-039",
+        spec={
+            "evidence_type": "remediation-verification",
+            "summary": "Owner reassigned and condition retested.",
+        },
+        actor=_actor(),
+    )
+    previous = registry._condition_evaluation(  # noqa: SLF001
+        condition_id="commerce.orders.condition.owner-present",
+        condition_version="1.0.0",
+        subject_id=requirement.metadata.id,
+        subject_revision=requirement.metadata.revision,
+        outcome=ConditionOutcome.SATISFIED,
+        findings=(),
+        proof={"synthetic": "previous"},
+        evaluated_at=requirement.metadata.created_at,
+    )
+    current = registry._condition_evaluation(  # noqa: SLF001
+        condition_id="commerce.orders.condition.owner-present",
+        condition_version="1.0.0",
+        subject_id=requirement.metadata.id,
+        subject_revision=requirement.metadata.revision,
+        outcome=ConditionOutcome.UNKNOWN,
+        findings=(),
+        proof={"synthetic": "current"},
+        evaluated_at=requirement.metadata.updated_at,
+    )
+    failure = registry.record_condition_failure(
+        previous_evaluation=previous,
+        current_evaluation=current,
+        transition_type=ConditionFailureTransitionType.BECAME_UNKNOWN,
+    )
+    registry.register_remediation_definition(
+        RemediationDefinition(
+            id="commerce.orders.remediation-definition.condition-failure",
+            name="conditionFailureRemediation",
+            trigger_types=(RemediationTriggerType.CONDITION_FAILURE,),
+            independent_verification_required=True,
+            effectiveness_evidence_required=("remediation-effectiveness",),
+        )
+    )
+    remediation_case = registry.open_remediation_case(
+        definition_id="commerce.orders.remediation-definition.condition-failure",
+        trigger=RemediationTrigger(RemediationTriggerType.CONDITION_FAILURE, failure.id),
+        subject_ref=ObjectReference(requirement.metadata.id),
+        objective="Restore owner-present condition with high assurance.",
+        owner_ref="role.governance-owner",
+        severity=RemediationSeverity.HIGH,
+        priority=RemediationPriority.P1,
+        deadlines=RemediationDeadlines(remediation_by=requirement.metadata.updated_at),
+    )
+
+    try:
+        registry.verify_remediation(
+            case_id=remediation_case.id,
+            result=RemediationVerificationResult.VERIFIED,
+            verifier_ref="principal.operator",
+            evidence_refs=(ObjectReference(evidence.metadata.id),),
+            independent=False,
+        )
+    except RegistryError as exc:
+        assert exc.code == "REMEDIATION_INDEPENDENCE_REQUIRED"
+    else:
+        raise AssertionError("non-independent remediation verification was accepted")
+
+    verification = registry.verify_remediation(
+        case_id=remediation_case.id,
+        result=RemediationVerificationResult.VERIFIED,
+        verifier_ref="principal.independent-verifier",
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+        independent=True,
+    )
+    effectiveness = registry.assess_remediation_effectiveness(
+        case_id=remediation_case.id,
+        verification_id=verification.id,
+        result=RemediationEffectivenessResult.EFFECTIVE,
+        assessor_ref="principal.assurance-reviewer",
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+    )
+    acceptance = registry.accept_remediation(
+        case_id=remediation_case.id,
+        effectiveness_id=effectiveness.id,
+        accepted_by_ref="principal.control-owner",
+        result=RemediationAcceptanceResult.ACCEPTED,
+    )
+    closure = registry.close_remediation_case(
+        case_id=remediation_case.id,
+        verification_id=verification.id,
+        effectiveness_id=effectiveness.id,
+        acceptance_id=acceptance.id,
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+        closed_by_ref="principal.assurance-owner",
+    )
+
+    assert closure.case_ref == remediation_case.id
+    assert registry.get_remediation_case(remediation_case.id).status is RemediationStatus.CLOSED
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:

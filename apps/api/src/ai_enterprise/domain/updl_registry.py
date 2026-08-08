@@ -116,6 +116,101 @@ class ConditionOutcome(StrEnum):
     EXEMPTED = "EXEMPTED"
 
 
+class ConditionEvaluationValidity(StrEnum):
+    CURRENT = "CURRENT"
+    STALE = "STALE"
+    EXPIRED = "EXPIRED"
+    INVALIDATED = "INVALIDATED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class ConditionFailureTransitionType(StrEnum):
+    BECAME_FALSE = "BECAME_FALSE"
+    BECAME_UNKNOWN = "BECAME_UNKNOWN"
+    BECAME_UNVERIFIABLE = "BECAME_UNVERIFIABLE"
+    EVIDENCE_EXPIRED = "EVIDENCE_EXPIRED"
+    EVIDENCE_REVOKED = "EVIDENCE_REVOKED"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+    SOURCE_CONTRADICTED = "SOURCE_CONTRADICTED"
+    EXEMPTION_EXPIRED = "EXEMPTION_EXPIRED"
+    EXEMPTION_REVOKED = "EXEMPTION_REVOKED"
+    THRESHOLD_BREACHED = "THRESHOLD_BREACHED"
+    DEPENDENCY_FAILED = "DEPENDENCY_FAILED"
+    SEMANTIC_ERROR = "SEMANTIC_ERROR"
+    EVALUATION_ERROR = "EVALUATION_ERROR"
+    TEMPORAL_WINDOW_CLOSED = "TEMPORAL_WINDOW_CLOSED"
+    APPLICABILITY_CHANGED = "APPLICABILITY_CHANGED"
+
+
+class ConditionFailureEffect(StrEnum):
+    NO_EFFECT = "NO_EFFECT"
+    WARN = "WARN"
+    RECORD_ONLY = "RECORD_ONLY"
+    EXECUTION_BLOCKED = "EXECUTION_BLOCKED"
+    EXECUTION_TERMINATED = "EXECUTION_TERMINATED"
+    EXECUTION_QUARANTINED = "EXECUTION_QUARANTINED"
+    DECISION_REASSESSMENT_REQUIRED = "DECISION_REASSESSMENT_REQUIRED"
+    DECISION_SUSPENDED = "DECISION_SUSPENDED"
+    DECISION_INVALIDATED = "DECISION_INVALIDATED"
+    AUTHORIZATION_SUSPENDED = "AUTHORIZATION_SUSPENDED"
+    AUTHORIZATION_REVOKED = "AUTHORIZATION_REVOKED"
+    STATE_TRANSITION_REQUIRED = "STATE_TRANSITION_REQUIRED"
+    STATE_QUARANTINE_REQUIRED = "STATE_QUARANTINE_REQUIRED"
+    CONTROL_REASSESSMENT_REQUIRED = "CONTROL_REASSESSMENT_REQUIRED"
+    CONTROL_FAILURE = "CONTROL_FAILURE"
+    CONTROL_DEFICIENCY_CREATED = "CONTROL_DEFICIENCY_CREATED"
+    OBLIGATION_TRIGGERED = "OBLIGATION_TRIGGERED"
+    EVIDENCE_REFRESH_REQUIRED = "EVIDENCE_REFRESH_REQUIRED"
+    EVIDENCE_INVALIDATED = "EVIDENCE_INVALIDATED"
+    COMPENSATING_CONTROL_REQUIRED = "COMPENSATING_CONTROL_REQUIRED"
+    REMEDIATION_REQUIRED = "REMEDIATION_REQUIRED"
+    ESCALATION_REQUIRED = "ESCALATION_REQUIRED"
+    HUMAN_REVIEW_REQUIRED = "HUMAN_REVIEW_REQUIRED"
+    INCIDENT_REQUIRED = "INCIDENT_REQUIRED"
+
+
+class ConditionFailureSeverity(StrEnum):
+    INFORMATIONAL = "INFORMATIONAL"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ConditionFailureStatus(StrEnum):
+    DETECTED = "DETECTED"
+    IMPACT_ANALYSIS_PENDING = "IMPACT_ANALYSIS_PENDING"
+    ACTIVE = "ACTIVE"
+    REMEDIATION_IN_PROGRESS = "REMEDIATION_IN_PROGRESS"
+    REASSESSMENT_PENDING = "REASSESSMENT_PENDING"
+    RESOLVED = "RESOLVED"
+    ACCEPTED = "ACCEPTED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class ConditionFailureDetectionMode(StrEnum):
+    EVENT_DRIVEN = "EVENT_DRIVEN"
+    POLLING = "POLLING"
+    SCHEDULED_REEVALUATION = "SCHEDULED_REEVALUATION"
+    DEPENDENCY_PROPAGATION = "DEPENDENCY_PROPAGATION"
+    EVIDENCE_EXPIRATION = "EVIDENCE_EXPIRATION"
+    MANUAL_REASSESSMENT = "MANUAL_REASSESSMENT"
+    CONTROL_MONITORING = "CONTROL_MONITORING"
+    EXTERNAL_NOTIFICATION = "EXTERNAL_NOTIFICATION"
+    STATE_TRANSITION = "STATE_TRANSITION"
+    POLICY_REEVALUATION = "POLICY_REEVALUATION"
+
+
+class ConditionDependencyType(StrEnum):
+    REQUIRES = "REQUIRES"
+    IMPLIES = "IMPLIES"
+    SUPPORTS = "SUPPORTS"
+    CORROBORATES = "CORROBORATES"
+    FALLBACK = "FALLBACK"
+    OVERRIDES = "OVERRIDES"
+    EXCLUDES = "EXCLUDES"
+
+
 class ConditionClauseType(StrEnum):
     OBJECT_KIND_IS = "object_kind_is"
     LIFECYCLE_STATE_IS = "lifecycle_state_is"
@@ -479,6 +574,83 @@ class RiskAcceptanceStatus(StrEnum):
     ACTIVE = "ACTIVE"
     EXPIRED = "EXPIRED"
     REVOKED = "REVOKED"
+
+
+class RemediationTriggerType(StrEnum):
+    CONTROL_FAILURE = "CONTROL_FAILURE"
+    CONTROL_DEFICIENCY = "CONTROL_DEFICIENCY"
+    CONDITION_FAILURE = "CONDITION_FAILURE"
+    EVIDENCE_GAP = "EVIDENCE_GAP"
+    EVIDENCE_INVALIDATION = "EVIDENCE_INVALIDATION"
+    ASSURANCE_GAP = "ASSURANCE_GAP"
+    ASSURANCE_DEFICIENCY = "ASSURANCE_DEFICIENCY"
+    POLICY_VIOLATION = "POLICY_VIOLATION"
+    OBLIGATION_BREACH = "OBLIGATION_BREACH"
+    AUTHORIZATION_FAILURE = "AUTHORIZATION_FAILURE"
+    INCIDENT = "INCIDENT"
+    AUDIT_FINDING = "AUDIT_FINDING"
+    RISK_DECISION = "RISK_DECISION"
+    MANUAL_FINDING = "MANUAL_FINDING"
+    EXTERNAL_FINDING = "EXTERNAL_FINDING"
+    RECURRENCE = "RECURRENCE"
+
+
+class RemediationSeverity(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class RemediationPriority(StrEnum):
+    P0 = "P0"
+    P1 = "P1"
+    P2 = "P2"
+    P3 = "P3"
+    P4 = "P4"
+
+
+class RemediationStatus(StrEnum):
+    DETECTED = "DETECTED"
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    CONTAINMENT_IN_PROGRESS = "CONTAINMENT_IN_PROGRESS"
+    CONTAINED = "CONTAINED"
+    ANALYSIS_IN_PROGRESS = "ANALYSIS_IN_PROGRESS"
+    PLAN_APPROVED = "PLAN_APPROVED"
+    IMPLEMENTATION_IN_PROGRESS = "IMPLEMENTATION_IN_PROGRESS"
+    IMPLEMENTED = "IMPLEMENTED"
+    VERIFICATION_IN_PROGRESS = "VERIFICATION_IN_PROGRESS"
+    VERIFIED = "VERIFIED"
+    MONITORING = "MONITORING"
+    ACCEPTED = "ACCEPTED"
+    CLOSED = "CLOSED"
+    FAILED = "FAILED"
+    ESCALATED = "ESCALATED"
+    EXCEPTION_ACTIVE = "EXCEPTION_ACTIVE"
+    CANCELLED = "CANCELLED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class RemediationVerificationResult(StrEnum):
+    VERIFIED = "VERIFIED"
+    PARTIALLY_VERIFIED = "PARTIALLY_VERIFIED"
+    FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    EVIDENCE_INSUFFICIENT = "EVIDENCE_INSUFFICIENT"
+
+
+class RemediationEffectivenessResult(StrEnum):
+    EFFECTIVE = "EFFECTIVE"
+    PARTIALLY_EFFECTIVE = "PARTIALLY_EFFECTIVE"
+    INEFFECTIVE = "INEFFECTIVE"
+    UNKNOWN = "UNKNOWN"
+
+
+class RemediationAcceptanceResult(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    CONDITIONALLY_ACCEPTED = "CONDITIONALLY_ACCEPTED"
+    REJECTED = "REJECTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1568,6 +1740,163 @@ class ConditionEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionFailureScope:
+    type: str
+    refs: tuple[str, ...] = ()
+    actions: tuple[str, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "refs": list(self.refs),
+            "actions": list(self.actions),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionFailurePolicy:
+    id: str
+    condition_ids: tuple[str, ...]
+    transitions_from: tuple[ConditionOutcome, ...]
+    transitions_to: tuple[ConditionOutcome, ...]
+    effects: tuple[ConditionFailureEffect, ...]
+    scope: ConditionFailureScope
+    version: str = "1.0.0"
+    severity: ConditionFailureSeverity = ConditionFailureSeverity.MEDIUM
+    grace_period: str | None = None
+    reassessment_deadline: str | None = None
+    recovery_mode: str = "REASSESS_BEFORE_RESTORE"
+    ai_may_resolve: bool = False
+    ai_may_create_exception: bool = False
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "version": self.version,
+            "appliesTo": {"conditionIds": list(self.condition_ids)},
+            "transitions": {
+                "from": [outcome.value for outcome in self.transitions_from],
+                "to": [outcome.value for outcome in self.transitions_to],
+            },
+            "classification": {"severity": self.severity.value},
+            "timing": {
+                "gracePeriod": self.grace_period,
+                "reassessmentDeadline": self.reassessment_deadline,
+            },
+            "effects": [effect.value for effect in self.effects],
+            "scope": self.scope.canonical_document(),
+            "recovery": {"mode": self.recovery_mode},
+            "ai": {
+                "mayResolve": self.ai_may_resolve,
+                "mayCreateException": self.ai_may_create_exception,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionDependency:
+    id: str
+    dependent_condition_id: str
+    dependency_condition_id: str
+    dependency_type: ConditionDependencyType = ConditionDependencyType.REQUIRES
+    on_not_satisfied: ConditionOutcome = ConditionOutcome.NOT_SATISFIED
+    on_unknown: ConditionOutcome = ConditionOutcome.UNKNOWN
+    on_expired: ConditionOutcome = ConditionOutcome.UNKNOWN
+    version: str = "1.0.0"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "version": self.version,
+            "dependentCondition": {"id": self.dependent_condition_id},
+            "dependency": {
+                "id": self.dependency_condition_id,
+                "type": self.dependency_type.value,
+            },
+            "semantics": {
+                "onNotSatisfied": self.on_not_satisfied.value,
+                "onUnknown": self.on_unknown.value,
+                "onExpired": self.on_expired.value,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionFailure:
+    id: str
+    condition_id: str
+    condition_version: str | None
+    subject_ref: ObjectReference
+    previous_evaluation: ConditionEvaluation
+    current_evaluation: ConditionEvaluation
+    transition_type: ConditionFailureTransitionType
+    severity: ConditionFailureSeverity
+    effects: tuple[ConditionFailureEffect, ...]
+    policy_ref: str | None
+    detected_at: datetime
+    effective_at: datetime
+    detection_mode: ConditionFailureDetectionMode
+    status: ConditionFailureStatus = ConditionFailureStatus.ACTIVE
+    cause: str = "UNKNOWN"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "condition": {
+                "id": self.condition_id,
+                "version": self.condition_version,
+            },
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "previousEvaluation": self.previous_evaluation.canonical_document(),
+            "currentEvaluation": self.current_evaluation.canonical_document(),
+            "transition": {
+                "from": self.previous_evaluation.outcome.value,
+                "to": self.current_evaluation.outcome.value,
+                "type": self.transition_type.value,
+            },
+            "classification": {"severity": self.severity.value},
+            "effects": [effect.value for effect in self.effects],
+            "policyRef": self.policy_ref,
+            "detectedAt": self.detected_at.isoformat(),
+            "effectiveAt": self.effective_at.isoformat(),
+            "detectionMode": self.detection_mode.value,
+            "status": self.status.value,
+            "cause": self.cause,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionFailureImpact:
+    id: str
+    failure_ref: str
+    decisions: tuple[str, ...] = ()
+    authorizations: tuple[str, ...] = ()
+    executions: tuple[str, ...] = ()
+    controls: tuple[str, ...] = ()
+    obligations: tuple[str, ...] = ()
+    states: tuple[str, ...] = ()
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "failureRef": self.failure_ref,
+            "affected": {
+                "decisions": list(self.decisions),
+                "authorizations": list(self.authorizations),
+                "executions": list(self.executions),
+                "controls": list(self.controls),
+                "obligations": list(self.obligations),
+                "states": list(self.states),
+            },
+            "calculatedAt": self.calculated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionFinding:
     code: str
     message: str
@@ -2260,6 +2589,199 @@ class RiskAcceptance:
 
 
 @dataclass(frozen=True, slots=True)
+class RemediationTrigger:
+    trigger_type: RemediationTriggerType
+    ref: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {"type": self.trigger_type.value, "ref": self.ref}
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationDeadlines:
+    containment_by: datetime | None = None
+    remediation_by: datetime | None = None
+    verification_by: datetime | None = None
+    closure_by: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "containmentBy": self.containment_by.isoformat() if self.containment_by else None,
+            "remediationBy": self.remediation_by.isoformat() if self.remediation_by else None,
+            "verificationBy": self.verification_by.isoformat() if self.verification_by else None,
+            "closureBy": self.closure_by.isoformat() if self.closure_by else None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationDefinition:
+    id: str
+    name: str
+    trigger_types: tuple[RemediationTriggerType, ...]
+    version: str = "1.0.0"
+    containment_required: bool = False
+    root_cause_required: bool = False
+    corrective_action_required: bool = True
+    independent_verification_required: bool = False
+    action_evidence_required: tuple[str, ...] = ()
+    effectiveness_evidence_required: tuple[str, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "triggers": [trigger.value for trigger in self.trigger_types],
+            "requirements": {
+                "containmentRequired": self.containment_required,
+                "rootCauseRequired": self.root_cause_required,
+                "correctiveActionRequired": self.corrective_action_required,
+                "independentVerificationRequired": self.independent_verification_required,
+            },
+            "evidenceRequirements": {
+                "actionEvidence": list(self.action_evidence_required),
+                "effectivenessEvidence": list(self.effectiveness_evidence_required),
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationCase:
+    id: str
+    definition_id: str
+    definition_version: str
+    trigger: RemediationTrigger
+    subject_ref: ObjectReference
+    objective: str
+    owner_ref: str
+    severity: RemediationSeverity
+    priority: RemediationPriority
+    status: RemediationStatus
+    opened_at: datetime
+    deadlines: RemediationDeadlines = field(default_factory=RemediationDeadlines)
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "trigger": self.trigger.canonical_document(),
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "objective": self.objective,
+            "ownerRef": self.owner_ref,
+            "classification": {
+                "severity": self.severity.value,
+                "priority": self.priority.value,
+            },
+            "status": self.status.value,
+            "openedAt": self.opened_at.isoformat(),
+            "deadlines": self.deadlines.canonical_document(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationVerification:
+    id: str
+    case_ref: str
+    result: RemediationVerificationResult
+    verifier_ref: str
+    evidence_refs: tuple[ObjectReference, ...]
+    verified_at: datetime
+    independent: bool = False
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "caseRef": self.case_ref,
+            "result": self.result.value,
+            "verifierRef": self.verifier_ref,
+            "independent": self.independent,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "verifiedAt": self.verified_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationEffectivenessAssessment:
+    id: str
+    case_ref: str
+    result: RemediationEffectivenessResult
+    verification_ref: str
+    evidence_refs: tuple[ObjectReference, ...]
+    assessed_at: datetime
+    assessor_ref: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "caseRef": self.case_ref,
+            "result": self.result.value,
+            "verificationRef": self.verification_ref,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "assessedAt": self.assessed_at.isoformat(),
+            "assessorRef": self.assessor_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationAcceptance:
+    id: str
+    case_ref: str
+    result: RemediationAcceptanceResult
+    effectiveness_ref: str
+    accepted_by_ref: str
+    accepted_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "caseRef": self.case_ref,
+            "result": self.result.value,
+            "effectivenessRef": self.effectiveness_ref,
+            "acceptedByRef": self.accepted_by_ref,
+            "acceptedAt": self.accepted_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RemediationClosure:
+    id: str
+    case_ref: str
+    verification_ref: str
+    effectiveness_ref: str
+    acceptance_ref: str
+    evidence_refs: tuple[ObjectReference, ...]
+    closed_by_ref: str
+    closed_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "caseRef": self.case_ref,
+            "verificationRef": self.verification_ref,
+            "effectivenessRef": self.effectiveness_ref,
+            "acceptanceRef": self.acceptance_ref,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "closedByRef": self.closed_by_ref,
+            "closedAt": self.closed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -2413,6 +2935,11 @@ class InMemoryUPDLRegistry:
         self._namespaces: dict[str, NamespaceDefinition] = {}
         self._relationship_types: dict[str, RelationshipTypeDefinition] = {}
         self._conditions: dict[str, SemanticConditionDefinition] = {}
+        self._condition_failure_policies: dict[str, ConditionFailurePolicy] = {}
+        self._condition_dependencies: dict[str, ConditionDependency] = {}
+        self._condition_failures: dict[str, ConditionFailure] = {}
+        self._active_condition_failure_keys: dict[str, str] = {}
+        self._condition_failure_impacts: dict[str, ConditionFailureImpact] = {}
         self._constraints: dict[str, ConstraintDefinition] = {}
         self._constraint_violations: dict[str, ConstraintViolation] = {}
         self._constraint_violation_keys: dict[str, str] = {}
@@ -2432,6 +2959,12 @@ class InMemoryUPDLRegistry:
         self._risk_assessments: dict[str, RiskAssessment] = {}
         self._risk_treatment_plans: dict[str, RiskTreatmentPlan] = {}
         self._risk_acceptances: dict[str, RiskAcceptance] = {}
+        self._remediation_definitions: dict[str, RemediationDefinition] = {}
+        self._remediation_cases: dict[str, RemediationCase] = {}
+        self._remediation_verifications: dict[str, RemediationVerification] = {}
+        self._remediation_effectiveness: dict[str, RemediationEffectivenessAssessment] = {}
+        self._remediation_acceptances: dict[str, RemediationAcceptance] = {}
+        self._remediation_closures: dict[str, RemediationClosure] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -2453,6 +2986,13 @@ class InMemoryUPDLRegistry:
         self._risk_assessment_sequence = 0
         self._risk_treatment_sequence = 0
         self._risk_acceptance_sequence = 0
+        self._condition_failure_sequence = 0
+        self._condition_failure_impact_sequence = 0
+        self._remediation_case_sequence = 0
+        self._remediation_verification_sequence = 0
+        self._remediation_effectiveness_sequence = 0
+        self._remediation_acceptance_sequence = 0
+        self._remediation_closure_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -2540,6 +3080,49 @@ class InMemoryUPDLRegistry:
         for clause in definition.clauses:
             self._require_valid_condition_clause(definition, clause)
         self._conditions[definition.id] = definition
+
+    def register_condition_failure_policy(
+        self,
+        policy: ConditionFailurePolicy,
+    ) -> None:
+        require_identifier(policy.id)
+        if not policy.condition_ids:
+            raise RegistryError("CONDITION_FAILURE_POLICY_CONDITION_REQUIRED", policy.id)
+        for condition_id in policy.condition_ids:
+            if condition_id not in self._conditions:
+                raise RegistryError("CONDITION_FAILURE_POLICY_CONDITION_UNKNOWN", condition_id)
+        if not policy.transitions_from or not policy.transitions_to:
+            raise RegistryError("CONDITION_FAILURE_TRANSITION_INVALID", policy.id)
+        if not policy.effects:
+            raise RegistryError("CONDITION_FAILURE_EFFECT_UNKNOWN", policy.id)
+        if not policy.scope.type:
+            raise RegistryError("CONDITION_FAILURE_SCOPE_REQUIRED", policy.id)
+        if (
+            ConditionFailureEffect.DECISION_INVALIDATED in policy.effects
+            and policy.scope.type not in {"DECISION", "AUTHORIZATION", "SUBJECT"}
+        ):
+            raise RegistryError("CONDITION_FAILURE_SCOPE_REQUIRED", policy.id)
+        if policy.ai_may_resolve or policy.ai_may_create_exception:
+            raise RegistryError("CONDITION_FAILURE_AI_AUTHORITY_INVALID", policy.id)
+        self._condition_failure_policies[policy.id] = policy
+
+    def register_condition_dependency(self, dependency: ConditionDependency) -> None:
+        require_identifier(dependency.id)
+        if dependency.dependent_condition_id not in self._conditions:
+            raise RegistryError(
+                "CONDITION_DEPENDENCY_CONDITION_UNKNOWN",
+                dependency.dependent_condition_id,
+            )
+        if dependency.dependency_condition_id not in self._conditions:
+            raise RegistryError(
+                "CONDITION_DEPENDENCY_CONDITION_UNKNOWN",
+                dependency.dependency_condition_id,
+            )
+        if dependency.dependent_condition_id == dependency.dependency_condition_id:
+            raise RegistryError("CONDITION_FAILURE_CIRCULAR_DEPENDENCY", dependency.id)
+        if self._condition_dependency_creates_cycle(dependency):
+            raise RegistryError("CONDITION_FAILURE_CIRCULAR_DEPENDENCY", dependency.id)
+        self._condition_dependencies[dependency.id] = dependency
 
     def register_constraint(self, definition: ConstraintDefinition) -> None:
         require_identifier(definition.id)
@@ -3198,6 +3781,241 @@ class InMemoryUPDLRegistry:
         )
         self._risk_acceptances[acceptance.id] = acceptance
         return acceptance
+
+    def register_remediation_definition(
+        self,
+        definition: RemediationDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("REMEDIATION_DEFINITION_NAME_REQUIRED", definition.id)
+        if not definition.trigger_types:
+            raise RegistryError("REMEDIATION_TRIGGER_REQUIRED", definition.id)
+        if (
+            definition.independent_verification_required
+            and not definition.effectiveness_evidence_required
+        ):
+            raise RegistryError("REMEDIATION_EVIDENCE_REQUIRED", definition.id)
+        self._remediation_definitions[definition.id] = definition
+
+    def open_remediation_case(
+        self,
+        *,
+        definition_id: str,
+        trigger: RemediationTrigger,
+        subject_ref: ObjectReference,
+        objective: str,
+        owner_ref: str,
+        severity: RemediationSeverity,
+        priority: RemediationPriority,
+        deadlines: RemediationDeadlines | None = None,
+    ) -> RemediationCase:
+        definition = self._remediation_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("REMEDIATION_DEFINITION_NOT_FOUND", definition_id)
+        if trigger.trigger_type not in definition.trigger_types:
+            raise RegistryError("REMEDIATION_TRIGGER_INVALID", trigger.trigger_type.value)
+        if not trigger.ref:
+            raise RegistryError("REMEDIATION_TRIGGER_REF_REQUIRED", definition_id)
+        if trigger.trigger_type is RemediationTriggerType.CONDITION_FAILURE:
+            self.get_condition_failure(trigger.ref)
+        subject = self.resolve_reference(subject_ref)
+        if subject.status is not ResolutionStatus.RESOLVED or subject.resolved is None:
+            raise RegistryError(subject.status.value, subject_ref.id)
+        if not objective:
+            raise RegistryError("REMEDIATION_OBJECTIVE_REQUIRED", definition_id)
+        if not owner_ref:
+            raise RegistryError("REMEDIATION_OWNER_REQUIRED", definition_id)
+        self._remediation_case_sequence += 1
+        remediation_case = RemediationCase(
+            id=f"REM-{self._remediation_case_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            trigger=trigger,
+            subject_ref=ObjectReference(
+                subject.resolved.metadata.id,
+                revision=subject.resolved.metadata.revision,
+            ),
+            objective=objective,
+            owner_ref=owner_ref,
+            severity=severity,
+            priority=priority,
+            status=RemediationStatus.OPEN,
+            opened_at=datetime.now(UTC),
+            deadlines=deadlines or RemediationDeadlines(),
+        )
+        self._remediation_cases[remediation_case.id] = remediation_case
+        return remediation_case
+
+    def verify_remediation(
+        self,
+        *,
+        case_id: str,
+        result: RemediationVerificationResult,
+        verifier_ref: str,
+        evidence_refs: tuple[ObjectReference, ...],
+        independent: bool = False,
+    ) -> RemediationVerification:
+        remediation_case = self.get_remediation_case(case_id)
+        definition = self._remediation_definitions[remediation_case.definition_id]
+        if not verifier_ref:
+            raise RegistryError("REMEDIATION_VERIFIER_REQUIRED", case_id)
+        if definition.independent_verification_required and not independent:
+            raise RegistryError("REMEDIATION_INDEPENDENCE_REQUIRED", case_id)
+        if not evidence_refs:
+            raise RegistryError("REMEDIATION_EVIDENCE_REQUIRED", case_id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "REMEDIATION_EVIDENCE_INVALID",
+        )
+        self._remediation_verification_sequence += 1
+        verification = RemediationVerification(
+            id=f"REMV-{self._remediation_verification_sequence:06d}",
+            case_ref=case_id,
+            result=result,
+            verifier_ref=verifier_ref,
+            evidence_refs=resolved_evidence,
+            verified_at=datetime.now(UTC),
+            independent=independent,
+        )
+        self._remediation_verifications[verification.id] = verification
+        if result is RemediationVerificationResult.VERIFIED:
+            self._remediation_cases[case_id] = replace(
+                remediation_case,
+                status=RemediationStatus.VERIFIED,
+            )
+        return verification
+
+    def assess_remediation_effectiveness(
+        self,
+        *,
+        case_id: str,
+        verification_id: str,
+        result: RemediationEffectivenessResult,
+        assessor_ref: str,
+        evidence_refs: tuple[ObjectReference, ...],
+    ) -> RemediationEffectivenessAssessment:
+        self.get_remediation_case(case_id)
+        verification = self._remediation_verifications.get(verification_id)
+        if verification is None:
+            raise RegistryError("REMEDIATION_VERIFICATION_NOT_FOUND", verification_id)
+        if verification.case_ref != case_id:
+            raise RegistryError("REMEDIATION_VERIFICATION_CASE_MISMATCH", verification_id)
+        if verification.result is not RemediationVerificationResult.VERIFIED:
+            raise RegistryError("REMEDIATION_VERIFICATION_NOT_VERIFIED", verification_id)
+        if not assessor_ref:
+            raise RegistryError("REMEDIATION_ASSESSOR_REQUIRED", case_id)
+        if not evidence_refs:
+            raise RegistryError("REMEDIATION_EFFECTIVENESS_EVIDENCE_REQUIRED", case_id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "REMEDIATION_EVIDENCE_INVALID",
+        )
+        self._remediation_effectiveness_sequence += 1
+        assessment = RemediationEffectivenessAssessment(
+            id=f"REME-{self._remediation_effectiveness_sequence:06d}",
+            case_ref=case_id,
+            result=result,
+            verification_ref=verification_id,
+            evidence_refs=resolved_evidence,
+            assessed_at=datetime.now(UTC),
+            assessor_ref=assessor_ref,
+        )
+        self._remediation_effectiveness[assessment.id] = assessment
+        return assessment
+
+    def accept_remediation(
+        self,
+        *,
+        case_id: str,
+        effectiveness_id: str,
+        accepted_by_ref: str,
+        result: RemediationAcceptanceResult = RemediationAcceptanceResult.ACCEPTED,
+    ) -> RemediationAcceptance:
+        self.get_remediation_case(case_id)
+        assessment = self._remediation_effectiveness.get(effectiveness_id)
+        if assessment is None:
+            raise RegistryError("REMEDIATION_EFFECTIVENESS_NOT_FOUND", effectiveness_id)
+        if assessment.case_ref != case_id:
+            raise RegistryError("REMEDIATION_EFFECTIVENESS_CASE_MISMATCH", effectiveness_id)
+        if assessment.result is not RemediationEffectivenessResult.EFFECTIVE:
+            raise RegistryError("REMEDIATION_NOT_EFFECTIVE", effectiveness_id)
+        if not accepted_by_ref:
+            raise RegistryError("REMEDIATION_ACCEPTOR_REQUIRED", case_id)
+        self._remediation_acceptance_sequence += 1
+        acceptance = RemediationAcceptance(
+            id=f"REMA-{self._remediation_acceptance_sequence:06d}",
+            case_ref=case_id,
+            result=result,
+            effectiveness_ref=effectiveness_id,
+            accepted_by_ref=accepted_by_ref,
+            accepted_at=datetime.now(UTC),
+        )
+        self._remediation_acceptances[acceptance.id] = acceptance
+        if result is RemediationAcceptanceResult.ACCEPTED:
+            self._remediation_cases[case_id] = replace(
+                self._remediation_cases[case_id],
+                status=RemediationStatus.ACCEPTED,
+            )
+        return acceptance
+
+    def close_remediation_case(
+        self,
+        *,
+        case_id: str,
+        verification_id: str,
+        effectiveness_id: str,
+        acceptance_id: str,
+        evidence_refs: tuple[ObjectReference, ...],
+        closed_by_ref: str,
+    ) -> RemediationClosure:
+        remediation_case = self.get_remediation_case(case_id)
+        verification = self._remediation_verifications.get(verification_id)
+        effectiveness = self._remediation_effectiveness.get(effectiveness_id)
+        acceptance = self._remediation_acceptances.get(acceptance_id)
+        if verification is None or verification.case_ref != case_id:
+            raise RegistryError("REMEDIATION_VERIFICATION_NOT_FOUND", verification_id)
+        if effectiveness is None or effectiveness.case_ref != case_id:
+            raise RegistryError("REMEDIATION_EFFECTIVENESS_NOT_FOUND", effectiveness_id)
+        if acceptance is None or acceptance.case_ref != case_id:
+            raise RegistryError("REMEDIATION_ACCEPTANCE_NOT_FOUND", acceptance_id)
+        if verification.result is not RemediationVerificationResult.VERIFIED:
+            raise RegistryError("REMEDIATION_CLOSURE_VERIFICATION_REQUIRED", case_id)
+        if effectiveness.result is not RemediationEffectivenessResult.EFFECTIVE:
+            raise RegistryError("REMEDIATION_CLOSURE_EFFECTIVENESS_REQUIRED", case_id)
+        if acceptance.result is not RemediationAcceptanceResult.ACCEPTED:
+            raise RegistryError("REMEDIATION_CLOSURE_ACCEPTANCE_REQUIRED", case_id)
+        if not evidence_refs:
+            raise RegistryError("REMEDIATION_CLOSURE_EVIDENCE_REQUIRED", case_id)
+        if not closed_by_ref:
+            raise RegistryError("REMEDIATION_CLOSER_REQUIRED", case_id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "REMEDIATION_EVIDENCE_INVALID",
+        )
+        self._remediation_closure_sequence += 1
+        closure = RemediationClosure(
+            id=f"REMC-{self._remediation_closure_sequence:06d}",
+            case_ref=case_id,
+            verification_ref=verification_id,
+            effectiveness_ref=effectiveness_id,
+            acceptance_ref=acceptance_id,
+            evidence_refs=resolved_evidence,
+            closed_by_ref=closed_by_ref,
+            closed_at=datetime.now(UTC),
+        )
+        self._remediation_closures[closure.id] = closure
+        self._remediation_cases[case_id] = replace(
+            remediation_case,
+            status=RemediationStatus.CLOSED,
+        )
+        return closure
+
+    def get_remediation_case(self, case_id: str) -> RemediationCase:
+        remediation_case = self._remediation_cases.get(case_id)
+        if remediation_case is None:
+            raise RegistryError("REMEDIATION_CASE_NOT_FOUND", case_id)
+        return remediation_case
 
     def evaluate_decision_obligations(
         self,
@@ -3926,6 +4744,125 @@ class InMemoryUPDLRegistry:
             },
             evaluated_at=evaluated_at,
         )
+
+    def record_condition_failure(
+        self,
+        *,
+        previous_evaluation: ConditionEvaluation,
+        current_evaluation: ConditionEvaluation,
+        transition_type: ConditionFailureTransitionType,
+        policy_id: str | None = None,
+        detection_mode: ConditionFailureDetectionMode = (
+            ConditionFailureDetectionMode.SCHEDULED_REEVALUATION
+        ),
+        cause: str = "UNKNOWN",
+        effective_at: datetime | None = None,
+    ) -> ConditionFailure:
+        if previous_evaluation.condition_id != current_evaluation.condition_id:
+            raise RegistryError(
+                "CONDITION_FAILURE_TRANSITION_INVALID",
+                previous_evaluation.condition_id,
+            )
+        if previous_evaluation.subject_id != current_evaluation.subject_id:
+            raise RegistryError(
+                "CONDITION_FAILURE_TRANSITION_INVALID",
+                previous_evaluation.subject_id,
+            )
+        if previous_evaluation.outcome not in {
+            ConditionOutcome.SATISFIED,
+            ConditionOutcome.EXEMPTED,
+        }:
+            raise RegistryError("CONDITION_FAILURE_TRANSITION_INVALID", previous_evaluation.outcome)
+        if current_evaluation.outcome in {
+            ConditionOutcome.SATISFIED,
+            ConditionOutcome.EXEMPTED,
+        }:
+            raise RegistryError("CONDITION_FAILURE_TRANSITION_INVALID", current_evaluation.outcome)
+        policy = self._resolve_condition_failure_policy(
+            previous_evaluation,
+            current_evaluation,
+            policy_id,
+        )
+        effects = (
+            policy.effects
+            if policy is not None
+            else (ConditionFailureEffect.DECISION_REASSESSMENT_REQUIRED,)
+        )
+        severity = (
+            policy.severity
+            if policy is not None
+            else ConditionFailureSeverity.MEDIUM
+        )
+        episode_key = self._condition_failure_episode_key(
+            previous_evaluation,
+            current_evaluation,
+        )
+        active_failure_id = self._active_condition_failure_keys.get(episode_key)
+        if active_failure_id is not None:
+            return self._condition_failures[active_failure_id]
+        self._condition_failure_sequence += 1
+        detected_at = datetime.now(UTC)
+        failure = ConditionFailure(
+            id=f"CF-{self._condition_failure_sequence:06d}",
+            condition_id=current_evaluation.condition_id,
+            condition_version=current_evaluation.condition_version,
+            subject_ref=ObjectReference(
+                current_evaluation.subject_id,
+                revision=current_evaluation.subject_revision,
+            ),
+            previous_evaluation=previous_evaluation,
+            current_evaluation=current_evaluation,
+            transition_type=transition_type,
+            severity=severity,
+            effects=effects,
+            policy_ref=policy.id if policy is not None else None,
+            detected_at=detected_at,
+            effective_at=effective_at or current_evaluation.evaluated_at,
+            detection_mode=detection_mode,
+            cause=cause,
+        )
+        self._condition_failures[failure.id] = failure
+        self._active_condition_failure_keys[episode_key] = failure.id
+        return failure
+
+    def get_condition_failure(self, failure_id: str) -> ConditionFailure:
+        failure = self._condition_failures.get(failure_id)
+        if failure is None:
+            raise RegistryError("CONDITION_FAILURE_NOT_FOUND", failure_id)
+        return failure
+
+    def calculate_condition_failure_impact(
+        self,
+        *,
+        failure_id: str,
+        decisions: tuple[str, ...] = (),
+        authorizations: tuple[str, ...] = (),
+        executions: tuple[str, ...] = (),
+        controls: tuple[str, ...] = (),
+        obligations: tuple[str, ...] = (),
+        states: tuple[str, ...] = (),
+    ) -> ConditionFailureImpact:
+        self.get_condition_failure(failure_id)
+        for control_id in controls:
+            if (
+                control_id not in self._control_definitions
+                and control_id not in self._control_implementations
+            ):
+                raise RegistryError("CONDITION_FAILURE_IMPACT_CONTROL_UNKNOWN", control_id)
+        self._condition_failure_impact_sequence += 1
+        impact = ConditionFailureImpact(
+            id=f"CFI-{self._condition_failure_impact_sequence:06d}",
+            failure_ref=failure_id,
+            decisions=decisions,
+            authorizations=authorizations,
+            executions=executions,
+            controls=controls,
+            obligations=obligations,
+            states=states,
+            calculated_at=datetime.now(UTC),
+        )
+        self._condition_failure_impacts[impact.id] = impact
+        return impact
 
     def evaluate_constraint(
         self,
@@ -5157,6 +6094,71 @@ class InMemoryUPDLRegistry:
                     raise RegistryError("CONDITION_COUNT_BOUND_INVALID", definition.id)
             return
         raise RegistryError("CONDITION_CLAUSE_TYPE_UNKNOWN", clause.clause_type.value)
+
+    def _condition_dependency_creates_cycle(
+        self,
+        candidate: ConditionDependency,
+    ) -> bool:
+        edges = {
+            dependency.dependent_condition_id: dependency.dependency_condition_id
+            for dependency in self._condition_dependencies.values()
+        }
+        edges[candidate.dependent_condition_id] = candidate.dependency_condition_id
+        current = candidate.dependency_condition_id
+        visited: set[str] = set()
+        while current in edges:
+            if current == candidate.dependent_condition_id:
+                return True
+            if current in visited:
+                return True
+            visited.add(current)
+            current = edges[current]
+        return False
+
+    def _resolve_condition_failure_policy(
+        self,
+        previous_evaluation: ConditionEvaluation,
+        current_evaluation: ConditionEvaluation,
+        policy_id: str | None,
+    ) -> ConditionFailurePolicy | None:
+        policies: tuple[ConditionFailurePolicy, ...]
+        if policy_id is not None:
+            policy = self._condition_failure_policies.get(policy_id)
+            if policy is None:
+                raise RegistryError("CONDITION_FAILURE_POLICY_NOT_FOUND", policy_id)
+            policies = (policy,)
+        else:
+            policies = tuple(
+                policy
+                for policy in sorted(
+                    self._condition_failure_policies.values(),
+                    key=lambda item: item.id,
+                )
+                if previous_evaluation.condition_id in policy.condition_ids
+            )
+        for policy in policies:
+            if (
+                previous_evaluation.outcome in policy.transitions_from
+                and current_evaluation.outcome in policy.transitions_to
+            ):
+                return policy
+        if policy_id is not None:
+            raise RegistryError("CONDITION_FAILURE_POLICY_NOT_APPLICABLE", policy_id)
+        return None
+
+    @staticmethod
+    def _condition_failure_episode_key(
+        previous_evaluation: ConditionEvaluation,
+        current_evaluation: ConditionEvaluation,
+    ) -> str:
+        document = {
+            "conditionId": current_evaluation.condition_id,
+            "subjectId": current_evaluation.subject_id,
+            "subjectRevision": current_evaluation.subject_revision,
+            "from": previous_evaluation.outcome.value,
+            "to": current_evaluation.outcome.value,
+        }
+        return f"sha256:{specification_hash(document)}"
 
     def _evaluate_condition_clause(
         self,
