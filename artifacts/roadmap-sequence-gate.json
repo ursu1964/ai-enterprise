@@ -1,0 +1,53 @@
+{
+  "alignment_report_hash": "607183c33dc1357abd46e8905cd20a3335af8dbcd2930934f943fb2522b371bd",
+  "checks": [
+    {
+      "name": "baseline-documents",
+      "status": "passed",
+      "summary": "5/5 required baseline documents present"
+    },
+    {
+      "name": "source-specifications",
+      "status": "passed",
+      "summary": "21/21 R2-R22 source specifications present"
+    },
+    {
+      "name": "ir-specifications",
+      "status": "passed",
+      "summary": "21/21 IR specifications implementation-ready"
+    },
+    {
+      "name": "implementation-packages",
+      "status": "passed",
+      "summary": "231/231 required implementation package files present"
+    },
+    {
+      "name": "phase-sequence",
+      "status": "passed",
+      "summary": "R2-R22 map sequentially to P12-P32"
+    },
+    {
+      "name": "alignment-report",
+      "status": "passed",
+      "summary": "R-series alignment report is schema-valid and complete"
+    },
+    {
+      "name": "post-r22-governance-adr",
+      "status": "passed",
+      "summary": "Accepted post-R22 roadmap governance ADR is present"
+    },
+    {
+      "name": "no-premature-r23",
+      "status": "passed",
+      "summary": "No premature R23 roadmap artifact detected"
+    }
+  ],
+  "findings": [],
+  "generated_at": "2026-08-08T01:10:56.641343+00:00",
+  "implementation_phase_range": "P12-P32",
+  "next_action": "Proceed only with ADR-backed post-R22 roadmap work.",
+  "r_range": "R2-R22",
+  "schema_ref": "schemas/architecture-baseline/roadmap-sequence-gate.schema.json",
+  "schema_version": "1.0",
+  "status": "passed"
+}

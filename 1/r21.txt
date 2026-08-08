@@ -1,0 +1,1548 @@
+# AI-ENTERPRISE R21
+
+## Execution Orchestrator and Universal Project Generation Pipeline
+
+**Document ID:** AI-ENT-R21
+**Status:** Implementation Specification
+**Depends on:** R1–R20
+**Primary purpose:** Convert a validated AI-Enterprise Manifest into a controlled, observable, resumable, and auditable project-generation execution.
+
+---
+
+## 1. Purpose
+
+R21 defines the **AI-Enterprise Execution Orchestrator**.
+
+The orchestrator is the runtime control layer responsible for transforming an approved project Manifest into executable work across the AI-Enterprise platform.
+
+It must not behave as an unrestricted autonomous agent.
+
+It must operate as a deterministic coordination system that:
+
+1. loads the project Manifest;
+2. validates it against the executable Manifest schema;
+3. resolves referenced UPDL Registry objects;
+4. constructs a project dependency graph;
+5. creates an execution plan;
+6. delegates bounded tasks to specialized workers;
+7. validates every generated artifact;
+8. records evidence and provenance;
+9. pauses when human authorization is required;
+10. resumes safely after interruption;
+11. produces a complete project delivery package.
+
+The orchestrator does not become a new source of truth.
+
+The Manifest, Registry, approved decisions, validated artifacts, and execution evidence remain the authoritative sources.
+
+---
+
+# 2. Architectural Position
+
+The Execution Orchestrator sits between the AI-Enterprise definition layer and the project-production layer.
+
+```text
+Client Manifest
+      |
+      v
+Manifest Validation
+      |
+      v
+UPDL Registry Resolution
+      |
+      v
+Project Model Compilation
+      |
+      v
+Execution Orchestrator
+      |
+      +------------------------------+
+      |              |               |
+      v              v               v
+Planning Workers  Generation     Validation
+                  Workers        Workers
+      |              |               |
+      +--------------+---------------+
+                     |
+                     v
+             Artifact Repository
+                     |
+                     v
+          Evidence and Audit Ledger
+                     |
+                     v
+            Delivery Package
+```
+
+The orchestrator must coordinate execution without allowing any worker, model, plugin, or external system to bypass governance controls.
+
+---
+
+# 3. Core Responsibilities
+
+The R21 orchestrator must provide the following capabilities.
+
+## 3.1 Manifest intake
+
+The orchestrator must accept only a Manifest that has:
+
+* a valid schema version;
+* a unique project identifier;
+* an approved project state;
+* resolvable Registry references;
+* defined project objectives;
+* declared constraints;
+* declared acceptance criteria;
+* declared governance rules;
+* declared delivery expectations.
+
+An incomplete or invalid Manifest must not enter execution.
+
+---
+
+## 3.2 Project compilation
+
+The orchestrator must compile the Manifest into an internal executable project model.
+
+The compiled model must contain:
+
+* project metadata;
+* stakeholder definitions;
+* objectives;
+* capabilities;
+* requirements;
+* constraints;
+* policies;
+* architectural objects;
+* deliverables;
+* work packages;
+* dependencies;
+* acceptance tests;
+* approval gates;
+* evidence requirements;
+* execution permissions.
+
+The compilation process must be deterministic for the same Manifest version, Registry version, policy set, and orchestration engine version.
+
+---
+
+## 3.3 Dependency graph construction
+
+Every executable project must be represented as a directed acyclic graph unless an explicitly supported iterative workflow is declared.
+
+Each node represents an executable unit such as:
+
+* requirement refinement;
+* architecture generation;
+* interface specification;
+* source-code generation;
+* configuration generation;
+* infrastructure definition;
+* test generation;
+* security validation;
+* compliance validation;
+* documentation generation;
+* packaging;
+* deployment preparation.
+
+Each edge represents a dependency, prerequisite, approval requirement, or evidence requirement.
+
+Example:
+
+```text
+Manifest Validation
+        |
+        v
+Requirement Compilation
+        |
+        +------------------+
+        |                  |
+        v                  v
+Architecture Design   Acceptance Test Design
+        |                  |
+        +--------+---------+
+                 |
+                 v
+         Implementation Plan
+                 |
+        +--------+---------+
+        |                  |
+        v                  v
+Source Generation    Infrastructure Generation
+        |                  |
+        +--------+---------+
+                 |
+                 v
+          Integrated Validation
+                 |
+                 v
+          Delivery Packaging
+```
+
+---
+
+# 4. Orchestration Principles
+
+## 4.1 Manifest-driven execution
+
+No work package may be created without a traceable relationship to one or more Manifest objects.
+
+Every task must include:
+
+```yaml
+manifest_trace:
+  project_id: string
+  manifest_version: string
+  source_objects:
+    - object_id: string
+      object_type: string
+      relationship: string
+```
+
+Untraceable work must be rejected.
+
+---
+
+## 4.2 Bounded autonomy
+
+Workers may make decisions only inside their assigned authority boundary.
+
+A worker task must define:
+
+* permitted inputs;
+* permitted tools;
+* permitted repositories;
+* permitted output types;
+* maximum resource consumption;
+* prohibited actions;
+* required validations;
+* escalation conditions;
+* approval requirements.
+
+Workers must not expand their own permissions.
+
+---
+
+## 4.3 Evidence before completion
+
+A task is not complete merely because an output exists.
+
+A task is complete only when:
+
+1. the expected artifact exists;
+2. the artifact conforms to its schema;
+3. required validators pass;
+4. acceptance criteria are satisfied;
+5. traceability is recorded;
+6. provenance is recorded;
+7. evidence is attached;
+8. required approvals are present.
+
+---
+
+## 4.4 Deterministic control, probabilistic production
+
+AI-generated outputs may be probabilistic.
+
+The control system must not be.
+
+The orchestrator must use deterministic rules for:
+
+* state transitions;
+* task eligibility;
+* dependency resolution;
+* approval checks;
+* policy enforcement;
+* retry limits;
+* rollback behavior;
+* artifact promotion;
+* delivery authorization.
+
+---
+
+## 4.5 Human authority
+
+Human approval must remain mandatory for designated high-impact decisions.
+
+Examples include:
+
+* project scope changes;
+* acceptance-criteria changes;
+* security exceptions;
+* compliance exceptions;
+* production deployment;
+* destructive operations;
+* financial commitments;
+* external publication;
+* irreversible data migration;
+* use of sensitive data;
+* changes to governance policies.
+
+---
+
+# 5. Execution State Model
+
+The orchestrator must implement an explicit project execution state machine.
+
+## 5.1 Project states
+
+```text
+DRAFT
+  |
+  v
+VALIDATING
+  |
+  +----> REJECTED
+  |
+  v
+COMPILED
+  |
+  v
+PLANNED
+  |
+  v
+AWAITING_AUTHORIZATION
+  |
+  v
+EXECUTING
+  |
+  +----> PAUSED
+  |
+  +----> BLOCKED
+  |
+  +----> FAILED
+  |
+  v
+VALIDATING_OUTPUT
+  |
+  +----> REMEDIATION_REQUIRED
+  |
+  v
+AWAITING_ACCEPTANCE
+  |
+  +----> REJECTED_OUTPUT
+  |
+  v
+COMPLETED
+  |
+  v
+ARCHIVED
+```
+
+---
+
+## 5.2 Work-package states
+
+Every work package must support at least:
+
+```text
+PENDING
+READY
+QUEUED
+RUNNING
+WAITING_FOR_INPUT
+WAITING_FOR_APPROVAL
+VALIDATING
+RETRY_SCHEDULED
+BLOCKED
+FAILED
+CANCELLED
+COMPLETED
+SUPERSEDED
+```
+
+---
+
+## 5.3 State-transition requirements
+
+Every transition must record:
+
+* previous state;
+* new state;
+* transition timestamp;
+* triggering actor;
+* triggering event;
+* authorization context;
+* reason;
+* related evidence;
+* execution correlation identifier.
+
+Example:
+
+```yaml
+transition:
+  transition_id: trn-01J8XYZ
+  entity_id: wp-architecture-001
+  entity_type: work_package
+  from_state: RUNNING
+  to_state: VALIDATING
+  triggered_by:
+    actor_type: worker
+    actor_id: worker-architecture-v1
+  event_type: artifact_submitted
+  occurred_at: 2026-08-04T18:30:00Z
+  correlation_id: exec-01J8ABC
+  evidence:
+    - artifact://architecture/system-context/v1
+```
+
+---
+
+# 6. Executable Work Package
+
+A work package is the smallest independently controlled orchestration unit.
+
+## 6.1 Required structure
+
+```yaml
+work_package:
+  work_package_id: wp-architecture-001
+  project_id: project-example-001
+  version: 1
+
+  title: Generate system architecture
+  purpose: >
+    Produce the system architecture required to satisfy the
+    approved capability and quality requirements.
+
+  manifest_trace:
+    manifest_version: 1.0.0
+    source_objects:
+      - object_id: CAP-001
+        object_type: capability
+        relationship: implements
+      - object_id: NFR-SEC-001
+        object_type: non_functional_requirement
+        relationship: constrains
+
+  dependencies:
+    requires:
+      - wp-requirements-001
+    required_by:
+      - wp-api-design-001
+      - wp-infrastructure-001
+
+  execution:
+    worker_type: architecture_worker
+    execution_mode: ai_assisted
+    priority: high
+    timeout_seconds: 3600
+    maximum_attempts: 3
+
+  permissions:
+    tools:
+      - registry.read
+      - artifact.read
+      - artifact.write
+    repositories:
+      - project-architecture
+    network_access: denied
+    destructive_operations: denied
+
+  inputs:
+    - artifact://requirements/compiled/v1
+    - registry://architecture-patterns/current
+
+  expected_outputs:
+    - artifact_type: system_architecture
+      schema: registry://schemas/system-architecture/v1
+    - artifact_type: architecture_decision_records
+      schema: registry://schemas/adr/v1
+
+  validation:
+    validators:
+      - schema_validator
+      - traceability_validator
+      - architecture_policy_validator
+      - security_boundary_validator
+
+  completion_criteria:
+    all_outputs_present: true
+    all_validators_pass: true
+    unresolved_critical_findings: 0
+
+  approvals:
+    required:
+      - role: solution_architect
+        gate: architecture_approval
+```
+
+---
+
+# 7. Execution Plan Generation
+
+The orchestrator must generate an execution plan before starting project production.
+
+The plan must be derived from:
+
+* the project Manifest;
+* resolved Registry definitions;
+* applicable policies;
+* available workers;
+* environment capabilities;
+* delivery constraints;
+* project priorities;
+* risk classifications.
+
+## 7.1 Execution plan contents
+
+```yaml
+execution_plan:
+  execution_plan_id: plan-project-example-001-v1
+  project_id: project-example-001
+  manifest_version: 1.0.0
+  registry_snapshot: registry-snapshot-2026-08-04
+  policy_snapshot: policy-snapshot-2026-08-04
+  orchestrator_version: 1.0.0
+
+  strategy:
+    execution_mode: controlled_parallel
+    optimization_target: balanced
+    maximum_parallel_tasks: 5
+    failure_policy: pause_affected_branch
+    approval_policy: explicit
+
+  phases:
+    - phase_id: phase-01
+      name: Definition compilation
+      work_packages:
+        - wp-requirements-001
+        - wp-acceptance-model-001
+
+    - phase_id: phase-02
+      name: Architecture
+      work_packages:
+        - wp-architecture-001
+        - wp-data-model-001
+        - wp-security-model-001
+
+    - phase_id: phase-03
+      name: Implementation
+      work_packages:
+        - wp-backend-001
+        - wp-frontend-001
+        - wp-infrastructure-001
+
+    - phase_id: phase-04
+      name: Validation
+      work_packages:
+        - wp-integration-test-001
+        - wp-security-test-001
+        - wp-compliance-test-001
+
+    - phase_id: phase-05
+      name: Delivery
+      work_packages:
+        - wp-documentation-001
+        - wp-package-001
+        - wp-release-readiness-001
+
+  approval_gates:
+    - gate_id: gate-plan
+      occurs_before: EXECUTING
+      required_roles:
+        - project_owner
+
+    - gate_id: gate-architecture
+      occurs_after: phase-02
+      required_roles:
+        - solution_architect
+        - security_owner
+
+    - gate_id: gate-release
+      occurs_before: COMPLETED
+      required_roles:
+        - project_owner
+        - release_authority
+```
+
+---
+
+# 8. Worker Contract
+
+All specialized workers must implement a common execution contract.
+
+## 8.1 Worker request
+
+```yaml
+worker_request:
+  request_id: req-01J8WORKER
+  execution_id: exec-01J8ABC
+  work_package_id: wp-architecture-001
+  worker_type: architecture_worker
+  worker_version: 1.0.0
+
+  instructions:
+    objective: Generate the approved system architecture.
+    constraints:
+      - Do not change project scope.
+      - Do not invent unavailable requirements.
+      - Escalate unresolved contradictions.
+      - Use only approved Registry objects.
+
+  context:
+    manifest_snapshot: artifact://manifest/v1
+    registry_snapshot: artifact://registry/snapshot-001
+    input_artifacts:
+      - artifact://requirements/compiled/v1
+
+  output_contract:
+    required_artifacts:
+      - system_architecture
+      - architecture_decision_records
+    response_schema: registry://schemas/worker-response/v1
+
+  authorization:
+    capability_token: token-reference
+    expires_at: 2026-08-04T20:00:00Z
+```
+
+---
+
+## 8.2 Worker response
+
+```yaml
+worker_response:
+  request_id: req-01J8WORKER
+  work_package_id: wp-architecture-001
+  status: completed
+
+  outputs:
+    - artifact_id: artifact-architecture-001
+      artifact_type: system_architecture
+      uri: artifact://architecture/system/v1
+      checksum: sha256:example
+
+  findings:
+    - finding_id: finding-001
+      severity: medium
+      category: ambiguity
+      description: Availability target lacks recovery-point objective.
+      related_manifest_objects:
+        - NFR-AVAIL-001
+
+  assumptions:
+    - assumption_id: assumption-001
+      description: Initial deployment targets one geographical region.
+      approval_required: true
+
+  evidence:
+    - evidence_type: validation_report
+      uri: artifact://validation/architecture/v1
+
+  metrics:
+    input_tokens: 12000
+    output_tokens: 4500
+    duration_ms: 74000
+```
+
+The orchestrator must reject responses that violate the worker-response schema.
+
+---
+
+# 9. Specialized Worker Categories
+
+The initial implementation should support a constrained set of worker types.
+
+## 9.1 Definition workers
+
+* Manifest interpretation worker;
+* requirements compiler;
+* ambiguity detector;
+* acceptance-criteria compiler;
+* traceability builder.
+
+## 9.2 Architecture workers
+
+* system architecture worker;
+* application architecture worker;
+* data architecture worker;
+* integration architecture worker;
+* security architecture worker;
+* infrastructure architecture worker.
+
+## 9.3 Engineering workers
+
+* backend implementation worker;
+* frontend implementation worker;
+* API implementation worker;
+* database implementation worker;
+* infrastructure-as-code worker;
+* configuration worker;
+* migration worker.
+
+## 9.4 Quality workers
+
+* static-analysis worker;
+* test-generation worker;
+* test-execution worker;
+* security-testing worker;
+* accessibility-testing worker;
+* performance-testing worker;
+* compliance-validation worker.
+
+## 9.5 Delivery workers
+
+* documentation worker;
+* packaging worker;
+* deployment-plan worker;
+* release-readiness worker;
+* operations-handbook worker;
+* training-material worker.
+
+Each worker must have its own Registry-defined capabilities and restrictions.
+
+---
+
+# 10. Scheduling and Parallel Execution
+
+The orchestrator must execute independent work packages in parallel when permitted.
+
+A work package is eligible to run only when:
+
+* all mandatory dependencies are complete;
+* all required inputs are available;
+* all preceding approval gates are satisfied;
+* its worker type is available;
+* resource quotas permit execution;
+* no active policy prohibits execution;
+* the work package is not superseded;
+* the project is not paused or cancelled.
+
+Eligibility function:
+
+```text
+eligible(W) =
+    dependencies_complete(W)
+    AND inputs_available(W)
+    AND approvals_satisfied(W)
+    AND worker_available(W)
+    AND resources_available(W)
+    AND policy_allows(W)
+    AND project_executable(W)
+```
+
+The scheduling engine must support:
+
+* priority queues;
+* dependency-aware scheduling;
+* concurrency limits;
+* worker capacity limits;
+* project-level quotas;
+* retry scheduling;
+* execution deadlines;
+* task cancellation;
+* branch suspension;
+* fair resource allocation.
+
+---
+
+# 11. Retry and Remediation Policy
+
+Retries must not be uncontrolled.
+
+## 11.1 Retryable conditions
+
+Examples:
+
+* temporary worker unavailability;
+* transient infrastructure failure;
+* temporary tool failure;
+* validator service timeout;
+* recoverable output-format error;
+* rate-limit response.
+
+## 11.2 Non-retryable conditions
+
+Examples:
+
+* policy violation;
+* invalid authorization;
+* unresolved Manifest contradiction;
+* missing human approval;
+* prohibited operation;
+* repeated deterministic validation failure;
+* security-critical finding;
+* corrupted project state.
+
+## 11.3 Retry record
+
+```yaml
+retry:
+  work_package_id: wp-backend-001
+  attempt: 2
+  maximum_attempts: 3
+  retry_reason: validator_timeout
+  previous_execution_id: exec-attempt-001
+  scheduled_at: 2026-08-04T19:00:00Z
+  backoff_seconds: 120
+```
+
+When the maximum attempt count is reached, the task must transition to `FAILED` or `REMEDIATION_REQUIRED`.
+
+---
+
+# 12. Human Approval Gates
+
+An approval gate must be represented as an executable governance object.
+
+```yaml
+approval_gate:
+  gate_id: gate-architecture
+  project_id: project-example-001
+  gate_type: artifact_approval
+
+  subject:
+    artifact_ids:
+      - artifact-architecture-001
+
+  required_approvers:
+    - role: solution_architect
+      minimum_approvals: 1
+    - role: security_owner
+      minimum_approvals: 1
+
+  decision_options:
+    - approve
+    - approve_with_conditions
+    - reject
+    - request_revision
+
+  expiration:
+    expires_at: 2026-08-11T18:00:00Z
+    on_expiration: remain_blocked
+
+  evidence_required:
+    - architecture_validation_report
+    - security_review_report
+```
+
+An approval must be bound to the exact artifact version reviewed.
+
+Any material artifact modification must invalidate the prior approval.
+
+---
+
+# 13. Artifact Promotion
+
+Generated artifacts must move through controlled promotion levels.
+
+```text
+GENERATED
+   |
+   v
+SCHEMA_VALIDATED
+   |
+   v
+TECHNICALLY_VALIDATED
+   |
+   v
+POLICY_VALIDATED
+   |
+   v
+REVIEWED
+   |
+   v
+APPROVED
+   |
+   v
+RELEASE_CANDIDATE
+   |
+   v
+RELEASED
+```
+
+The orchestrator must not treat a generated artifact as approved.
+
+Promotion requirements must be defined by artifact type in the Registry.
+
+Example:
+
+```yaml
+artifact_promotion_policy:
+  artifact_type: system_architecture
+  required_validations:
+    - schema
+    - traceability
+    - security
+    - architecture_policy
+  required_approvals:
+    - solution_architect
+    - security_owner
+  release_eligible: true
+```
+
+---
+
+# 14. Execution Events
+
+The orchestrator must communicate through structured events.
+
+## 14.1 Core event types
+
+```text
+project.validation.started
+project.validation.failed
+project.compiled
+execution.plan.created
+execution.authorized
+execution.started
+execution.paused
+execution.resumed
+execution.failed
+execution.completed
+
+work_package.ready
+work_package.queued
+work_package.started
+work_package.output_submitted
+work_package.validation_failed
+work_package.completed
+work_package.blocked
+work_package.failed
+
+artifact.created
+artifact.validated
+artifact.rejected
+artifact.promoted
+artifact.superseded
+
+approval.requested
+approval.granted
+approval.rejected
+approval.expired
+
+policy.violation.detected
+security.finding.detected
+human.intervention.required
+```
+
+---
+
+## 14.2 Event envelope
+
+```yaml
+event:
+  event_id: evt-01J8EVENT
+  event_type: work_package.completed
+  event_version: 1
+  occurred_at: 2026-08-04T19:30:00Z
+
+  project_id: project-example-001
+  execution_id: exec-01J8ABC
+  correlation_id: corr-01J8ABC
+  causation_id: evt-previous-001
+
+  actor:
+    actor_type: orchestrator
+    actor_id: orchestrator-primary
+
+  subject:
+    entity_type: work_package
+    entity_id: wp-architecture-001
+
+  payload:
+    final_state: COMPLETED
+    output_artifacts:
+      - artifact-architecture-001
+
+  integrity:
+    checksum: sha256:example
+```
+
+---
+
+# 15. Checkpointing and Recovery
+
+The orchestrator must persist checkpoints so execution can resume safely after failure or interruption.
+
+A checkpoint must contain:
+
+* execution identifier;
+* project state;
+* Manifest version;
+* Registry snapshot;
+* policy snapshot;
+* completed work packages;
+* active work packages;
+* blocked work packages;
+* pending approvals;
+* produced artifacts;
+* validation results;
+* active leases;
+* retry counters;
+* scheduler state;
+* event-log position.
+
+```yaml
+checkpoint:
+  checkpoint_id: chk-01J8CHECK
+  execution_id: exec-01J8ABC
+  created_at: 2026-08-04T19:45:00Z
+  project_state: EXECUTING
+  last_event_sequence: 1842
+
+  completed_work_packages:
+    - wp-requirements-001
+    - wp-architecture-001
+
+  running_work_packages:
+    - work_package_id: wp-data-model-001
+      lease_id: lease-001
+      lease_expires_at: 2026-08-04T20:00:00Z
+
+  pending_approvals:
+    - gate-architecture
+
+  integrity:
+    manifest_checksum: sha256:example
+    checkpoint_checksum: sha256:example
+```
+
+Recovery must not duplicate irreversible operations.
+
+Every externally visible operation must therefore use an idempotency key.
+
+---
+
+# 16. Idempotency
+
+Each work-package execution and external operation must include a stable idempotency identifier.
+
+```yaml
+idempotency:
+  key: project-example-001:wp-package-001:v1:attempt-1
+  scope: delivery_package_creation
+  expiration: never
+```
+
+Before repeating an operation, the orchestrator must determine whether it:
+
+* was never started;
+* started but did not complete;
+* completed successfully;
+* completed with an unknown response;
+* completed but was superseded.
+
+---
+
+# 17. Conflict and Contradiction Handling
+
+The orchestrator must not silently resolve material contradictions.
+
+Contradictions may occur between:
+
+* Manifest objects;
+* Registry definitions;
+* policies;
+* stakeholder decisions;
+* architecture constraints;
+* generated artifacts;
+* acceptance criteria;
+* deployment requirements.
+
+A contradiction record must include:
+
+```yaml
+contradiction:
+  contradiction_id: conflict-001
+  severity: high
+  status: unresolved
+
+  sources:
+    - object_id: NFR-SEC-001
+      statement: All data must remain within the private network.
+    - object_id: INT-EXT-001
+      statement: Use the public external analytics service.
+
+  impact:
+    affected_work_packages:
+      - wp-integration-001
+      - wp-security-model-001
+
+  resolution_authority:
+    required_role: project_owner
+
+  allowed_actions:
+    - amend_manifest
+    - remove_integration
+    - approve_architecture_exception
+```
+
+Affected execution branches must remain blocked until resolution.
+
+---
+
+# 18. Change Propagation
+
+When the Manifest changes during execution, the orchestrator must perform impact analysis.
+
+It must determine:
+
+* which compiled objects changed;
+* which work packages are affected;
+* which completed artifacts may be invalid;
+* which validations must be rerun;
+* which approvals are invalidated;
+* which tasks must be cancelled;
+* which tasks may continue;
+* whether the execution plan must be regenerated.
+
+Impact classes:
+
+```text
+NONE
+DOCUMENTATION_ONLY
+LOCAL
+DEPENDENCY_BRANCH
+CROSS_CUTTING
+ARCHITECTURAL
+PROJECT_REBASE_REQUIRED
+```
+
+A significant change must create a new execution-plan version.
+
+The prior plan and its evidence must remain immutable.
+
+---
+
+# 19. Orchestrator APIs
+
+The first implementation should expose the following API surface.
+
+## 19.1 Project execution APIs
+
+```text
+POST   /v1/projects/{projectId}/compile
+POST   /v1/projects/{projectId}/execution-plans
+GET    /v1/projects/{projectId}/execution-plans/{planId}
+POST   /v1/projects/{projectId}/executions
+GET    /v1/projects/{projectId}/executions/{executionId}
+POST   /v1/projects/{projectId}/executions/{executionId}/pause
+POST   /v1/projects/{projectId}/executions/{executionId}/resume
+POST   /v1/projects/{projectId}/executions/{executionId}/cancel
+```
+
+## 19.2 Work-package APIs
+
+```text
+GET    /v1/executions/{executionId}/work-packages
+GET    /v1/work-packages/{workPackageId}
+POST   /v1/work-packages/{workPackageId}/retry
+POST   /v1/work-packages/{workPackageId}/cancel
+POST   /v1/work-packages/{workPackageId}/remediate
+```
+
+## 19.3 Approval APIs
+
+```text
+GET    /v1/projects/{projectId}/approval-gates
+GET    /v1/approval-gates/{gateId}
+POST   /v1/approval-gates/{gateId}/decisions
+```
+
+## 19.4 Evidence APIs
+
+```text
+GET    /v1/executions/{executionId}/evidence
+GET    /v1/work-packages/{workPackageId}/evidence
+GET    /v1/artifacts/{artifactId}/provenance
+GET    /v1/projects/{projectId}/traceability
+```
+
+---
+
+# 20. Repository Bootstrap
+
+R21 should introduce the following repository structure:
+
+```text
+ai-enterprise/
+├── services/
+│   └── execution-orchestrator/
+│       ├── src/
+│       │   ├── api/
+│       │   ├── application/
+│       │   ├── domain/
+│       │   │   ├── execution/
+│       │   │   ├── work-package/
+│       │   │   ├── scheduler/
+│       │   │   ├── approval/
+│       │   │   ├── checkpoint/
+│       │   │   └── policy/
+│       │   ├── infrastructure/
+│       │   │   ├── persistence/
+│       │   │   ├── messaging/
+│       │   │   ├── workers/
+│       │   │   └── telemetry/
+│       │   └── bootstrap/
+│       ├── tests/
+│       │   ├── unit/
+│       │   ├── integration/
+│       │   ├── contract/
+│       │   └── recovery/
+│       ├── migrations/
+│       ├── Dockerfile
+│       └── README.md
+│
+├── packages/
+│   ├── orchestration-contracts/
+│   ├── worker-sdk/
+│   ├── execution-events/
+│   └── execution-policy-engine/
+│
+├── schemas/
+│   └── orchestration/
+│       ├── execution-plan.schema.json
+│       ├── work-package.schema.json
+│       ├── worker-request.schema.json
+│       ├── worker-response.schema.json
+│       ├── approval-gate.schema.json
+│       ├── checkpoint.schema.json
+│       └── execution-event.schema.json
+│
+├── registry/
+│   ├── worker-types/
+│   ├── task-types/
+│   ├── execution-policies/
+│   ├── promotion-policies/
+│   └── retry-policies/
+│
+└── examples/
+    └── orchestration/
+        ├── minimal-execution-plan.yaml
+        ├── software-project-plan.yaml
+        └── regulated-project-plan.yaml
+```
+
+---
+
+# 21. Persistence Model
+
+The initial database model should include:
+
+```text
+projects
+project_compilations
+execution_plans
+execution_plan_versions
+executions
+execution_checkpoints
+work_packages
+work_package_dependencies
+work_package_attempts
+worker_assignments
+artifacts
+artifact_versions
+artifact_validations
+artifact_promotions
+approval_gates
+approval_decisions
+contradictions
+policy_evaluations
+execution_events
+idempotency_records
+```
+
+All historical execution records must be append-only where practical.
+
+Mutable projection tables may be used for performance, but the underlying event and evidence records must remain immutable.
+
+---
+
+# 22. Security Requirements
+
+The orchestrator must enforce:
+
+* service identity;
+* worker identity;
+* short-lived capability tokens;
+* least-privilege authorization;
+* execution isolation;
+* repository isolation;
+* tenant isolation;
+* encrypted communications;
+* encrypted persistent storage;
+* immutable audit events;
+* secrets separation;
+* explicit external-network policies;
+* command and tool allowlists;
+* resource quotas;
+* artifact integrity checks.
+
+Workers must never receive unrestricted platform credentials.
+
+Each worker receives only the minimum capability token required for its assigned task.
+
+---
+
+# 23. Observability
+
+The orchestration runtime must emit metrics, logs, traces, and domain events.
+
+## 23.1 Required metrics
+
+```text
+executions_started_total
+executions_completed_total
+executions_failed_total
+executions_paused_total
+work_packages_queued
+work_packages_running
+work_packages_blocked
+work_package_duration_seconds
+work_package_retry_total
+approval_wait_duration_seconds
+artifact_validation_failure_total
+policy_violation_total
+worker_failure_total
+checkpoint_creation_total
+execution_recovery_total
+```
+
+## 23.2 Required trace dimensions
+
+* tenant ID;
+* project ID;
+* execution ID;
+* execution-plan ID;
+* work-package ID;
+* worker ID;
+* artifact ID;
+* approval-gate ID;
+* correlation ID.
+
+Sensitive Manifest content must not be placed directly into telemetry records.
+
+---
+
+# 24. Minimal Executable Orchestrator
+
+The first implementation does not need to support the complete future platform.
+
+The minimum viable orchestrator must:
+
+1. load one valid Manifest;
+2. resolve its Registry references;
+3. compile a project model;
+4. generate a dependency graph;
+5. create work packages;
+6. execute at least two worker types;
+7. run tasks in dependency order;
+8. support parallel execution;
+9. validate worker outputs;
+10. persist execution state;
+11. pause for one human approval gate;
+12. resume after approval;
+13. create checkpoints;
+14. recover after process restart;
+15. generate an evidence-backed delivery package.
+
+---
+
+# 25. Recommended First Vertical Slice
+
+The first end-to-end implementation should generate a small API service from a Manifest.
+
+The vertical slice should include:
+
+```text
+Manifest
+   |
+   v
+Requirements Compilation
+   |
+   v
+API Contract Generation
+   |
+   +----------------------+
+   |                      |
+   v                      v
+Service Code          Test Generation
+   |                      |
+   +----------+-----------+
+              |
+              v
+        Build Validation
+              |
+              v
+       Human Approval Gate
+              |
+              v
+        Delivery Package
+```
+
+Expected outputs:
+
+* compiled requirement specification;
+* OpenAPI contract;
+* service source code;
+* unit tests;
+* integration tests;
+* container definition;
+* build instructions;
+* validation report;
+* traceability report;
+* provenance record;
+* delivery archive.
+
+This slice proves that AI-Enterprise can transform a Manifest into a governed executable project rather than merely generate disconnected documents.
+
+---
+
+# 26. Acceptance Criteria
+
+R21 is complete when the implementation demonstrates that:
+
+1. an approved Manifest can create an execution plan;
+2. every work package is traceable to Manifest objects;
+3. dependencies control execution order;
+4. independent tasks can run in parallel;
+5. workers operate under bounded permissions;
+6. generated outputs are schema-validated;
+7. failed validation prevents artifact promotion;
+8. approval gates block execution correctly;
+9. approvals are bound to artifact versions;
+10. execution can pause and resume;
+11. execution can recover from a stored checkpoint;
+12. retries follow declared policies;
+13. contradictions create explicit blockers;
+14. Manifest changes trigger impact analysis;
+15. all important actions appear in the audit ledger;
+16. the final delivery package includes artifacts, validations, provenance, and traceability.
+
+---
+
+# 27. Test Scenarios
+
+The implementation team must validate at least these scenarios.
+
+## Scenario A — Successful execution
+
+A valid Manifest is compiled, all work packages succeed, approval is granted, and the project completes.
+
+## Scenario B — Invalid Manifest
+
+The Manifest fails schema validation and no execution plan is created.
+
+## Scenario C — Missing Registry object
+
+A referenced Registry object cannot be resolved and compilation is blocked.
+
+## Scenario D — Worker output validation failure
+
+A worker submits an invalid artifact. The artifact is rejected and the retry policy is applied.
+
+## Scenario E — Human rejection
+
+An approver rejects the architecture artifact. Downstream implementation tasks remain blocked.
+
+## Scenario F — Runtime interruption
+
+The orchestrator stops during execution and resumes from the latest valid checkpoint without duplicating completed work.
+
+## Scenario G — Manifest change
+
+A requirement changes after architecture approval. Impact analysis invalidates affected artifacts and approvals.
+
+## Scenario H — Policy violation
+
+A worker attempts to use a prohibited tool. Execution is blocked and a security event is recorded.
+
+## Scenario I — Contradictory requirements
+
+Two Manifest requirements conflict. The affected execution branch pauses until an authorized human records a resolution.
+
+## Scenario J — Maximum retries exceeded
+
+A work package repeatedly fails validation and transitions to `REMEDIATION_REQUIRED`.
+
+---
+
+# 28. Implementation Sequence
+
+The recommended R21 implementation order is:
+
+```text
+R21.1  Define orchestration domain objects
+R21.2  Create JSON Schemas
+R21.3  Implement execution state machines
+R21.4  Implement dependency graph compiler
+R21.5  Implement work-package scheduler
+R21.6  Implement worker contract and SDK
+R21.7  Implement artifact-validation integration
+R21.8  Implement approval gates
+R21.9  Implement event and audit emission
+R21.10 Implement checkpoint persistence
+R21.11 Implement recovery and idempotency
+R21.12 Implement Manifest change impact analysis
+R21.13 Build the first vertical slice
+R21.14 Execute failure and recovery tests
+R21.15 Publish the orchestration conformance suite
+```
+
+---
+
+# 29. Deliverables
+
+R21 must produce:
+
+* Execution Orchestrator service;
+* execution-plan schema;
+* work-package schema;
+* worker-request schema;
+* worker-response schema;
+* approval-gate schema;
+* checkpoint schema;
+* execution-event schema;
+* orchestration policy definitions;
+* worker SDK;
+* persistence migrations;
+* event contracts;
+* test suite;
+* first end-to-end project-generation demonstration;
+* operational runbook;
+* security model;
+* recovery procedure;
+* conformance checklist.
+
+---
+
+# 30. Definition of Done
+
+R21 is done only when AI-Enterprise can accept a valid Manifest and execute a controlled project-generation workflow from compilation through delivery.
+
+The resulting project must be:
+
+* traceable;
+* validated;
+* reproducible;
+* recoverable;
+* policy-compliant;
+* approval-controlled;
+* evidence-backed;
+* independently auditable.
+
+At the end of R21, AI-Enterprise is no longer only a project-definition system.
+
+It becomes an executable project-production platform.
+
+---
+
+## R21 Final Principle
+
+> AI-Enterprise must never confuse generated activity with completed work.
+
+Execution is complete only when the platform can prove:
+
+* what was requested;
+* why each task existed;
+* what produced each artifact;
+* which rules were applied;
+* which validations passed;
+* which humans approved the result;
+* and whether the final project satisfies the original Manifest.
+
+The Execution Orchestrator is therefore not merely a task scheduler.
+
+It is the controlled runtime through which the AI-Enterprise Manifest becomes an auditable, deliverable, and operational project.

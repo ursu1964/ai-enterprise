@@ -1,0 +1,679 @@
+{
+  "artifact_count": 49,
+  "artifacts": [
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "02179537c0bdbff1c61fb827746c4cbc017cd229f40878e93a32e323bc0af88c"
+      },
+      "id": "R1",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r1.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "12ca73363f6faccabb7b45f4c5dc8d1202768294512dc2f3650a6e0a765d9d4c"
+      },
+      "id": "R2",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r2.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "a74262db87345edc4394f9c4b248207c48b28838c15d0eecd85634752e1a1834"
+      },
+      "id": "R3",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r3.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "cd3537179d476f736e43dab949fe4a4428a1728cc389bd4d8691417d5bc22f4c"
+      },
+      "id": "R4",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r4.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "f19b92df953541df6730c9f8489a6a384048b6b5ef762758269af6feed0311ec"
+      },
+      "id": "R5",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r5.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "8f1df10edd5a8e149feae0ef335aaab521a5461fdb2a83926e7b70e41ec99299"
+      },
+      "id": "R6",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r6.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "5e270a0e91d976b701dd43c4a62b5716ba686fabaefd8d03932000475b17350c"
+      },
+      "id": "R7",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r7.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "b44283f8200b7d37e560fb28e9da478158ef7a10372bbc7e13f883801f865d75"
+      },
+      "id": "R8",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r8.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "5145ab46548c4b7345fc535922ff931b0fca832591ba6b188d0b1256e66ec499"
+      },
+      "id": "R9",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r9.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "aae36e317c0e33507d010fddf36489adc46f8bec76803fea31cb565facb5da6d"
+      },
+      "id": "R10",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r10.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "7f1f80efeaa9df6bc059f8694f65b0c68f8b1f7dce894d2dd920af30e3d28ba2"
+      },
+      "id": "R11",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r11.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "4f912a11ab833d3d72c9ec4e12bdbd9de7a103427e0bcb2eb293c8975066c5dd"
+      },
+      "id": "R12",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r12.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "78f3eccaee3b163f2f740487260804157b8897576ab812e17e5d24e62caab7f3"
+      },
+      "id": "R13",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r13.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "50e47ef2850f6960464a8e87dd0e58f4e1f7a0d3ca6be58731f3c370377e4cb4"
+      },
+      "id": "R14",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r14.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "3c5b2ebfae8e89b60f7fbd9668aaf09c88557dc9cdb838bbb869ba00fe0b0265"
+      },
+      "id": "R15",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r15.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "eae61b46f40c86e81b61ac240fb0dedcec490e8e07b650fd13aabfc421f7472f"
+      },
+      "id": "R16",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r16.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "882d00cfae777e85d307ca4386ba2529ae91550d1b4029e8b4c12f85b3fa7fed"
+      },
+      "id": "R17",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r17.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "1cef56eb40ecf97e510d70751894e35bde2e39f12a7631b6467e1ca4fe5bb743"
+      },
+      "id": "R18",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r18.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "60aa6418eee35115da1cf77dd6a539dc005e08abcf7947aa14310e9f6860badc"
+      },
+      "id": "R19",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r19.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "3791816dbeebb3f47dbbc4e6f519f49664f9812a128e64eae1401375a87d2139"
+      },
+      "id": "R20",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r20.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "f1cf171d24d78ce4dcd6c80fa1a55c08bbc5d75014a30ba55527af1a203c642a"
+      },
+      "id": "R21",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r21.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "ee92e0d8e329d67ec2ecf72c1ab4a92cf87d8d4b41554eb5636b0dd42cdbec4c"
+      },
+      "id": "R22",
+      "owner": "enterprise-architecture",
+      "source_path": "1/r22.txt",
+      "status": "frozen",
+      "type": "requirement_specification",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "3bf75cb7ae3cdf37d55ad01fba0bbfe1f1ad2a5fb42036a90fcb75a184b5a901"
+      },
+      "id": "R-INDEX",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/R-INDEX.md",
+      "status": "frozen",
+      "type": "control_artifact",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "235bb49045ba7ddbc4349cef227a061b39aabc7608d4231ac6da3661c5ab976d"
+      },
+      "id": "AEB-1.0",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/ARCHITECTURE-BASELINE-v1.0.md",
+      "status": "frozen",
+      "type": "control_artifact",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "737a22d0af489a6e8b9a9d534d0c8803c241cbca4b4010fc98c820c433624f15"
+      },
+      "id": "R-AUDIT-01",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/R-AUDIT-01-current-state-repository-audit.md",
+      "status": "frozen",
+      "type": "audit_artifact",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "f9d71f7074271a08db992b5c697cde1bce9e036dc39ebfd9fa8c6a349f9aad61"
+      },
+      "id": "R-AUDIT-02",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/R-AUDIT-02-r1-r22-alignment-matrix.md",
+      "status": "frozen",
+      "type": "audit_artifact",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "5b29fecb397a5ebc2011af62aa79e1bae793eae0aafc02c2c7b6b8468492993d"
+      },
+      "id": "R-REV-01",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/R-REV-01-corrected-r-series-baseline.md",
+      "status": "frozen",
+      "type": "revision_artifact",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "49ed4a7367e256d58064f69088bc676ffcd092fb598e3b91cfb279dc49346060"
+      },
+      "id": "ADR-0007",
+      "owner": "enterprise-architecture",
+      "source_path": "docs/adrs/0007-post-r22-roadmap-governance.md",
+      "status": "frozen",
+      "type": "governance_adr",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "6e0799b11fabc995d9d730fad90b496aafa4efc649b391a0f843e56f31bb6e55"
+      },
+      "id": "P12-R2-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r02/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "ef240d17d54b91483504d821a49cf503b1679ad124e2539c9d2d14cfa9490de4"
+      },
+      "id": "P13-R3-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r03/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "1b23020cde203b534447fb71820054c344d7a67a64e523229b2d87cc3c6797b1"
+      },
+      "id": "P14-R4-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r04/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "d2d670ab7411ad7ea1220706319128a4a9d005567419c78b7572739cca3a9890"
+      },
+      "id": "P15-R5-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r05/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "5842d778adf6a8bcd5af5232f0c8120140f85977920753660df87a7d27e6bf54"
+      },
+      "id": "P16-R6-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r06/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "ba2858c79be3200a2136274ca1ffd01d4f9afd74d208051b997ced193f75ed20"
+      },
+      "id": "P17-R7-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r07/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "f62581dc821b6541e738e8bcdd0d76e4d01c6dfc3564f3cb39148897380a1771"
+      },
+      "id": "P18-R8-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r08/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "783dc546482e373c4ef2a9509d3685674cb508eb544b8f247a0654a8168abeef"
+      },
+      "id": "P19-R9-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r09/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "baa22a39c271dc863cb5a3a733853170117fa22fe51e40f8924b4f89b10aa8f6"
+      },
+      "id": "P20-R10-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r10/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "d1ef11fab0084132f9c1525e36b946f4c6275c5edd93b1d25e1208d292e37e2c"
+      },
+      "id": "P21-R11-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r11/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "16f329e34022a694b9722dd80fcb7c87a2ab1299460aca83c371b10a81862389"
+      },
+      "id": "P22-R12-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r12/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "0677795e65f636bb921d005963a7abae7533bf85690b35945bd3c9f1a8657432"
+      },
+      "id": "P23-R13-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r13/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "d9dfdcafb43a7225d2a1df078b9f413239fd464486f0cda3e0d76f057b7cb4a0"
+      },
+      "id": "P24-R14-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r14/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "4ff2450fe2285f841405242a2e0a074d2072a47b765ea692b03b1591941ba66e"
+      },
+      "id": "P25-R15-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r15/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "896bf001cc6fb9f0415ad2d291f4e6f1f432f55920acce88061efdf05443a483"
+      },
+      "id": "P26-R16-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r16/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "1c428582d93efb1b21648ccf8d09d271461324f16f842b9ea1588fee3ffce8f7"
+      },
+      "id": "P27-R17-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r17/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "2b07fbe312608a42059b6de9446e1cebd45e78bc09f78ff4c60b2428423084b6"
+      },
+      "id": "P28-R18-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r18/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "1ff996515e30fc875fc715580f281cdea59c5ca25e5b57363ee839a4e1f3d718"
+      },
+      "id": "P29-R19-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r19/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "fa126966fde42c5d9e4129c7f78aa4f1469837bb8610e156d3d5c46c9176529d"
+      },
+      "id": "P30-R20-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r20/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "f562f60e49723e3307d3083e3a7b21c6017f04f4696cb2021f105955b09ea3ab"
+      },
+      "id": "P31-R21-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r21/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    },
+    {
+      "baseline_id": "AEB-1.0",
+      "content_hash": {
+        "algorithm": "SHA-256",
+        "value": "36ebf7d09cbf82b47450d54049bae7cf8ce1f17cbb085525502a814812bed10f"
+      },
+      "id": "P32-R22-CLAUSE-VERIFICATION",
+      "owner": "enterprise-architecture",
+      "source_path": "implementation/r22/clause-verification.md",
+      "status": "frozen",
+      "type": "implementation_evidence",
+      "version": "1.0.0"
+    }
+  ],
+  "baseline_id": "AEB-1.0",
+  "baseline_version": "1.0.0",
+  "findings": [],
+  "future_modules": {
+    "R23": {
+      "allowed": false,
+      "authorization": "requires accepted ADR after post-R22 governance"
+    }
+  },
+  "generated_at": "2026-08-08T01:10:55.174104Z",
+  "governance": {
+    "change_process": "R-REV",
+    "direct_modification": "prohibited",
+    "immutable": true
+  },
+  "implementation": {
+    "first_slice": "P12",
+    "first_target": "R2",
+    "phase_range": "P12-P32"
+  },
+  "next_action": "Use AEB-1.0 as the immutable architecture reference.",
+  "root_hash": {
+    "algorithm": "SHA-256",
+    "value": "6ee7d3e606eeeb995452b2cb9f3dd04bbadde4ee1e1de043e2a2a6b0c8bfe3b0"
+  },
+  "schema_ref": "schemas/architecture-baseline/architecture-baseline-manifest.schema.json",
+  "schema_version": "1.0",
+  "scope": {
+    "architecture_baseline": "docs/ARCHITECTURE-BASELINE-v1.0.md",
+    "r_index": "docs/R-INDEX.md",
+    "requirements": {
+      "count": 22,
+      "first": "R1",
+      "last": "R22"
+    }
+  },
+  "status": "frozen"
+}

@@ -1,0 +1,483 @@
+However, it is currently an implementation plan, not yet an implementation-ready specification.
+
+What is correct
+
+The strongest decisions are:
+
+Starting with AEPM v0.1, rather than the complete enterprise model.
+Using a small canonical model as the first practical AEIR.
+Running deterministic validation before AI reasoning.
+Preventing AI-generated assumptions from silently becoming approved facts.
+Using PostgreSQL and JSONB instead of prematurely adopting a graph database.
+Building a modular monolith instead of microservices.
+Generating artifacts from the canonical model, not directly from the client’s prose.
+Making traceability mandatory.
+Limiting the first release to manifest-to-blueprint.
+Explicitly postponing multi-agent orchestration, formal languages, marketplaces, and full code generation.
+
+Those decisions substantially reduce implementation risk.
+
+What must be added before coding
+1. Freeze the MVP success condition
+
+Your first release should have one measurable definition of success:
+
+Given one valid AEPM, the system produces a validated canonical project model, identifies unresolved gaps, accepts human corrections, and generates five traceable project artifacts.
+
+Do not evaluate the MVP by UI quality, number of AI agents, or quantity of generated text.
+
+Evaluate it by:
+
+schema validity
+traceability completeness
+validation accuracy
+reproducibility
+human approval handling
+consistency across generated artifacts
+2. Define AEPM v0.1 precisely
+
+The attachment lists the AEPM sections, but it does not yet define:
+
+required versus optional fields
+field types
+allowed values
+identifiers
+cardinality
+validation rules
+versioning
+extension fields
+examples
+compatibility policy
+
+A real AEPM specification should include something like:
+
+aepm_version: "0.1"
+
+project:
+  id: "PRJ-001"
+  name: "Inventory Management Platform"
+  intent:
+    statement: "Reduce stock discrepancies and manual reconciliation."
+    status: approved
+    source_refs:
+      - SRC-001
+
+outcomes:
+  - id: "OUT-001"
+    name: "Reduce inventory variance"
+    indicator:
+      metric: "monthly inventory variance"
+      baseline: 7.5
+      target: 2.0
+      unit: percent
+      deadline: "2027-06-30"
+
+stakeholders:
+  - id: "STK-001"
+    name: "Warehouse Manager"
+    role: business_owner
+    decision_authority: true
+
+Without a formal schema, every later component will interpret the manifest differently.
+
+3. Separate lifecycle status from truth status
+
+The attachment currently proposes statuses such as:
+
+proposed
+inferred
+unverified
+approved
+rejected
+
+These describe epistemic or approval state, not object lifecycle.
+
+Use separate fields:
+
+lifecycle_status: draft
+truth_status: inferred
+approval_status: pending
+
+Recommended values:
+
+lifecycle_status:
+draft
+active
+deprecated
+archived
+
+truth_status:
+asserted
+inferred
+assumed
+verified
+disputed
+
+approval_status:
+not_required
+pending
+approved
+rejected
+
+This avoids mixing fundamentally different concerns.
+
+4. Strengthen the canonical object model
+
+The proposed shared fields are a good start, but insufficient for traceable engineering.
+
+Every canonical object should minimally include:
+
+id:
+type:
+name:
+description:
+
+lifecycle_status:
+truth_status:
+approval_status:
+
+source_refs: []
+evidence_refs: []
+relationship_refs: []
+
+confidence:
+version:
+created_at:
+created_by:
+updated_at:
+updated_by:
+
+attributes: {}
+metadata: {}
+
+Do not store complete relationship objects redundantly inside every object. Keep canonical relationships as separate records and expose relationship references in object views.
+
+5. Define relationships as first-class records
+
+A relationship should have its own schema:
+
+id: "REL-001"
+type: "supports"
+
+source_object_id: "CAP-001"
+target_object_id: "OUT-001"
+
+status: active
+source_refs:
+  - "SRC-001"
+
+confidence: 1.0
+valid_from: "2026-08-04"
+valid_to: null
+
+This is essential for:
+
+graph traversal
+impact analysis
+traceability
+versioning
+semantic validation
+future migration to graph-oriented storage
+6. Distinguish validation categories
+
+The validation engine should not return an undifferentiated list.
+
+Each finding should contain:
+
+id: "VAL-001"
+rule_id: "AEPM.OUTCOME.METRIC_REQUIRED"
+severity: error
+category: completeness
+message: "Outcome OUT-003 has no measurable indicator."
+object_refs:
+  - "OUT-003"
+blocking: true
+suggested_action: "Define a metric, baseline, target, and evaluation date."
+
+Recommended severity levels:
+
+error
+warning
+information
+recommendation
+
+Recommended categories:
+
+schema
+completeness
+consistency
+traceability
+security
+quality
+governance
+ambiguity
+duplication
+7. Define the boundary between deterministic logic and AI
+
+This boundary must be explicit.
+
+Deterministic engine
+
+Use application code for:
+
+schema validation
+missing required fields
+duplicate identifiers
+invalid references
+orphan objects
+unsupported statuses
+missing owners
+missing acceptance criteria
+invalid state transitions
+traceability coverage
+cardinality rules
+AI interpretation
+
+Use an LLM for:
+
+extracting objects from prose
+semantic deduplication suggestions
+ambiguity detection
+candidate requirement generation
+likely contradiction detection
+question drafting
+classification suggestions
+
+An LLM must never be the final authority for whether the project model is structurally valid.
+
+8. Add provenance to every AI operation
+
+For every AI-created or modified object, record:
+
+ai_operation:
+  model_provider: "..."
+  model_name: "..."
+  operation_type: extraction
+  prompt_version: "extractor-0.1.3"
+  schema_version: "AEIR-0.1"
+  generated_at: "..."
+  input_source_refs:
+    - "SRC-001"
+  review_required: true
+
+This supports:
+
+reproducibility
+auditing
+model upgrades
+debugging
+evaluation
+compliance
+9. Define human review as a real workflow
+
+“Human review” cannot remain one box in the architecture.
+
+Use explicit transitions:
+
+Extracted
+→ Validation Pending
+→ Clarification Required
+→ Client Review
+→ Approved
+→ Ready for Compilation
+
+An artifact must only compile from an approved snapshot unless it is explicitly marked as a draft artifact.
+
+10. Version immutable project snapshots
+
+Do not generate artifacts directly from mutable current-state records.
+
+Create a project snapshot:
+
+snapshot_id: "SNP-0007"
+project_id: "PRJ-001"
+aepm_version: "0.1"
+aeir_version: "0.1"
+object_versions:
+  - object_id: "REQ-014"
+    version: 3
+status: approved
+created_at: "..."
+
+Every generated artifact should reference the snapshot from which it was compiled.
+
+That gives you reproducibility:
+
+Artifact version 4 was generated from snapshot SNP-0007.
+
+11. Define artifact contracts
+
+Each of the five artifact compilers needs a formal input-output contract.
+
+For example:
+
+compiler:
+  id: "software-requirements-specification"
+  version: "0.1"
+  accepted_object_types:
+    - Intent
+    - Outcome
+    - Stakeholder
+    - Capability
+    - Requirement
+    - Rule
+    - Constraint
+  required_validation_state: approved
+  output_formats:
+    - markdown
+    - docx
+    - pdf
+  traceability_required: true
+
+Do not allow arbitrary direct prompting from the source manifest.
+
+The compiler should receive:
+
+approved project snapshot
+artifact configuration
+rendering template
+traceability map
+12. Add artifact consistency checks
+
+Generating five artifacts independently can create contradictions.
+
+After generation, run cross-artifact checks such as:
+
+every requirement in the SRS appears in the backlog
+every domain entity is referenced by a process or requirement
+every architecture component traces to a capability
+every backlog item has acceptance criteria
+every constraint appears in relevant architecture sections
+artifact references point to valid canonical objects
+13. Define MVP non-goals more strictly
+
+The attachment correctly postpones many capabilities.
+
+Also exclude these from v0.1:
+
+automatic deployment
+production-ready code generation
+autonomous approval
+unconstrained chat-based editing of the canonical model
+real-time multi-user collaboration
+semantic merge conflict resolution
+arbitrary user-defined ontologies
+automatic regulatory compliance claims
+broad domain-pack support
+Correct implementation sequence
+
+I would implement the system in this order:
+
+Milestone 1 — Schemas and examples
+
+Produce:
+
+AEPM-0.1.schema.json
+AEIR-0.1.schema.json
+RELATIONSHIP-0.1.schema.json
+VALIDATION-FINDING-0.1.schema.json
+one complete sample project
+one intentionally invalid sample project
+
+No AI yet.
+
+Milestone 2 — Deterministic intake
+
+Implement:
+
+manifest upload
+parsing
+schema validation
+canonical identifier generation
+persistence
+source registration
+validation report
+Milestone 3 — Canonical model
+
+Implement:
+
+objects
+relationships
+object versions
+source references
+evidence
+snapshots
+event log
+Milestone 4 — AI extraction
+
+Implement one AI operation only:
+
+Convert unstructured client manifesto text into candidate AEPM and AEIR objects.
+
+Require structured output and schema validation.
+
+Milestone 5 — Clarification workflow
+
+Implement:
+
+validation findings
+generated questions
+client answers
+proposed model changes
+approval or rejection
+snapshot creation
+Milestone 6 — One compiler
+
+Start with only:
+
+Executive Project Brief
+
+Prove that it is generated from the canonical snapshot with complete source traceability.
+
+Milestone 7 — Remaining four artifacts
+
+Add:
+
+SRS
+domain and data model
+solution architecture blueprint
+delivery backlog
+Milestone 8 — Cross-artifact validation
+
+Only after the five compilers work independently.
+
+Suggested first database model
+
+A practical PostgreSQL foundation would include:
+
+projects
+project_snapshots
+knowledge_objects
+knowledge_object_versions
+relationships
+relationship_versions
+sources
+evidence
+object_source_links
+validation_rules
+validation_findings
+clarification_questions
+clarification_answers
+decisions
+artifacts
+artifact_versions
+artifact_trace_links
+event_log
+ai_operations
+
+Use JSONB for object-specific attributes, but keep identity, status, type, version, ownership, and timestamps as ordinary indexed columns.
+
+Final judgment
+
+Yes, you can begin implementation from the attachment.
+
+But treat it as the MVP architecture brief, not as the final technical specification.
+
+Before writing the application UI or integrating an LLM, freeze these four items:
+
+AEPM v0.1 JSON Schema
+Canonical AEIR v0.1 object and relationship schemas
+Validation finding and approval workflow
+Snapshot-based traceability model
+
+Once those foundations exist, the rest of the attachment gives you the correct implementation direction. Without them, the project risks becoming an AI document generator with inconsistent internal state—which is exactly what AI-Enterprise is intended to avoid.

@@ -1,0 +1,565 @@
+R14 — Executable AI-Enterprise Manifest Schema
+The Universal Contract Between the Client and AI-Enterprise
+
+Document ID
+
+AIE-R14
+
+Title
+
+Executable Manifest Schema Specification
+
+Depends On
+
+R1–R13
+UPDL Registry
+AI-Enterprise Bootstrap Repository
+1. Purpose
+
+The Manifest is the only project-specific input required by AI-Enterprise.
+
+A client never describes databases.
+
+A client never describes APIs.
+
+A client never describes microservices.
+
+A client never describes React components.
+
+The client describes the business.
+
+Everything else is inferred.
+
+The Manifest therefore becomes the contract between business intent and software generation.
+
+2. Manifest Definition
+
+A Manifest is a structured document that answers one question:
+
+"What system should AI-Enterprise build?"
+
+It does not answer:
+
+How should it be built?
+Which framework should be used?
+Which database should be selected?
+Which cloud provider should be deployed?
+Which programming language should be chosen?
+
+Those are implementation decisions made by AI-Enterprise according to platform policies and generation strategies.
+
+3. Core Principle
+
+Every field in the Manifest must satisfy three rules:
+
+It describes business intent.
+It is implementation-independent.
+It can be validated automatically.
+
+If a field cannot satisfy all three, it does not belong in the Manifest.
+
+4. Manifest Lifecycle
+Client
+    │
+    ▼
+Manifest
+    │
+    ▼
+Validation
+    │
+    ▼
+Registry Expansion
+    │
+    ▼
+Knowledge Graph
+    │
+    ▼
+Execution Plan
+    │
+    ▼
+Generated Software
+
+The Manifest is immutable during generation.
+
+Any change creates a new Manifest version.
+
+5. Manifest Structure
+Manifest
+
+├── Metadata
+├── Organization
+├── Vision
+├── Domain
+├── Objectives
+├── Users
+├── Business Entities
+├── Capabilities
+├── Workflows
+├── Business Rules
+├── Policies
+├── Integrations
+├── Reporting
+├── Security
+├── Quality
+├── Constraints
+├── Deployment Preferences
+└── Version
+
+This is the canonical structure for every AI-Enterprise project.
+
+6. Metadata
+
+Purpose:
+
+Identify the Manifest.
+
+Example:
+
+{
+  "id": "hospital-v1",
+  "name": "Hospital Management",
+  "version": "1.0.0",
+  "createdBy": "Customer",
+  "createdAt": "2026-08-04"
+}
+7. Organization
+
+Defines the organization that owns the system.
+
+Example:
+
+{
+  "organization": {
+    "name": "Acme Hospital",
+    "industry": "Healthcare",
+    "country": "Germany",
+    "size": "Enterprise"
+  }
+}
+
+Organization information influences policies but never changes business logic.
+
+8. Vision
+
+Defines why the system exists.
+
+Example
+
+Provide a unified platform for managing
+patients, appointments,
+billing,
+clinical operations,
+and reporting.
+
+Vision is human-readable and is preserved in generated documentation.
+
+9. Domain
+
+Defines the business domain.
+
+Example
+
+Healthcare
+
+Examples
+
+Retail
+
+Insurance
+
+Manufacturing
+
+Banking
+
+Education
+
+Government
+
+Logistics
+
+Construction
+
+Telecommunications
+
+The domain activates domain-specific Registry modules.
+
+10. Objectives
+
+Objectives are measurable outcomes.
+
+Example
+
+Reduce appointment scheduling time
+
+Improve patient traceability
+
+Automate billing
+
+Reduce manual paperwork
+
+Improve compliance
+
+Objectives influence workflow prioritization.
+
+11. Users
+
+Users describe business actors.
+
+Example
+
+Administrator
+
+Doctor
+
+Nurse
+
+Patient
+
+Receptionist
+
+Accountant
+
+Auditor
+
+Users are roles, not authentication accounts.
+
+Authentication is generated later.
+
+12. Business Entities
+
+Entities define business concepts.
+
+Example
+
+Patient
+
+Appointment
+
+Invoice
+
+Medical Record
+
+Department
+
+Employee
+
+Medication
+
+Entities contain business meaning only.
+
+Database implementation is generated later.
+
+13. Capabilities
+
+Capabilities describe what the organization can do.
+
+Example
+
+Schedule Appointment
+
+Cancel Appointment
+
+Issue Invoice
+
+Admit Patient
+
+Transfer Patient
+
+Generate Reports
+
+Approve Purchase
+
+Capabilities become executable services.
+
+14. Workflows
+
+Workflow describes sequences.
+
+Example
+
+Patient Registration
+
+↓
+
+Medical Examination
+
+↓
+
+Diagnosis
+
+↓
+
+Treatment
+
+↓
+
+Billing
+
+↓
+
+Discharge
+
+The planner converts workflows into execution graphs.
+
+15. Business Rules
+
+Rules constrain behavior.
+
+Example
+
+Patient ID must be unique.
+
+Invoices require approval above €10,000.
+
+Medication cannot be prescribed without diagnosis.
+
+Appointments require available physician.
+
+Business rules are transformed into validation logic.
+
+16. Policies
+
+Policies define organizational governance.
+
+Example
+
+Retention Policy
+
+Privacy Policy
+
+Approval Policy
+
+Audit Policy
+
+Compliance Policy
+
+Policies influence multiple generated components simultaneously.
+
+17. Integrations
+
+Defines external systems.
+
+Example
+
+SAP
+
+Stripe
+
+Microsoft Entra ID
+
+Salesforce
+
+Google Workspace
+
+FHIR Server
+
+The Manifest specifies what to integrate, not how.
+
+18. Reporting
+
+Defines business reporting needs.
+
+Example
+
+Daily Revenue
+
+Patient Statistics
+
+Inventory Status
+
+Financial Dashboard
+
+Compliance Report
+
+Reports become generated analytics modules.
+
+19. Security
+
+Business-level security requirements.
+
+Example
+
+Single Sign-On
+
+Multi-Factor Authentication
+
+Role-Based Access
+
+Encryption Required
+
+Audit Logging
+
+Implementation mechanisms remain platform decisions.
+
+20. Quality Requirements
+
+Example
+
+99.9% Availability
+
+Response Time < 2 Seconds
+
+Horizontal Scalability
+
+High Maintainability
+
+Accessibility WCAG AA
+
+These become non-functional requirements for generators.
+
+21. Constraints
+
+Defines mandatory limitations.
+
+Example
+
+Must remain on-premise.
+
+Data cannot leave EU.
+
+Open-source components only.
+
+Use PostgreSQL.
+
+Deploy inside Kubernetes.
+
+Unlike preferences, constraints are mandatory and validated.
+
+22. Deployment Preferences
+
+Preferences guide generation where multiple valid options exist.
+
+Example
+
+Preferred Cloud
+
+Preferred Frontend
+
+Preferred Language
+
+Preferred CI/CD
+
+Preferred Monitoring
+
+Preferences may be overridden only if they violate constraints.
+
+23. Manifest Versioning
+
+Every Manifest contains:
+
+Manifest Version
+
+Schema Version
+
+Registry Version
+
+Generator Version
+
+Compiler Version
+
+This guarantees reproducible builds.
+
+24. Validation Rules
+
+A Manifest is valid only if:
+
+Required sections exist.
+Schema matches the current version.
+Every referenced object exists in the Registry.
+No duplicate identifiers exist.
+No circular business dependencies exist.
+Constraints are internally consistent.
+Policies are compatible.
+Workflows reference valid capabilities and entities.
+
+Validation failures stop generation immediately.
+
+25. Manifest Expansion
+
+The Manifest intentionally remains concise.
+
+During compilation, AI-Enterprise expands it into:
+
+Business Graph
+
+↓
+
+Semantic Graph
+
+↓
+
+Dependency Graph
+
+↓
+
+Execution Graph
+
+↓
+
+Implementation Graph
+
+The client never edits these derived artifacts.
+
+26. Minimal Manifest Example
+{
+  "metadata": {
+    "id": "crm-v1",
+    "version": "1.0.0"
+  },
+  "organization": {
+    "name": "Acme Ltd",
+    "industry": "Retail"
+  },
+  "domain": "CRM",
+  "users": [
+    "Sales Manager",
+    "Sales Representative"
+  ],
+  "entities": [
+    "Customer",
+    "Lead",
+    "Opportunity"
+  ],
+  "capabilities": [
+    "Manage Customers",
+    "Track Opportunities"
+  ]
+}
+
+This minimal Manifest is sufficient for AI-Enterprise to begin compilation.
+
+27. Manifest Evolution
+
+The Manifest is a living artifact.
+
+Each revision:
+
+receives a new version identifier,
+preserves previous versions,
+triggers incremental recompilation,
+regenerates only impacted artifacts,
+updates the execution graph,
+maintains full traceability.
+
+No manual synchronization is required.
+
+28. Manifest Contract
+
+The Manifest guarantees that:
+
+Business intent is expressed once.
+Technical implementation is never embedded.
+Every project starts from the same canonical structure.
+Validation occurs before any generation.
+All generated artifacts remain traceable to explicit business intent.
+The same Manifest, Registry, and generator versions always produce the same logical system.
+29. Outcome
+
+With R14 completed, AI-Enterprise now has:
+
+A universal, machine-readable Manifest contract.
+A validation target for the bootstrap repository defined in R13.
+A stable interface between business stakeholders and the AI-Enterprise compiler.
+The foundation for deterministic, repeatable software generation independent of implementation technologies.
+
+R14 completes the input boundary of the platform. The next logical specification, R15, should define the Manifest Compiler—the engine that transforms a validated Manifest into the semantic Knowledge Graph and executable Execution Graph consumed by planners and generators.

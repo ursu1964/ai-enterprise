@@ -7,6 +7,14 @@ __pycache__/
 .mypy_cache/
 artifacts/*
 !artifacts/.gitkeep
+!artifacts/architecture-baseline-manifest.json
+!artifacts/gate-evidence.json
+!artifacts/r-series-alignment-report.json
+!artifacts/release-evidence-bundle.json
+!artifacts/release-verification-check.json
+!artifacts/release-verification.json
+!artifacts/release-verification.md
+!artifacts/roadmap-sequence-gate.json
 apps/api/artifacts/
 docs/enterprise/real-world-infrastructure-decisions.json
 docs/enterprise/production-readiness-evidence.json
@@ -24,6 +32,7 @@ apps/api/graphify-out/
 /p*.txt
 /1/*
 !/1/plancontrol.md
+!/1/r*.txt
 /2/
 /execution manifestcode.yaml
 /executionmanifest.yaml

@@ -1,0 +1,1317 @@
+R3 should convert R1 and R2 into the first executable implementation specification. It should define exactly what the engineering team builds before introducing the frontend, document generators, or AI interpretation.
+
+R3 — AI-Enterprise Foundation Implementation Specification
+Version
+
+Document: R3
+Title: AI-Enterprise Foundation Implementation Specification
+Version: 0.1
+Status: Implementation Baseline
+Depends on: R1 and R2
+
+1. Purpose
+
+R3 defines the first implementation foundation of AI-Enterprise.
+
+R1 defines the MVP vision, scope, architecture, and target workflow.
+
+R2 defines the technical controls required to implement that vision safely and consistently.
+
+R3 converts those decisions into an executable engineering specification.
+
+The objective of R3 is to establish a deterministic, versioned, traceable project-model foundation before introducing AI interpretation, artifact generation, or advanced orchestration.
+
+2. Implementation Objective
+
+The first implementation shall support the following deterministic workflow:
+
+Client Manifest
+    ↓
+Manifest Parsing
+    ↓
+AEPM Schema Validation
+    ↓
+Canonical Object Creation
+    ↓
+Canonical Relationship Creation
+    ↓
+Deterministic Validation
+    ↓
+Validation Findings
+    ↓
+Human Review State
+    ↓
+Immutable Project Snapshot
+
+At the completion of R3, the system shall be able to receive a machine-readable client manifest and create a validated, versioned, traceable canonical project model.
+
+R3 does not include AI extraction or document generation.
+
+3. R3 Success Condition
+
+R3 is complete when the system can:
+
+Accept an AEPM v0.1 manifest in JSON or YAML.
+Validate the manifest against a formal JSON Schema.
+Reject structurally invalid manifests.
+Convert a valid manifest into canonical AEIR objects.
+Create first-class relationships between objects.
+execute deterministic validation rules.
+Produce structured validation findings.
+Persist the project, objects, relationships, sources, and versions.
+Create an immutable project snapshot.
+Reconstruct the exact project state from that snapshot.
+retain traceability from every canonical object to its source manifest location.
+pass automated tests for valid and invalid example projects.
+4. Scope
+4.1 Included
+
+R3 includes:
+
+AEPM v0.1 specification
+AEPM JSON Schema
+AEIR v0.1 canonical object model
+canonical relationship model
+source and provenance model
+validation-finding model
+project lifecycle model
+approval-state model
+object versioning
+relationship versioning
+immutable project snapshots
+append-only event log
+deterministic validation engine
+manifest import API
+validation API
+snapshot API
+automated tests
+valid example project
+invalid example project
+4.2 Excluded
+
+R3 does not include:
+
+LLM integration
+extraction from unstructured prose
+clarification-question generation by AI
+downloadable business documents
+source-code generation
+architecture-diagram generation
+multi-agent orchestration
+domain packs
+technology packs
+graph database
+automatic deployment
+production compliance certification
+real-time collaboration
+marketplace functionality
+semantic merge resolution
+autonomous approval
+5. Required Deliverables
+
+The engineering team shall create the following specification files:
+
+specifications/
+├── AEPM-0.1.md
+├── AEPM-0.1.schema.json
+├── AEIR-0.1.md
+├── AEIR-0.1.schema.json
+├── RELATIONSHIP-0.1.md
+├── RELATIONSHIP-0.1.schema.json
+├── SOURCE-0.1.schema.json
+├── VALIDATION-FINDING-0.1.schema.json
+├── SNAPSHOT-0.1.schema.json
+├── EVENT-0.1.schema.json
+├── TRACEABILITY-0.1.md
+└── LIFECYCLE-0.1.md
+
+The engineering team shall create the following example files:
+
+examples/
+├── valid/
+│   └── inventory-management.aepm.yaml
+└── invalid/
+    └── incomplete-inventory-management.aepm.yaml
+
+The engineering team shall create automated tests for every schema and deterministic validation rule.
+
+6. AEPM v0.1 Specification
+6.1 Purpose
+
+The AI-Enterprise Project Manifest is the authoritative client input for a project.
+
+AEPM v0.1 captures project intent and essential business knowledge without attempting to represent the entire enterprise.
+
+6.2 Root Structure
+
+An AEPM v0.1 manifest shall contain:
+
+aepm_version: "0.1"
+
+project: {}
+
+intents: []
+
+outcomes: []
+
+stakeholders: []
+
+capabilities: []
+
+processes: []
+
+requirements: []
+
+rules: []
+
+entities: []
+
+integrations: []
+
+quality_requirements: []
+
+constraints: []
+
+risks: []
+
+technology_preferences: []
+
+sources: []
+6.3 Required Root Fields
+
+The following fields are mandatory:
+
+aepm_version
+project
+intents
+outcomes
+stakeholders
+capabilities
+sources
+
+Other collections may be empty but must be present.
+
+6.4 Project Definition
+project:
+  id: "PRJ-001"
+  name: "Inventory Management Platform"
+  description: "A platform for managing stock across warehouses."
+  lifecycle_status: "draft"
+  approval_status: "pending"
+  owner_ref: "STK-001"
+  source_refs:
+    - "SRC-001"
+
+Required project fields:
+
+id
+name
+description
+lifecycle_status
+approval_status
+source_refs
+6.5 Intent Definition
+intents:
+  - id: "INT-001"
+    name: "Reduce inventory discrepancies"
+    description: "Reduce discrepancies between physical and recorded stock."
+    lifecycle_status: "active"
+    truth_status: "asserted"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+
+Every project shall contain at least one intent.
+
+6.6 Outcome Definition
+outcomes:
+  - id: "OUT-001"
+    name: "Lower inventory variance"
+    description: "Reduce monthly inventory variance."
+    metric:
+      name: "Monthly inventory variance"
+      baseline: 7.5
+      target: 2.0
+      unit: "percent"
+      target_date: "2027-06-30"
+    lifecycle_status: "active"
+    truth_status: "asserted"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+
+Every outcome shall contain a measurable indicator.
+
+6.7 Stakeholder Definition
+stakeholders:
+  - id: "STK-001"
+    name: "Warehouse Manager"
+    description: "Owns warehouse operations."
+    stakeholder_type: "business_owner"
+    decision_authority: true
+    lifecycle_status: "active"
+    truth_status: "verified"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+6.8 Capability Definition
+capabilities:
+  - id: "CAP-001"
+    name: "Inventory Tracking"
+    description: "Track inventory quantities by warehouse and location."
+    owner_ref: "STK-001"
+    priority: "critical"
+    lifecycle_status: "active"
+    truth_status: "asserted"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+
+Every capability shall reference an existing stakeholder owner.
+
+6.9 Process Definition
+processes:
+  - id: "PRO-001"
+    name: "Receive Inventory"
+    description: "Register goods received into a warehouse."
+    trigger: "Shipment arrives"
+    inputs:
+      - "Purchase order"
+      - "Delivery note"
+    outputs:
+      - "Inventory receipt"
+      - "Updated stock quantity"
+    owner_ref: "STK-001"
+    lifecycle_status: "active"
+    truth_status: "asserted"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+
+Every process shall define:
+
+trigger
+at least one input
+at least one output
+owner
+6.10 Requirement Definition
+requirements:
+  - id: "REQ-001"
+    name: "Record received inventory"
+    description: "The system shall record goods received by warehouse."
+    requirement_type: "functional"
+    priority: "critical"
+    acceptance_criteria:
+      - "The user can select a warehouse."
+      - "The user can enter received quantities."
+      - "The stock balance is updated after confirmation."
+    lifecycle_status: "draft"
+    truth_status: "asserted"
+    approval_status: "pending"
+    source_refs:
+      - "SRC-001"
+
+Every requirement shall contain at least one acceptance criterion.
+
+6.11 Rule Definition
+rules:
+  - id: "RUL-001"
+    name: "Received quantity must be positive"
+    description: "A received quantity must be greater than zero."
+    rule_type: "business"
+    expression: "received_quantity > 0"
+    lifecycle_status: "active"
+    truth_status: "verified"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+6.12 Entity Definition
+entities:
+  - id: "ENT-001"
+    name: "Inventory Item"
+    description: "A stock-managed business item."
+    owner_ref: "STK-001"
+    attributes:
+      - name: "sku"
+        data_type: "string"
+        required: true
+      - name: "description"
+        data_type: "string"
+        required: true
+    lifecycle_status: "active"
+    truth_status: "asserted"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+
+Every entity shall define an owner.
+
+6.13 Integration Definition
+integrations:
+  - id: "INTG-001"
+    name: "ERP Purchase Order Integration"
+    description: "Imports approved purchase orders from the ERP."
+    external_system: "ERP"
+    direction: "inbound"
+    data_exchanged:
+      - "Purchase order"
+    authentication:
+      method: "oauth2"
+    criticality: "high"
+    lifecycle_status: "draft"
+    truth_status: "asserted"
+    approval_status: "pending"
+    source_refs:
+      - "SRC-001"
+
+Every integration shall define an authentication or security mechanism.
+
+6.14 Quality Requirement Definition
+quality_requirements:
+  - id: "QAR-001"
+    name: "Platform availability"
+    description: "The service shall remain available during warehouse operations."
+    quality_type: "availability"
+    metric:
+      target: 99.9
+      unit: "percent"
+      measurement_period: "monthly"
+    lifecycle_status: "draft"
+    truth_status: "asserted"
+    approval_status: "pending"
+    source_refs:
+      - "SRC-001"
+6.15 Constraint Definition
+constraints:
+  - id: "CON-001"
+    name: "Cloud deployment restriction"
+    description: "The system must be deployed in an approved European region."
+    constraint_type: "technology"
+    lifecycle_status: "active"
+    truth_status: "verified"
+    approval_status: "approved"
+    source_refs:
+      - "SRC-001"
+6.16 Risk Definition
+risks:
+  - id: "RSK-001"
+    name: "Incorrect initial stock data"
+    description: "Migrated inventory balances may be inaccurate."
+    probability: "medium"
+    impact: "high"
+    mitigation: "Perform stock reconciliation before go-live."
+    lifecycle_status: "active"
+    truth_status: "assumed"
+    approval_status: "pending"
+    source_refs:
+      - "SRC-001"
+6.17 Technology Preference Definition
+technology_preferences:
+  - id: "TECH-001"
+    category: "backend"
+    preference: "Python FastAPI"
+    mandatory: false
+    rationale: "Existing internal experience"
+    source_refs:
+      - "SRC-001"
+
+Technology preferences are implementation preferences, not business truth.
+
+6.18 Source Definition
+sources:
+  - id: "SRC-001"
+    source_type: "client_manifest"
+    name: "Initial Client Manifest"
+    location: "uploads/initial-client-manifest.yaml"
+    checksum: "sha256:..."
+    captured_at: "2026-08-04T18:00:00+02:00"
+    captured_by: "USR-001"
+
+Every project object shall reference at least one source.
+
+7. AEIR v0.1 Canonical Object Model
+7.1 Purpose
+
+AEIR v0.1 is the canonical internal representation created from AEPM.
+
+AEIR shall not preserve the source document structure as its authoritative model.
+
+It shall normalize all project concepts into canonical objects and relationships.
+
+7.2 Canonical Object Types
+
+AEIR v0.1 supports:
+
+Project
+Intent
+Outcome
+Stakeholder
+Capability
+Process
+Requirement
+Rule
+Entity
+Integration
+QualityRequirement
+Constraint
+Risk
+Decision
+Artifact
+TechnologyPreference
+7.3 Canonical Object Structure
+id: "REQ-001"
+project_id: "PRJ-001"
+type: "Requirement"
+name: "Record received inventory"
+description: "The system shall record received inventory."
+
+lifecycle_status: "draft"
+truth_status: "asserted"
+approval_status: "pending"
+
+confidence: 1.0
+version: 1
+
+source_refs:
+  - "SRC-001"
+
+evidence_refs: []
+
+relationship_refs:
+  - "REL-001"
+  - "REL-002"
+
+attributes:
+  requirement_type: "functional"
+  priority: "critical"
+  acceptance_criteria:
+    - "The user can select a warehouse."
+    - "The user can enter received quantities."
+
+metadata: {}
+
+created_at: "2026-08-04T18:10:00+02:00"
+created_by: "system"
+updated_at: "2026-08-04T18:10:00+02:00"
+updated_by: "system"
+7.4 Status Separation
+
+The system shall maintain three independent status dimensions.
+
+Lifecycle status
+
+Allowed values:
+
+draft
+active
+deprecated
+archived
+Truth status
+
+Allowed values:
+
+asserted
+inferred
+assumed
+verified
+disputed
+Approval status
+
+Allowed values:
+
+not_required
+pending
+approved
+rejected
+
+The system shall not combine these status dimensions into one field.
+
+7.5 Confidence
+
+Confidence shall be represented as a decimal value between 0.0 and 1.0.
+
+Confidence shall not replace truth status or approval status.
+
+Objects directly asserted by a client source may initially receive confidence 1.0, while AI-inferred objects introduced later may receive lower confidence values.
+
+8. Relationship Model
+8.1 Purpose
+
+Relationships are first-class canonical records.
+
+Relationships shall not be stored only as nested fields inside objects.
+
+8.2 Relationship Structure
+id: "REL-001"
+project_id: "PRJ-001"
+type: "supports"
+
+source_object_id: "CAP-001"
+target_object_id: "OUT-001"
+
+lifecycle_status: "active"
+truth_status: "asserted"
+approval_status: "approved"
+
+confidence: 1.0
+version: 1
+
+source_refs:
+  - "SRC-001"
+
+valid_from: "2026-08-04"
+valid_to: null
+
+attributes: {}
+metadata: {}
+
+created_at: "2026-08-04T18:10:00+02:00"
+created_by: "system"
+8.3 Initial Relationship Types
+
+R3 shall support at least:
+
+owns
+supports
+realizes
+contains
+depends_on
+uses
+produces
+consumes
+governs
+constrains
+affects
+implements
+validated_by
+derived_from
+traces_to
+integrates_with
+measured_by
+mitigates
+8.4 Relationship Validation
+
+The system shall reject a relationship when:
+
+the source object does not exist
+the target object does not exist
+the source and target belong to different projects
+the relationship type is unsupported
+the relationship violates a configured cardinality rule
+the relationship duplicates an existing active relationship
+9. Validation Finding Model
+
+Every validation result shall be represented as a structured finding.
+
+id: "VAL-001"
+project_id: "PRJ-001"
+rule_id: "AEPM.OUTCOME.METRIC_REQUIRED"
+
+severity: "error"
+category: "completeness"
+
+message: "Outcome OUT-003 has no measurable indicator."
+
+object_refs:
+  - "OUT-003"
+
+source_refs:
+  - "SRC-001"
+
+blocking: true
+
+suggested_action: "Define a metric, baseline, target, unit, and target date."
+
+status: "open"
+
+created_at: "2026-08-04T18:15:00+02:00"
+resolved_at: null
+resolved_by: null
+resolution_note: null
+9.1 Severity Values
+error
+warning
+information
+recommendation
+9.2 Validation Categories
+schema
+completeness
+consistency
+traceability
+security
+quality
+governance
+ambiguity
+duplication
+lifecycle
+9.3 Finding Status
+open
+acknowledged
+resolved
+accepted_risk
+rejected
+10. Deterministic Validation Rules
+
+R3 shall implement deterministic validation before any AI reasoning.
+
+10.1 Schema Rules
+The manifest must conform to AEPM v0.1.
+Every identifier must match its object-type prefix.
+Every identifier must be unique within a project.
+All required fields must be present.
+Every enumerated value must be supported.
+Dates and timestamps must use ISO 8601.
+10.2 Intent Rules
+A project must contain at least one intent.
+Every intent must contain a name and description.
+Every intent must reference a source.
+At least one intent must be approved before snapshot approval.
+10.3 Outcome Rules
+Every outcome must reference or relate to an intent.
+Every outcome must define a measurable indicator.
+Every outcome metric must contain a target.
+Every outcome must have an owner or owning stakeholder relationship.
+10.4 Stakeholder Rules
+Every project must contain at least one business owner.
+Every referenced stakeholder must exist.
+Every stakeholder with decision authority must have approval status recorded.
+10.5 Capability Rules
+Every capability must have an owner.
+Every capability must support at least one intent or outcome.
+Every critical capability must have at least one requirement.
+10.6 Process Rules
+Every process must define a trigger.
+Every process must define at least one input.
+Every process must define at least one output.
+Every process must have an owner.
+Every process must relate to at least one capability.
+10.7 Requirement Rules
+Every requirement must have at least one acceptance criterion.
+Every requirement must trace to an intent, outcome, capability, process, or rule.
+Every critical requirement must be approved before an approved snapshot is created.
+Rejected requirements shall not be included in approved snapshots.
+10.8 Rule Rules
+Every rule must have a defined rule type.
+Every rule must have a structured or textual expression.
+Every rule must relate to at least one requirement, process, entity, or integration.
+10.9 Entity Rules
+Every entity must have an owner.
+Every entity must have at least one attribute.
+Entity attribute names must be unique within the entity.
+Every required attribute must define a data type.
+10.10 Integration Rules
+Every integration must define direction.
+Every integration must define exchanged data.
+Every integration must define an authentication or security method.
+High-criticality integrations must have an associated risk or quality requirement.
+10.11 Traceability Rules
+Every canonical object must reference at least one source.
+Every approved object must be traceable to an approved intent or source assertion.
+Every relationship must reference valid objects.
+No active object may remain orphaned unless its type explicitly allows it.
+10.12 Duplication Rules
+
+The deterministic engine shall detect:
+
+duplicate identifiers
+exact duplicate names within the same object type
+duplicate active relationships
+duplicate source checksums
+
+Semantic similarity detection is excluded from R3 and will later belong to the AI interpretation layer.
+
+11. Project Workflow
+11.1 Project States
+Created
+→ Imported
+→ Validation Pending
+→ Clarification Required
+→ Client Review
+→ Approved
+→ Ready for Compilation
+→ Archived
+11.2 Transition Rules
+Created to Imported
+
+Allowed when:
+
+a source manifest has been registered
+parsing has completed
+Imported to Validation Pending
+
+Allowed when:
+
+AEPM schema validation succeeds
+canonical objects have been created
+Validation Pending to Clarification Required
+
+Required when:
+
+at least one blocking validation finding exists
+Validation Pending to Client Review
+
+Allowed when:
+
+no blocking findings exist
+Clarification Required to Client Review
+
+Allowed when:
+
+all blocking findings are resolved or explicitly accepted
+Client Review to Approved
+
+Allowed when:
+
+required project objects are approved
+no unresolved blocking findings remain
+a reviewer with decision authority approves the project
+Approved to Ready for Compilation
+
+Allowed when:
+
+an immutable approved snapshot has been created successfully
+12. Versioning Model
+12.1 Object Versioning
+
+Canonical objects shall be immutable by version.
+
+Updating an object shall:
+
+preserve the existing version
+create a new version
+increment the version number
+create an event-log entry
+record the actor responsible for the change
+12.2 Relationship Versioning
+
+Relationships shall follow the same versioning model as canonical objects.
+
+12.3 Deletion
+
+Canonical objects and relationships shall not be physically deleted through normal application operations.
+
+Removal shall be represented by:
+
+lifecycle status change
+validity end date
+archival event
+
+Administrative erasure required by law shall be handled by a separate controlled process outside R3.
+
+13. Snapshot Model
+13.1 Purpose
+
+A project snapshot is an immutable record of an exact approved project state.
+
+Artifacts introduced in later phases shall compile from snapshots, not from mutable current-state records.
+
+13.2 Snapshot Structure
+snapshot_id: "SNP-0001"
+project_id: "PRJ-001"
+
+aepm_version: "0.1"
+aeir_version: "0.1"
+
+status: "approved"
+
+object_versions:
+  - object_id: "INT-001"
+    version: 1
+  - object_id: "OUT-001"
+    version: 1
+  - object_id: "REQ-001"
+    version: 2
+
+relationship_versions:
+  - relationship_id: "REL-001"
+    version: 1
+
+validation_summary:
+  errors: 0
+  warnings: 2
+  information: 4
+  accepted_risks: 1
+
+created_at: "2026-08-04T19:00:00+02:00"
+created_by: "USR-001"
+approved_by: "USR-002"
+13.3 Snapshot Rules
+
+An approved snapshot shall not be created when:
+
+blocking findings remain open
+required approvals are missing
+referenced object versions do not exist
+referenced relationship versions do not exist
+source traceability is incomplete
+the project lacks an approved intent
+
+Snapshots shall never be modified after creation.
+
+14. Source and Traceability Model
+14.1 Traceability Principle
+
+Every canonical object and relationship must be traceable to one or more registered sources.
+
+14.2 Source Link Structure
+id: "OSL-001"
+project_id: "PRJ-001"
+object_id: "REQ-001"
+object_version: 1
+source_id: "SRC-001"
+source_pointer: "/requirements/0"
+derivation_type: "direct"
+created_at: "2026-08-04T18:10:00+02:00"
+14.3 Derivation Types
+direct
+normalized
+inferred
+assumed
+manually_added
+generated
+imported
+
+R3 shall primarily use:
+
+direct
+normalized
+manually_added
+
+AI-specific derivation types will be used in later releases.
+
+15. Event Log
+
+Every meaningful state change shall create an append-only event.
+
+15.1 Event Structure
+event_id: "EVT-0001"
+project_id: "PRJ-001"
+event_type: "object.version.created"
+entity_type: "Requirement"
+entity_id: "REQ-001"
+entity_version: 2
+actor_type: "user"
+actor_id: "USR-001"
+occurred_at: "2026-08-04T18:30:00+02:00"
+payload:
+  previous_version: 1
+  reason: "Acceptance criteria clarified"
+15.2 Minimum Event Types
+project.created
+manifest.imported
+manifest.rejected
+validation.started
+validation.completed
+validation.finding.created
+validation.finding.resolved
+object.created
+object.version.created
+relationship.created
+relationship.version.created
+project.state.changed
+approval.granted
+approval.rejected
+snapshot.created
+snapshot.rejected
+16. Database Model
+
+R3 shall use PostgreSQL.
+
+The initial database shall include:
+
+projects
+project_state_history
+
+sources
+source_versions
+
+knowledge_objects
+knowledge_object_versions
+
+relationships
+relationship_versions
+
+object_source_links
+relationship_source_links
+
+validation_rules
+validation_findings
+
+approvals
+decisions
+
+project_snapshots
+snapshot_object_versions
+snapshot_relationship_versions
+
+event_log
+16.1 Storage Rules
+
+Ordinary indexed columns shall be used for:
+
+identity
+project ID
+object type
+status
+version
+ownership
+timestamps
+source references
+confidence
+
+JSONB may be used for:
+
+type-specific attributes
+extension metadata
+rule-specific configuration
+event payloads
+
+The system shall not place all canonical data into a single unstructured JSONB document.
+
+17. API Requirements
+
+R3 shall expose a minimal REST API.
+
+17.1 Import Manifest
+POST /api/v1/projects/import
+
+Responsibilities:
+
+register the source
+parse JSON or YAML
+validate AEPM schema
+create project
+create canonical objects
+create relationships
+execute deterministic validation
+return project and validation summary
+17.2 Get Project
+GET /api/v1/projects/{projectId}
+17.3 List Project Objects
+GET /api/v1/projects/{projectId}/objects
+
+Optional filters:
+
+type
+lifecycle status
+truth status
+approval status
+owner
+source
+17.4 Get Object
+GET /api/v1/projects/{projectId}/objects/{objectId}
+17.5 Update Object
+PUT /api/v1/projects/{projectId}/objects/{objectId}
+
+Updating an object shall create a new immutable version.
+
+17.6 List Relationships
+GET /api/v1/projects/{projectId}/relationships
+17.7 Run Validation
+POST /api/v1/projects/{projectId}/validation-runs
+17.8 List Validation Findings
+GET /api/v1/projects/{projectId}/validation-findings
+17.9 Resolve Validation Finding
+POST /api/v1/projects/{projectId}/validation-findings/{findingId}/resolution
+17.10 Create Snapshot
+POST /api/v1/projects/{projectId}/snapshots
+17.11 Get Snapshot
+GET /api/v1/projects/{projectId}/snapshots/{snapshotId}
+18. Repository Structure
+ai-enterprise/
+├── apps/
+│   └── api/
+│
+├── packages/
+│   ├── aepm-schema/
+│   ├── aeir-schema/
+│   ├── canonical-model/
+│   ├── validation-engine/
+│   ├── traceability/
+│   ├── versioning/
+│   ├── snapshots/
+│   └── event-log/
+│
+├── specifications/
+│   ├── AEPM-0.1.md
+│   ├── AEPM-0.1.schema.json
+│   ├── AEIR-0.1.md
+│   ├── AEIR-0.1.schema.json
+│   ├── RELATIONSHIP-0.1.schema.json
+│   ├── VALIDATION-FINDING-0.1.schema.json
+│   ├── SNAPSHOT-0.1.schema.json
+│   ├── EVENT-0.1.schema.json
+│   ├── TRACEABILITY-0.1.md
+│   └── LIFECYCLE-0.1.md
+│
+├── examples/
+│   ├── valid/
+│   └── invalid/
+│
+├── migrations/
+│
+├── tests/
+│   ├── schema/
+│   ├── validation/
+│   ├── versioning/
+│   ├── snapshots/
+│   ├── traceability/
+│   └── api/
+│
+├── docker/
+│
+├── docker-compose.yml
+└── README.md
+19. Recommended Technology Baseline
+
+A recommended R3 stack is:
+
+Backend:
+Python 3.12+
+FastAPI
+Pydantic
+SQLAlchemy
+Alembic
+
+Database:
+PostgreSQL
+
+Schema:
+JSON Schema Draft 2020-12
+
+Testing:
+Pytest
+Testcontainers or isolated PostgreSQL test database
+
+Serialization:
+JSON
+YAML
+
+Deployment:
+Docker
+Docker Compose
+
+API Documentation:
+OpenAPI generated by FastAPI
+
+An equivalent TypeScript implementation may use:
+
+NestJS
+TypeScript
+AJV
+Prisma or TypeORM
+PostgreSQL
+Jest
+
+Only one backend stack shall be selected for R3.
+
+20. Test Requirements
+20.1 Schema Tests
+
+Tests shall verify:
+
+valid AEPM accepted
+missing intent rejected
+duplicate IDs rejected
+invalid status rejected
+invalid date rejected
+missing source reference rejected
+invalid stakeholder owner reference rejected
+missing acceptance criteria rejected
+missing integration authentication rejected
+20.2 Canonical Model Tests
+
+Tests shall verify:
+
+AEPM objects convert to correct AEIR types
+source pointers are preserved
+object versions start at version 1
+relationships reference valid objects
+object IDs remain stable across versions
+20.3 Validation Tests
+
+Tests shall verify every deterministic rule independently.
+
+20.4 Versioning Tests
+
+Tests shall verify:
+
+updates create new versions
+previous versions remain unchanged
+event log entries are created
+rejected updates do not create versions
+20.5 Snapshot Tests
+
+Tests shall verify:
+
+approved snapshot creation
+rejection when blocking findings exist
+reconstruction of exact object versions
+snapshot immutability
+snapshot traceability completeness
+20.6 API Tests
+
+Tests shall cover:
+
+successful import
+failed import
+project retrieval
+object update
+validation execution
+finding resolution
+snapshot creation
+invalid authorization when authentication is later enabled
+21. R3 Implementation Milestones
+Milestone 1 — Specification and Schemas
+
+Deliver:
+
+AEPM schema
+AEIR schema
+relationship schema
+validation-finding schema
+snapshot schema
+event schema
+valid example
+invalid example
+
+Completion condition:
+
+All schemas pass automated tests.
+
+Milestone 2 — Manifest Import
+
+Deliver:
+
+JSON and YAML parsing
+source registration
+schema validation
+normalized error responses
+
+Completion condition:
+
+Valid manifests import successfully and invalid manifests return structured errors.
+
+Milestone 3 — Canonical Model Persistence
+
+Deliver:
+
+project persistence
+canonical objects
+object versions
+relationships
+relationship versions
+source links
+
+Completion condition:
+
+The imported project can be reconstructed entirely from persisted canonical records.
+
+Milestone 4 — Deterministic Validation
+
+Deliver:
+
+validation-rule registry
+validation execution engine
+structured findings
+severity and category handling
+blocking-rule support
+
+Completion condition:
+
+The valid sample produces no blocking findings, and the invalid sample produces the expected findings.
+
+Milestone 5 — Workflow and Approval
+
+Deliver:
+
+project-state transitions
+finding resolution
+object approval
+project approval
+transition guards
+
+Completion condition:
+
+A project cannot reach approved state while blocking findings remain unresolved.
+
+Milestone 6 — Snapshots
+
+Deliver:
+
+snapshot creation
+snapshot validation
+snapshot reconstruction
+immutable snapshot storage
+
+Completion condition:
+
+The exact approved project state can be reconstructed from a snapshot.
+
+Milestone 7 — Foundation Release
+
+Deliver:
+
+complete API
+automated tests
+Docker environment
+database migrations
+example requests
+technical documentation
+
+Completion condition:
+
+A new developer can start the platform locally and execute the complete R3 workflow.
+
+22. R3 Acceptance Criteria
+
+R3 shall be accepted only when all of the following are true:
+
+AEPM v0.1 has a formal JSON Schema.
+AEIR v0.1 has a formal canonical schema.
+Relationships are first-class records.
+Status dimensions are separated.
+Every object has source traceability.
+Every update creates an immutable version.
+Every meaningful change creates an event.
+Deterministic validation executes without AI.
+Validation findings are structured and persisted.
+Blocking findings prevent approval.
+Approved project snapshots are immutable.
+Exact snapshot reconstruction is tested.
+Valid and invalid example manifests are included.
+Automated tests cover all critical rules.
+The complete system runs locally in Docker.
+No LLM is required for R3 operation.
+23. Architectural Invariant
+
+The following invariant governs all R3 implementation decisions:
+
+Every accepted project state must be structurally valid, versioned, reproducible, and traceable to its source.
+
+Any implementation choice that violates this invariant shall be rejected.
+
+24. Transition to R4
+
+R4 may begin only after R3 acceptance.
+
+R4 shall introduce the first AI interpretation capability:
+
+Convert unstructured client manifesto text into candidate AEPM and AEIR objects.
+
+R4 shall preserve all R3 controls.
+
+AI-generated objects shall:
+
+use structured output
+pass AEPM and AEIR schema validation
+record model and prompt provenance
+use truth_status: inferred or truth_status: assumed
+use approval_status: pending
+require human review
+remain traceable to source text
+never modify approved project knowledge silently
+
+R3 therefore establishes the trusted deterministic foundation on which AI capabilities can safely operate.
+
+R3 is now the implementation specification for the foundation. The logical next document is R4 — AI Interpretation and Manifest Extraction Specification.

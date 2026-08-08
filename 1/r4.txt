@@ -1,0 +1,2109 @@
+# R4 — AI Interpretation and Manifest Extraction Specification
+
+## Version
+
+**Document:** R4
+**Title:** AI Interpretation and Manifest Extraction Specification
+**Version:** 0.1
+**Status:** Implementation Baseline
+**Depends on:** R1, R2, and R3
+
+---
+
+# 1. Purpose
+
+R4 defines the first AI-enabled capability of AI-Enterprise.
+
+Its purpose is to convert unstructured client input into candidate structured project knowledge while preserving provenance, uncertainty, human control, and deterministic validation.
+
+R4 does not permit AI to become an authoritative source of business truth.
+
+The AI interpretation layer shall:
+
+* read client-provided source material
+* identify candidate project concepts
+* map those concepts into AEPM and AEIR structures
+* identify ambiguity and missing information
+* propose clarification questions
+* detect probable contradictions
+* record complete AI-operation provenance
+* submit all candidate knowledge for deterministic validation and human review
+
+R4 builds on the R3 foundation and shall not weaken any R3 control.
+
+---
+
+# 2. Implementation Objective
+
+R4 shall support the following workflow:
+
+```text
+Client Source Material
+    ↓
+Source Registration
+    ↓
+Content Normalization
+    ↓
+AI Interpretation Request
+    ↓
+Structured Candidate Extraction
+    ↓
+Schema Validation
+    ↓
+Candidate AEPM and AEIR Objects
+    ↓
+Deterministic Validation
+    ↓
+Ambiguity and Gap Analysis
+    ↓
+Clarification Questions
+    ↓
+Human Review
+    ↓
+Approve, Reject, or Edit
+    ↓
+Canonical Object Version
+    ↓
+Project Snapshot
+```
+
+At the completion of R4, AI-Enterprise shall be capable of transforming client prose into reviewable, traceable candidate project knowledge.
+
+---
+
+# 3. R4 Success Condition
+
+R4 is complete when the system can:
+
+1. Accept unstructured client text as a registered source.
+2. Normalize the text into machine-processable source segments.
+3. invoke one configured AI model using a versioned interpretation contract.
+4. receive structured output conforming to an approved response schema.
+5. reject malformed or schema-invalid AI output.
+6. create candidate AEPM and AEIR objects from valid AI output.
+7. mark all AI-derived knowledge with appropriate truth and approval status.
+8. preserve traceability to exact source segments.
+9. record model, prompt, schema, parameters, and execution provenance.
+10. generate structured ambiguity and missing-information findings.
+11. produce candidate clarification questions.
+12. allow a human reviewer to approve, reject, edit, or defer each candidate object.
+13. promote only approved candidate knowledge into the canonical project model.
+14. prevent AI from directly modifying approved knowledge.
+15. reproduce the interpretation operation from its saved inputs and configuration, subject to model availability.
+16. pass automated evaluation against representative source examples.
+
+---
+
+# 4. Scope
+
+## 4.1 Included
+
+R4 includes:
+
+* unstructured text intake
+* source segmentation
+* AI interpretation operations
+* prompt and instruction versioning
+* structured output enforcement
+* candidate object staging
+* candidate relationship staging
+* candidate validation
+* ambiguity detection
+* assumption detection
+* probable contradiction detection
+* clarification-question generation
+* human review workflow
+* AI-operation provenance
+* interpretation retries
+* evaluation datasets
+* model-adapter abstraction
+* cost and usage recording
+* secure prompt construction
+* approved promotion into canonical AEIR
+* audit events
+
+## 4.2 Excluded
+
+R4 does not include:
+
+* autonomous project approval
+* direct artifact compilation from raw text
+* unrestricted conversational editing
+* autonomous multi-agent collaboration
+* production source-code generation
+* autonomous architecture selection
+* regulatory certification
+* automatic legal interpretation
+* domain-pack marketplace
+* self-learning model training
+* fine-tuning pipelines
+* automatic deployment
+* continuous autonomous project modification
+* unrestricted web research
+* ingestion from live enterprise systems
+* image, audio, or video extraction
+* OCR
+* semantic merge conflict resolution
+
+---
+
+# 5. R4 Architectural Principles
+
+## 5.1 AI Is an Interpreter, Not an Authority
+
+The AI layer may interpret, classify, infer, and propose.
+
+It shall not silently establish approved business knowledge.
+
+## 5.2 Structured Output Is Mandatory
+
+Free-form AI responses shall not be accepted as canonical input.
+
+Every interpretation operation shall return output conforming to a formal JSON Schema.
+
+## 5.3 Deterministic Validation Follows AI Interpretation
+
+All AI output shall pass:
+
+1. response-schema validation
+2. identifier validation
+3. object-model validation
+4. relationship validation
+5. deterministic project validation
+
+## 5.4 Provenance Is Mandatory
+
+Every AI-derived object, relationship, assumption, contradiction, or question shall reference:
+
+* the AI operation
+* the source
+* the exact source segment
+* the prompt version
+* the model
+* the output schema version
+
+## 5.5 Human Approval Is Required
+
+AI-derived knowledge shall default to:
+
+```yaml
+truth_status: inferred
+approval_status: pending
+```
+
+No AI-derived candidate may enter an approved snapshot before explicit human review.
+
+## 5.6 Approved Knowledge Is Protected
+
+AI interpretation operations shall not update approved objects directly.
+
+Changes to approved knowledge shall be represented as proposed revisions.
+
+## 5.7 Unknowns Must Remain Unknown
+
+When the source does not support a conclusion, the AI shall return:
+
+* unknown
+* ambiguous
+* unsupported
+* assumption_required
+* clarification_required
+
+The AI shall not fill gaps with plausible but unsupported content.
+
+---
+
+# 6. R4 Components
+
+R4 shall introduce the following components:
+
+```text
+Source Intake Adapter
+Source Normalization Service
+Source Segment Store
+AI Model Adapter
+Prompt Registry
+Interpretation Orchestrator
+Structured Output Validator
+Candidate Knowledge Store
+Candidate Relationship Store
+AI Provenance Store
+Ambiguity Analyzer
+Clarification Question Engine
+Candidate Review Workflow
+Promotion Service
+AI Evaluation Framework
+Usage and Cost Recorder
+```
+
+---
+
+# 7. Source Intake Model
+
+## 7.1 Supported Source Types
+
+R4 shall initially support:
+
+* plain text
+* Markdown
+* manually pasted client manifesto
+* UTF-8 text files
+* structured notes exported as text
+
+R4 may accept JSON or YAML as raw text, but machine-readable AEPM files should continue through the deterministic R3 import path.
+
+## 7.2 Source Registration
+
+Every source shall be registered before AI interpretation.
+
+```yaml
+source:
+  id: "SRC-002"
+  project_id: "PRJ-001"
+  source_type: "client_manifest_text"
+  name: "Initial Client Vision"
+  media_type: "text/plain"
+  language: "en"
+  storage_location: "sources/PRJ-001/SRC-002.txt"
+  checksum: "sha256:..."
+  captured_at: "2026-08-04T19:30:00+02:00"
+  captured_by: "USR-001"
+  processing_status: "registered"
+```
+
+## 7.3 Source Processing Status
+
+Allowed values:
+
+* registered
+* normalization_pending
+* normalized
+* interpretation_pending
+* interpreted
+* failed
+* archived
+
+---
+
+# 8. Source Normalization
+
+## 8.1 Purpose
+
+Source normalization prepares unstructured text for deterministic segmentation and AI interpretation.
+
+Normalization shall not alter business meaning.
+
+## 8.2 Normalization Operations
+
+R4 may perform:
+
+* Unicode normalization
+* line-ending normalization
+* removal of invalid control characters
+* whitespace normalization
+* preservation of paragraph boundaries
+* heading detection
+* list-boundary detection
+* source-language detection
+* stable segment numbering
+
+R4 shall not:
+
+* rewrite client text
+* summarize the source before storage
+* silently correct terminology
+* remove apparently duplicated statements
+* resolve contradictions
+* translate content without explicit instruction
+
+## 8.3 Normalized Source Structure
+
+```yaml
+normalized_source:
+  source_id: "SRC-002"
+  normalization_version: "0.1"
+  language: "en"
+  character_count: 4180
+  segment_count: 18
+  normalized_at: "2026-08-04T19:31:00+02:00"
+  checksum: "sha256:..."
+```
+
+---
+
+# 9. Source Segmentation
+
+## 9.1 Purpose
+
+Segments provide precise traceability between source text and candidate knowledge.
+
+## 9.2 Segment Structure
+
+```yaml
+segment:
+  id: "SEG-002-0007"
+  source_id: "SRC-002"
+  sequence: 7
+  segment_type: "paragraph"
+  heading_path:
+    - "Business Vision"
+    - "Expected Outcomes"
+  text: "The company wants to reduce inventory discrepancies by at least 50 percent."
+  start_offset: 892
+  end_offset: 976
+  checksum: "sha256:..."
+```
+
+## 9.3 Segment Types
+
+* heading
+* paragraph
+* list_item
+* table_row
+* quoted_statement
+* metadata
+* unknown
+
+## 9.4 Segment Stability
+
+Segment identifiers shall remain stable for the same normalized source version.
+
+If source content changes, a new source version shall be created.
+
+---
+
+# 10. AI Model Adapter
+
+## 10.1 Purpose
+
+The model adapter isolates AI-Enterprise from a specific model provider or SDK.
+
+## 10.2 Required Adapter Interface
+
+```text
+interpret(request) → structured_response
+```
+
+The adapter shall accept:
+
+* model configuration
+* system instruction reference
+* task instruction reference
+* source segments
+* project context
+* response schema
+* operation parameters
+* correlation ID
+
+The adapter shall return:
+
+* structured output
+* raw provider response reference
+* model metadata
+* token usage
+* latency
+* finish status
+* provider request ID
+* safety or refusal metadata
+* error information
+
+## 10.3 Adapter Constraints
+
+The adapter shall not:
+
+* write directly to canonical project tables
+* approve candidate knowledge
+* bypass schema validation
+* hide provider errors
+* silently change models
+* retry indefinitely
+* use external tools unless the operation contract explicitly permits them
+
+---
+
+# 11. Prompt Registry
+
+## 11.1 Purpose
+
+All AI instructions shall be versioned and auditable.
+
+No production interpretation operation may use an unregistered prompt.
+
+## 11.2 Prompt Definition
+
+```yaml
+prompt:
+  id: "PROMPT-AEPM-EXTRACTOR"
+  version: "0.1.0"
+  name: "AEPM Candidate Extractor"
+  operation_type: "manifest_extraction"
+  system_instruction_ref: "instructions/system-aepm-extractor-0.1.0.md"
+  task_template_ref: "instructions/task-aepm-extractor-0.1.0.md"
+  response_schema_ref: "schemas/AI-EXTRACTION-RESPONSE-0.1.schema.json"
+  status: "active"
+  created_at: "2026-08-04T19:00:00+02:00"
+  approved_by: "USR-ARCH-001"
+```
+
+## 11.3 Prompt Status
+
+* draft
+* evaluation
+* active
+* deprecated
+* retired
+
+## 11.4 Prompt Requirements
+
+The extraction prompt shall instruct the AI to:
+
+* use only the supplied source material
+* distinguish direct assertions from inference
+* avoid inventing missing business facts
+* cite source segment IDs
+* return unknown where evidence is insufficient
+* mark assumptions explicitly
+* produce only schema-conforming structured output
+* avoid technology recommendations unless present in the source
+* preserve client terminology
+* avoid approval decisions
+* generate clarification needs separately from extracted facts
+
+---
+
+# 12. AI Interpretation Operation
+
+## 12.1 Operation Types
+
+R4 shall support the following operation types:
+
+* manifest_extraction
+* ambiguity_detection
+* assumption_detection
+* probable_contradiction_detection
+* clarification_question_generation
+* candidate_requirement_drafting
+* semantic_classification
+* candidate_relationship_extraction
+
+The initial implementation should prioritize:
+
+1. manifest_extraction
+2. ambiguity_detection
+3. clarification_question_generation
+
+## 12.2 AI Operation Structure
+
+```yaml
+ai_operation:
+  id: "AIOP-0001"
+  project_id: "PRJ-001"
+  source_ids:
+    - "SRC-002"
+  segment_ids:
+    - "SEG-002-0001"
+    - "SEG-002-0002"
+    - "SEG-002-0003"
+
+  operation_type: "manifest_extraction"
+
+  provider: "configured-provider"
+  model: "configured-model"
+  model_version: "provider-reported-version"
+
+  prompt_id: "PROMPT-AEPM-EXTRACTOR"
+  prompt_version: "0.1.0"
+
+  response_schema_id: "AI-EXTRACTION-RESPONSE"
+  response_schema_version: "0.1"
+
+  parameters:
+    temperature: 0
+    max_output_tokens: 12000
+
+  status: "completed"
+
+  started_at: "2026-08-04T19:40:00+02:00"
+  completed_at: "2026-08-04T19:40:14+02:00"
+
+  provider_request_id: "..."
+  input_token_count: 3820
+  output_token_count: 2610
+  estimated_cost: 0.0
+  currency: "EUR"
+
+  output_checksum: "sha256:..."
+  review_required: true
+```
+
+## 12.3 Operation Status
+
+* queued
+* running
+* completed
+* completed_with_warnings
+* schema_failed
+* provider_failed
+* validation_failed
+* cancelled
+* rejected
+
+---
+
+# 13. Interpretation Request Contract
+
+## 13.1 Request Structure
+
+```yaml
+interpretation_request:
+  operation_id: "AIOP-0001"
+  project_id: "PRJ-001"
+
+  task:
+    type: "manifest_extraction"
+    requested_object_types:
+      - Intent
+      - Outcome
+      - Stakeholder
+      - Capability
+      - Process
+      - Requirement
+      - Rule
+      - Entity
+      - Integration
+      - QualityRequirement
+      - Constraint
+      - Risk
+      - TechnologyPreference
+
+  source_segments:
+    - segment_id: "SEG-002-0001"
+      text: "..."
+    - segment_id: "SEG-002-0002"
+      text: "..."
+
+  existing_project_context:
+    project_id: "PRJ-001"
+    existing_object_summaries: []
+
+  output_contract:
+    schema_id: "AI-EXTRACTION-RESPONSE"
+    schema_version: "0.1"
+```
+
+## 13.2 Context Minimization
+
+The orchestrator shall provide only relevant project context.
+
+It shall not automatically include:
+
+* all previous conversations
+* all project documents
+* unrelated projects
+* hidden organizational data
+* unapproved external knowledge
+
+---
+
+# 14. Structured Extraction Response
+
+## 14.1 Root Structure
+
+```yaml
+extraction_response:
+  operation_id: "AIOP-0001"
+  source_summary:
+    supported_language: "en"
+    source_scope: "inventory-management project"
+    interpretation_notes: []
+
+  candidate_objects: []
+
+  candidate_relationships: []
+
+  ambiguities: []
+
+  assumptions: []
+
+  probable_contradictions: []
+
+  missing_information: []
+
+  clarification_candidates: []
+
+  unsupported_requests: []
+```
+
+## 14.2 Candidate Object Structure
+
+```yaml
+candidate_object:
+  candidate_id: "CAND-OBJ-0001"
+  proposed_type: "Intent"
+  proposed_id: "INT-001"
+
+  name: "Reduce inventory discrepancies"
+  description: "Reduce differences between physical and recorded inventory."
+
+  truth_status: "asserted"
+  approval_status: "pending"
+  confidence: 0.97
+
+  source_support:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0007"
+      support_type: "direct"
+      quoted_fragment: "reduce inventory discrepancies by at least 50 percent"
+
+  attributes: {}
+
+  interpretation_rationale: "The source directly states the desired reduction."
+
+  warnings: []
+```
+
+## 14.3 Candidate Relationship Structure
+
+```yaml
+candidate_relationship:
+  candidate_id: "CAND-REL-0001"
+  type: "measured_by"
+
+  source_candidate_ref: "CAND-OBJ-0001"
+  target_candidate_ref: "CAND-OBJ-0002"
+
+  truth_status: "inferred"
+  approval_status: "pending"
+  confidence: 0.81
+
+  source_support:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0007"
+      support_type: "contextual"
+
+  interpretation_rationale: "The percentage target appears to measure the stated intent."
+```
+
+---
+
+# 15. Evidence and Support Classification
+
+## 15.1 Support Types
+
+Every candidate shall classify its source support as one of:
+
+* direct
+* contextual
+* inferred
+* assumed
+* unsupported
+
+## 15.2 Mapping to Truth Status
+
+Recommended initial mapping:
+
+```text
+direct       → asserted
+contextual   → asserted or inferred
+inferred     → inferred
+assumed      → assumed
+unsupported  → disputed or rejected candidate
+```
+
+This mapping shall be configurable but deterministic.
+
+## 15.3 Unsupported Candidates
+
+A candidate with only unsupported evidence shall not be promoted.
+
+The system may retain it as:
+
+* a rejected candidate
+* a clarification topic
+* a recommendation explicitly separated from client truth
+
+---
+
+# 16. Candidate Knowledge Store
+
+## 16.1 Purpose
+
+AI output shall first enter a staging area.
+
+The candidate store is separate from canonical AEIR persistence.
+
+## 16.2 Candidate Object Record
+
+```yaml
+candidate_record:
+  id: "CAND-OBJ-0001"
+  project_id: "PRJ-001"
+  ai_operation_id: "AIOP-0001"
+
+  proposed_object_type: "Intent"
+  proposed_object_id: "INT-001"
+
+  payload: {}
+
+  candidate_status: "pending_review"
+
+  schema_status: "valid"
+  deterministic_validation_status: "valid_with_warnings"
+
+  created_at: "2026-08-04T19:40:14+02:00"
+  reviewed_at: null
+  reviewed_by: null
+```
+
+## 16.3 Candidate Status
+
+* pending_validation
+* validation_failed
+* pending_review
+* approved
+* approved_with_edits
+* rejected
+* deferred
+* superseded
+* promoted
+
+## 16.4 Candidate Isolation
+
+Candidate objects shall not:
+
+* appear as approved canonical objects
+* enter approved project snapshots
+* be used by production artifact compilers
+* alter existing approved relationships
+* satisfy mandatory approval rules
+
+until promotion is completed.
+
+---
+
+# 17. Candidate Identifier Handling
+
+## 17.1 Proposed Identifiers
+
+The AI may propose identifiers, but the platform shall validate or replace them.
+
+## 17.2 Canonical Identifier Assignment
+
+The canonical identifier service shall:
+
+* enforce object-type prefixes
+* guarantee project-level uniqueness
+* avoid reuse of retired IDs
+* preserve stable IDs after promotion
+* record proposed and assigned identifiers
+
+Example:
+
+```yaml
+identifier_assignment:
+  candidate_id: "CAND-OBJ-0001"
+  proposed_id: "INT-001"
+  assigned_id: "INT-004"
+  assignment_reason: "INT-001 already exists"
+```
+
+AI shall never be the final authority for canonical identifiers.
+
+---
+
+# 18. Candidate Deduplication
+
+## 18.1 Deterministic Duplicate Checks
+
+Before human review, the system shall detect:
+
+* duplicate proposed IDs
+* exact duplicate names
+* identical normalized descriptions
+* exact duplicate relationship triples
+* candidates matching an existing canonical source pointer
+
+## 18.2 Semantic Duplicate Suggestions
+
+AI may suggest semantic duplicates, but these shall remain non-binding.
+
+```yaml
+duplicate_suggestion:
+  candidate_id: "CAND-OBJ-0012"
+  existing_object_id: "CAP-003"
+  similarity_type: "probable_semantic_duplicate"
+  confidence: 0.86
+  rationale: "Both describe stock reservation."
+  status: "pending_review"
+```
+
+---
+
+# 19. Ambiguity Model
+
+## 19.1 Purpose
+
+R4 shall represent ambiguity explicitly rather than hiding it in generated prose.
+
+## 19.2 Ambiguity Structure
+
+```yaml
+ambiguity:
+  id: "AMB-001"
+  project_id: "PRJ-001"
+  ai_operation_id: "AIOP-0001"
+
+  category: "undefined_scope"
+  statement: "The term 'real-time inventory' is not quantified."
+
+  source_refs:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0011"
+
+  affected_candidate_refs:
+    - "CAND-OBJ-0009"
+
+  severity: "warning"
+  blocking: false
+  confidence: 0.94
+
+  recommended_resolution:
+    "Define the acceptable synchronization delay."
+```
+
+## 19.3 Ambiguity Categories
+
+* undefined_term
+* undefined_scope
+* unclear_actor
+* unclear_owner
+* unclear_trigger
+* unclear_output
+* unclear_metric
+* unclear_priority
+* unclear_timeline
+* unclear_exception
+* unclear_security_requirement
+* unclear_integration_boundary
+* conflicting_interpretation
+* insufficient_evidence
+
+---
+
+# 20. Assumption Model
+
+## 20.1 Assumption Structure
+
+```yaml
+assumption:
+  id: "ASM-001"
+  project_id: "PRJ-001"
+  ai_operation_id: "AIOP-0001"
+
+  statement: "The platform will support multiple warehouses."
+
+  reason:
+    "The source refers to warehouse operations in plural but does not explicitly define scope."
+
+  source_refs:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0004"
+
+  affected_candidate_refs:
+    - "CAND-OBJ-0006"
+
+  confidence: 0.62
+  approval_status: "pending"
+  status: "open"
+```
+
+## 20.2 Assumption Rules
+
+* assumptions shall never use `truth_status: verified`
+* assumptions shall require review
+* assumptions may become asserted or verified only through supporting evidence or human approval
+* rejected assumptions shall not remain active in canonical knowledge
+* material assumptions may block snapshot approval
+
+---
+
+# 21. Probable Contradiction Model
+
+## 21.1 Purpose
+
+AI may identify probable contradictions that require deterministic comparison or human review.
+
+## 21.2 Contradiction Structure
+
+```yaml
+probable_contradiction:
+  id: "PCON-001"
+  project_id: "PRJ-001"
+  ai_operation_id: "AIOP-0001"
+
+  statement_a:
+    source_id: "SRC-002"
+    segment_id: "SEG-002-0008"
+    text: "All warehouse users must authenticate."
+
+  statement_b:
+    source_id: "SRC-002"
+    segment_id: "SEG-002-0015"
+    text: "Temporary workers should access receiving without accounts."
+
+  contradiction_type: "security_access_conflict"
+
+  confidence: 0.91
+  severity: "error"
+  blocking_recommendation: true
+
+  explanation:
+    "The two statements define incompatible access requirements unless an alternative temporary identity mechanism exists."
+
+  status: "pending_review"
+```
+
+## 21.3 Contradiction Limitation
+
+The AI shall label these as probable contradictions.
+
+Only deterministic rules or human review may establish a confirmed contradiction.
+
+---
+
+# 22. Missing Information Model
+
+```yaml
+missing_information:
+  id: "MISS-001"
+  project_id: "PRJ-001"
+  category: "outcome_metric"
+  related_candidate_refs:
+    - "CAND-OBJ-0003"
+  description:
+    "The desired reduction in processing time has no baseline or target."
+  severity: "error"
+  blocking: true
+  source_refs:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0009"
+```
+
+Missing information shall be converted into validation findings where deterministic rules support the finding.
+
+---
+
+# 23. Clarification Question Engine
+
+## 23.1 Purpose
+
+The question engine converts findings, ambiguities, assumptions, and probable contradictions into structured client questions.
+
+## 23.2 Question Structure
+
+```yaml
+clarification_question:
+  id: "QUE-001"
+  project_id: "PRJ-001"
+
+  origin_type: "ambiguity"
+  origin_ref: "AMB-001"
+
+  category: "quality_requirement"
+  priority: "high"
+  blocking: false
+
+  question:
+    "What maximum delay is acceptable for inventory updates?"
+
+  explanation:
+    "The phrase 'real-time inventory' is not measurable."
+
+  expected_answer_type: "duration"
+
+  answer_options:
+    - "Less than 1 second"
+    - "Less than 5 seconds"
+    - "Less than 30 seconds"
+    - "Other"
+
+  affected_candidate_refs:
+    - "CAND-OBJ-0009"
+
+  source_refs:
+    - source_id: "SRC-002"
+      segment_id: "SEG-002-0011"
+
+  status: "open"
+```
+
+## 23.3 Expected Answer Types
+
+* free_text
+* boolean
+* integer
+* decimal
+* percentage
+* currency
+* duration
+* date
+* datetime
+* single_choice
+* multiple_choice
+* stakeholder_reference
+* object_reference
+* structured_metric
+
+## 23.4 Question Quality Rules
+
+A clarification question shall:
+
+* ask one primary question
+* identify why the answer is needed
+* connect to affected objects
+* avoid embedding unsupported assumptions
+* preserve client terminology
+* avoid technical implementation detail unless relevant
+* avoid combining unrelated uncertainties
+* include a structured expected answer type
+
+## 23.5 Question Priorities
+
+* critical
+* high
+* medium
+* low
+
+---
+
+# 24. Human Review Workflow
+
+## 24.1 Review Actions
+
+For each candidate object or relationship, the reviewer may:
+
+* approve
+* approve with edits
+* reject
+* defer
+* merge with existing object
+* request clarification
+* classify as recommendation
+* classify as unsupported
+
+## 24.2 Review Record
+
+```yaml
+candidate_review:
+  id: "REV-001"
+  candidate_id: "CAND-OBJ-0001"
+  reviewer_id: "USR-002"
+
+  action: "approve_with_edits"
+
+  original_payload_checksum: "sha256:..."
+  approved_payload_checksum: "sha256:..."
+
+  edits:
+    - field: "description"
+      old_value: "Reduce inventory differences."
+      new_value: "Reduce differences between physical and recorded stock."
+
+  rationale: "Clarified terminology used by the client."
+
+  reviewed_at: "2026-08-04T20:15:00+02:00"
+```
+
+## 24.3 Review Authority
+
+The platform shall distinguish:
+
+* editor
+* business reviewer
+* technical reviewer
+* project approver
+* administrator
+
+A reviewer shall only perform actions permitted by role and project authority.
+
+## 24.4 Bulk Review
+
+R4 may support bulk approval only when:
+
+* all selected candidates passed schema validation
+* no selected candidate has a blocking finding
+* all candidates have direct source support
+* no candidate modifies an approved canonical object
+* the reviewer has appropriate authority
+
+---
+
+# 25. Promotion to Canonical AEIR
+
+## 25.1 Promotion Preconditions
+
+A candidate may be promoted when:
+
+* response schema validation passed
+* AEIR schema validation passed
+* deterministic validation completed
+* reviewer approval exists
+* assigned canonical identifier is valid
+* source traceability is complete
+* any required clarification has been resolved
+
+## 25.2 Promotion Operation
+
+Promotion shall:
+
+1. create a canonical object or relationship version
+2. preserve candidate provenance
+3. create source links
+4. create AI-operation links
+5. create an event-log entry
+6. update candidate status to promoted
+7. preserve the original candidate payload
+8. record reviewer edits
+9. rerun project validation
+
+## 25.3 Promoted Object Example
+
+```yaml
+id: "INT-004"
+project_id: "PRJ-001"
+type: "Intent"
+name: "Reduce inventory discrepancies"
+description: "Reduce differences between physical and recorded stock."
+
+lifecycle_status: "draft"
+truth_status: "asserted"
+approval_status: "approved"
+
+confidence: 0.97
+version: 1
+
+source_refs:
+  - "SRC-002"
+
+evidence_refs:
+  - "AIOP-0001"
+  - "REV-001"
+
+metadata:
+  origin_candidate_id: "CAND-OBJ-0001"
+  ai_derived: true
+```
+
+---
+
+# 26. Proposed Revision of Approved Knowledge
+
+## 26.1 Protection Rule
+
+AI shall never directly replace an approved canonical object.
+
+## 26.2 Revision Proposal
+
+```yaml
+revision_proposal:
+  id: "REVPROP-001"
+  project_id: "PRJ-001"
+  target_object_id: "REQ-014"
+  target_version: 3
+
+  proposed_changes:
+    description:
+      old: "The system shall reserve stock."
+      new: "The system shall reserve stock for fifteen minutes."
+
+  source_refs:
+    - source_id: "SRC-004"
+      segment_id: "SEG-004-0006"
+
+  ai_operation_id: "AIOP-0014"
+  truth_status: "inferred"
+  approval_status: "pending"
+  status: "pending_review"
+```
+
+Approved knowledge shall change only after revision review and version creation.
+
+---
+
+# 27. AI Provenance Model
+
+## 27.1 Required Provenance
+
+Every AI-derived candidate shall preserve:
+
+* operation ID
+* provider
+* model
+* model version if available
+* prompt ID and version
+* response schema version
+* source IDs
+* segment IDs
+* input checksum
+* output checksum
+* generation timestamp
+* operation parameters
+* usage information
+* review outcome
+
+## 27.2 AI Provenance Link
+
+```yaml
+ai_provenance_link:
+  id: "AIPL-001"
+  project_id: "PRJ-001"
+
+  entity_type: "candidate_object"
+  entity_id: "CAND-OBJ-0001"
+
+  ai_operation_id: "AIOP-0001"
+
+  source_segment_refs:
+    - "SEG-002-0007"
+
+  derivation_type: "direct_extraction"
+  confidence: 0.97
+```
+
+## 27.3 Raw Responses
+
+Raw provider responses may be stored for audit purposes, subject to:
+
+* security policy
+* data-retention policy
+* privacy requirements
+* provider terms
+* encryption requirements
+
+Canonical processing shall rely on validated structured output, not raw provider text.
+
+---
+
+# 28. Retry and Failure Handling
+
+## 28.1 Retry Conditions
+
+The orchestrator may retry when:
+
+* transient provider error occurs
+* rate limiting occurs
+* response is truncated
+* schema validation fails due to recoverable formatting
+* operation timeout occurs
+
+## 28.2 Retry Limits
+
+Default maximum:
+
+* two automatic retries for transient provider errors
+* one schema-repair attempt
+* no automatic retry after policy refusal
+* no automatic retry after explicit unsupported-language result
+
+## 28.3 Schema Repair
+
+A schema-repair operation may receive:
+
+* invalid structured output
+* schema validation errors
+* the same response schema
+
+It shall not receive additional business knowledge or silently reinterpret the source.
+
+## 28.4 Failure Record
+
+```yaml
+ai_operation_failure:
+  operation_id: "AIOP-0002"
+  failure_type: "schema_validation"
+  retry_count: 1
+  final_status: "schema_failed"
+  error_summary: "candidate_objects[2].source_support is missing"
+  occurred_at: "2026-08-04T20:00:00+02:00"
+```
+
+---
+
+# 29. Security Requirements
+
+## 29.1 Data Isolation
+
+Project source material shall not be mixed across tenants or projects.
+
+## 29.2 Prompt Injection Controls
+
+The source text shall be treated as untrusted content.
+
+The interpretation system shall:
+
+* clearly separate system instructions from source text
+* mark source text as data
+* prohibit source text from redefining system rules
+* prohibit source instructions from changing output schemas
+* reject requests to reveal system prompts
+* avoid executing commands embedded in source content
+* record detected prompt-injection indicators
+
+## 29.3 Secret Handling
+
+The system shall not send secrets to the AI model unless explicitly required and authorized.
+
+Secrets detected in source material should be:
+
+* redacted
+* tokenized
+* quarantined
+* or excluded from interpretation
+
+according to platform policy.
+
+## 29.4 Sensitive Data
+
+Sources containing sensitive data shall be classified before model submission.
+
+The platform shall support policies such as:
+
+* allowed external model
+* private model only
+* redaction required
+* interpretation prohibited
+
+## 29.5 Provider Configuration
+
+Provider credentials shall be stored in a secure secret-management system.
+
+They shall not appear in:
+
+* prompts
+* logs
+* candidate payloads
+* event records
+* API responses
+
+---
+
+# 30. Privacy and Retention
+
+The platform shall record:
+
+* what source data was sent
+* which provider received it
+* when it was sent
+* what retention policy applied
+* whether provider-side retention was enabled or disabled
+* which user initiated the operation
+
+AI-operation data retention shall be configurable by tenant and project policy.
+
+---
+
+# 31. Usage and Cost Recording
+
+## 31.1 Usage Record
+
+```yaml
+ai_usage:
+  operation_id: "AIOP-0001"
+  provider: "configured-provider"
+  model: "configured-model"
+  input_tokens: 3820
+  output_tokens: 2610
+  cached_input_tokens: 0
+  execution_seconds: 14.2
+  estimated_cost: 0.18
+  currency: "EUR"
+```
+
+## 31.2 Budget Controls
+
+R4 should support:
+
+* project-level operation limit
+* daily token limit
+* monthly cost limit
+* maximum source size
+* maximum retries
+* maximum concurrent operations
+
+Exceeding a configured limit shall create a structured failure, not an uncontrolled operation.
+
+---
+
+# 32. AI Evaluation Framework
+
+## 32.1 Purpose
+
+R4 shall not be accepted based solely on qualitative demonstrations.
+
+The extraction layer shall be evaluated against a controlled dataset.
+
+## 32.2 Evaluation Dataset
+
+The initial dataset should contain:
+
+* clear project manifesto
+* incomplete manifesto
+* contradictory manifesto
+* ambiguous manifesto
+* technology-heavy manifesto
+* business-only manifesto
+* manifesto containing unsupported assumptions
+* manifesto containing duplicate concepts
+* manifesto containing prompt-injection text
+* manifesto with mixed approved and speculative statements
+
+## 32.3 Ground-Truth Structure
+
+Each evaluation case shall define:
+
+* expected object types
+* expected direct facts
+* expected unknowns
+* expected ambiguities
+* expected assumptions
+* expected contradictions
+* prohibited invented facts
+* expected source-segment links
+
+## 32.4 Core Metrics
+
+R4 shall measure:
+
+### Object Extraction Precision
+
+Correct extracted objects divided by all extracted objects.
+
+### Object Extraction Recall
+
+Correct extracted objects divided by expected objects.
+
+### Source Attribution Accuracy
+
+Candidates linked to correct source segments divided by all candidates.
+
+### Unsupported Invention Rate
+
+Unsupported candidates divided by all candidates.
+
+### Classification Accuracy
+
+Correct object-type classifications divided by evaluated classifications.
+
+### Ambiguity Detection Recall
+
+Detected expected ambiguities divided by total expected ambiguities.
+
+### Schema Compliance Rate
+
+Schema-valid responses divided by all interpretation responses.
+
+### Human Acceptance Rate
+
+Approved or approved-with-edit candidates divided by reviewed candidates.
+
+### Edit Distance to Approval
+
+Amount of human correction required before promotion.
+
+## 32.5 Critical Acceptance Metric
+
+The unsupported invention rate shall be treated as a critical safety and quality metric.
+
+A low recall may produce more questions.
+
+A high invention rate corrupts project truth.
+
+---
+
+# 33. Initial Quality Thresholds
+
+R4 v0.1 should target:
+
+```text
+Schema compliance rate:          99% after permitted repair
+Source attribution accuracy:     at least 95%
+Unsupported invention rate:      below 2%
+Object extraction precision:     at least 90%
+Object extraction recall:        at least 80%
+Human acceptance rate:           at least 80%
+Blocking ambiguity recall:       at least 85%
+```
+
+These values are initial engineering targets and may be revised through evaluation.
+
+Failure to meet them shall not be hidden by increasing human review workload without analysis.
+
+---
+
+# 34. API Requirements
+
+R4 shall extend the R3 API.
+
+## 34.1 Register Text Source
+
+```text
+POST /api/v1/projects/{projectId}/sources
+```
+
+## 34.2 Normalize Source
+
+```text
+POST /api/v1/projects/{projectId}/sources/{sourceId}/normalization-runs
+```
+
+## 34.3 List Source Segments
+
+```text
+GET /api/v1/projects/{projectId}/sources/{sourceId}/segments
+```
+
+## 34.4 Start Interpretation
+
+```text
+POST /api/v1/projects/{projectId}/interpretation-runs
+```
+
+Request example:
+
+```yaml
+source_ids:
+  - "SRC-002"
+
+operation_type: "manifest_extraction"
+
+requested_object_types:
+  - Intent
+  - Outcome
+  - Stakeholder
+  - Capability
+  - Process
+  - Requirement
+
+prompt_version: "0.1.0"
+```
+
+## 34.5 Get Interpretation Run
+
+```text
+GET /api/v1/projects/{projectId}/interpretation-runs/{operationId}
+```
+
+## 34.6 List Candidates
+
+```text
+GET /api/v1/projects/{projectId}/candidates
+```
+
+Optional filters:
+
+* object type
+* candidate status
+* truth status
+* confidence range
+* AI operation
+* source
+* validation status
+
+## 34.7 Review Candidate
+
+```text
+POST /api/v1/projects/{projectId}/candidates/{candidateId}/reviews
+```
+
+## 34.8 Promote Candidate
+
+```text
+POST /api/v1/projects/{projectId}/candidates/{candidateId}/promotion
+```
+
+## 34.9 List Ambiguities
+
+```text
+GET /api/v1/projects/{projectId}/ambiguities
+```
+
+## 34.10 List Assumptions
+
+```text
+GET /api/v1/projects/{projectId}/assumptions
+```
+
+## 34.11 List Probable Contradictions
+
+```text
+GET /api/v1/projects/{projectId}/probable-contradictions
+```
+
+## 34.12 List Clarification Questions
+
+```text
+GET /api/v1/projects/{projectId}/clarification-questions
+```
+
+## 34.13 Answer Clarification Question
+
+```text
+POST /api/v1/projects/{projectId}/clarification-questions/{questionId}/answers
+```
+
+## 34.14 Get AI Usage
+
+```text
+GET /api/v1/projects/{projectId}/ai-usage
+```
+
+---
+
+# 35. Database Model
+
+R4 shall add the following tables or equivalent persistence structures:
+
+```text
+source_normalizations
+source_segments
+
+ai_providers
+ai_model_configurations
+prompt_definitions
+prompt_versions
+response_schema_versions
+
+ai_operations
+ai_operation_inputs
+ai_operation_outputs
+ai_operation_failures
+ai_usage_records
+
+candidate_objects
+candidate_relationships
+candidate_source_links
+candidate_validation_results
+
+ambiguities
+assumptions
+probable_contradictions
+missing_information
+
+clarification_questions
+clarification_answers
+
+candidate_reviews
+candidate_review_edits
+candidate_promotions
+revision_proposals
+
+ai_provenance_links
+evaluation_cases
+evaluation_runs
+evaluation_results
+```
+
+## 35.1 Storage Rules
+
+Indexed relational columns shall be used for:
+
+* project identity
+* source identity
+* candidate type
+* status
+* AI operation
+* confidence
+* model
+* prompt version
+* timestamps
+* reviewer
+* canonical object reference
+
+JSONB may be used for:
+
+* candidate type-specific attributes
+* raw structured AI output
+* provider metadata
+* evaluation details
+* operation parameters
+
+---
+
+# 36. Repository Structure
+
+```text
+ai-enterprise/
+├── apps/
+│   └── api/
+│
+├── packages/
+│   ├── source-intake/
+│   ├── source-normalization/
+│   ├── source-segmentation/
+│   ├── ai-model-adapters/
+│   ├── prompt-registry/
+│   ├── interpretation-orchestrator/
+│   ├── structured-output-validation/
+│   ├── candidate-model/
+│   ├── ambiguity-engine/
+│   ├── clarification-engine/
+│   ├── candidate-review/
+│   ├── candidate-promotion/
+│   ├── ai-provenance/
+│   ├── ai-evaluation/
+│   └── ai-usage/
+│
+├── prompts/
+│   ├── manifest-extraction/
+│   ├── ambiguity-detection/
+│   ├── contradiction-detection/
+│   └── clarification-generation/
+│
+├── specifications/
+│   ├── AI-INTERPRETATION-0.1.md
+│   ├── AI-EXTRACTION-RESPONSE-0.1.schema.json
+│   ├── CANDIDATE-OBJECT-0.1.schema.json
+│   ├── CANDIDATE-RELATIONSHIP-0.1.schema.json
+│   ├── AMBIGUITY-0.1.schema.json
+│   ├── ASSUMPTION-0.1.schema.json
+│   ├── PROBABLE-CONTRADICTION-0.1.schema.json
+│   ├── CLARIFICATION-QUESTION-0.1.schema.json
+│   └── AI-PROVENANCE-0.1.schema.json
+│
+├── evaluation/
+│   ├── cases/
+│   ├── expected/
+│   ├── runners/
+│   └── reports/
+│
+├── tests/
+│   ├── normalization/
+│   ├── segmentation/
+│   ├── model-adapters/
+│   ├── structured-output/
+│   ├── candidate-validation/
+│   ├── review/
+│   ├── promotion/
+│   ├── security/
+│   └── evaluation/
+│
+└── migrations/
+```
+
+---
+
+# 37. Recommended Technology Baseline
+
+R4 should preserve the backend selected in R3.
+
+For a Python implementation:
+
+```text
+Backend:
+Python 3.12+
+FastAPI
+Pydantic
+SQLAlchemy
+Alembic
+
+AI integration:
+Provider adapter interface
+Structured JSON responses
+JSON Schema Draft 2020-12
+
+Queue:
+Redis-backed queue or PostgreSQL-backed job queue
+
+Database:
+PostgreSQL
+
+Testing:
+Pytest
+Mock provider adapter
+Recorded deterministic fixtures
+
+Observability:
+Structured logging
+Metrics
+Tracing
+```
+
+The AI provider SDK shall remain behind the model-adapter package.
+
+---
+
+# 38. Test Requirements
+
+## 38.1 Source Tests
+
+Tests shall verify:
+
+* source registration
+* checksum generation
+* normalization
+* stable segmentation
+* source-version preservation
+* unsupported encoding rejection
+
+## 38.2 Model Adapter Tests
+
+Tests shall verify:
+
+* valid provider response
+* provider timeout
+* rate limiting
+* provider refusal
+* truncated output
+* malformed JSON
+* schema-invalid JSON
+* retry limit enforcement
+* usage recording
+
+## 38.3 Structured Output Tests
+
+Tests shall verify:
+
+* missing required candidate fields rejected
+* invalid source segment reference rejected
+* unsupported object type rejected
+* invalid confidence rejected
+* approved AI output rejected
+* candidate without provenance rejected
+
+## 38.4 Candidate Tests
+
+Tests shall verify:
+
+* candidates remain isolated from canonical objects
+* candidates cannot enter snapshots
+* candidate status transitions
+* identifier reassignment
+* deterministic duplicate detection
+* source traceability
+
+## 38.5 Review Tests
+
+Tests shall verify:
+
+* authorized review
+* unauthorized review rejection
+* approval with edits
+* rejection
+* deferment
+* merge with existing object
+* audit-record creation
+
+## 38.6 Promotion Tests
+
+Tests shall verify:
+
+* successful promotion
+* promotion blocked by schema failure
+* promotion blocked by unresolved finding
+* promotion blocked by missing source
+* canonical version creation
+* AI provenance link creation
+* project revalidation after promotion
+
+## 38.7 Security Tests
+
+Tests shall verify:
+
+* prompt-injection text does not override system instruction
+* cross-project source access rejected
+* secrets excluded according to policy
+* provider credentials never appear in logs
+* raw source is separated from instructions
+* unauthorized model configuration rejected
+
+## 38.8 Evaluation Tests
+
+Tests shall calculate all required metrics over the evaluation dataset.
+
+---
+
+# 39. R4 Implementation Milestones
+
+## Milestone 1 — Source Normalization and Segmentation
+
+Deliver:
+
+* text-source registration
+* normalization service
+* source segmentation
+* segment persistence
+* stable source pointers
+
+Completion condition:
+
+Every source segment can be retrieved and referenced deterministically.
+
+## Milestone 2 — Model Adapter and Prompt Registry
+
+Deliver:
+
+* provider-independent adapter interface
+* one provider implementation
+* mock provider
+* prompt registry
+* prompt versioning
+* response schema registry
+
+Completion condition:
+
+The same interpretation contract can execute through the mock and configured provider.
+
+## Milestone 3 — Structured Manifest Extraction
+
+Deliver:
+
+* extraction request
+* schema-constrained response
+* candidate object creation
+* candidate relationship creation
+* schema validation
+* operation provenance
+
+Completion condition:
+
+One client manifesto produces valid candidate objects with exact source-segment references.
+
+## Milestone 4 — Candidate Validation
+
+Deliver:
+
+* AEIR candidate validation
+* identifier validation
+* deterministic duplicate checks
+* relationship validation
+* validation findings
+
+Completion condition:
+
+Invalid AI candidates are blocked before human review.
+
+## Milestone 5 — Ambiguity and Assumption Analysis
+
+Deliver:
+
+* ambiguity records
+* assumption records
+* missing-information records
+* probable contradiction records
+
+Completion condition:
+
+The system separates extracted knowledge from uncertainty and unsupported inference.
+
+## Milestone 6 — Clarification Question Engine
+
+Deliver:
+
+* structured questions
+* priority
+* expected answer types
+* source links
+* affected candidate links
+* answer persistence
+
+Completion condition:
+
+Every blocking ambiguity can produce a reviewable clarification question.
+
+## Milestone 7 — Human Review and Promotion
+
+Deliver:
+
+* candidate review workflow
+* edits
+* approval
+* rejection
+* merge
+* promotion
+* canonical version creation
+
+Completion condition:
+
+Only approved candidates enter canonical AEIR.
+
+## Milestone 8 — Evaluation and Hardening
+
+Deliver:
+
+* evaluation dataset
+* automated evaluation runner
+* metric report
+* prompt-injection tests
+* cost controls
+* retry controls
+* operational dashboards
+
+Completion condition:
+
+R4 quality thresholds are met or deviations are formally documented.
+
+---
+
+# 40. R4 Acceptance Criteria
+
+R4 shall be accepted only when all of the following are true:
+
+* Unstructured text can be registered as a source.
+* Normalized source segments have stable identifiers.
+* AI instructions and prompts are versioned.
+* Model access is isolated behind an adapter.
+* AI output conforms to formal schemas.
+* Invalid output is rejected.
+* All candidates remain separate from canonical knowledge.
+* Every candidate traces to exact source segments.
+* AI-generated knowledge defaults to pending approval.
+* AI cannot approve its own output.
+* AI cannot directly modify approved knowledge.
+* Ambiguities and assumptions are first-class records.
+* Probable contradictions are clearly labeled as probable.
+* Clarification questions are structured and traceable.
+* Human review actions are audited.
+* Only approved candidates may be promoted.
+* Promotion creates canonical AEIR versions.
+* AI-operation provenance is preserved.
+* Usage and cost are recorded.
+* Prompt-injection controls are tested.
+* Evaluation metrics are automatically produced.
+* The unsupported invention rate remains below the accepted threshold.
+* R3 snapshot and traceability guarantees remain intact.
+
+---
+
+# 41. Architectural Invariant
+
+The following invariant governs all R4 implementation decisions:
+
+> AI may propose project knowledge, but only validated, traceable, human-approved knowledge may become canonical project truth.
+
+Any feature that allows AI output to bypass candidate staging, deterministic validation, provenance, or human review shall be rejected.
+
+---
+
+# 42. Transition to R5
+
+R5 may begin only after R4 acceptance.
+
+R5 shall introduce the complete clarification and knowledge-convergence workflow:
+
+> Transform unresolved findings, ambiguities, assumptions, and client answers into an approved, internally consistent project knowledge baseline.
+
+R5 shall focus on:
+
+* adaptive clarification cycles
+* answer validation
+* change proposals
+* contradiction resolution
+* decision records
+* approval gates
+* completeness scoring
+* knowledge-readiness scoring
+* approved baseline creation
+
+R5 shall not yet introduce all five artifact compilers.
+
+The first artifact compiler should begin only after the project knowledge baseline can be declared ready, approved, reproducible, and traceable.

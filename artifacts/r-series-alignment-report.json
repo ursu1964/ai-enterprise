@@ -1,0 +1,1194 @@
+{
+  "alignment_hash": "607183c33dc1357abd46e8905cd20a3335af8dbcd2930934f943fb2522b371bd",
+  "capability_area_count": 168,
+  "complete_count": 21,
+  "evidence_reference_count": 559,
+  "incomplete": [],
+  "ir_specification_count": 21,
+  "ir_specifications": [
+    {
+      "document_id": "R02-IR-01",
+      "path": "docs/ir/R02-IR-01-foundational-domain-manifest-concepts.md",
+      "title": "Foundational Domain and Manifest Concepts"
+    },
+    {
+      "document_id": "R03-IR-01",
+      "path": "docs/ir/R03-IR-01-registry-foundations-executable-foundation.md",
+      "title": "Registry Foundations and Executable Foundation"
+    },
+    {
+      "document_id": "R04-IR-01",
+      "path": "docs/ir/R04-IR-01-controlled-ai-participation.md",
+      "title": "Controlled AI Participation"
+    },
+    {
+      "document_id": "R05-IR-01",
+      "path": "docs/ir/R05-IR-01-manifest-transformation-engine.md",
+      "title": "Universal Manifest Transformation Engine"
+    },
+    {
+      "document_id": "R06-IR-01",
+      "path": "docs/ir/R06-IR-01-artifact-generation-framework.md",
+      "title": "Universal Artifact Generation Framework"
+    },
+    {
+      "document_id": "R07-IR-01",
+      "path": "docs/ir/R07-IR-01-execution-runtime-model.md",
+      "title": "Universal Execution and Runtime Model"
+    },
+    {
+      "document_id": "R08-IR-01",
+      "path": "docs/ir/R08-IR-01-governance-evolution-intelligence-framework.md",
+      "title": "Universal Governance, Evolution and Intelligence Framework"
+    },
+    {
+      "document_id": "R09-IR-01",
+      "path": "docs/ir/R09-IR-01-universal-ai-enterprise-kernel.md",
+      "title": "Universal AI-Enterprise Kernel"
+    },
+    {
+      "document_id": "R10-IR-01",
+      "path": "docs/ir/R10-IR-01-verification-validation-engine.md",
+      "title": "Verification and Validation Engine"
+    },
+    {
+      "document_id": "R11-IR-01",
+      "path": "docs/ir/R11-IR-01-evidence-audit-engine.md",
+      "title": "Evidence and Audit Engine"
+    },
+    {
+      "document_id": "R12-IR-01",
+      "path": "docs/ir/R12-IR-01-policy-governance-engine.md",
+      "title": "Policy and Governance Engine"
+    },
+    {
+      "document_id": "R13-IR-01",
+      "path": "docs/ir/R13-IR-01-ai-orchestration-engine.md",
+      "title": "AI Orchestration Engine"
+    },
+    {
+      "document_id": "R14-IR-01",
+      "path": "docs/ir/R14-IR-01-agent-framework.md",
+      "title": "Agent Framework"
+    },
+    {
+      "document_id": "R15-IR-01",
+      "path": "docs/ir/R15-IR-01-workflow-process-engine.md",
+      "title": "Workflow and Process Engine"
+    },
+    {
+      "document_id": "R16-IR-01",
+      "path": "docs/ir/R16-IR-01-repository-integration-engine.md",
+      "title": "Repository Integration Engine"
+    },
+    {
+      "document_id": "R17-IR-01",
+      "path": "docs/ir/R17-IR-01-deployment-runtime-engine.md",
+      "title": "Deployment and Runtime Engine"
+    },
+    {
+      "document_id": "R18-IR-01",
+      "path": "docs/ir/R18-IR-01-observability-telemetry-engine.md",
+      "title": "Observability and Telemetry Engine"
+    },
+    {
+      "document_id": "R19-IR-01",
+      "path": "docs/ir/R19-IR-01-security-identity-engine.md",
+      "title": "Security and Identity Engine"
+    },
+    {
+      "document_id": "R20-IR-01",
+      "path": "docs/ir/R20-IR-01-organizational-knowledge-engine.md",
+      "title": "Organizational Knowledge Engine"
+    },
+    {
+      "document_id": "R21-IR-01",
+      "path": "docs/ir/R21-IR-01-platform-administration-operations.md",
+      "title": "Platform Administration and Operations"
+    },
+    {
+      "document_id": "R22-IR-01",
+      "path": "docs/ir/R22-IR-01-constitutional-kernel-evolution-framework.md",
+      "title": "Constitutional Kernel and Evolution Framework"
+    }
+  ],
+  "package_count": 21,
+  "packages": [
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 7,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 6,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 7,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 8,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 16,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P12",
+      "package_path": "implementation/r02",
+      "r": "R2",
+      "spec_hash": "12ca73363f6faccabb7b45f4c5dc8d1202768294512dc2f3650a6e0a765d9d4c",
+      "spec_path": "1/r2.txt",
+      "title": "R2 \u2014 Foundational Domain and Manifest Concepts"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 16,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P13",
+      "package_path": "implementation/r03",
+      "r": "R3",
+      "spec_hash": "a74262db87345edc4394f9c4b248207c48b28838c15d0eecd85634752e1a1834",
+      "spec_path": "1/r3.txt",
+      "title": "R3 should convert R1 and R2 into the first executable implementation specification. It should define exactly what the engineering team builds before introducing the frontend, document generators, or AI interpretation."
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 7,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 6,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P14",
+      "package_path": "implementation/r04",
+      "r": "R4",
+      "spec_hash": "cd3537179d476f736e43dab949fe4a4428a1728cc389bd4d8691417d5bc22f4c",
+      "spec_path": "1/r4.txt",
+      "title": "R4 \u2014 AI Interpretation and Manifest Extraction Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P15",
+      "package_path": "implementation/r05",
+      "r": "R5",
+      "spec_hash": "f19b92df953541df6730c9f8489a6a384048b6b5ef762758269af6feed0311ec",
+      "spec_path": "1/r5.txt",
+      "title": "R5 \u2014 Universal Manifest Transformation Engine (UMTE)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P16",
+      "package_path": "implementation/r06",
+      "r": "R6",
+      "spec_hash": "8f1df10edd5a8e149feae0ef335aaab521a5461fdb2a83926e7b70e41ec99299",
+      "spec_path": "1/r6.txt",
+      "title": "R6 \u2014 Universal Artifact Generation Framework (UAGF)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 6,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P17",
+      "package_path": "implementation/r07",
+      "r": "R7",
+      "spec_hash": "5e270a0e91d976b701dd43c4a62b5716ba686fabaefd8d03932000475b17350c",
+      "spec_path": "1/r7.txt",
+      "title": "R7 \u2014 Universal Execution & Runtime Model (UERM)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P18",
+      "package_path": "implementation/r08",
+      "r": "R8",
+      "spec_hash": "b44283f8200b7d37e560fb28e9da478158ef7a10372bbc7e13f883801f865d75",
+      "spec_path": "1/r8.txt",
+      "title": "R8 \u2014 Universal Governance, Evolution & Intelligence Framework (UGEIF)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 13,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P19",
+      "package_path": "implementation/r09",
+      "r": "R9",
+      "spec_hash": "5145ab46548c4b7345fc535922ff931b0fca832591ba6b188d0b1256e66ec499",
+      "spec_path": "1/r9.txt",
+      "title": "R9 \u2014 Universal AI-Enterprise Kernel (UAK)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 4,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 5,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 5,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P20",
+      "package_path": "implementation/r10",
+      "r": "R10",
+      "spec_hash": "aae36e317c0e33507d010fddf36489adc46f8bec76803fea31cb565facb5da6d",
+      "spec_path": "1/r10.txt",
+      "title": "R10 \u2014 Universal Experience & Interaction Framework (UEIF)"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 4,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 5,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 6,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P21",
+      "package_path": "implementation/r11",
+      "r": "R11",
+      "spec_hash": "7f1f80efeaa9df6bc059f8694f65b0c68f8b1f7dce894d2dd920af30e3d28ba2",
+      "spec_path": "1/r11.txt",
+      "title": "R11"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 15,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P22",
+      "package_path": "implementation/r12",
+      "r": "R12",
+      "spec_hash": "4f912a11ab833d3d72c9ec4e12bdbd9de7a103427e0bcb2eb293c8975066c5dd",
+      "spec_path": "1/r12.txt",
+      "title": "R12 \u2014 AI-Enterprise Implementation & Bootstrap Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P23",
+      "package_path": "implementation/r13",
+      "r": "R13",
+      "spec_hash": "78f3eccaee3b163f2f740487260804157b8897576ab812e17e5d24e62caab7f3",
+      "spec_path": "1/r13.txt",
+      "title": "R13 \u2014 AI-Enterprise Repository Bootstrap Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 5,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P24",
+      "package_path": "implementation/r14",
+      "r": "R14",
+      "spec_hash": "50e47ef2850f6960464a8e87dd0e58f4e1f7a0d3ca6be58731f3c370377e4cb4",
+      "spec_path": "1/r14.txt",
+      "title": "R14 \u2014 Executable AI-Enterprise Manifest Schema"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P25",
+      "package_path": "implementation/r15",
+      "r": "R15",
+      "spec_hash": "3c5b2ebfae8e89b60f7fbd9668aaf09c88557dc9cdb838bbb869ba00fe0b0265",
+      "spec_path": "1/r15.txt",
+      "title": "R15 \u2014 AI-Enterprise Manifest Compiler Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P26",
+      "package_path": "implementation/r16",
+      "r": "R16",
+      "spec_hash": "eae61b46f40c86e81b61ac240fb0dedcec490e8e07b650fd13aabfc421f7472f",
+      "spec_path": "1/r16.txt",
+      "title": "R16 \u2014 AI-Enterprise Knowledge Graph Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P27",
+      "package_path": "implementation/r17",
+      "r": "R17",
+      "spec_hash": "882d00cfae777e85d307ca4386ba2529ae91550d1b4029e8b4c12f85b3fa7fed",
+      "spec_path": "1/r17.txt",
+      "title": "R17 \u2014 AI-Enterprise Execution Planning Engine Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 15,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P28",
+      "package_path": "implementation/r18",
+      "r": "R18",
+      "spec_hash": "1cef56eb40ecf97e510d70751894e35bde2e39f12a7631b6467e1ca4fe5bb743",
+      "spec_path": "1/r18.txt",
+      "title": "R18 \u2014 AI-Enterprise Generator Orchestration Framework"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 15,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P29",
+      "package_path": "implementation/r19",
+      "r": "R19",
+      "spec_hash": "60aa6418eee35115da1cf77dd6a539dc005e08abcf7947aa14310e9f6860badc",
+      "spec_path": "1/r19.txt",
+      "title": "R19 \u2014 AI-Enterprise Project Memory & Context Engine"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 0,
+          "status": "verified_not_applicable"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 14,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P30",
+      "package_path": "implementation/r20",
+      "r": "R20",
+      "spec_hash": "3791816dbeebb3f47dbbc4e6f519f49664f9812a128e64eae1401375a87d2139",
+      "spec_path": "1/r20.txt",
+      "title": "R20 \u2014 AI-Enterprise Runtime Kernel Specification"
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 2,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 9,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 15,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P31",
+      "package_path": "implementation/r21",
+      "r": "R21",
+      "spec_hash": "f1cf171d24d78ce4dcd6c80fa1a55c08bbc5d75014a30ba55527af1a203c642a",
+      "spec_path": "1/r21.txt",
+      "title": "R21 defines the **AI-Enterprise Execution Orchestrator**."
+    },
+    {
+      "capabilities": [
+        {
+          "category": "source_specification",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "domain_or_runtime",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_contract",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "api_route",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "persistence_or_migration",
+          "evidence_count": 3,
+          "status": "implemented"
+        },
+        {
+          "category": "schema_or_registry",
+          "evidence_count": 12,
+          "status": "implemented"
+        },
+        {
+          "category": "tests",
+          "evidence_count": 1,
+          "status": "implemented"
+        },
+        {
+          "category": "status_documentation",
+          "evidence_count": 16,
+          "status": "implemented"
+        }
+      ],
+      "complete": true,
+      "p_phase": "P32",
+      "package_path": "implementation/r22",
+      "r": "R22",
+      "spec_hash": "ee92e0d8e329d67ec2ecf72c1ab4a92cf87d8d4b41554eb5636b0dd42cdbec4c",
+      "spec_path": "1/r22.txt",
+      "title": "R22 defines the **AI-Enterprise Artifact Intelligence and Evidence Graph**."
+    }
+  ],
+  "r_range": "R2-R22",
+  "reconciled_capability_area_count": 168,
+  "reconciliation_verdict": "complete",
+  "schema_ref": "schemas/architecture-baseline/r-series-alignment-report.schema.json",
+  "schema_version": "1.0"
+}

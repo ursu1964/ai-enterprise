@@ -1,0 +1,153 @@
+{
+  "archive_policy": {
+    "archive_only_when_status_complete": true,
+    "fail_closed_when_required_artifact_missing": true,
+    "hash_algorithm": "sha256",
+    "schemas_are_recorded_when_available": true,
+    "target_runtime": "BK/R11 evidence audit"
+  },
+  "artifact_count": 11,
+  "artifacts": [
+    {
+      "bk_r11_evidence_type": "release-verification",
+      "content_type": "application/json",
+      "kind": "release_verification",
+      "name": "release-verification-json",
+      "path": "artifacts/release-verification.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/release-artifacts/release-verification.schema.json",
+      "sha256": "2a1a73d7bad8bc20e2016b0d304b63be19a970f0071a556514da1e9f9b1ae47e",
+      "size_bytes": 19751
+    },
+    {
+      "bk_r11_evidence_type": "human-review-summary",
+      "content_type": "text/markdown",
+      "kind": "release_verification_summary",
+      "name": "release-verification-markdown",
+      "path": "artifacts/release-verification.md",
+      "present": true,
+      "required": true,
+      "schema_ref": null,
+      "sha256": "e21daeb7aaeb4eb6b1c7eb05b0eab503d8b6210b6f93f3bc7cd32c70bb01568a",
+      "size_bytes": 1111
+    },
+    {
+      "bk_r11_evidence_type": "consistency-check",
+      "content_type": "application/json",
+      "kind": "release_verification_check",
+      "name": "release-verification-check",
+      "path": "artifacts/release-verification-check.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/release-artifacts/release-verification-check.schema.json",
+      "sha256": "4b98dd3a7e98b7cc7aeb0b28aa85435d1364ca7f4c14f45ac84791fe2efe6af1",
+      "size_bytes": 444
+    },
+    {
+      "bk_r11_evidence_type": "gate-execution-evidence",
+      "content_type": "application/json",
+      "kind": "release_gate_evidence",
+      "name": "release-gate-evidence",
+      "path": "artifacts/gate-evidence.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/release-artifacts/release-gate-evidence.schema.json",
+      "sha256": "716eea661abc09755ed5e3c45d17c3f0577e4ace2c198f9f4c2a2b0d3c3e0992",
+      "size_bytes": 7502
+    },
+    {
+      "bk_r11_evidence_type": "architecture-baseline-freeze-candidate",
+      "content_type": "text/markdown",
+      "kind": "architecture_baseline",
+      "name": "architecture-baseline-v1",
+      "path": "docs/ARCHITECTURE-BASELINE-v1.0.md",
+      "present": true,
+      "required": true,
+      "schema_ref": null,
+      "sha256": "235bb49045ba7ddbc4349cef227a061b39aabc7608d4231ac6da3661c5ab976d",
+      "size_bytes": 1545
+    },
+    {
+      "bk_r11_evidence_type": "repository-audit",
+      "content_type": "text/markdown",
+      "kind": "repository_audit",
+      "name": "r-audit-01",
+      "path": "docs/R-AUDIT-01-current-state-repository-audit.md",
+      "present": true,
+      "required": true,
+      "schema_ref": null,
+      "sha256": "737a22d0af489a6e8b9a9d534d0c8803c241cbca4b4010fc98c820c433624f15",
+      "size_bytes": 3126
+    },
+    {
+      "bk_r11_evidence_type": "requirements-traceability-matrix",
+      "content_type": "text/markdown",
+      "kind": "alignment_matrix",
+      "name": "r-audit-02",
+      "path": "docs/R-AUDIT-02-r1-r22-alignment-matrix.md",
+      "present": true,
+      "required": true,
+      "schema_ref": null,
+      "sha256": "f9d71f7074271a08db992b5c697cde1bce9e036dc39ebfd9fa8c6a349f9aad61",
+      "size_bytes": 2272
+    },
+    {
+      "bk_r11_evidence_type": "baseline-correction-record",
+      "content_type": "text/markdown",
+      "kind": "corrected_baseline",
+      "name": "r-rev-01",
+      "path": "docs/R-REV-01-corrected-r-series-baseline.md",
+      "present": true,
+      "required": true,
+      "schema_ref": null,
+      "sha256": "5b29fecb397a5ebc2011af62aa79e1bae793eae0aafc02c2c7b6b8468492993d",
+      "size_bytes": 592
+    },
+    {
+      "bk_r11_evidence_type": "machine-verifiable-alignment-report",
+      "content_type": "application/json",
+      "kind": "r_series_alignment_report",
+      "name": "r-series-alignment-report",
+      "path": "artifacts/r-series-alignment-report.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/architecture-baseline/r-series-alignment-report.schema.json",
+      "sha256": "bcd8047a7eadaf28c31f9ccbb6684b9e62c65f4a1544cf6821de3d595a02bfdb",
+      "size_bytes": 33043
+    },
+    {
+      "bk_r11_evidence_type": "architecture-baseline-root-fingerprint",
+      "content_type": "application/json",
+      "kind": "architecture_baseline_manifest",
+      "name": "architecture-baseline-manifest",
+      "path": "artifacts/architecture-baseline-manifest.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/architecture-baseline/architecture-baseline-manifest.schema.json",
+      "sha256": "d9e5997fe448ab5a777671f97534870e0227ef57fa3ae74899175febd7c788f2",
+      "size_bytes": 21116
+    },
+    {
+      "bk_r11_evidence_type": "roadmap-sequence-governance",
+      "content_type": "application/json",
+      "kind": "roadmap_sequence_gate",
+      "name": "roadmap-sequence-gate",
+      "path": "artifacts/roadmap-sequence-gate.json",
+      "present": true,
+      "required": true,
+      "schema_ref": "schemas/architecture-baseline/roadmap-sequence-gate.schema.json",
+      "sha256": "877ab65d43bc618cf637e12da290e3edbe2f67db949101af76e80fd519979bb0",
+      "size_bytes": 1581
+    }
+  ],
+  "bundle_hash": "204d4ec7b30e886f14b1a29efd69584eeef7f071ba07aeb720b59933c24385f0",
+  "bundle_type": "release",
+  "generated_at": "2026-08-07T14:52:36.236435+00:00",
+  "missing_artifacts": [],
+  "next_action": "Archive this bundle manifest and all listed artifacts with BK/R11.",
+  "present_artifact_count": 11,
+  "required_artifact_count": 11,
+  "schema_version": "1.0",
+  "status": "complete"
+}

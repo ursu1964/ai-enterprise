@@ -1,0 +1,253 @@
+1. AEPM v0.1
+
+Create a machine-readable manifest in YAML or JSON covering only:
+
+project intent
+business outcomes
+stakeholders
+capabilities
+core processes
+business rules
+data entities
+integrations
+quality requirements
+constraints
+preferred technology targets
+
+Do not attempt to model the entire enterprise yet.
+
+2. Canonical project model
+
+Convert the manifest into a small internal representation containing:
+
+Project
+Intent
+Outcome
+Stakeholder
+Capability
+Process
+Requirement
+Rule
+Entity
+Integration
+Constraint
+Risk
+Decision
+Artifact
+Relationship
+
+Each object should have:
+
+id
+type
+name
+description
+status
+source
+confidence
+version
+relationships
+
+This becomes your first practical AEIR.
+
+3. Validation engine
+
+Implement deterministic checks before AI reasoning:
+
+missing project intent
+outcomes without measurable indicators
+capabilities without owners
+processes without triggers or outputs
+requirements without acceptance criteria
+entities without ownership
+integrations without security rules
+contradictions
+unresolved assumptions
+duplicate concepts
+orphan objects
+
+The first version can use ordinary application code and JSON Schema. It does not require a sophisticated reasoning engine.
+
+4. AI interpretation layer
+
+Use an LLM only for tasks that genuinely require interpretation:
+
+extracting structured fields from client prose
+identifying ambiguities
+proposing missing questions
+classifying facts, assumptions, and recommendations
+detecting probable contradictions
+drafting candidate requirements
+
+The model must return structured output validated against schemas.
+
+AI-generated information should never silently become approved truth. Mark it as:
+
+proposed
+inferred
+unverified
+approved
+rejected
+5. Knowledge storage
+
+For the first release, use:
+
+PostgreSQL for canonical objects and versions
+relational relationship tables
+JSONB for extensible attributes
+object storage for uploaded source files
+an append-only event log for changes
+
+Do not begin with a graph database unless graph traversal becomes a demonstrated bottleneck. A relational model can support the first implementation cleanly.
+
+6. Question engine
+
+After intake, generate a clarification report:
+
+Critical blockers
+Important ambiguities
+Unverified assumptions
+Recommended improvements
+Optional enhancements
+
+The user answers these questions, and the platform updates the canonical project model.
+
+7. First artifact compilers
+
+Generate only five outputs initially:
+
+Executive project brief
+Software requirements specification
+Domain and data model
+Solution architecture blueprint
+Delivery backlog with acceptance criteria
+
+These outputs should be generated from the structured model—not directly from the original client text.
+
+8. Traceability
+
+Every generated section should retain references to its source objects.
+
+For example:
+
+Requirement REQ-014
+derived from:
+- INTENT-001
+- CAP-003
+- RULE-009
+- CLIENT-SOURCE-02
+
+This is essential. Without traceability, AI-Enterprise becomes another document generator.
+
+Recommended MVP architecture
+Client Portal
+    ↓
+Manifest Intake API
+    ↓
+Schema Validation
+    ↓
+AI Extraction Service
+    ↓
+Canonical Project Model
+    ↓
+Validation and Question Engine
+    ↓
+Human Review
+    ↓
+Artifact Compiler
+    ↓
+Downloadable Project Blueprint
+
+A practical technology stack could be:
+
+Frontend: React or Next.js
+Backend: Python FastAPI or TypeScript NestJS
+Database: PostgreSQL
+Queue: Redis or a managed message queue
+Object storage: S3-compatible storage
+Schemas: JSON Schema
+AI integration: structured model outputs
+Documents: DOCX, Markdown and PDF generators
+Authentication: managed OIDC provider
+Deployment: Docker first
+
+The architecture should remain modular, but do not start with microservices. Build a modular monolith with clear internal boundaries.
+
+Suggested repository structure
+ai-enterprise/
+├── apps/
+│   ├── web/
+│   └── api/
+├── packages/
+│   ├── aepm-schema/
+│   ├── canonical-model/
+│   ├── validation-engine/
+│   ├── ai-interpretation/
+│   ├── question-engine/
+│   ├── artifact-compiler/
+│   └── traceability/
+├── generators/
+│   ├── executive-brief/
+│   ├── requirements/
+│   ├── architecture/
+│   ├── domain-model/
+│   └── backlog/
+├── examples/
+│   └── sample-project/
+├── specifications/
+│   ├── AEPM-0.1.md
+│   ├── AEIR-0.1.md
+│   └── TRACEABILITY-0.1.md
+└── tests/
+First implementation milestone
+
+Your first demonstrable release should complete this scenario:
+
+A client describes a business application in a manifest.
+AI-Enterprise imports it.
+The platform creates structured project objects.
+It displays missing information and assumptions.
+The client validates or corrects them.
+The platform generates a downloadable project blueprint.
+Every generated requirement and design decision links back to the original intent.
+
+That is enough to prove the core concept.
+
+Do not implement yet
+
+Avoid these during the first version:
+
+universal enterprise ontology
+autonomous multi-agent council
+marketplace
+domain-pack ecosystem
+custom programming language
+fully deterministic source-code generation
+self-deploying systems
+enterprise-wide digital twin
+formal algebra
+certification framework
+graph database at global scale
+
+Those may become later phases. Building them now would delay validation of the central proposition.
+
+Implementation phases
+Phase 1 — Manifest to blueprint
+
+Prove that one client manifest can generate a validated, traceable project definition.
+
+Phase 2 — Blueprint to technical design
+
+Add APIs, database schemas, UI flows, security models, and test plans.
+
+Phase 3 — Technical design to starter implementation
+
+Generate application scaffolding, contracts, migrations, and test skeletons.
+
+Phase 4 — Controlled project evolution
+
+Add change impact analysis, versioning, regeneration, and semantic diffs.
+
+Phase 5 — Expert orchestration
+
+Introduce specialized AI roles only after the object model and workflows are stable.

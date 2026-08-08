@@ -1,0 +1,173 @@
+{
+  "gates": {
+    "architecture-baseline-manifest": {
+      "command": "python tools/architecture_baseline_manifest.py --output artifacts/architecture-baseline-manifest.json",
+      "duration_seconds": 0.215,
+      "output_path": "artifacts/release-gates/architecture-baseline-manifest.log",
+      "output_sha256": "ad180ecc07a792111d89adcf28323540a82a53e2cba01c9f4fc60822495bfeec",
+      "recorded_at": "2026-08-07T14:50:47.844726+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "compose-check": {
+      "command": "docker compose config --quiet",
+      "duration_seconds": 0.073,
+      "output_path": "artifacts/release-gates/compose-check.log",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "recorded_at": "2026-08-07T14:49:36.746788+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "dashboard-browser-verify": {
+      "command": "apps/api/.venv/bin/python tools/dashboard_browser_verify.py --base-url \"${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}\"",
+      "duration_seconds": 7.392,
+      "output_path": "artifacts/release-gates/dashboard-browser-verify.log",
+      "output_sha256": "ccddada99f246bf306d147e381cb6e2a0ee8a4d074dfd6d208f6c93fe5985df1",
+      "recorded_at": "2026-08-07T14:50:58.142532+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "dashboard-verify": {
+      "command": "python tools/dashboard_verify.py --base-url \"${DASHBOARD_BASE_URL:-http://127.0.0.1:8000}\"",
+      "duration_seconds": 0.224,
+      "output_path": "artifacts/release-gates/dashboard-verify.log",
+      "output_sha256": "51d4f88e1eb5f0b4d3f871d483c75fda60ba9c486668edad267e1e38394a36d8",
+      "recorded_at": "2026-08-07T14:50:50.750366+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "docker-smoke": {
+      "command": "python tools/docker_smoke.py --require-worker",
+      "duration_seconds": 0.21,
+      "output_path": "artifacts/release-gates/docker-smoke.log",
+      "output_sha256": "59cdb5e39cd0116f273fdcbdce5adb2a144dcf839b33dcf4c4c4275591c14105",
+      "recorded_at": "2026-08-07T14:50:47.628983+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "engineering-full": {
+      "command": "python tools/engineering_verify.py --full --json",
+      "duration_seconds": 93.978,
+      "output_path": "artifacts/release-gates/engineering-full.log",
+      "output_sha256": "776511c69c31772ca9b5ea2c3e41c1ac33f054ecc9248de7ad21adbbb43df462",
+      "recorded_at": "2026-08-07T14:52:35.018635+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "engineering-static": {
+      "command": "python tools/engineering_verify.py --static --json",
+      "duration_seconds": 2.268,
+      "output_path": "artifacts/release-gates/engineering-static.log",
+      "output_sha256": "c08f21bbeaa5c936a07a3054a667fae034a8347680816cdd562c1223a57cc616",
+      "recorded_at": "2026-08-07T14:51:00.410950+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "etra-check": {
+      "command": "python tools/etra_conformance.py --root . --json",
+      "duration_seconds": 0.551,
+      "output_path": "artifacts/release-gates/etra-check.log",
+      "output_sha256": "6988f52f851c63b7e8a7c3ed89cd38c1cf94c35ebb6135c31d1616e093fc5753",
+      "recorded_at": "2026-08-07T14:52:35.570228+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "evolution-check": {
+      "command": "python tools/evolution_verify.py --json",
+      "duration_seconds": 0.2,
+      "output_path": "artifacts/release-gates/evolution-check.log",
+      "output_sha256": "22ada5066b9f1339d4190cbc3c0b735487b18d43f2732550623e7f112c9d650f",
+      "recorded_at": "2026-08-07T14:51:00.611498+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "federation-check": {
+      "command": "python tools/federation_verify.py --json",
+      "duration_seconds": 0.197,
+      "output_path": "artifacts/release-gates/federation-check.log",
+      "output_sha256": "3815a3d974a7c5c43a335e2de41c6a8af3006aaed2ee9f394e829bd8e8259e39",
+      "recorded_at": "2026-08-07T14:51:00.808495+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "intelligence-check": {
+      "command": "python tools/intelligence_verify.py --json",
+      "duration_seconds": 0.231,
+      "output_path": "artifacts/release-gates/intelligence-check.log",
+      "output_sha256": "e269379059f4d531f118aed8d0e6af68796905281a49a5c589a50444190df86f",
+      "recorded_at": "2026-08-07T14:51:01.040179+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "lint": {
+      "command": "cd apps/api && .venv/bin/ruff check src tests ../../migrations",
+      "duration_seconds": 0.014,
+      "output_path": "artifacts/release-gates/lint.log",
+      "output_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "recorded_at": "2026-08-07T14:49:39.394636+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "migration-check": {
+      "command": "cd apps/api && .venv/bin/alembic heads && .venv/bin/alembic upgrade head --sql >/dev/null && cd ../.. && python tools/migration_verify.py --json",
+      "duration_seconds": 2.633,
+      "output_path": "artifacts/release-gates/migration-check.log",
+      "output_sha256": "ad2417fb5968c1edcff1881d408f1a6285bc3c3856557de5cab9e4f7131ea350",
+      "recorded_at": "2026-08-07T14:49:39.379939+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "roadmap-sequence-gate": {
+      "command": "python tools/roadmap_sequence_gate.py --output artifacts/roadmap-sequence-gate.json",
+      "duration_seconds": 2.681,
+      "output_path": "artifacts/release-gates/roadmap-sequence-gate.log",
+      "output_sha256": "600f06c1d879b00664742a406180e9b0d43d20496bdddf313d1271ded7bfd552",
+      "recorded_at": "2026-08-07T14:50:50.526079+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "secret-scan": {
+      "command": "python tools/secret_scan.py --all",
+      "duration_seconds": 1.631,
+      "output_path": "artifacts/release-gates/secret-scan.log",
+      "output_sha256": "4f5e7829a4743f5f157e205f2ed00a8b117d7c32d433d8ded424cbeb50005d97",
+      "recorded_at": "2026-08-07T14:50:47.419164+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "test": {
+      "command": "cd apps/api && .venv/bin/pytest -q",
+      "duration_seconds": 65.623,
+      "output_path": "artifacts/release-gates/test.log",
+      "output_sha256": "3f71eace83676ae605921e4615207e3d0abd1cf77d3304f3370c2d048fa8c33f",
+      "recorded_at": "2026-08-07T14:50:45.787520+00:00",
+      "return_code": 0,
+      "status": "passed"
+    },
+    "typecheck": {
+      "command": "cd apps/api && .venv/bin/mypy src",
+      "duration_seconds": 0.769,
+      "output_path": "artifacts/release-gates/typecheck.log",
+      "output_sha256": "e30256d1ad76ebac1470747a15c97912c5a92a33e6204c9686b11b83cee8136a",
+      "recorded_at": "2026-08-07T14:49:40.163751+00:00",
+      "return_code": 0,
+      "status": "passed"
+    }
+  },
+  "generated_at": "2026-08-07T14:52:35.592152+00:00",
+  "git": {
+    "branch": "main",
+    "commit": "290b1fa80f1067c7b7d82757ec0a46db61749351",
+    "dirty": false,
+    "tree": "0c59e852f59e29b9fe9ccc1506aa690b5b53fefc"
+  },
+  "git_before": {
+    "branch": "main",
+    "commit": "290b1fa80f1067c7b7d82757ec0a46db61749351",
+    "dirty": false,
+    "tree": "0c59e852f59e29b9fe9ccc1506aa690b5b53fefc"
+  },
+  "provenance_valid": true,
+  "schema_version": "1.0",
+  "status": "passed"
+}

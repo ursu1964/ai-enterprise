@@ -1,0 +1,11 @@
+{
+  "findings": [],
+  "json_path": "artifacts/release-verification.json",
+  "markdown_path": "artifacts/release-verification.md",
+  "next_action": "Archive JSON and Markdown together.",
+  "recomputed_artifact_hash": "d9245a5ee77afbf01e49adf1b2cc938e9a297fe1c42d1b89a8595886a8dbbb2b",
+  "schema_version": "1.0",
+  "status": "valid",
+  "stored_artifact_hash": "d9245a5ee77afbf01e49adf1b2cc938e9a297fe1c42d1b89a8595886a8dbbb2b",
+  "valid": true
+}
