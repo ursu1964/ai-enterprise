@@ -16,6 +16,7 @@ viewpoints and links to the canonical reference architecture for expansion.
 - [Application Kernel](application-kernel.md): P4 command, aggregate, workflow, event, and outbox discipline.
 - [Security Governance](security-governance.md): P5 identity, authorization, tenant isolation, and evidence model.
 - [Project Formation Orchestration](project-formation-orchestration.md): P6 specialized agents that turn an idea into an approved project plan.
+- [Governed Assurance Control and Decision Contracts](governed-assurance-control-decision-contracts.md): post-R22 control, authority, and decision semantics authorized by ADR-0008.
 - [AEOS Master Specification](../aeos/README.md): Autonomous Enterprise Operating System and
   Project Foundry foundation.
 - [Reference Architecture](../reference-architecture/README.md): full catalog, chapter contract,

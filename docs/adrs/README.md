@@ -15,3 +15,4 @@ or replacement creates a new ADR and links the superseded record.
 | ADR-0005 | [0005-security-control-plane.md](0005-security-control-plane.md) | accepted | 2026-08-01 | enterprise-architecture | P5 |
 | ADR-0006 | [0006-specialized-project-formation-agents.md](0006-specialized-project-formation-agents.md) | accepted | 2026-08-01 | enterprise-architecture | P6 |
 | ADR-0007 | [0007-post-r22-roadmap-governance.md](0007-post-r22-roadmap-governance.md) | accepted | 2026-08-07 | enterprise-architecture | post-R22 |
+| ADR-0008 | [0008-governed-assurance-control-decision-contracts.md](0008-governed-assurance-control-decision-contracts.md) | accepted | 2026-08-08 | enterprise-architecture | post-R22 |
