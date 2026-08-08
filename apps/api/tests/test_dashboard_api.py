@@ -1348,10 +1348,9 @@ def test_graphify_dashboard_explains_missing_generated_graph(
 
     response = client.get("/dashboard/graphify")
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == (
-        "Code graph needs generation. Run graphify update ., then reopen this page."
-    )
+    assert response.status_code == 200
+    assert "Code Graph Pending" in response.text
+    assert "graphify update ." in response.text
 
 
 def test_demo_story_page_explains_idea_to_reality() -> None:

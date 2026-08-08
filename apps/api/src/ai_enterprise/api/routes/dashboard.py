@@ -629,12 +629,37 @@ def _project_blueprint_markdown(
     return "\n".join(sections).rstrip() + "\n"
 
 
-@router.get("/dashboard/graphify", response_class=FileResponse)
-async def graphify_dashboard() -> FileResponse:
+@router.get("/dashboard/graphify")
+async def graphify_dashboard() -> Any:
     if not GRAPHIFY_HTML.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Code graph needs generation. Run graphify update ., then reopen this page.",
+        return HTMLResponse(
+            """
+            <!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <title>Code Graph Pending</title>
+                <style>
+                  body { font-family: system-ui, sans-serif; margin: 3rem; color: #172033; }
+                  main { max-width: 760px; }
+                  code { background: #eef2f7; border-radius: 4px; padding: 0.15rem 0.35rem; }
+                </style>
+              </head>
+              <body>
+                <main>
+                  <h1>Code Graph Pending</h1>
+                  <p>
+                    Code graph output is not mounted in this runtime. Run
+                    <code>graphify update .</code>, then reopen this page.
+                  </p>
+                  <p>
+                    The dashboard remains available while the generated graph artifact is absent.
+                  </p>
+                </main>
+              </body>
+            </html>
+            """,
+            status_code=200,
         )
     return FileResponse(GRAPHIFY_HTML, media_type="text/html")
 
