@@ -1,20 +1,63 @@
 from ai_enterprise.domain.updl_registry import (
     ActorReference,
     AdditionalPropertiesPolicy,
+    ConditionClauseType,
+    ConditionOutcome,
+    ConstraintDefinition,
+    ConstraintEvaluationResult,
+    ConstraintRequirement,
+    ConstraintViolationState,
+    DecisionAdvice,
+    DecisionConstraint,
+    DecisionDefinition,
+    DecisionEffect,
+    DecisionEvaluationStatus,
+    DecisionRequest,
     InMemoryUPDLRegistry,
     NamespaceDefinition,
     ObjectReference,
+    ObligationActivationOutcome,
+    ObligationAssignmentStrategy,
+    ObligationBreach,
+    ObligationDefinition,
+    ObligationDuty,
+    ObligationFulfillmentResult,
+    ObligationLifecycleState,
+    ObligationResponsibility,
+    ObligationSubject,
+    ObligationTiming,
+    ObligationTrigger,
+    ObligationTriggerSource,
+    PlanLifecycleState,
+    PlanValidationResult,
     PolicyDefinition,
     PolicyEffect,
     PolicyObligation,
+    PreemptionDefinition,
+    PreemptionEffect,
+    PreemptionMode,
+    PreemptionRequest,
+    PriorityClass,
+    PriorityDefinition,
     PropertyDefinition,
     RegistryError,
+    RelationshipCardinality,
     RelationshipTypeDefinition,
+    ReservationDefinition,
+    ReservationLifecycleState,
     ResolutionMode,
     ResolutionStatus,
+    SemanticConditionClause,
+    SemanticConditionDefinition,
     StateDefinition,
     StateMachineDefinition,
     StateTransitionDefinition,
+    TaskCompletionResult,
+    TaskDependency,
+    TaskDependencyType,
+    TaskLifecycleState,
+    TaskOutputDefinition,
+    TaskOutputSource,
     TransitionClassification,
     TypeDefinition,
 )
@@ -48,6 +91,15 @@ def _registry() -> InMemoryUPDLRegistry:
                     required=True,
                     target_kinds=("Person",),
                 ),
+            },
+        )
+    )
+    registry.register_type(
+        TypeDefinition(
+            kind_name="Evidence",
+            properties={
+                "evidence_type": PropertyDefinition("string", required=True),
+                "summary": PropertyDefinition("string", required=True),
             },
         )
     )
@@ -502,8 +554,17 @@ def test_updl_registry_registers_typed_relationships_as_source_revisions() -> No
             "type": {"$ref": {"id": "commerce.orders.relationship.owned-by"}},
             "source": {"$ref": {"id": requirement.metadata.id, "revision": 1}},
             "target": {"$ref": {"id": person.metadata.id, "revision": 1}},
+            "lifecycle": {"state": "ACTIVE"},
         },
     )
+    audit_records = registry.list_relationship_audit_records("commerce.orders.REL-001")
+    assert len(audit_records) == 1
+    assert audit_records[0].id == "RELAUD-000001"
+    assert audit_records[0].action == "RELATIONSHIP_CREATED"
+    assert audit_records[0].relationship_type_id == "commerce.orders.relationship.owned-by"
+    assert audit_records[0].source_id == requirement.metadata.id
+    assert audit_records[0].target_id == person.metadata.id
+    assert audit_records[0].new_source_revision == 2
 
     updated = registry.update_object(
         object_id=requirement.metadata.id,
@@ -514,6 +575,1391 @@ def test_updl_registry_registers_typed_relationships_as_source_revisions() -> No
 
     assert updated.metadata.revision == 3
     assert updated.relationships == related.relationships
+
+
+def test_updl_registry_enforces_relationship_cardinality_and_evidence() -> None:
+    registry = _registry()
+    registry.register_relationship_type(
+        RelationshipTypeDefinition(
+            id="commerce.orders.relationship.accountable-to",
+            name="accountableTo",
+            source_kinds=("Requirement",),
+            target_kinds=("Person",),
+            cardinality=RelationshipCardinality.MANY_TO_ONE,
+            required_evidence=("ownership_decision",),
+        )
+    )
+    person = _person(registry)
+    backup_owner = registry.create_object(
+        kind="Person",
+        namespace="commerce.orders",
+        local_id="PERSON-002",
+        spec={"display_name": "Jamie Lee", "active": True},
+        actor=_actor(),
+    )
+    evidence = registry.create_object(
+        kind="Evidence",
+        namespace="commerce.orders",
+        local_id="EVIDENCE-001",
+        spec={
+            "evidence_type": "ownership_decision",
+            "summary": "Architecture owner decision record.",
+        },
+        actor=_actor(),
+    )
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-019",
+        spec={
+            "statement": "Privileged access shall be reviewed.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    try:
+        registry.create_relationship(
+            relationship_id="commerce.orders.REL-004",
+            type_id="commerce.orders.relationship.accountable-to",
+            source_id=requirement.metadata.id,
+            target=ObjectReference(person.metadata.id),
+            actor=_actor(),
+        )
+    except RegistryError as exc:
+        assert exc.code == "RELATIONSHIP_EVIDENCE_INCOMPLETE"
+    else:
+        raise AssertionError("relationship without required evidence was accepted")
+
+    related = registry.create_relationship(
+        relationship_id="commerce.orders.REL-005",
+        type_id="commerce.orders.relationship.accountable-to",
+        source_id=requirement.metadata.id,
+        target=ObjectReference(person.metadata.id),
+        actor=_actor(),
+        evidence={"ownership_decision": ObjectReference(evidence.metadata.id)},
+    )
+
+    assert related.metadata.revision == 2
+    assert related.relationships[0]["evidence"] == [
+        {
+            "type": "ownership_decision",
+            "$ref": {"id": evidence.metadata.id, "revision": 1},
+        },
+    ]
+    audit_records = registry.list_relationship_audit_records("commerce.orders.REL-005")
+    assert audit_records[0].evidence_types == ("ownership_decision",)
+
+    try:
+        registry.create_relationship(
+            relationship_id="commerce.orders.REL-006",
+            type_id="commerce.orders.relationship.accountable-to",
+            source_id=requirement.metadata.id,
+            target=ObjectReference(backup_owner.metadata.id),
+            actor=_actor(),
+            evidence={"ownership_decision": ObjectReference(evidence.metadata.id)},
+        )
+    except RegistryError as exc:
+        assert exc.code == "RELATIONSHIP_CARDINALITY_VIOLATION"
+    else:
+        raise AssertionError("relationship cardinality was not enforced")
+
+
+def test_updl_registry_evaluates_semantic_conditions_over_relationships() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-owned",
+            name="requirementOwned",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MUST",
+                ),
+                SemanticConditionClause(
+                    ConditionClauseType.RELATIONSHIP_COUNT,
+                    relationship_type_id="commerce.orders.relationship.owned-by",
+                    target_kind="Person",
+                    min_count=1,
+                    max_count=1,
+                ),
+            ),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-020",
+        spec={
+            "statement": "Payment audit requirements shall have an owner.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    incomplete = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.requirement-owned",
+        subject_id=requirement.metadata.id,
+    )
+
+    assert incomplete.outcome is ConditionOutcome.NOT_SATISFIED
+    assert [finding.code for finding in incomplete.findings] == [
+        "CONDITION_RELATIONSHIP_NOT_SATISFIED"
+    ]
+    assert incomplete.proof_hash.startswith("sha256:")
+
+    registry.create_relationship(
+        relationship_id="commerce.orders.REL-007",
+        type_id="commerce.orders.relationship.owned-by",
+        source_id=requirement.metadata.id,
+        target=ObjectReference(person.metadata.id),
+        actor=_actor(),
+    )
+
+    satisfied = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.requirement-owned",
+        subject_id=requirement.metadata.id,
+    )
+
+    assert satisfied.outcome is ConditionOutcome.SATISFIED
+    assert satisfied.findings == ()
+    assert satisfied.subject_revision == 2
+    assert satisfied.proof["inputs"][2]["count"] == 1
+    assert satisfied.canonical_document()["outcome"] == "SATISFIED"
+
+
+def test_updl_registry_preserves_unknown_semantic_condition_inputs() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-classified",
+            name="requirementClassified",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="classification",
+                    expected="regulated",
+                ),
+            ),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-021",
+        spec={
+            "statement": "Records retention shall be classified.",
+            "priority": "SHOULD",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    evaluation = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.requirement-classified",
+        subject_id=requirement.metadata.id,
+    )
+    missing_subject = registry.evaluate_condition(
+        condition_id="commerce.orders.condition.requirement-classified",
+        subject_id="commerce.orders.REQ-404",
+    )
+
+    assert evaluation.outcome is ConditionOutcome.UNKNOWN
+    assert [finding.code for finding in evaluation.findings] == ["CONDITION_INPUT_UNKNOWN"]
+    assert missing_subject.outcome is ConditionOutcome.UNKNOWN
+    assert [finding.code for finding in missing_subject.findings] == [
+        "CONDITION_SUBJECT_NOT_FOUND"
+    ]
+
+
+def test_updl_registry_evaluates_must_hold_constraints_and_records_violation() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-must-priority",
+            name="requirementMustPriority",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MUST",
+                ),
+            ),
+        )
+    )
+    registry.register_constraint(
+        ConstraintDefinition(
+            id="commerce.orders.constraint.requirement-must-priority",
+            name="requirementMustPriority",
+            requirement=ConstraintRequirement.MUST_HOLD,
+            condition_id="commerce.orders.condition.requirement-must-priority",
+            subject_kinds=("Requirement",),
+            severity="HIGH",
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-026",
+        spec={
+            "statement": "Hard constraints shall detect non-MUST priority.",
+            "priority": "SHOULD",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    evaluation = registry.evaluate_constraint(
+        constraint_id="commerce.orders.constraint.requirement-must-priority",
+        subject_id=requirement.metadata.id,
+    )
+    repeated = registry.evaluate_constraint(
+        constraint_id="commerce.orders.constraint.requirement-must-priority",
+        subject_id=requirement.metadata.id,
+    )
+    violations = registry.list_constraint_violations(
+        constraint_id="commerce.orders.constraint.requirement-must-priority",
+        subject_id=requirement.metadata.id,
+        state=ConstraintViolationState.OPEN,
+    )
+
+    assert evaluation.result is ConstraintEvaluationResult.VIOLATED
+    assert repeated.violation_id == evaluation.violation_id
+    assert len(violations) == 1
+    assert violations[0].severity == "HIGH"
+    assert violations[0].constraint_version == "1.0.0"
+    assert evaluation.proof_hash.startswith("sha256:")
+    assert evaluation.canonical_document()["result"] == "VIOLATED"
+
+
+def test_updl_registry_evaluates_must_not_hold_constraints() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-is-may",
+            name="requirementIsMay",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MAY",
+                ),
+            ),
+        )
+    )
+    registry.register_constraint(
+        ConstraintDefinition(
+            id="commerce.orders.constraint.requirement-must-not-be-may",
+            name="requirementMustNotBeMay",
+            requirement=ConstraintRequirement.MUST_NOT_HOLD,
+            condition_id="commerce.orders.condition.requirement-is-may",
+            subject_kinds=("Requirement",),
+            severity="MEDIUM",
+        )
+    )
+    person = _person(registry)
+    allowed = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-027",
+        spec={
+            "statement": "Non-MAY requirements satisfy the prohibition.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    violating = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-028",
+        spec={
+            "statement": "MAY requirements violate this prohibition.",
+            "priority": "MAY",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    satisfied = registry.evaluate_constraint(
+        constraint_id="commerce.orders.constraint.requirement-must-not-be-may",
+        subject_id=allowed.metadata.id,
+    )
+    violated = registry.evaluate_constraint(
+        constraint_id="commerce.orders.constraint.requirement-must-not-be-may",
+        subject_id=violating.metadata.id,
+    )
+
+    assert satisfied.result is ConstraintEvaluationResult.SATISFIED
+    assert satisfied.violation_id is None
+    assert violated.result is ConstraintEvaluationResult.VIOLATED
+    assert violated.violation_id == "VIO-000001"
+
+
+def test_updl_registry_preserves_unknown_constraint_evaluation() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-classified",
+            name="requirementClassified",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="classification",
+                    expected="regulated",
+                ),
+            ),
+        )
+    )
+    registry.register_constraint(
+        ConstraintDefinition(
+            id="commerce.orders.constraint.requirement-classified",
+            name="requirementClassified",
+            requirement=ConstraintRequirement.MUST_HOLD,
+            condition_id="commerce.orders.condition.requirement-classified",
+            subject_kinds=("Requirement",),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-029",
+        spec={
+            "statement": "Missing classification remains unknown.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    evaluation = registry.evaluate_constraint(
+        constraint_id="commerce.orders.constraint.requirement-classified",
+        subject_id=requirement.metadata.id,
+    )
+
+    assert evaluation.result is ConstraintEvaluationResult.UNKNOWN
+    assert evaluation.violation_id is None
+    assert evaluation.condition_evaluation is not None
+    assert evaluation.condition_evaluation.outcome is ConditionOutcome.UNKNOWN
+
+
+def test_updl_registry_completes_task_only_through_completion_condition() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-ready",
+            name="requirementReady",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MUST",
+                ),
+            ),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-030",
+        spec={
+            "statement": "Task completion shall be condition-backed.",
+            "priority": "SHOULD",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    task = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+        completion_condition_id="commerce.orders.condition.requirement-ready",
+        allowed_actions=("inspect",),
+        parent_allowed_actions=("inspect", "repair"),
+    )
+
+    ready = registry.transition_task(
+        task_id=task.id,
+        target_state=TaskLifecycleState.READY,
+    )
+    started = registry.transition_task(
+        task_id=ready.id,
+        target_state=TaskLifecycleState.IN_PROGRESS,
+    )
+    incomplete = registry.evaluate_task_completion(started.id)
+
+    assert incomplete.result is TaskCompletionResult.NOT_COMPLETED
+    assert registry.get_task(task.id).state is TaskLifecycleState.IN_PROGRESS
+
+    registry.update_object(
+        object_id=requirement.metadata.id,
+        expected_revision=1,
+        semantic_patch={"spec": {"priority": "MUST"}},
+        actor=_actor(),
+    )
+    completed = registry.evaluate_task_completion(task.id)
+
+    assert completed.result is TaskCompletionResult.COMPLETED
+    assert completed.state is TaskLifecycleState.COMPLETED
+    assert registry.get_task(task.id).state is TaskLifecycleState.COMPLETED
+    assert completed.proof_hash.startswith("sha256:")
+
+
+def test_updl_registry_rejects_task_authority_and_constraint_weakening() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-must-priority",
+            name="requirementMustPriority",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MUST",
+                ),
+            ),
+        )
+    )
+    registry.register_constraint(
+        ConstraintDefinition(
+            id="commerce.orders.constraint.requirement-must-priority",
+            name="requirementMustPriority",
+            requirement=ConstraintRequirement.MUST_HOLD,
+            condition_id="commerce.orders.condition.requirement-must-priority",
+            subject_kinds=("Requirement",),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-031",
+        spec={
+            "statement": "Task envelopes shall narrow goal authority.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    try:
+        registry.create_task(
+            goal_ref="goal.restore-api",
+            assignee_ref="agent.production-recovery",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            actor=_actor(),
+            allowed_actions=("delete-database",),
+            parent_allowed_actions=("inspect",),
+        )
+    except RegistryError as exc:
+        assert exc.code == "TASK_AUTHORITY_EXCEEDS_GOAL"
+    else:
+        raise AssertionError("task authority expansion was accepted")
+
+    try:
+        registry.create_task(
+            goal_ref="goal.restore-api",
+            assignee_ref="agent.production-recovery",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            actor=_actor(),
+            parent_required_constraint_ids=(
+                "commerce.orders.constraint.requirement-must-priority",
+            ),
+        )
+    except RegistryError as exc:
+        assert exc.code == "TASK_CONSTRAINT_WEAKENING"
+    else:
+        raise AssertionError("task constraint weakening was accepted")
+
+
+def test_updl_registry_enforces_task_dependencies_and_rejects_cycles() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-ready",
+            name="requirementReady",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="priority",
+                    expected="MUST",
+                ),
+            ),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-032",
+        spec={
+            "statement": "Task dependencies shall form a DAG.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    first = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+        completion_condition_id="commerce.orders.condition.requirement-ready",
+    )
+    second = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+        dependencies=(TaskDependency(first.id, TaskDependencyType.COMPLETE_AFTER),),
+    )
+
+    registry.transition_task(task_id=second.id, target_state=TaskLifecycleState.READY)
+    try:
+        registry.transition_task(
+            task_id=second.id,
+            target_state=TaskLifecycleState.IN_PROGRESS,
+        )
+    except RegistryError as exc:
+        assert exc.code == "TASK_DEPENDENCY_UNSATISFIED"
+    else:
+        raise AssertionError("task started with unsatisfied dependency")
+
+    try:
+        registry.set_task_dependencies(
+            task_id=first.id,
+            dependencies=(TaskDependency(second.id, TaskDependencyType.COMPLETE_AFTER),),
+        )
+    except RegistryError as exc:
+        assert exc.code == "TASK_DEPENDENCY_CYCLE"
+    else:
+        raise AssertionError("cyclic task dependencies were accepted")
+
+    assert registry.get_task(first.id).dependencies == ()
+
+
+def test_updl_registry_records_task_outputs_with_provenance() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-033",
+        spec={
+            "statement": "Task outputs shall preserve provenance.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    task = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+        outputs=(
+            TaskOutputDefinition(
+                id="diagnosis",
+                type="enum",
+                enum_values=("CONFIGURATION_ERROR", "CODE_REGRESSION"),
+            ),
+        ),
+    )
+
+    updated = registry.record_task_output(
+        task_id=task.id,
+        output_id="diagnosis",
+        value="CODE_REGRESSION",
+        source=TaskOutputSource.AI_INFERRED,
+        provenance={"model": "agent.production-recovery@1"},
+    )
+
+    assert updated.output_values[0].source is TaskOutputSource.AI_INFERRED
+    assert updated.canonical_document()["outputValues"][0]["provenance"] == {
+        "model": "agent.production-recovery@1"
+    }
+
+
+def test_updl_registry_versions_plan_instances_without_in_place_mutation() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-034",
+        spec={
+            "statement": "Plan revisions shall preserve provenance.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    first = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+    )
+    second = registry.create_task(
+        goal_ref="goal.restore-api",
+        assignee_ref="agent.production-recovery",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        actor=_actor(),
+        dependencies=(TaskDependency(first.id),),
+    )
+    plan = registry.create_plan(
+        goal_ref="goal.restore-api",
+        planner_ref="agent.production-recovery",
+        task_ids=(first.id, second.id),
+        expected_outcome_ref="outcome.production-service-restored",
+    )
+    validation = registry.validate_plan(plan.id)
+    revised = registry.revise_plan(
+        plan_id=plan.id,
+        reason="TASK_FAILED",
+        task_ids=(first.id,),
+    )
+
+    assert validation.result is PlanValidationResult.VALID
+    assert registry.get_plan(plan.id).state is PlanLifecycleState.SUPERSEDED
+    assert registry.get_plan(plan.id).superseded_by == revised.id
+    assert revised.version == 2
+    assert revised.previous_plan_id == plan.id
+    assert revised.revision_reason == "TASK_FAILED"
+
+
+def test_updl_registry_preempts_preemptible_reservation_atomically() -> None:
+    registry = _relationship_registry()
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.normal",
+            name="Normal",
+            rank=500,
+            priority_class=PriorityClass.NORMAL,
+        )
+    )
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.security-critical",
+            name="Security Critical",
+            rank=900,
+            priority_class=PriorityClass.CRITICAL,
+        )
+    )
+    registry.register_reservation_definition(
+        ReservationDefinition(
+            id="commerce.orders.reservation.deployment-capacity",
+            name="Deployment capacity",
+            resource_type="DeploymentCapacity",
+            preemption_mode=PreemptionMode.PREEMPTIBLE,
+            expiration_required=False,
+        )
+    )
+    target = registry.create_reservation(
+        definition_id="commerce.orders.reservation.deployment-capacity",
+        holder_ref="goal.release-optimization",
+        resource_ref="resource.production-deployment-slot",
+        priority_id="commerce.orders.priority.normal",
+    )
+    registry.register_preemption(
+        PreemptionDefinition(
+            id="commerce.orders.preemption.production-capacity",
+            name="Production capacity preemption",
+            resource_types=("DeploymentCapacity",),
+            minimum_priority_id="commerce.orders.priority.security-critical",
+            target_modes=(PreemptionMode.PREEMPTIBLE,),
+            minimum_priority_delta=200,
+            required_evidence=(
+                "preemption.reason",
+                "displaced.reservation",
+                "replacement.reservation",
+            ),
+        )
+    )
+
+    decision = registry.evaluate_preemption(
+        PreemptionRequest(
+            id="commerce.orders.preemption-request.84721",
+            preemption_definition_id="commerce.orders.preemption.production-capacity",
+            requester_ref="goal.patch-critical-vulnerability",
+            requested_resource_ref="resource.production-deployment-slot",
+            target_reservation_id=target.id,
+            replacement_holder_ref="goal.patch-critical-vulnerability",
+            priority_id="commerce.orders.priority.security-critical",
+            reason_code="SECURITY_CRITICAL",
+        )
+    )
+
+    assert decision.effect is PreemptionEffect.PERMIT
+    assert decision.replacement_reservation_id is not None
+    displaced = registry.get_reservation(target.id)
+    replacement = registry.get_reservation(decision.replacement_reservation_id)
+    assert displaced.state is ReservationLifecycleState.PREEMPTED
+    assert displaced.preempted_by == replacement.id
+    assert displaced.preemption_decision_id == decision.id
+    assert replacement.state is ReservationLifecycleState.ACTIVE
+    assert replacement.resource_ref == target.resource_ref
+    assert replacement.priority_id == "commerce.orders.priority.security-critical"
+    assert decision.proof_hash.startswith("sha256:")
+
+
+def test_updl_registry_denies_non_preemptible_reservation() -> None:
+    registry = _relationship_registry()
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.normal",
+            name="Normal",
+            rank=500,
+        )
+    )
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.critical",
+            name="Critical",
+            rank=900,
+            priority_class=PriorityClass.CRITICAL,
+        )
+    )
+    registry.register_reservation_definition(
+        ReservationDefinition(
+            id="commerce.orders.reservation.legal-execution",
+            name="Legal execution slot",
+            resource_type="LegalExecution",
+            preemption_mode=PreemptionMode.NON_PREEMPTIBLE,
+            expiration_required=False,
+        )
+    )
+    target = registry.create_reservation(
+        definition_id="commerce.orders.reservation.legal-execution",
+        holder_ref="goal.contract-signing",
+        resource_ref="resource.contract-signing-slot",
+        priority_id="commerce.orders.priority.normal",
+    )
+    registry.register_preemption(
+        PreemptionDefinition(
+            id="commerce.orders.preemption.legal-execution",
+            name="Legal execution preemption",
+            resource_types=("LegalExecution",),
+            minimum_priority_id="commerce.orders.priority.critical",
+            target_modes=(PreemptionMode.PREEMPTIBLE,),
+        )
+    )
+
+    decision = registry.evaluate_preemption(
+        PreemptionRequest(
+            id="commerce.orders.preemption-request.84722",
+            preemption_definition_id="commerce.orders.preemption.legal-execution",
+            requester_ref="goal.emergency-review",
+            requested_resource_ref="resource.contract-signing-slot",
+            target_reservation_id=target.id,
+            replacement_holder_ref="goal.emergency-review",
+            priority_id="commerce.orders.priority.critical",
+            reason_code="EMERGENCY_REVIEW",
+        )
+    )
+
+    assert decision.effect is PreemptionEffect.DENY
+    assert decision.reason_code == "PREEMPTION_TARGET_NOT_PREEMPTIBLE"
+    assert decision.replacement_reservation_id is None
+    assert registry.get_reservation(target.id).state is ReservationLifecycleState.ACTIVE
+
+
+def test_updl_registry_enforces_preemption_priority_delta() -> None:
+    registry = _relationship_registry()
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.normal",
+            name="Normal",
+            rank=600,
+        )
+    )
+    registry.register_priority(
+        PriorityDefinition(
+            id="commerce.orders.priority.high",
+            name="High",
+            rank=700,
+            priority_class=PriorityClass.HIGH,
+        )
+    )
+    registry.register_reservation_definition(
+        ReservationDefinition(
+            id="commerce.orders.reservation.batch-capacity",
+            name="Batch capacity",
+            resource_type="BatchCapacity",
+            preemption_mode=PreemptionMode.PREEMPTIBLE,
+            expiration_required=False,
+        )
+    )
+    target = registry.create_reservation(
+        definition_id="commerce.orders.reservation.batch-capacity",
+        holder_ref="goal.batch-reporting",
+        resource_ref="resource.batch-slot",
+        priority_id="commerce.orders.priority.normal",
+    )
+    registry.register_preemption(
+        PreemptionDefinition(
+            id="commerce.orders.preemption.batch-capacity",
+            name="Batch capacity preemption",
+            resource_types=("BatchCapacity",),
+            minimum_priority_id="commerce.orders.priority.high",
+            target_modes=(PreemptionMode.PREEMPTIBLE,),
+            minimum_priority_delta=200,
+        )
+    )
+
+    decision = registry.evaluate_preemption(
+        PreemptionRequest(
+            id="commerce.orders.preemption-request.84723",
+            preemption_definition_id="commerce.orders.preemption.batch-capacity",
+            requester_ref="goal.faster-reporting",
+            requested_resource_ref="resource.batch-slot",
+            target_reservation_id=target.id,
+            replacement_holder_ref="goal.faster-reporting",
+            priority_id="commerce.orders.priority.high",
+            reason_code="REPORTING_PRIORITY",
+        )
+    )
+
+    assert decision.effect is PreemptionEffect.DENY
+    assert decision.reason_code == "PREEMPTION_PRIORITY_DELTA_INSUFFICIENT"
+    assert decision.replacement_reservation_id is None
+    assert registry.get_reservation(target.id).state is ReservationLifecycleState.ACTIVE
+
+
+def test_updl_registry_defers_decisions_when_required_condition_is_unknown() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-classified",
+            name="requirementClassified",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="classification",
+                    expected="regulated",
+                ),
+            ),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.requirement-change",
+            name="requirementChange",
+            action="APPLY_CHANGE",
+            resource_kinds=("Requirement",),
+            condition_ids=("commerce.orders.condition.requirement-classified",),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-022",
+        spec={
+            "statement": "Retention requirement shall be governed.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    decision = registry.evaluate_decision(
+        decision_id="commerce.orders.decision.requirement-change",
+        resource_id=requirement.metadata.id,
+        actor=_actor(),
+    )
+
+    assert decision.effect is DecisionEffect.DEFER
+    assert decision.outcome == "DEFER"
+    assert [finding.code for finding in decision.findings] == ["DECISION_CONDITION_UNKNOWN"]
+    assert decision.condition_evaluations[0].outcome is ConditionOutcome.UNKNOWN
+    assert decision.proof_hash.startswith("sha256:")
+
+
+def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:
+    registry = _relationship_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.requirement-owned",
+            name="requirementOwned",
+            subject_kinds=("Requirement",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.RELATIONSHIP_EXISTS,
+                    relationship_type_id="commerce.orders.relationship.owned-by",
+                    target_kind="Person",
+                ),
+            ),
+        )
+    )
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-change-window",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("APPLY_CHANGE",),
+            resource_kinds=("Requirement",),
+            obligations=(PolicyObligation("AUDIT"),),
+        )
+    )
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-freeze-sensitive",
+            revision=2,
+            effect=PolicyEffect.DENY,
+            actions=("APPLY_CHANGE",),
+            resource_kinds=("Requirement",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.requirement-change",
+            name="requirementChange",
+            action="APPLY_CHANGE",
+            resource_kinds=("Requirement",),
+            condition_ids=("commerce.orders.condition.requirement-owned",),
+            policy_ids=(
+                "commerce.orders.POL-change-window",
+                "commerce.orders.POL-freeze-sensitive",
+            ),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-023",
+        spec={
+            "statement": "Sensitive requirements shall obey freezes.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.create_relationship(
+        relationship_id="commerce.orders.REL-008",
+        type_id="commerce.orders.relationship.owned-by",
+        source_id=requirement.metadata.id,
+        target=ObjectReference(person.metadata.id),
+        actor=_actor(),
+    )
+
+    decision = registry.evaluate_decision(
+        decision_id="commerce.orders.decision.requirement-change",
+        resource_id=requirement.metadata.id,
+        actor=_actor(),
+        context={"purpose": "change-request"},
+    )
+
+    assert decision.effect is DecisionEffect.PROHIBIT
+    assert decision.outcome == "DENY"
+    assert [item.effect for item in decision.policy_contributions] == [
+        PolicyEffect.ALLOW,
+        PolicyEffect.DENY,
+    ]
+    assert [obligation.type for obligation in decision.obligations] == ["AUDIT"]
+    assert decision.condition_evaluations[0].outcome is ConditionOutcome.SATISFIED
+    assert decision.canonical_document()["effect"] == "PROHIBIT"
+
+
+def test_updl_registry_evaluates_explicit_decision_request_contract() -> None:
+    registry = _relationship_registry()
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-change-allow",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("APPLY_CHANGE",),
+            resource_kinds=("Requirement",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.requirement-change",
+            name="requirementChange",
+            action="APPLY_CHANGE",
+            resource_kinds=("Requirement",),
+            policy_ids=("commerce.orders.POL-change-allow",),
+            constraints=(
+                DecisionConstraint(
+                    type="RESOURCE_KIND",
+                    value="Requirement",
+                ),
+            ),
+            advice=(
+                DecisionAdvice(
+                    code="REVIEW_CHANGE_WINDOW",
+                    message="Review the active change window before execution.",
+                ),
+            ),
+            validity_seconds=300,
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-024",
+        spec={
+            "statement": "Decision requests shall be explicit.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    decision = registry.evaluate_decision_request(
+        DecisionRequest(
+            id="commerce.orders.decision-request.REQ-024",
+            decision_id="commerce.orders.decision.requirement-change",
+            resource_id=requirement.metadata.id,
+            actor=_actor(),
+            requested_action="APPLY_CHANGE",
+            context={"purpose": "change-request"},
+        )
+    )
+
+    document = decision.canonical_document()
+    assert decision.evaluation_status is DecisionEvaluationStatus.COMPLETED
+    assert decision.effect is DecisionEffect.PERMIT
+    assert decision.request_id == "commerce.orders.decision-request.REQ-024"
+    assert decision.valid_until is not None
+    assert decision.valid_until > decision.evaluated_at
+    assert document["constraints"] == [
+        {"type": "RESOURCE_KIND", "value": "Requirement"},
+    ]
+    assert document["advice"] == [
+        {
+            "code": "REVIEW_CHANGE_WINDOW",
+            "message": "Review the active change window before execution.",
+        },
+    ]
+    assert document["validUntil"] == decision.valid_until.isoformat()
+
+
+def test_updl_registry_defers_decision_request_on_action_mismatch() -> None:
+    registry = _relationship_registry()
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-change-allow",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("APPLY_CHANGE",),
+            resource_kinds=("Requirement",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.requirement-change",
+            name="requirementChange",
+            action="APPLY_CHANGE",
+            resource_kinds=("Requirement",),
+            policy_ids=("commerce.orders.POL-change-allow",),
+        )
+    )
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-025",
+        spec={
+            "statement": "Mismatched requested actions shall not permit execution.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+    decision = registry.evaluate_decision_request(
+        DecisionRequest(
+            id="commerce.orders.decision-request.REQ-025",
+            decision_id="commerce.orders.decision.requirement-change",
+            resource_id=requirement.metadata.id,
+            actor=_actor(),
+            requested_action="DELETE",
+        )
+    )
+
+    assert decision.effect is DecisionEffect.DEFER
+    assert decision.outcome == "DEFER"
+    assert [finding.code for finding in decision.findings] == [
+        "DECISION_ACTION_MISMATCH"
+    ]
+
+
+def test_updl_registry_activates_decision_obligation_idempotently() -> None:
+    registry = _state_machine_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.production-deployment",
+            name="productionDeployment",
+            subject_kinds=("Deployment",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="environment",
+                    expected="production",
+                ),
+            ),
+        )
+    )
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-production-deploy",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("DEPLOY",),
+            resource_kinds=("Deployment",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.production-deploy",
+            name="productionDeploy",
+            action="DEPLOY",
+            resource_kinds=("Deployment",),
+            policy_ids=("commerce.orders.POL-production-deploy",),
+        )
+    )
+    registry.register_obligation(
+        ObligationDefinition(
+            id="commerce.orders.obligation.monitor-production-release",
+            name="monitorProductionRelease",
+            trigger=ObligationTrigger(
+                source=ObligationTriggerSource.POLICY_DECISION,
+                decision_effect=DecisionEffect.PERMIT,
+                policy_id="commerce.orders.POL-production-deploy",
+            ),
+            applicability_condition_id="commerce.orders.condition.production-deployment",
+            subject=ObligationSubject(),
+            duty=ObligationDuty(action_ref="commerce.orders.action.monitor-release"),
+            responsibility=ObligationResponsibility(
+                strategy=ObligationAssignmentStrategy.ROLE,
+                assignee_ref="role.production-operator",
+            ),
+            timing=ObligationTiming(completion_within="PT24H"),
+            required_evidence=(
+                "monitoring-session",
+                "release-health-report",
+            ),
+        )
+    )
+    deployment = registry.create_object(
+        kind="Deployment",
+        namespace="commerce.orders",
+        local_id="DEP-002",
+        spec={"artifact": "artifact:checkout@1.0.0", "environment": "production"},
+        actor=_actor(),
+        lifecycle_state="requested",
+    )
+
+    decision = registry.evaluate_decision_request(
+        DecisionRequest(
+            id="commerce.orders.decision-request.DEP-002",
+            decision_id="commerce.orders.decision.production-deploy",
+            resource_id=deployment.metadata.id,
+            actor=_actor(),
+            requested_action="DEPLOY",
+        )
+    )
+    activations = registry.evaluate_decision_obligations(decision)
+    repeated = registry.evaluate_decision_obligations(decision)
+
+    assert [activation.outcome for activation in activations] == [
+        ObligationActivationOutcome.ACTIVATED
+    ]
+    assert activations[0].reason_code == "OBLIGATION_ACTIVATED"
+    assert repeated[0].reason_code == "OBLIGATION_ALREADY_ACTIVATED"
+    assert repeated[0].instance_id == activations[0].instance_id
+    assert len(registry.list_obligations(subject_id=deployment.metadata.id)) == 1
+
+    obligation = registry.get_obligation(activations[0].instance_id or "")
+    assert obligation.definition_version == "1.0.0"
+    assert obligation.subject_ref.id == deployment.metadata.id
+    assert obligation.assignee_ref == "role.production-operator"
+    assert obligation.state is ObligationLifecycleState.ACTIVE
+    assert obligation.due_at is not None
+
+
+def test_updl_registry_requires_obligation_fulfillment_evidence() -> None:
+    registry = _state_machine_registry()
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-production-deploy",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("DEPLOY",),
+            resource_kinds=("Deployment",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.production-deploy",
+            name="productionDeploy",
+            action="DEPLOY",
+            resource_kinds=("Deployment",),
+            policy_ids=("commerce.orders.POL-production-deploy",),
+        )
+    )
+    registry.register_obligation(
+        ObligationDefinition(
+            id="commerce.orders.obligation.capture-production-evidence",
+            name="captureProductionEvidence",
+            trigger=ObligationTrigger(
+                source=ObligationTriggerSource.POLICY_DECISION,
+                decision_effect=DecisionEffect.PERMIT,
+            ),
+            subject=ObligationSubject(),
+            duty=ObligationDuty(action_ref="commerce.orders.action.capture-evidence"),
+            responsibility=ObligationResponsibility(
+                strategy=ObligationAssignmentStrategy.ROLE,
+                assignee_ref="role.release-owner",
+            ),
+            required_evidence=("release-health-report",),
+        )
+    )
+    deployment = registry.create_object(
+        kind="Deployment",
+        namespace="commerce.orders",
+        local_id="DEP-003",
+        spec={"artifact": "artifact:checkout@1.0.0", "environment": "production"},
+        actor=_actor(),
+        lifecycle_state="requested",
+    )
+    evidence = registry.create_object(
+        kind="Evidence",
+        namespace="commerce.orders",
+        local_id="EVIDENCE-003",
+        spec={
+            "evidence_type": "release-health-report",
+            "summary": "Release health report was captured.",
+        },
+        actor=_actor(),
+    )
+    decision = registry.evaluate_decision(
+        decision_id="commerce.orders.decision.production-deploy",
+        resource_id=deployment.metadata.id,
+        actor=_actor(),
+    )
+    activation = registry.evaluate_decision_obligations(decision)[0]
+    obligation_id = activation.instance_id or ""
+
+    pending = registry.evaluate_obligation(obligation_id)
+    assert pending.result is ObligationFulfillmentResult.NOT_FULFILLED
+    assert [finding.code for finding in pending.findings] == [
+        "OBLIGATION_REQUIRED_EVIDENCE_MISSING"
+    ]
+
+    registry.attach_obligation_evidence(
+        obligation_id=obligation_id,
+        evidence_type="release-health-report",
+        evidence_ref=ObjectReference(evidence.metadata.id),
+    )
+    fulfilled = registry.evaluate_obligation(obligation_id)
+
+    assert fulfilled.result is ObligationFulfillmentResult.FULFILLED
+    assert fulfilled.state is ObligationLifecycleState.FULFILLED
+    assert registry.get_obligation(obligation_id).state is ObligationLifecycleState.FULFILLED
+    assert fulfilled.proof_hash.startswith("sha256:")
+    assert fulfilled.canonical_document()["evidence"][0]["type"] == "release-health-report"
+
+
+def test_updl_registry_evaluates_obligation_breach_condition() -> None:
+    registry = _state_machine_registry()
+    registry.register_condition(
+        SemanticConditionDefinition(
+            id="commerce.orders.condition.production-deployment",
+            name="productionDeployment",
+            subject_kinds=("Deployment",),
+            clauses=(
+                SemanticConditionClause(
+                    ConditionClauseType.SPEC_EQUALS,
+                    path="environment",
+                    expected="production",
+                ),
+            ),
+        )
+    )
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-production-deploy",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("DEPLOY",),
+            resource_kinds=("Deployment",),
+        )
+    )
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.production-deploy",
+            name="productionDeploy",
+            action="DEPLOY",
+            resource_kinds=("Deployment",),
+            policy_ids=("commerce.orders.POL-production-deploy",),
+        )
+    )
+    registry.register_obligation(
+        ObligationDefinition(
+            id="commerce.orders.obligation.monitor-production-release",
+            name="monitorProductionRelease",
+            trigger=ObligationTrigger(
+                source=ObligationTriggerSource.POLICY_DECISION,
+                decision_effect=DecisionEffect.PERMIT,
+            ),
+            subject=ObligationSubject(),
+            duty=ObligationDuty(action_ref="commerce.orders.action.monitor-release"),
+            responsibility=ObligationResponsibility(
+                strategy=ObligationAssignmentStrategy.ROLE,
+                assignee_ref="role.production-operator",
+            ),
+            required_evidence=("monitoring-session",),
+            breach=ObligationBreach(
+                condition_id="commerce.orders.condition.production-deployment",
+                severity="HIGH",
+            ),
+        )
+    )
+    deployment = registry.create_object(
+        kind="Deployment",
+        namespace="commerce.orders",
+        local_id="DEP-004",
+        spec={"artifact": "artifact:checkout@1.0.0", "environment": "production"},
+        actor=_actor(),
+        lifecycle_state="requested",
+    )
+    decision = registry.evaluate_decision(
+        decision_id="commerce.orders.decision.production-deploy",
+        resource_id=deployment.metadata.id,
+        actor=_actor(),
+    )
+    activation = registry.evaluate_decision_obligations(decision)[0]
+
+    evaluation = registry.evaluate_obligation(activation.instance_id or "")
+
+    assert evaluation.result is ObligationFulfillmentResult.NOT_FULFILLED
+    assert evaluation.state is ObligationLifecycleState.BREACHED
+    assert [finding.code for finding in evaluation.findings] == [
+        "OBLIGATION_REQUIRED_EVIDENCE_MISSING",
+        "OBLIGATION_BREACHED",
+    ]
 
 
 def test_updl_registry_rejects_invalid_relationship_endpoints_atomically() -> None:
@@ -591,6 +2037,40 @@ def test_updl_registry_registers_state_machine_and_executes_declared_transition(
     assert approved.lifecycle.state == "approved"
     assert approved.spec == deployment.spec
 
+    events = registry.list_state_transition_events(deployment.metadata.id)
+    audit_records = registry.list_state_transition_audit_records(deployment.metadata.id)
+
+    assert len(events) == 1
+    assert events[0].id == "EVT-000001"
+    assert events[0].sequence == 1
+    assert events[0].event_type == "StateTransitioned"
+    assert events[0].object_id == deployment.metadata.id
+    assert events[0].previous_revision == 1
+    assert events[0].new_revision == 2
+    assert events[0].state_machine_id == "commerce.orders.lifecycle.deployment"
+    assert events[0].state_machine_version == "1.0.0"
+    assert events[0].transition == "approve"
+    assert events[0].from_state == "requested"
+    assert events[0].to_state == "approved"
+    assert events[0].actor == _actor()
+    assert events[0].action_id == "commerce.orders.action.approve-deployment"
+
+    assert len(audit_records) == 1
+    assert audit_records[0].id == "AUD-000001"
+    assert audit_records[0].event_id == events[0].id
+    assert audit_records[0].decision.permitted
+    assert audit_records[0].previous_state == "requested"
+    assert audit_records[0].new_state == "approved"
+
+    event_document = events[0].canonical_document()
+    assert event_document["object"] == {
+        "id": deployment.metadata.id,
+        "kind": "Deployment",
+        "previousRevision": 1,
+        "newRevision": 2,
+    }
+    assert audit_records[0].canonical_document()["decision"]["permitted"] is True
+
 
 def test_updl_registry_rejects_invalid_initial_state_for_governed_object() -> None:
     registry = _state_machine_registry()
@@ -633,6 +2113,8 @@ def test_updl_registry_denies_undeclared_or_action_mismatched_transition() -> No
     assert not mismatched.permitted
     assert [reason.code for reason in mismatched.reasons] == ["TRANSITION_ACTION_MISMATCH"]
     assert registry.get_object(deployment.metadata.id).metadata.revision == 1
+    assert registry.list_state_transition_events(deployment.metadata.id) == ()
+    assert registry.list_state_transition_audit_records(deployment.metadata.id) == ()
 
 
 def test_updl_registry_rejects_stale_and_terminal_state_transition() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -15,6 +15,7 @@ IDENTIFIER = re.compile(
 )
 NAMESPACE = re.compile(r"^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$")
 RESERVED_NAMESPACE_ROOTS = frozenset({"core", "system", "updl", "ai-enterprise"})
+_MISSING = object()
 PRIMITIVE_TYPES = frozenset(
     {
         "string",
@@ -95,6 +96,203 @@ class TransitionClassification(StrEnum):
     MIGRATION = "migration"
 
 
+class RelationshipCardinality(StrEnum):
+    ONE_TO_ONE = "one_to_one"
+    ONE_TO_MANY = "one_to_many"
+    MANY_TO_ONE = "many_to_one"
+    MANY_TO_MANY = "many_to_many"
+
+
+class RelationshipLifecycle(StrEnum):
+    ACTIVE = "ACTIVE"
+    DEPRECATED = "DEPRECATED"
+    RETIRED = "RETIRED"
+
+
+class ConditionOutcome(StrEnum):
+    SATISFIED = "SATISFIED"
+    NOT_SATISFIED = "NOT_SATISFIED"
+    UNKNOWN = "UNKNOWN"
+    EXEMPTED = "EXEMPTED"
+
+
+class ConditionClauseType(StrEnum):
+    OBJECT_KIND_IS = "object_kind_is"
+    LIFECYCLE_STATE_IS = "lifecycle_state_is"
+    SPEC_EQUALS = "spec_equals"
+    RELATIONSHIP_EXISTS = "relationship_exists"
+    RELATIONSHIP_COUNT = "relationship_count"
+
+
+class DecisionEffect(StrEnum):
+    PERMIT = "PERMIT"
+    PROHIBIT = "PROHIBIT"
+    REQUIRE = "REQUIRE"
+    DEFER = "DEFER"
+    ESCALATE = "ESCALATE"
+    ABSTAIN = "ABSTAIN"
+
+
+class DecisionEvaluationStatus(StrEnum):
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
+
+
+class DecisionCombiningAlgorithm(StrEnum):
+    DENY_OVERRIDES = "DENY_OVERRIDES"
+    PERMIT_OVERRIDES = "PERMIT_OVERRIDES"
+
+
+class ObligationTriggerSource(StrEnum):
+    POLICY_DECISION = "POLICY_DECISION"
+
+
+class ObligationSubjectBinding(StrEnum):
+    DECISION_RESOURCE = "DECISION_RESOURCE"
+
+
+class ObligationAssignmentStrategy(StrEnum):
+    ROLE = "ROLE"
+    STATIC = "STATIC"
+
+
+class ObligationTimingActivation(StrEnum):
+    IMMEDIATE = "IMMEDIATE"
+
+
+class ObligationLifecycleState(StrEnum):
+    CREATED = "CREATED"
+    ACTIVE = "ACTIVE"
+    IN_PROGRESS = "IN_PROGRESS"
+    FULFILLED = "FULFILLED"
+    BREACHED = "BREACHED"
+    WAIVED = "WAIVED"
+    SUSPENDED = "SUSPENDED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class ObligationFulfillmentResult(StrEnum):
+    FULFILLED = "FULFILLED"
+    NOT_FULFILLED = "NOT_FULFILLED"
+    PARTIALLY_FULFILLED = "PARTIALLY_FULFILLED"
+    UNKNOWN = "UNKNOWN"
+    EXEMPTED = "EXEMPTED"
+
+
+class ObligationActivationOutcome(StrEnum):
+    ACTIVATED = "ACTIVATED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    UNKNOWN = "UNKNOWN"
+
+
+class ConstraintRequirement(StrEnum):
+    MUST_HOLD = "MUST_HOLD"
+    MUST_NOT_HOLD = "MUST_NOT_HOLD"
+    MUST_REMAIN = "MUST_REMAIN"
+    MUST_BECOME = "MUST_BECOME"
+    MUST_CEASE = "MUST_CEASE"
+
+
+class ConstraintEvaluationResult(StrEnum):
+    SATISFIED = "SATISFIED"
+    VIOLATED = "VIOLATED"
+    UNKNOWN = "UNKNOWN"
+    EXEMPTED = "EXEMPTED"
+
+
+class ConstraintViolationState(StrEnum):
+    OPEN = "OPEN"
+    RESOLVED = "RESOLVED"
+    WAIVED = "WAIVED"
+
+
+class TaskLifecycleState(StrEnum):
+    CREATED = "CREATED"
+    READY = "READY"
+    IN_PROGRESS = "IN_PROGRESS"
+    BLOCKED = "BLOCKED"
+    SUSPENDED = "SUSPENDED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class TaskMode(StrEnum):
+    DEFINED = "DEFINED"
+    AD_HOC = "AD_HOC"
+
+
+class TaskDependencyType(StrEnum):
+    START_AFTER = "START_AFTER"
+    COMPLETE_AFTER = "COMPLETE_AFTER"
+    REQUIRES_SUCCESS = "REQUIRES_SUCCESS"
+    REQUIRES_OUTPUT = "REQUIRES_OUTPUT"
+    REQUIRES_EVIDENCE = "REQUIRES_EVIDENCE"
+
+
+class TaskCompletionResult(StrEnum):
+    COMPLETED = "COMPLETED"
+    NOT_COMPLETED = "NOT_COMPLETED"
+    UNKNOWN = "UNKNOWN"
+
+
+class TaskOutputSource(StrEnum):
+    OBSERVED = "OBSERVED"
+    AI_INFERRED = "AI_INFERRED"
+    HUMAN_DECLARED = "HUMAN_DECLARED"
+
+
+class PlanLifecycleState(StrEnum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    SUPERSEDED = "SUPERSEDED"
+    INVALIDATED = "INVALIDATED"
+    COMPLETED = "COMPLETED"
+
+
+class PlanValidationResult(StrEnum):
+    VALID = "VALID"
+    INVALID = "INVALID"
+    CONDITIONALLY_VALID = "CONDITIONALLY_VALID"
+    UNKNOWN = "UNKNOWN"
+
+
+class PriorityClass(StrEnum):
+    LOW = "LOW"
+    NORMAL = "NORMAL"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class PreemptionMode(StrEnum):
+    NON_PREEMPTIBLE = "NON_PREEMPTIBLE"
+    PREEMPTIBLE = "PREEMPTIBLE"
+    CONDITIONALLY_PREEMPTIBLE = "CONDITIONALLY_PREEMPTIBLE"
+
+
+class ReservationLifecycleState(StrEnum):
+    REQUESTED = "REQUESTED"
+    ACTIVE = "ACTIVE"
+    CONSUMED = "CONSUMED"
+    RELEASED = "RELEASED"
+    EXPIRED = "EXPIRED"
+    REVOKED = "REVOKED"
+    PREEMPTED = "PREEMPTED"
+
+
+class PreemptionEffect(StrEnum):
+    PERMIT = "PERMIT"
+    DENY = "DENY"
+    CONDITIONAL = "CONDITIONAL"
+    INDETERMINATE = "INDETERMINATE"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -142,9 +340,47 @@ class RelationshipTypeDefinition:
     name: str
     source_kinds: tuple[str, ...]
     target_kinds: tuple[str, ...]
+    version: str = "1.0.0"
     symmetric: bool = False
     transitive: bool = False
     inverse_name: str | None = None
+    cardinality: RelationshipCardinality = RelationshipCardinality.MANY_TO_MANY
+    lifecycle: RelationshipLifecycle = RelationshipLifecycle.ACTIVE
+    required_evidence: tuple[str, ...] = ()
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "sourceKinds": list(self.source_kinds),
+            "targetKinds": list(self.target_kinds),
+            "symmetric": self.symmetric,
+            "transitive": self.transitive,
+            "inverseName": self.inverse_name,
+            "cardinality": self.cardinality.value,
+            "lifecycle": self.lifecycle.value,
+            "requiredEvidence": list(self.required_evidence),
+            "description": self.description,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipEvidence:
+    type: str
+    reference: ObjectReference
+
+    def canonical_document(self) -> dict[str, Any]:
+        document: dict[str, Any] = {
+            "type": self.type,
+            "$ref": {"id": self.reference.id},
+        }
+        if self.reference.revision is not None:
+            document["$ref"]["revision"] = self.reference.revision
+        if self.reference.resolution is not ResolutionMode.LATEST:
+            document["$ref"]["resolution"] = self.reference.resolution.value
+        return document
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +389,8 @@ class RelationshipInstance:
     type_id: str
     source: ObjectReference
     target: ObjectReference
+    lifecycle: RelationshipLifecycle = RelationshipLifecycle.ACTIVE
+    evidence: tuple[RelationshipEvidence, ...] = ()
 
     def canonical_document(self) -> dict[str, Any]:
         document: dict[str, Any] = {
@@ -169,7 +407,427 @@ class RelationshipInstance:
             document["source"]["$ref"]["resolution"] = self.source.resolution.value
         if self.target.resolution is not ResolutionMode.LATEST:
             document["target"]["$ref"]["resolution"] = self.target.resolution.value
+        document["lifecycle"] = {"state": self.lifecycle.value}
+        if self.evidence:
+            document["evidence"] = [
+                evidence.canonical_document()
+                for evidence in sorted(self.evidence, key=lambda item: item.type)
+            ]
         return document
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticConditionClause:
+    clause_type: ConditionClauseType
+    path: str | None = None
+    expected: Any = None
+    relationship_type_id: str | None = None
+    target_kind: str | None = None
+    target_id: str | None = None
+    min_count: int | None = None
+    max_count: int | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "type": self.clause_type.value,
+            "path": self.path,
+            "expected": self.expected,
+            "relationshipTypeId": self.relationship_type_id,
+            "targetKind": self.target_kind,
+            "targetId": self.target_id,
+            "minCount": self.min_count,
+            "maxCount": self.max_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticConditionDefinition:
+    id: str
+    name: str
+    subject_kinds: tuple[str, ...]
+    clauses: tuple[SemanticConditionClause, ...]
+    version: str = "1.0.0"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "subjectKinds": list(self.subject_kinds),
+            "clauses": [clause.canonical_document() for clause in self.clauses],
+            "description": self.description,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConstraintDefinition:
+    id: str
+    name: str
+    requirement: ConstraintRequirement
+    condition_id: str
+    subject_kinds: tuple[str, ...]
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    severity: str = "HIGH"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "requirement": self.requirement.value,
+            "conditionId": self.condition_id,
+            "subjectKinds": list(self.subject_kinds),
+            "severity": self.severity,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PriorityDefinition:
+    id: str
+    name: str
+    rank: int
+    priority_class: PriorityClass = PriorityClass.NORMAL
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "rank": self.rank,
+            "class": self.priority_class.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReservationDefinition:
+    id: str
+    name: str
+    resource_type: str
+    quantity_type: str = "unit"
+    preemption_mode: PreemptionMode = PreemptionMode.NON_PREEMPTIBLE
+    expiration_required: bool = True
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "resourceType": self.resource_type,
+            "quantityType": self.quantity_type,
+            "preemption": {"mode": self.preemption_mode.value},
+            "lifecycle": {"expirationRequired": self.expiration_required},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PreemptionDefinition:
+    id: str
+    name: str
+    resource_types: tuple[str, ...]
+    minimum_priority_id: str
+    target_modes: tuple[PreemptionMode, ...]
+    condition_ids: tuple[str, ...] = ()
+    policy_id: str | None = None
+    compensation_required: bool = False
+    required_evidence: tuple[str, ...] = ()
+    minimum_priority_delta: int = 0
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "resourceTypes": list(self.resource_types),
+            "requester": {
+                "minimumPriority": {
+                    "ref": self.minimum_priority_id,
+                }
+            },
+            "target": {
+                "requiredModes": [mode.value for mode in self.target_modes],
+            },
+            "conditions": [{"ref": condition_id} for condition_id in self.condition_ids],
+            "authorization": (
+                {"policy": {"ref": self.policy_id}}
+                if self.policy_id is not None
+                else None
+            ),
+            "compensation": {"required": self.compensation_required},
+            "evidence": {"required": list(self.required_evidence)},
+            "priorityDelta": {"minimum": self.minimum_priority_delta},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskOutputDefinition:
+    id: str
+    type: str
+    target_kind: str | None = None
+    enum_values: tuple[str, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "targetKind": self.target_kind,
+            "enumValues": list(self.enum_values),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskDefinition:
+    id: str
+    name: str
+    version: str = "1.0.0"
+    completion_condition_id: str | None = None
+    allowed_actions: tuple[str, ...] = ()
+    required_constraint_ids: tuple[str, ...] = ()
+    outputs: tuple[TaskOutputDefinition, ...] = ()
+    status: str = "ACTIVE"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "completionConditionId": self.completion_condition_id,
+            "allowedActions": list(self.allowed_actions),
+            "requiredConstraintIds": list(self.required_constraint_ids),
+            "outputs": [output.canonical_document() for output in self.outputs],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskDependency:
+    task_id: str
+    dependency_type: TaskDependencyType = TaskDependencyType.COMPLETE_AFTER
+    output_id: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "taskId": self.task_id,
+            "type": self.dependency_type.value,
+            "outputId": self.output_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionConstraint:
+    type: str
+    value: Any
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {"type": self.type, "value": self.value}
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionAdvice:
+    code: str
+    message: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {"code": self.code, "message": self.message}
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionDefinition:
+    id: str
+    name: str
+    action: str
+    resource_kinds: tuple[str, ...] = ()
+    condition_ids: tuple[str, ...] = ()
+    policy_ids: tuple[str, ...] = ()
+    combining_algorithm: DecisionCombiningAlgorithm = DecisionCombiningAlgorithm.DENY_OVERRIDES
+    version: str = "1.0.0"
+    unknown_condition_effect: DecisionEffect = DecisionEffect.DEFER
+    unsatisfied_condition_effect: DecisionEffect = DecisionEffect.PROHIBIT
+    constraints: tuple[DecisionConstraint, ...] = ()
+    advice: tuple[DecisionAdvice, ...] = ()
+    validity_seconds: int | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "action": self.action,
+            "resourceKinds": list(self.resource_kinds),
+            "conditionIds": list(self.condition_ids),
+            "policyIds": list(self.policy_ids),
+            "combiningAlgorithm": self.combining_algorithm.value,
+            "unknownConditionEffect": self.unknown_condition_effect.value,
+            "unsatisfiedConditionEffect": self.unsatisfied_condition_effect.value,
+            "constraints": [
+                constraint.canonical_document() for constraint in self.constraints
+            ],
+            "advice": [advice.canonical_document() for advice in self.advice],
+            "validity": {
+                "maximumAgeSeconds": self.validity_seconds,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionRequest:
+    id: str
+    decision_id: str
+    resource_id: str
+    actor: ActorReference
+    requested_action: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "decisionId": self.decision_id,
+            "resourceId": self.resource_id,
+            "actor": self.actor.id,
+            "requestedAction": self.requested_action,
+            "context": self.context,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationTrigger:
+    source: ObligationTriggerSource
+    decision_effect: DecisionEffect | None = None
+    policy_id: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "source": self.source.value,
+            "decisionEffect": (
+                self.decision_effect.value if self.decision_effect is not None else None
+            ),
+            "policyId": self.policy_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationSubject:
+    binding: ObligationSubjectBinding = ObligationSubjectBinding.DECISION_RESOURCE
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {"binding": self.binding.value}
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationResponsibility:
+    strategy: ObligationAssignmentStrategy
+    assignee_ref: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "strategy": self.strategy.value,
+            "assigneeRef": self.assignee_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationDuty:
+    action_ref: str | None = None
+    condition_id: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "actionRef": self.action_ref,
+            "conditionId": self.condition_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationTiming:
+    activation: ObligationTimingActivation = ObligationTimingActivation.IMMEDIATE
+    completion_within: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "activation": self.activation.value,
+            "completionWithin": self.completion_within,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationBreach:
+    condition_id: str | None = None
+    severity: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "conditionId": self.condition_id,
+            "severity": self.severity,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationWaiverPolicy:
+    allowed: bool = False
+    policy_id: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "allowed": self.allowed,
+            "policyId": self.policy_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationDefinition:
+    id: str
+    name: str
+    trigger: ObligationTrigger
+    subject: ObligationSubject
+    duty: ObligationDuty
+    responsibility: ObligationResponsibility
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    applicability_condition_id: str | None = None
+    timing: ObligationTiming = field(default_factory=ObligationTiming)
+    fulfillment_condition_id: str | None = None
+    required_evidence: tuple[str, ...] = ()
+    breach: ObligationBreach | None = None
+    waiver: ObligationWaiverPolicy = field(default_factory=ObligationWaiverPolicy)
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "trigger": self.trigger.canonical_document(),
+            "applicabilityConditionId": self.applicability_condition_id,
+            "subject": self.subject.canonical_document(),
+            "duty": self.duty.canonical_document(),
+            "responsibility": self.responsibility.canonical_document(),
+            "timing": self.timing.canonical_document(),
+            "fulfillmentConditionId": self.fulfillment_condition_id,
+            "requiredEvidence": list(self.required_evidence),
+            "breach": self.breach.canonical_document() if self.breach is not None else None,
+            "waiver": self.waiver.canonical_document(),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,6 +991,580 @@ class PolicyDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionFinding:
+    code: str
+    message: str
+    clause: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionEvaluation:
+    condition_id: str
+    condition_version: str | None
+    subject_id: str
+    subject_revision: int | None
+    outcome: ConditionOutcome
+    findings: tuple[ConditionFinding, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "condition": {
+                "id": self.condition_id,
+                "version": self.condition_version,
+            },
+            "subject": {
+                "id": self.subject_id,
+                "revision": self.subject_revision,
+            },
+            "outcome": self.outcome.value,
+            "findings": [
+                {
+                    "code": finding.code,
+                    "message": finding.message,
+                    "clause": finding.clause,
+                }
+                for finding in self.findings
+            ],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionFinding:
+    code: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyContribution:
+    policy_id: str
+    policy_revision: int
+    effect: PolicyEffect
+    obligations: tuple[PolicyObligation, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "policy": {
+                "id": self.policy_id,
+                "revision": self.policy_revision,
+            },
+            "effect": self.effect.value,
+            "obligations": [
+                {
+                    "type": obligation.type,
+                    "authority": obligation.authority,
+                    "evidenceType": obligation.evidence_type,
+                }
+                for obligation in self.obligations
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEvaluation:
+    request_id: str | None
+    decision_id: str
+    decision_version: str | None
+    action: str
+    resource_id: str
+    resource_revision: int | None
+    evaluation_status: DecisionEvaluationStatus
+    outcome: str
+    effect: DecisionEffect
+    condition_evaluations: tuple[ConditionEvaluation, ...]
+    policy_contributions: tuple[PolicyContribution, ...]
+    obligations: tuple[PolicyObligation, ...]
+    constraints: tuple[DecisionConstraint, ...]
+    advice: tuple[DecisionAdvice, ...]
+    findings: tuple[DecisionFinding, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+    valid_until: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "requestId": self.request_id,
+            "decision": {
+                "id": self.decision_id,
+                "version": self.decision_version,
+            },
+            "action": self.action,
+            "resource": {
+                "id": self.resource_id,
+                "revision": self.resource_revision,
+            },
+            "evaluationStatus": self.evaluation_status.value,
+            "outcome": self.outcome,
+            "effect": self.effect.value,
+            "conditions": [
+                evaluation.canonical_document()
+                for evaluation in self.condition_evaluations
+            ],
+            "policyContributions": [
+                contribution.canonical_document()
+                for contribution in self.policy_contributions
+            ],
+            "obligations": [
+                {
+                    "type": obligation.type,
+                    "authority": obligation.authority,
+                    "evidenceType": obligation.evidence_type,
+                }
+                for obligation in self.obligations
+            ],
+            "constraints": [
+                constraint.canonical_document() for constraint in self.constraints
+            ],
+            "advice": [advice.canonical_document() for advice in self.advice],
+            "findings": [
+                {"code": finding.code, "message": finding.message}
+                for finding in self.findings
+            ],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+            "validUntil": (
+                self.valid_until.isoformat() if self.valid_until is not None else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationEvidence:
+    evidence_type: str
+    reference: ObjectReference
+    attached_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        document: dict[str, Any] = {
+            "type": self.evidence_type,
+            "$ref": {"id": self.reference.id},
+            "attachedAt": self.attached_at.isoformat(),
+        }
+        if self.reference.revision is not None:
+            document["$ref"]["revision"] = self.reference.revision
+        return document
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationInstance:
+    id: str
+    activation_key: str
+    definition_id: str
+    definition_version: str
+    source_decision_ref: str
+    subject_ref: ObjectReference
+    assignee_ref: str
+    state: ObligationLifecycleState
+    activated_at: datetime
+    due_at: datetime | None
+    evidence: tuple[ObligationEvidence, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "activationKey": self.activation_key,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "source": {
+                "decisionRef": self.source_decision_ref,
+            },
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "assigneeRef": self.assignee_ref,
+            "state": self.state.value,
+            "activatedAt": self.activated_at.isoformat(),
+            "dueAt": self.due_at.isoformat() if self.due_at is not None else None,
+            "evidence": [item.canonical_document() for item in self.evidence],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationActivation:
+    definition_id: str
+    definition_version: str | None
+    outcome: ObligationActivationOutcome
+    instance_id: str | None
+    reason_code: str
+    evaluated_at: datetime
+    condition_evaluation: ConditionEvaluation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationEvaluation:
+    obligation_id: str
+    definition_id: str
+    definition_version: str
+    result: ObligationFulfillmentResult
+    state: ObligationLifecycleState
+    findings: tuple[ConditionFinding, ...]
+    evidence: tuple[ObligationEvidence, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "obligationId": self.obligation_id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "result": self.result.value,
+            "state": self.state.value,
+            "findings": [
+                {
+                    "code": finding.code,
+                    "message": finding.message,
+                    "clause": finding.clause,
+                }
+                for finding in self.findings
+            ],
+            "evidence": [item.canonical_document() for item in self.evidence],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConstraintViolation:
+    id: str
+    violation_key: str
+    constraint_id: str
+    constraint_version: str
+    subject_ref: ObjectReference
+    condition_evaluation: ConditionEvaluation
+    severity: str
+    state: ConstraintViolationState
+    detected_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "violationKey": self.violation_key,
+            "constraint": {
+                "id": self.constraint_id,
+                "version": self.constraint_version,
+            },
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "conditionEvaluation": self.condition_evaluation.canonical_document(),
+            "severity": self.severity,
+            "state": self.state.value,
+            "detectedAt": self.detected_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConstraintEvaluation:
+    constraint_id: str
+    constraint_version: str | None
+    subject_id: str
+    subject_revision: int | None
+    result: ConstraintEvaluationResult
+    condition_evaluation: ConditionEvaluation | None
+    violation_id: str | None
+    findings: tuple[ConditionFinding, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "constraint": {
+                "id": self.constraint_id,
+                "version": self.constraint_version,
+            },
+            "subject": {
+                "id": self.subject_id,
+                "revision": self.subject_revision,
+            },
+            "result": self.result.value,
+            "conditionEvaluation": (
+                self.condition_evaluation.canonical_document()
+                if self.condition_evaluation is not None
+                else None
+            ),
+            "violationId": self.violation_id,
+            "findings": [
+                {
+                    "code": finding.code,
+                    "message": finding.message,
+                    "clause": finding.clause,
+                }
+                for finding in self.findings
+            ],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskOutputValue:
+    output_id: str
+    value: Any
+    source: TaskOutputSource
+    provenance: dict[str, Any]
+    recorded_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "outputId": self.output_id,
+            "value": self.value,
+            "source": self.source.value,
+            "provenance": self.provenance,
+            "recordedAt": self.recorded_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskInstance:
+    id: str
+    goal_ref: str
+    assignee_ref: str
+    subject_ref: ObjectReference
+    mode: TaskMode
+    state: TaskLifecycleState
+    definition_id: str | None = None
+    definition_version: str | None = None
+    completion_condition_id: str | None = None
+    allowed_actions: tuple[str, ...] = ()
+    required_constraint_ids: tuple[str, ...] = ()
+    dependencies: tuple[TaskDependency, ...] = ()
+    outputs: tuple[TaskOutputDefinition, ...] = ()
+    output_values: tuple[TaskOutputValue, ...] = ()
+    budget: int | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "goalRef": self.goal_ref,
+            "assigneeRef": self.assignee_ref,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "mode": self.mode.value,
+            "state": self.state.value,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "completionConditionId": self.completion_condition_id,
+            "allowedActions": list(self.allowed_actions),
+            "requiredConstraintIds": list(self.required_constraint_ids),
+            "dependencies": [
+                dependency.canonical_document() for dependency in self.dependencies
+            ],
+            "outputs": [output.canonical_document() for output in self.outputs],
+            "outputValues": [value.canonical_document() for value in self.output_values],
+            "budget": self.budget,
+            "createdAt": self.created_at.isoformat(),
+            "updatedAt": self.updated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskCompletionEvaluation:
+    task_id: str
+    result: TaskCompletionResult
+    state: TaskLifecycleState
+    condition_evaluation: ConditionEvaluation | None
+    findings: tuple[ConditionFinding, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "taskId": self.task_id,
+            "result": self.result.value,
+            "state": self.state.value,
+            "conditionEvaluation": (
+                self.condition_evaluation.canonical_document()
+                if self.condition_evaluation is not None
+                else None
+            ),
+            "findings": [
+                {
+                    "code": finding.code,
+                    "message": finding.message,
+                    "clause": finding.clause,
+                }
+                for finding in self.findings
+            ],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PlanInstance:
+    id: str
+    goal_ref: str
+    planner_ref: str
+    task_ids: tuple[str, ...]
+    version: int
+    state: PlanLifecycleState
+    expected_outcome_ref: str | None = None
+    previous_plan_id: str | None = None
+    superseded_by: str | None = None
+    revision_reason: str | None = None
+    validation_result: PlanValidationResult = PlanValidationResult.UNKNOWN
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "goalRef": self.goal_ref,
+            "plannerRef": self.planner_ref,
+            "taskIds": list(self.task_ids),
+            "version": self.version,
+            "state": self.state.value,
+            "expectedOutcomeRef": self.expected_outcome_ref,
+            "previousPlanId": self.previous_plan_id,
+            "supersededBy": self.superseded_by,
+            "revisionReason": self.revision_reason,
+            "validation": {"result": self.validation_result.value},
+            "createdAt": self.created_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PlanValidation:
+    plan_id: str
+    result: PlanValidationResult
+    findings: tuple[ConditionFinding, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    evaluated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ReservationInstance:
+    id: str
+    definition_id: str
+    definition_version: str
+    holder_ref: str
+    resource_ref: str
+    resource_type: str
+    priority_id: str
+    priority_rank: int
+    preemption_mode: PreemptionMode
+    state: ReservationLifecycleState
+    quantity: int
+    created_at: datetime
+    expires_at: datetime | None = None
+    preempted_by: str | None = None
+    preemption_decision_id: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "holderRef": self.holder_ref,
+            "resourceRef": self.resource_ref,
+            "resourceType": self.resource_type,
+            "priority": {
+                "ref": self.priority_id,
+                "rank": self.priority_rank,
+            },
+            "preemption": {"mode": self.preemption_mode.value},
+            "state": self.state.value,
+            "quantity": self.quantity,
+            "createdAt": self.created_at.isoformat(),
+            "expiresAt": (
+                self.expires_at.isoformat() if self.expires_at is not None else None
+            ),
+            "preemptedBy": self.preempted_by,
+            "preemptionDecisionId": self.preemption_decision_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PreemptionRequest:
+    id: str
+    preemption_definition_id: str
+    requester_ref: str
+    requested_resource_ref: str
+    target_reservation_id: str
+    replacement_holder_ref: str
+    priority_id: str
+    reason_code: str
+    expected_target_state: ReservationLifecycleState = ReservationLifecycleState.ACTIVE
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "preemptionDefinitionId": self.preemption_definition_id,
+            "requesterRef": self.requester_ref,
+            "requestedResourceRef": self.requested_resource_ref,
+            "targetReservationId": self.target_reservation_id,
+            "replacementHolderRef": self.replacement_holder_ref,
+            "priorityRef": self.priority_id,
+            "reason": {"code": self.reason_code},
+            "expectedTargetState": self.expected_target_state.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PreemptionDecision:
+    id: str
+    request_id: str
+    definition_id: str | None
+    definition_version: str | None
+    effect: PreemptionEffect
+    target_reservation_id: str
+    replacement_reservation_id: str | None
+    reason_code: str
+    condition_evaluations: tuple[ConditionEvaluation, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    decided_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "requestId": self.request_id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "effect": self.effect.value,
+            "targetReservationId": self.target_reservation_id,
+            "replacementReservationId": self.replacement_reservation_id,
+            "reason": {"code": self.reason_code},
+            "conditions": [
+                evaluation.canonical_document()
+                for evaluation in self.condition_evaluations
+            ],
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "decidedAt": self.decided_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -348,6 +1580,136 @@ class StateTransitionDecision:
     reasons: tuple[StateTransitionFinding, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class StateTransitionEvent:
+    id: str
+    sequence: int
+    event_type: str
+    object_id: str
+    object_kind: str
+    previous_revision: int
+    new_revision: int
+    state_machine_id: str
+    state_machine_version: str
+    transition: str
+    from_state: str
+    to_state: str
+    actor: ActorReference
+    action_id: str | None
+    occurred_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "sequence": self.sequence,
+            "eventType": self.event_type,
+            "object": {
+                "id": self.object_id,
+                "kind": self.object_kind,
+                "previousRevision": self.previous_revision,
+                "newRevision": self.new_revision,
+            },
+            "stateMachine": {
+                "id": self.state_machine_id,
+                "version": self.state_machine_version,
+            },
+            "transition": self.transition,
+            "fromState": self.from_state,
+            "toState": self.to_state,
+            "actor": self.actor.id,
+            "actionId": self.action_id,
+            "occurredAt": self.occurred_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StateTransitionAuditRecord:
+    id: str
+    event_id: str
+    object_id: str
+    state_machine_id: str
+    state_machine_version: str
+    transition: str
+    action_id: str | None
+    actor: ActorReference
+    previous_state: str
+    new_state: str
+    previous_revision: int
+    new_revision: int
+    decision: StateTransitionDecision
+    recorded_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "eventId": self.event_id,
+            "objectId": self.object_id,
+            "stateMachine": {
+                "id": self.state_machine_id,
+                "version": self.state_machine_version,
+            },
+            "transition": self.transition,
+            "actionId": self.action_id,
+            "actor": self.actor.id,
+            "previousState": self.previous_state,
+            "newState": self.new_state,
+            "previousRevision": self.previous_revision,
+            "newRevision": self.new_revision,
+            "decision": {
+                "permitted": self.decision.permitted,
+                "currentState": self.decision.current_state,
+                "targetState": self.decision.target_state,
+                "reasons": [
+                    {"code": reason.code, "message": reason.message}
+                    for reason in self.decision.reasons
+                ],
+            },
+            "recordedAt": self.recorded_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipAuditRecord:
+    id: str
+    sequence: int
+    relationship_id: str
+    relationship_type_id: str
+    relationship_type_version: str
+    action: str
+    source_id: str
+    target_id: str
+    source_revision: int
+    target_revision: int
+    new_source_revision: int
+    actor: ActorReference
+    evidence_types: tuple[str, ...]
+    recorded_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "sequence": self.sequence,
+            "relationshipId": self.relationship_id,
+            "relationshipType": {
+                "id": self.relationship_type_id,
+                "version": self.relationship_type_version,
+            },
+            "action": self.action,
+            "source": {
+                "id": self.source_id,
+                "previousRevision": self.source_revision,
+                "newRevision": self.new_source_revision,
+            },
+            "target": {
+                "id": self.target_id,
+                "revision": self.target_revision,
+            },
+            "actor": self.actor.id,
+            "evidenceTypes": list(self.evidence_types),
+            "recordedAt": self.recorded_at.isoformat(),
+        }
+
+
 class InMemoryUPDLRegistry:
     def __init__(self) -> None:
         self._types: dict[str, TypeDefinition] = {}
@@ -355,7 +1717,34 @@ class InMemoryUPDLRegistry:
         self._policies: dict[str, PolicyDefinition] = {}
         self._namespaces: dict[str, NamespaceDefinition] = {}
         self._relationship_types: dict[str, RelationshipTypeDefinition] = {}
+        self._conditions: dict[str, SemanticConditionDefinition] = {}
+        self._constraints: dict[str, ConstraintDefinition] = {}
+        self._constraint_violations: dict[str, ConstraintViolation] = {}
+        self._constraint_violation_keys: dict[str, str] = {}
+        self._task_definitions: dict[str, TaskDefinition] = {}
+        self._tasks: dict[str, TaskInstance] = {}
+        self._plans: dict[str, PlanInstance] = {}
+        self._priorities: dict[str, PriorityDefinition] = {}
+        self._reservation_definitions: dict[str, ReservationDefinition] = {}
+        self._reservations: dict[str, ReservationInstance] = {}
+        self._preemption_definitions: dict[str, PreemptionDefinition] = {}
+        self._preemption_decisions: dict[str, PreemptionDecision] = {}
+        self._decisions: dict[str, DecisionDefinition] = {}
+        self._obligation_definitions: dict[str, ObligationDefinition] = {}
+        self._obligation_instances: dict[str, ObligationInstance] = {}
+        self._obligation_activation_keys: dict[str, str] = {}
         self._state_machines: dict[str, StateMachineDefinition] = {}
+        self._transition_events: list[StateTransitionEvent] = []
+        self._transition_audit_records: list[StateTransitionAuditRecord] = []
+        self._relationship_audit_records: list[RelationshipAuditRecord] = []
+        self._event_sequence = 0
+        self._relationship_audit_sequence = 0
+        self._obligation_sequence = 0
+        self._constraint_violation_sequence = 0
+        self._task_sequence = 0
+        self._plan_sequence = 0
+        self._reservation_sequence = 0
+        self._preemption_decision_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -379,6 +1768,17 @@ class InMemoryUPDLRegistry:
 
     def register_relationship_type(self, definition: RelationshipTypeDefinition) -> None:
         require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("RELATIONSHIP_NAME_REQUIRED", definition.id)
+        if not definition.source_kinds:
+            raise RegistryError("RELATIONSHIP_SOURCE_KIND_REQUIRED", definition.id)
+        if not definition.target_kinds:
+            raise RegistryError("RELATIONSHIP_TARGET_KIND_REQUIRED", definition.id)
+        if definition.symmetric and set(definition.source_kinds) != set(definition.target_kinds):
+            raise RegistryError(
+                "RELATIONSHIP_SYMMETRIC_KIND_MISMATCH",
+                definition.id,
+            )
         for kind in (*definition.source_kinds, *definition.target_kinds):
             if kind not in self._types:
                 raise RegistryError("RELATIONSHIP_KIND_UNKNOWN", kind)
@@ -417,6 +1817,837 @@ class InMemoryUPDLRegistry:
     def register_policy(self, definition: PolicyDefinition) -> None:
         require_identifier(definition.id)
         self._policies[definition.id] = definition
+
+    def register_condition(self, definition: SemanticConditionDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("CONDITION_NAME_REQUIRED", definition.id)
+        if not definition.subject_kinds:
+            raise RegistryError("CONDITION_SUBJECT_KIND_REQUIRED", definition.id)
+        if not definition.clauses:
+            raise RegistryError("CONDITION_CLAUSE_REQUIRED", definition.id)
+        for kind in definition.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("CONDITION_SUBJECT_KIND_UNKNOWN", kind)
+        for clause in definition.clauses:
+            self._require_valid_condition_clause(definition, clause)
+        self._conditions[definition.id] = definition
+
+    def register_constraint(self, definition: ConstraintDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("CONSTRAINT_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("CONSTRAINT_STATUS_INVALID", definition.status)
+        if not definition.subject_kinds:
+            raise RegistryError("CONSTRAINT_SUBJECT_KIND_REQUIRED", definition.id)
+        self._require_registered_condition(
+            definition.condition_id,
+            "CONSTRAINT_CONDITION_UNKNOWN",
+        )
+        for kind in definition.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("CONSTRAINT_SUBJECT_KIND_UNKNOWN", kind)
+        condition = self._conditions[definition.condition_id]
+        if not set(definition.subject_kinds).issubset(condition.subject_kinds):
+            raise RegistryError("CONSTRAINT_CONDITION_SUBJECT_KIND_MISMATCH", definition.id)
+        self._constraints[definition.id] = definition
+
+    def register_task_definition(self, definition: TaskDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("TASK_DEFINITION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("TASK_DEFINITION_STATUS_INVALID", definition.status)
+        if definition.completion_condition_id is not None:
+            self._require_registered_condition(
+                definition.completion_condition_id,
+                "TASK_COMPLETION_CONDITION_UNKNOWN",
+            )
+        for constraint_id in definition.required_constraint_ids:
+            if constraint_id not in self._constraints:
+                raise RegistryError("TASK_CONSTRAINT_UNKNOWN", constraint_id)
+        self._require_unique_task_outputs(definition.outputs)
+        self._task_definitions[definition.id] = definition
+
+    def register_decision(self, definition: DecisionDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("DECISION_NAME_REQUIRED", definition.id)
+        if not definition.action:
+            raise RegistryError("DECISION_ACTION_REQUIRED", definition.id)
+        if (
+            definition.validity_seconds is not None
+            and definition.validity_seconds <= 0
+        ):
+            raise RegistryError("DECISION_VALIDITY_INVALID", definition.id)
+        for kind in definition.resource_kinds:
+            if kind not in self._types:
+                raise RegistryError("DECISION_RESOURCE_KIND_UNKNOWN", kind)
+        for condition_id in definition.condition_ids:
+            if condition_id not in self._conditions:
+                raise RegistryError("DECISION_CONDITION_UNKNOWN", condition_id)
+        for policy_id in definition.policy_ids:
+            if policy_id not in self._policies:
+                raise RegistryError("DECISION_POLICY_UNKNOWN", policy_id)
+        self._decisions[definition.id] = definition
+
+    def register_obligation(self, definition: ObligationDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("OBLIGATION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("OBLIGATION_STATUS_INVALID", definition.status)
+        if definition.trigger.source is ObligationTriggerSource.POLICY_DECISION:
+            if definition.trigger.decision_effect is None:
+                raise RegistryError("OBLIGATION_TRIGGER_EFFECT_REQUIRED", definition.id)
+            if (
+                definition.trigger.policy_id is not None
+                and definition.trigger.policy_id not in self._policies
+            ):
+                raise RegistryError(
+                    "OBLIGATION_TRIGGER_POLICY_UNKNOWN",
+                    definition.trigger.policy_id,
+                )
+        if definition.applicability_condition_id is not None:
+            self._require_registered_condition(
+                definition.applicability_condition_id,
+                "OBLIGATION_APPLICABILITY_CONDITION_UNKNOWN",
+            )
+        if not definition.duty.action_ref and not definition.duty.condition_id:
+            raise RegistryError("OBLIGATION_DUTY_REQUIRED", definition.id)
+        if definition.duty.condition_id is not None:
+            self._require_registered_condition(
+                definition.duty.condition_id,
+                "OBLIGATION_DUTY_CONDITION_UNKNOWN",
+            )
+        if definition.fulfillment_condition_id is not None:
+            self._require_registered_condition(
+                definition.fulfillment_condition_id,
+                "OBLIGATION_FULFILLMENT_CONDITION_UNKNOWN",
+            )
+        if definition.breach is not None and definition.breach.condition_id is not None:
+            self._require_registered_condition(
+                definition.breach.condition_id,
+                "OBLIGATION_BREACH_CONDITION_UNKNOWN",
+            )
+        if (
+            definition.waiver.policy_id is not None
+            and definition.waiver.policy_id not in self._policies
+        ):
+            raise RegistryError("OBLIGATION_WAIVER_POLICY_UNKNOWN", definition.waiver.policy_id)
+        if definition.timing.completion_within is not None:
+            _parse_duration(definition.timing.completion_within)
+        if not definition.responsibility.assignee_ref:
+            raise RegistryError("OBLIGATION_ASSIGNMENT_INVALID", definition.id)
+        self._obligation_definitions[definition.id] = definition
+
+    def register_priority(self, definition: PriorityDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("PRIORITY_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("PRIORITY_STATUS_INVALID", definition.status)
+        if definition.rank < 0:
+            raise RegistryError("PRIORITY_RANK_INVALID", definition.id)
+        self._priorities[definition.id] = definition
+
+    def register_reservation_definition(
+        self,
+        definition: ReservationDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("RESERVATION_DEFINITION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("RESERVATION_DEFINITION_STATUS_INVALID", definition.status)
+        if not definition.resource_type:
+            raise RegistryError("RESERVATION_RESOURCE_TYPE_REQUIRED", definition.id)
+        if not definition.quantity_type:
+            raise RegistryError("RESERVATION_QUANTITY_TYPE_REQUIRED", definition.id)
+        self._reservation_definitions[definition.id] = definition
+
+    def register_preemption(self, definition: PreemptionDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("PREEMPTION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("PREEMPTION_STATUS_INVALID", definition.status)
+        if not definition.resource_types:
+            raise RegistryError("PREEMPTION_RESOURCE_TYPE_REQUIRED", definition.id)
+        if definition.minimum_priority_id not in self._priorities:
+            raise RegistryError(
+                "PREEMPTION_MINIMUM_PRIORITY_UNKNOWN",
+                definition.minimum_priority_id,
+            )
+        if not definition.target_modes:
+            raise RegistryError("PREEMPTION_TARGET_MODE_REQUIRED", definition.id)
+        if PreemptionMode.NON_PREEMPTIBLE in definition.target_modes:
+            raise RegistryError("PREEMPTION_TARGET_MODE_INVALID", definition.id)
+        for condition_id in definition.condition_ids:
+            self._require_registered_condition(
+                condition_id,
+                "PREEMPTION_CONDITION_UNKNOWN",
+            )
+        if definition.policy_id is not None and definition.policy_id not in self._policies:
+            raise RegistryError("PREEMPTION_POLICY_UNKNOWN", definition.policy_id)
+        if definition.minimum_priority_delta < 0:
+            raise RegistryError("PREEMPTION_PRIORITY_DELTA_INVALID", definition.id)
+        self._preemption_definitions[definition.id] = definition
+
+    def create_reservation(
+        self,
+        *,
+        definition_id: str,
+        holder_ref: str,
+        resource_ref: str,
+        priority_id: str,
+        quantity: int = 1,
+        expires_at: datetime | None = None,
+        preemption_mode: PreemptionMode | None = None,
+    ) -> ReservationInstance:
+        definition = self._reservation_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("RESERVATION_DEFINITION_NOT_FOUND", definition_id)
+        if definition.status != "ACTIVE":
+            raise RegistryError("RESERVATION_DEFINITION_INACTIVE", definition_id)
+        priority = self._priorities.get(priority_id)
+        if priority is None:
+            raise RegistryError("RESERVATION_PRIORITY_NOT_FOUND", priority_id)
+        if priority.status != "ACTIVE":
+            raise RegistryError("RESERVATION_PRIORITY_INACTIVE", priority_id)
+        if not holder_ref:
+            raise RegistryError("RESERVATION_HOLDER_REQUIRED", definition_id)
+        if not resource_ref:
+            raise RegistryError("RESERVATION_RESOURCE_REQUIRED", definition_id)
+        if quantity <= 0:
+            raise RegistryError("RESERVATION_QUANTITY_INVALID", definition_id)
+        if definition.expiration_required and expires_at is None:
+            raise RegistryError("RESERVATION_EXPIRATION_REQUIRED", definition_id)
+        self._reservation_sequence += 1
+        reservation = ReservationInstance(
+            id=f"RSV-{self._reservation_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            holder_ref=holder_ref,
+            resource_ref=resource_ref,
+            resource_type=definition.resource_type,
+            priority_id=priority.id,
+            priority_rank=priority.rank,
+            preemption_mode=preemption_mode or definition.preemption_mode,
+            state=ReservationLifecycleState.ACTIVE,
+            quantity=quantity,
+            created_at=datetime.now(UTC),
+            expires_at=expires_at,
+        )
+        self._reservations[reservation.id] = reservation
+        return reservation
+
+    def get_reservation(self, reservation_id: str) -> ReservationInstance:
+        reservation = self._reservations.get(reservation_id)
+        if reservation is None:
+            raise RegistryError("RESERVATION_NOT_FOUND", reservation_id)
+        return reservation
+
+    def get_preemption_decision(self, decision_id: str) -> PreemptionDecision:
+        decision = self._preemption_decisions.get(decision_id)
+        if decision is None:
+            raise RegistryError("PREEMPTION_DECISION_NOT_FOUND", decision_id)
+        return decision
+
+    def evaluate_preemption(self, request: PreemptionRequest) -> PreemptionDecision:
+        require_identifier(request.id)
+        decided_at = datetime.now(UTC)
+        definition = self._preemption_definitions.get(request.preemption_definition_id)
+        if definition is None:
+            return self._preemption_decision(
+                request=request,
+                definition=None,
+                effect=PreemptionEffect.INDETERMINATE,
+                reason_code="PREEMPTION_DEFINITION_NOT_FOUND",
+                condition_evaluations=(),
+                replacement=None,
+                decided_at=decided_at,
+            )
+        if definition.status != "ACTIVE":
+            return self._preemption_decision(
+                request=request,
+                definition=definition,
+                effect=PreemptionEffect.DENY,
+                reason_code="PREEMPTION_DEFINITION_INACTIVE",
+                condition_evaluations=(),
+                replacement=None,
+                decided_at=decided_at,
+            )
+        target = self._reservations.get(request.target_reservation_id)
+        if target is None:
+            return self._preemption_decision(
+                request=request,
+                definition=definition,
+                effect=PreemptionEffect.DENY,
+                reason_code="PREEMPTION_TARGET_NOT_FOUND",
+                condition_evaluations=(),
+                replacement=None,
+                decided_at=decided_at,
+            )
+        structural_reason = self._preemption_structural_denial(
+            request=request,
+            definition=definition,
+            target=target,
+        )
+        condition_evaluations = self._evaluate_preemption_conditions(
+            definition=definition,
+            target=target,
+        )
+        condition_reason = self._preemption_condition_denial(condition_evaluations)
+        reason_code = structural_reason or condition_reason
+        if reason_code is not None:
+            effect = (
+                PreemptionEffect.INDETERMINATE
+                if reason_code == "PREEMPTION_CONDITION_UNKNOWN"
+                else PreemptionEffect.DENY
+            )
+            return self._preemption_decision(
+                request=request,
+                definition=definition,
+                effect=effect,
+                reason_code=reason_code,
+                condition_evaluations=condition_evaluations,
+                replacement=None,
+                decided_at=decided_at,
+                target=target,
+            )
+
+        replacement = self._create_replacement_reservation(
+            request=request,
+            target=target,
+        )
+        decision = self._preemption_decision(
+            request=request,
+            definition=definition,
+            effect=PreemptionEffect.PERMIT,
+            reason_code="PREEMPTION_PERMITTED",
+            condition_evaluations=condition_evaluations,
+            replacement=replacement,
+            decided_at=decided_at,
+            target=target,
+        )
+        self._reservations[target.id] = replace(
+            target,
+            state=ReservationLifecycleState.PREEMPTED,
+            preempted_by=replacement.id,
+            preemption_decision_id=decision.id,
+        )
+        return decision
+
+    def evaluate_decision_obligations(
+        self,
+        decision: DecisionEvaluation,
+    ) -> tuple[ObligationActivation, ...]:
+        evaluated_at = datetime.now(UTC)
+        activations: list[ObligationActivation] = []
+        for definition in sorted(
+            self._obligation_definitions.values(),
+            key=lambda item: item.id,
+        ):
+            if definition.status != "ACTIVE":
+                continue
+            activation = self._activate_obligation_from_decision(
+                definition,
+                decision,
+                evaluated_at,
+            )
+            activations.append(activation)
+        return tuple(activations)
+
+    def get_obligation(self, obligation_id: str) -> ObligationInstance:
+        instance = self._obligation_instances.get(obligation_id)
+        if instance is None:
+            raise RegistryError("OBLIGATION_NOT_FOUND", obligation_id)
+        return instance
+
+    def list_obligations(
+        self,
+        *,
+        state: ObligationLifecycleState | None = None,
+        subject_id: str | None = None,
+        definition_id: str | None = None,
+    ) -> tuple[ObligationInstance, ...]:
+        instances = sorted(self._obligation_instances.values(), key=lambda item: item.id)
+        return tuple(
+            instance
+            for instance in instances
+            if (state is None or instance.state is state)
+            and (subject_id is None or instance.subject_ref.id == subject_id)
+            and (definition_id is None or instance.definition_id == definition_id)
+        )
+
+    def attach_obligation_evidence(
+        self,
+        *,
+        obligation_id: str,
+        evidence_type: str,
+        evidence_ref: ObjectReference,
+    ) -> ObligationInstance:
+        instance = self.get_obligation(obligation_id)
+        definition = self._obligation_definitions.get(instance.definition_id)
+        if definition is None:
+            raise RegistryError("OBLIGATION_DEFINITION_NOT_FOUND", instance.definition_id)
+        if (
+            definition.required_evidence
+            and evidence_type not in definition.required_evidence
+        ):
+            raise RegistryError("OBLIGATION_EVIDENCE_TYPE_INVALID", evidence_type)
+        resolution = self.resolve_reference(evidence_ref)
+        if resolution.status is not ResolutionStatus.RESOLVED or resolution.resolved is None:
+            raise RegistryError(resolution.status.value, evidence_ref.id)
+        attached = ObligationEvidence(
+            evidence_type=evidence_type,
+            reference=ObjectReference(
+                resolution.resolved.metadata.id,
+                revision=resolution.resolved.metadata.revision,
+            ),
+            attached_at=datetime.now(UTC),
+        )
+        updated = replace(instance, evidence=(*instance.evidence, attached))
+        self._obligation_instances[obligation_id] = updated
+        return updated
+
+    def evaluate_obligation(
+        self,
+        obligation_id: str,
+    ) -> ObligationEvaluation:
+        instance = self.get_obligation(obligation_id)
+        definition = self._obligation_definitions.get(instance.definition_id)
+        evaluated_at = datetime.now(UTC)
+        if definition is None:
+            raise RegistryError("OBLIGATION_DEFINITION_NOT_FOUND", instance.definition_id)
+        findings: list[ConditionFinding] = []
+        evidence_types = {item.evidence_type for item in instance.evidence}
+        missing_evidence = tuple(
+            evidence_type
+            for evidence_type in definition.required_evidence
+            if evidence_type not in evidence_types
+        )
+        if missing_evidence:
+            findings.append(
+                ConditionFinding(
+                    "OBLIGATION_REQUIRED_EVIDENCE_MISSING",
+                    f"Missing required evidence: {list(missing_evidence)}.",
+                )
+            )
+        fulfillment_evaluation: ConditionEvaluation | None = None
+        if definition.fulfillment_condition_id is not None:
+            fulfillment_evaluation = self.evaluate_condition(
+                condition_id=definition.fulfillment_condition_id,
+                subject_id=instance.subject_ref.id,
+            )
+            if fulfillment_evaluation.outcome is ConditionOutcome.UNKNOWN:
+                findings.extend(fulfillment_evaluation.findings)
+            elif fulfillment_evaluation.outcome is not ConditionOutcome.SATISFIED:
+                findings.extend(fulfillment_evaluation.findings)
+        breach_evaluation: ConditionEvaluation | None = None
+        breach_satisfied = False
+        if definition.breach is not None and definition.breach.condition_id is not None:
+            breach_evaluation = self.evaluate_condition(
+                condition_id=definition.breach.condition_id,
+                subject_id=instance.subject_ref.id,
+            )
+            breach_satisfied = breach_evaluation.outcome is ConditionOutcome.SATISFIED
+        deadline_breached = instance.due_at is not None and evaluated_at > instance.due_at
+        fulfilled_by_condition = (
+            fulfillment_evaluation is None
+            or fulfillment_evaluation.outcome is ConditionOutcome.SATISFIED
+        )
+        if not missing_evidence and fulfilled_by_condition:
+            result = ObligationFulfillmentResult.FULFILLED
+            state = ObligationLifecycleState.FULFILLED
+        elif breach_satisfied or deadline_breached:
+            result = ObligationFulfillmentResult.NOT_FULFILLED
+            state = ObligationLifecycleState.BREACHED
+            findings.append(
+                ConditionFinding(
+                    "OBLIGATION_BREACHED",
+                    "Obligation breach condition or deadline was reached.",
+                )
+            )
+        elif (
+            fulfillment_evaluation is not None
+            and fulfillment_evaluation.outcome is ConditionOutcome.UNKNOWN
+        ):
+            result = ObligationFulfillmentResult.UNKNOWN
+            state = instance.state
+        else:
+            result = ObligationFulfillmentResult.NOT_FULFILLED
+            state = instance.state
+        updated = replace(instance, state=state)
+        self._obligation_instances[obligation_id] = updated
+        proof = {
+            "definition": definition.canonical_document(),
+            "instance": updated.canonical_document(),
+            "fulfillmentCondition": (
+                fulfillment_evaluation.canonical_document()
+                if fulfillment_evaluation is not None
+                else None
+            ),
+            "breachCondition": (
+                breach_evaluation.canonical_document()
+                if breach_evaluation is not None
+                else None
+            ),
+        }
+        return ObligationEvaluation(
+            obligation_id=updated.id,
+            definition_id=updated.definition_id,
+            definition_version=updated.definition_version,
+            result=result,
+            state=state,
+            findings=tuple(findings),
+            evidence=updated.evidence,
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            evaluated_at=evaluated_at,
+        )
+
+    def evaluate_decision_request(
+        self,
+        request: DecisionRequest,
+    ) -> DecisionEvaluation:
+        require_identifier(request.id)
+        return self.evaluate_decision(
+            decision_id=request.decision_id,
+            resource_id=request.resource_id,
+            actor=request.actor,
+            context=request.context,
+            request_id=request.id,
+            requested_action=request.requested_action,
+        )
+
+    def create_task(
+        self,
+        *,
+        goal_ref: str,
+        assignee_ref: str,
+        subject_ref: ObjectReference,
+        actor: ActorReference,
+        mode: TaskMode = TaskMode.AD_HOC,
+        definition_id: str | None = None,
+        completion_condition_id: str | None = None,
+        allowed_actions: tuple[str, ...] = (),
+        required_constraint_ids: tuple[str, ...] = (),
+        dependencies: tuple[TaskDependency, ...] = (),
+        outputs: tuple[TaskOutputDefinition, ...] = (),
+        budget: int | None = None,
+        parent_allowed_actions: tuple[str, ...] = (),
+        parent_required_constraint_ids: tuple[str, ...] = (),
+        parent_budget: int | None = None,
+    ) -> TaskInstance:
+        if not goal_ref:
+            raise RegistryError("TASK_GOAL_REQUIRED", "goalRef is required")
+        if not assignee_ref:
+            raise RegistryError("TASK_ASSIGNEE_INVALID", "assigneeRef is required")
+        subject_resolution = self.resolve_reference(subject_ref)
+        if subject_resolution.status is not ResolutionStatus.RESOLVED:
+            raise RegistryError(subject_resolution.status.value, subject_ref.id)
+        definition: TaskDefinition | None = None
+        if mode is TaskMode.DEFINED:
+            if definition_id is None:
+                raise RegistryError("TASK_DEFINITION_REQUIRED", goal_ref)
+            definition = self._task_definitions.get(definition_id)
+            if definition is None:
+                raise RegistryError("TASK_DEFINITION_NOT_FOUND", definition_id)
+            if definition.status != "ACTIVE":
+                raise RegistryError("TASK_DEFINITION_INACTIVE", definition_id)
+            completion_condition_id = definition.completion_condition_id
+            allowed_actions = definition.allowed_actions
+            required_constraint_ids = definition.required_constraint_ids
+            outputs = definition.outputs
+        elif definition_id is not None:
+            raise RegistryError("TASK_AD_HOC_DEFINITION_FORBIDDEN", definition_id)
+        if completion_condition_id is not None:
+            self._require_registered_condition(
+                completion_condition_id,
+                "TASK_COMPLETION_CONDITION_UNKNOWN",
+            )
+        for constraint_id in required_constraint_ids:
+            if constraint_id not in self._constraints:
+                raise RegistryError("TASK_CONSTRAINT_UNKNOWN", constraint_id)
+        if parent_allowed_actions and not set(allowed_actions).issubset(parent_allowed_actions):
+            raise RegistryError("TASK_AUTHORITY_EXCEEDS_GOAL", goal_ref)
+        if not set(parent_required_constraint_ids).issubset(required_constraint_ids):
+            raise RegistryError("TASK_CONSTRAINT_WEAKENING", goal_ref)
+        if budget is not None and parent_budget is not None and budget > parent_budget:
+            raise RegistryError("TASK_BUDGET_EXCEEDS_GOAL", goal_ref)
+        self._require_unique_task_outputs(outputs)
+        self._require_task_dependencies_resolvable(dependencies)
+        self._task_sequence += 1
+        task_id = f"TASK-{self._task_sequence:06d}"
+        now = datetime.now(UTC)
+        task = TaskInstance(
+            id=task_id,
+            goal_ref=goal_ref,
+            assignee_ref=assignee_ref,
+            subject_ref=ObjectReference(
+                (
+                    subject_resolution.resolved.metadata.id
+                    if subject_resolution.resolved
+                    else subject_ref.id
+                ),
+                revision=(
+                    subject_resolution.resolved.metadata.revision
+                    if subject_resolution.resolved
+                    else subject_ref.revision
+                ),
+            ),
+            mode=mode,
+            state=TaskLifecycleState.CREATED,
+            definition_id=definition.id if definition is not None else None,
+            definition_version=definition.version if definition is not None else None,
+            completion_condition_id=completion_condition_id,
+            allowed_actions=allowed_actions,
+            required_constraint_ids=required_constraint_ids,
+            dependencies=dependencies,
+            outputs=outputs,
+            budget=budget,
+            created_at=now,
+            updated_at=now,
+        )
+        self._tasks[task_id] = task
+        self._require_no_task_dependency_cycle()
+        return task
+
+    def get_task(self, task_id: str) -> TaskInstance:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise RegistryError("TASK_NOT_FOUND", task_id)
+        return task
+
+    def set_task_dependencies(
+        self,
+        *,
+        task_id: str,
+        dependencies: tuple[TaskDependency, ...],
+    ) -> TaskInstance:
+        task = self.get_task(task_id)
+        self._require_task_dependencies_resolvable(dependencies)
+        updated = replace(task, dependencies=dependencies, updated_at=datetime.now(UTC))
+        self._tasks[task_id] = updated
+        try:
+            self._require_no_task_dependency_cycle()
+        except RegistryError:
+            self._tasks[task_id] = task
+            raise
+        return updated
+
+    def transition_task(
+        self,
+        *,
+        task_id: str,
+        target_state: TaskLifecycleState,
+    ) -> TaskInstance:
+        task = self.get_task(task_id)
+        allowed = {
+            TaskLifecycleState.CREATED: {TaskLifecycleState.READY},
+            TaskLifecycleState.READY: {
+                TaskLifecycleState.IN_PROGRESS,
+                TaskLifecycleState.BLOCKED,
+                TaskLifecycleState.CANCELLED,
+            },
+            TaskLifecycleState.IN_PROGRESS: {
+                TaskLifecycleState.BLOCKED,
+                TaskLifecycleState.FAILED,
+                TaskLifecycleState.SUSPENDED,
+            },
+            TaskLifecycleState.BLOCKED: {TaskLifecycleState.READY},
+            TaskLifecycleState.SUSPENDED: {TaskLifecycleState.READY},
+        }
+        if target_state not in allowed.get(task.state, set()):
+            raise RegistryError(
+                "TASK_TRANSITION_INVALID",
+                f"{task.state.value} -> {target_state.value}",
+            )
+        if target_state is TaskLifecycleState.IN_PROGRESS:
+            self._require_task_dependencies_satisfied(task)
+        updated = replace(task, state=target_state, updated_at=datetime.now(UTC))
+        self._tasks[task_id] = updated
+        return updated
+
+    def evaluate_task_completion(self, task_id: str) -> TaskCompletionEvaluation:
+        task = self.get_task(task_id)
+        evaluated_at = datetime.now(UTC)
+        findings: list[ConditionFinding] = []
+        condition_evaluation: ConditionEvaluation | None = None
+        if task.state is not TaskLifecycleState.IN_PROGRESS:
+            findings.append(
+                ConditionFinding(
+                    "TASK_NOT_IN_PROGRESS",
+                    f"Task state is {task.state.value}.",
+                )
+            )
+        if task.completion_condition_id is None:
+            findings.append(
+                ConditionFinding(
+                    "TASK_COMPLETION_CONDITION_REQUIRED",
+                    "Task completion requires a governed condition.",
+                )
+            )
+        else:
+            condition_evaluation = self.evaluate_condition(
+                condition_id=task.completion_condition_id,
+                subject_id=task.subject_ref.id,
+            )
+        result = TaskCompletionResult.NOT_COMPLETED
+        state = task.state
+        if not findings and condition_evaluation is not None:
+            if condition_evaluation.outcome is ConditionOutcome.SATISFIED:
+                result = TaskCompletionResult.COMPLETED
+                state = TaskLifecycleState.COMPLETED
+                self._tasks[task_id] = replace(
+                    task,
+                    state=state,
+                    updated_at=evaluated_at,
+                )
+            elif condition_evaluation.outcome is ConditionOutcome.UNKNOWN:
+                result = TaskCompletionResult.UNKNOWN
+                findings.extend(condition_evaluation.findings)
+            else:
+                findings.extend(condition_evaluation.findings)
+        proof = {
+            "task": self.get_task(task_id).canonical_document(),
+            "conditionEvaluation": (
+                condition_evaluation.canonical_document()
+                if condition_evaluation is not None
+                else None
+            ),
+        }
+        return TaskCompletionEvaluation(
+            task_id=task_id,
+            result=result,
+            state=state,
+            condition_evaluation=condition_evaluation,
+            findings=tuple(findings),
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            evaluated_at=evaluated_at,
+        )
+
+    def record_task_output(
+        self,
+        *,
+        task_id: str,
+        output_id: str,
+        value: Any,
+        source: TaskOutputSource,
+        provenance: dict[str, Any],
+    ) -> TaskInstance:
+        task = self.get_task(task_id)
+        output = next((item for item in task.outputs if item.id == output_id), None)
+        if output is None:
+            raise RegistryError("TASK_OUTPUT_NOT_DECLARED", output_id)
+        if output.type == "enum" and output.enum_values and value not in output.enum_values:
+            raise RegistryError("TASK_OUTPUT_VALUE_INVALID", output_id)
+        recorded = TaskOutputValue(
+            output_id=output_id,
+            value=value,
+            source=source,
+            provenance=provenance,
+            recorded_at=datetime.now(UTC),
+        )
+        updated = replace(
+            task,
+            output_values=(*task.output_values, recorded),
+            updated_at=recorded.recorded_at,
+        )
+        self._tasks[task_id] = updated
+        return updated
+
+    def create_plan(
+        self,
+        *,
+        goal_ref: str,
+        planner_ref: str,
+        task_ids: tuple[str, ...],
+        expected_outcome_ref: str | None = None,
+    ) -> PlanInstance:
+        if not goal_ref:
+            raise RegistryError("PLAN_GOAL_REQUIRED", "goalRef is required")
+        if not planner_ref:
+            raise RegistryError("PLAN_PLANNER_REQUIRED", "plannerRef is required")
+        self._require_plan_tasks(goal_ref, task_ids)
+        self._plan_sequence += 1
+        plan = PlanInstance(
+            id=f"PLAN-{self._plan_sequence:06d}-v1",
+            goal_ref=goal_ref,
+            planner_ref=planner_ref,
+            task_ids=task_ids,
+            version=1,
+            state=PlanLifecycleState.ACTIVE,
+            expected_outcome_ref=expected_outcome_ref,
+        )
+        self._plans[plan.id] = plan
+        return plan
+
+    def get_plan(self, plan_id: str) -> PlanInstance:
+        plan = self._plans.get(plan_id)
+        if plan is None:
+            raise RegistryError("PLAN_NOT_FOUND", plan_id)
+        return plan
+
+    def validate_plan(self, plan_id: str) -> PlanValidation:
+        plan = self.get_plan(plan_id)
+        evaluated_at = datetime.now(UTC)
+        findings: list[ConditionFinding] = []
+        try:
+            self._require_plan_tasks(plan.goal_ref, plan.task_ids)
+            self._require_no_task_dependency_cycle(plan.task_ids)
+        except RegistryError as exc:
+            findings.append(ConditionFinding(exc.code, exc.message))
+        result = PlanValidationResult.VALID if not findings else PlanValidationResult.INVALID
+        updated = replace(plan, validation_result=result)
+        self._plans[plan_id] = updated
+        proof = {
+            "plan": updated.canonical_document(),
+            "tasks": [self._tasks[task_id].canonical_document() for task_id in plan.task_ids],
+        }
+        return PlanValidation(
+            plan_id=plan_id,
+            result=result,
+            findings=tuple(findings),
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            evaluated_at=evaluated_at,
+        )
+
+    def revise_plan(
+        self,
+        *,
+        plan_id: str,
+        reason: str,
+        task_ids: tuple[str, ...],
+    ) -> PlanInstance:
+        current = self.get_plan(plan_id)
+        if current.state is PlanLifecycleState.SUPERSEDED:
+            raise RegistryError("PLAN_ALREADY_SUPERSEDED", plan_id)
+        self._require_plan_tasks(current.goal_ref, task_ids)
+        new_id = f"{plan_id.rsplit('-v', 1)[0]}-v{current.version + 1}"
+        revised = PlanInstance(
+            id=new_id,
+            goal_ref=current.goal_ref,
+            planner_ref=current.planner_ref,
+            task_ids=task_ids,
+            version=current.version + 1,
+            state=PlanLifecycleState.ACTIVE,
+            expected_outcome_ref=current.expected_outcome_ref,
+            previous_plan_id=current.id,
+            revision_reason=reason,
+        )
+        self._plans[new_id] = revised
+        self._plans[plan_id] = replace(
+            current,
+            state=PlanLifecycleState.SUPERSEDED,
+            superseded_by=new_id,
+        )
+        return revised
 
     def create_object(
         self,
@@ -459,11 +2690,14 @@ class InMemoryUPDLRegistry:
         source_id: str,
         target: ObjectReference,
         actor: ActorReference,
+        evidence: dict[str, ObjectReference] | None = None,
     ) -> ObjectEnvelope:
         require_identifier(relationship_id)
         relationship_type = self._relationship_types.get(type_id)
         if relationship_type is None:
             raise RegistryError("RELATIONSHIP_TYPE_NOT_REGISTERED", type_id)
+        if relationship_type.lifecycle is not RelationshipLifecycle.ACTIVE:
+            raise RegistryError("RELATIONSHIP_TYPE_INACTIVE", type_id)
         source = self.get_object(source_id)
         target_resolution = self.resolve_reference(
             target,
@@ -478,11 +2712,31 @@ class InMemoryUPDLRegistry:
                 "RELATIONSHIP_SOURCE_KIND_INVALID",
                 f"{source.kind} is not valid for {type_id}",
             )
+        source_type = self._types[source.kind]
+        if (
+            source_type.allowed_relationships
+            and type_id not in source_type.allowed_relationships
+        ):
+            raise RegistryError(
+                "RELATIONSHIP_NOT_ALLOWED_FOR_SOURCE_TYPE",
+                f"{source.kind} does not allow {type_id}",
+            )
         if any(item["id"] == relationship_id for item in source.relationships):
             raise RegistryError(
                 "RELATIONSHIP_IDENTITY_CONFLICT",
                 f"relationship already exists on source: {relationship_id}",
             )
+        if target_resolution.resolved is None:
+            raise RegistryError("REFERENCE_NOT_FOUND", f"target: {target.id}")
+        self._require_relationship_cardinality(
+            relationship_type,
+            source_id=source.metadata.id,
+            target_id=target_resolution.resolved.metadata.id,
+        )
+        resolved_evidence = self._resolve_relationship_evidence(
+            relationship_type,
+            evidence or {},
+        )
         relationship = RelationshipInstance(
             id=relationship_id,
             type_id=type_id,
@@ -491,7 +2745,9 @@ class InMemoryUPDLRegistry:
                 target_resolution.resolved.metadata.id,
                 revision=target_resolution.resolved.metadata.revision,
             ),
+            evidence=resolved_evidence,
         )
+        occurred_at = datetime.now(UTC)
         updated = self._object_envelope(
             kind=source.kind,
             object_id=source.metadata.id,
@@ -500,12 +2756,385 @@ class InMemoryUPDLRegistry:
             spec=source.spec,
             actor=actor,
             created_at=source.metadata.created_at,
-            updated_at=datetime.now(UTC),
+            updated_at=occurred_at,
             lifecycle_state=source.lifecycle.state,
             relationships=(*source.relationships, relationship.canonical_document()),
         )
         self._objects[source_id].append(updated)
+        self._record_relationship_audit(
+            relationship_type=relationship_type,
+            relationship=relationship,
+            new_source_revision=updated.metadata.revision,
+            actor=actor,
+            occurred_at=occurred_at,
+        )
         return updated
+
+    def list_relationship_audit_records(
+        self,
+        relationship_id: str | None = None,
+    ) -> tuple[RelationshipAuditRecord, ...]:
+        if relationship_id is None:
+            return tuple(self._relationship_audit_records)
+        return tuple(
+            record
+            for record in self._relationship_audit_records
+            if record.relationship_id == relationship_id
+        )
+
+    def evaluate_condition(
+        self,
+        *,
+        condition_id: str,
+        subject_id: str,
+    ) -> ConditionEvaluation:
+        definition = self._conditions.get(condition_id)
+        evaluated_at = datetime.now(UTC)
+        if definition is None:
+            return self._condition_evaluation(
+                condition_id=condition_id,
+                condition_version=None,
+                subject_id=subject_id,
+                subject_revision=None,
+                outcome=ConditionOutcome.UNKNOWN,
+                findings=(
+                    ConditionFinding(
+                        "CONDITION_DEFINITION_NOT_FOUND",
+                        f"Condition '{condition_id}' is not registered.",
+                    ),
+                ),
+                proof={"inputs": []},
+                evaluated_at=evaluated_at,
+            )
+        try:
+            subject = self.get_object(subject_id)
+        except RegistryError as exc:
+            return self._condition_evaluation(
+                condition_id=condition_id,
+                condition_version=definition.version,
+                subject_id=subject_id,
+                subject_revision=None,
+                outcome=ConditionOutcome.UNKNOWN,
+                findings=(
+                    ConditionFinding(
+                        "CONDITION_SUBJECT_NOT_FOUND",
+                        exc.message,
+                    ),
+                ),
+                proof={"definition": definition.canonical_document(), "inputs": []},
+                evaluated_at=evaluated_at,
+            )
+        findings: list[ConditionFinding] = []
+        proof_inputs: list[dict[str, Any]] = [
+            {
+                "kind": "subject",
+                "id": subject.metadata.id,
+                "revision": subject.metadata.revision,
+                "objectKind": subject.kind,
+                "lifecycleState": subject.lifecycle.state,
+            }
+        ]
+        if subject.kind not in definition.subject_kinds:
+            findings.append(
+                ConditionFinding(
+                    "CONDITION_SUBJECT_KIND_INVALID",
+                    f"{subject.kind} is not valid for {condition_id}.",
+                )
+            )
+        for clause in definition.clauses:
+            finding, proof = self._evaluate_condition_clause(subject, clause)
+            proof_inputs.append(proof)
+            if finding is not None:
+                findings.append(finding)
+        unknown = any(finding.code.endswith("_UNKNOWN") for finding in findings)
+        outcome = (
+            ConditionOutcome.UNKNOWN
+            if unknown
+            else ConditionOutcome.NOT_SATISFIED
+            if findings
+            else ConditionOutcome.SATISFIED
+        )
+        return self._condition_evaluation(
+            condition_id=condition_id,
+            condition_version=definition.version,
+            subject_id=subject.metadata.id,
+            subject_revision=subject.metadata.revision,
+            outcome=outcome,
+            findings=tuple(findings),
+            proof={
+                "definition": definition.canonical_document(),
+                "inputs": proof_inputs,
+            },
+            evaluated_at=evaluated_at,
+        )
+
+    def evaluate_constraint(
+        self,
+        *,
+        constraint_id: str,
+        subject_id: str,
+    ) -> ConstraintEvaluation:
+        definition = self._constraints.get(constraint_id)
+        evaluated_at = datetime.now(UTC)
+        if definition is None:
+            proof: dict[str, Any] = {"inputs": []}
+            return ConstraintEvaluation(
+                constraint_id=constraint_id,
+                constraint_version=None,
+                subject_id=subject_id,
+                subject_revision=None,
+                result=ConstraintEvaluationResult.UNKNOWN,
+                condition_evaluation=None,
+                violation_id=None,
+                findings=(
+                    ConditionFinding(
+                        "CONSTRAINT_DEFINITION_NOT_FOUND",
+                        f"Constraint '{constraint_id}' is not registered.",
+                    ),
+                ),
+                proof=proof,
+                proof_hash=f"sha256:{specification_hash(proof)}",
+                evaluated_at=evaluated_at,
+            )
+        try:
+            subject = self.get_object(subject_id)
+        except RegistryError as exc:
+            proof = {
+                "definition": definition.canonical_document(),
+                "inputs": [],
+            }
+            return ConstraintEvaluation(
+                constraint_id=definition.id,
+                constraint_version=definition.version,
+                subject_id=subject_id,
+                subject_revision=None,
+                result=ConstraintEvaluationResult.UNKNOWN,
+                condition_evaluation=None,
+                violation_id=None,
+                findings=(ConditionFinding("CONSTRAINT_SUBJECT_NOT_FOUND", exc.message),),
+                proof=proof,
+                proof_hash=f"sha256:{specification_hash(proof)}",
+                evaluated_at=evaluated_at,
+            )
+        findings: list[ConditionFinding] = []
+        if subject.kind not in definition.subject_kinds:
+            findings.append(
+                ConditionFinding(
+                    "CONSTRAINT_SUBJECT_KIND_INVALID",
+                    f"{subject.kind} is not valid for {definition.id}.",
+                )
+            )
+        condition_evaluation = self.evaluate_condition(
+            condition_id=definition.condition_id,
+            subject_id=subject.metadata.id,
+        )
+        result = self._constraint_result_from_condition(
+            definition.requirement,
+            condition_evaluation.outcome,
+        )
+        violation_id: str | None = None
+        if findings:
+            result = ConstraintEvaluationResult.UNKNOWN
+        elif result is ConstraintEvaluationResult.VIOLATED:
+            violation_id = self._record_constraint_violation(
+                definition=definition,
+                subject=subject,
+                condition_evaluation=condition_evaluation,
+                detected_at=evaluated_at,
+            ).id
+        proof = {
+            "definition": definition.canonical_document(),
+            "subject": {
+                "id": subject.metadata.id,
+                "revision": subject.metadata.revision,
+                "kind": subject.kind,
+            },
+            "conditionEvaluation": condition_evaluation.canonical_document(),
+            "violationId": violation_id,
+        }
+        return ConstraintEvaluation(
+            constraint_id=definition.id,
+            constraint_version=definition.version,
+            subject_id=subject.metadata.id,
+            subject_revision=subject.metadata.revision,
+            result=result,
+            condition_evaluation=condition_evaluation,
+            violation_id=violation_id,
+            findings=tuple(findings),
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            evaluated_at=evaluated_at,
+        )
+
+    def list_constraint_violations(
+        self,
+        *,
+        constraint_id: str | None = None,
+        subject_id: str | None = None,
+        state: ConstraintViolationState | None = None,
+    ) -> tuple[ConstraintViolation, ...]:
+        violations = sorted(self._constraint_violations.values(), key=lambda item: item.id)
+        return tuple(
+            violation
+            for violation in violations
+            if (constraint_id is None or violation.constraint_id == constraint_id)
+            and (subject_id is None or violation.subject_ref.id == subject_id)
+            and (state is None or violation.state is state)
+        )
+
+    def evaluate_decision(
+        self,
+        *,
+        decision_id: str,
+        resource_id: str,
+        actor: ActorReference,
+        context: dict[str, Any] | None = None,
+        request_id: str | None = None,
+        requested_action: str | None = None,
+    ) -> DecisionEvaluation:
+        definition = self._decisions.get(decision_id)
+        evaluated_at = datetime.now(UTC)
+        if definition is None:
+            return self._decision_evaluation(
+                decision_id=decision_id,
+                decision_version=None,
+                request_id=request_id,
+                action="",
+                resource_id=resource_id,
+                resource_revision=None,
+                evaluation_status=DecisionEvaluationStatus.FAILED,
+                outcome="DEFER",
+                effect=DecisionEffect.DEFER,
+                condition_evaluations=(),
+                policy_contributions=(),
+                obligations=(),
+                constraints=(),
+                advice=(),
+                findings=(
+                    DecisionFinding(
+                        "DECISION_DEFINITION_NOT_FOUND",
+                        f"Decision '{decision_id}' is not registered.",
+                    ),
+                ),
+                proof={"inputs": []},
+                evaluated_at=evaluated_at,
+            )
+        try:
+            resource = self.get_object(resource_id)
+        except RegistryError as exc:
+            return self._decision_evaluation(
+                decision_id=definition.id,
+                decision_version=definition.version,
+                request_id=request_id,
+                action=definition.action,
+                resource_id=resource_id,
+                resource_revision=None,
+                evaluation_status=DecisionEvaluationStatus.FAILED,
+                outcome="DEFER",
+                effect=DecisionEffect.DEFER,
+                condition_evaluations=(),
+                policy_contributions=(),
+                obligations=(),
+                constraints=definition.constraints,
+                advice=definition.advice,
+                findings=(
+                    DecisionFinding(
+                        "DECISION_RESOURCE_NOT_FOUND",
+                        exc.message,
+                    ),
+                ),
+                proof={"definition": definition.canonical_document(), "inputs": []},
+                evaluated_at=evaluated_at,
+            )
+        findings: list[DecisionFinding] = []
+        if definition.resource_kinds and resource.kind not in definition.resource_kinds:
+            findings.append(
+                DecisionFinding(
+                    "DECISION_RESOURCE_KIND_INVALID",
+                    f"{resource.kind} is not valid for {definition.id}.",
+                )
+            )
+        if requested_action is not None and requested_action != definition.action:
+            findings.append(
+                DecisionFinding(
+                    "DECISION_ACTION_MISMATCH",
+                    f"Requested action '{requested_action}' does not match "
+                    f"decision action '{definition.action}'.",
+                )
+            )
+        condition_evaluations = tuple(
+            self.evaluate_condition(condition_id=condition_id, subject_id=resource.metadata.id)
+            for condition_id in definition.condition_ids
+        )
+        condition_effect = self._decision_effect_from_conditions(
+            definition,
+            condition_evaluations,
+            findings,
+        )
+        policy_contributions = self._policy_contributions_for_decision(
+            definition,
+            resource,
+        )
+        policy_effect = self._decision_effect_from_policies(
+            definition,
+            policy_contributions,
+        )
+        effect = self._combine_decision_effects(
+            definition.combining_algorithm,
+            tuple(item for item in (condition_effect, policy_effect) if item is not None),
+        )
+        obligations = tuple(
+            obligation
+            for contribution in policy_contributions
+            for obligation in contribution.obligations
+        )
+        proof = {
+            "definition": definition.canonical_document(),
+            "request": {
+                "id": request_id,
+                "requestedAction": requested_action,
+            },
+            "actor": actor.id,
+            "context": context or {},
+            "conditions": [
+                evaluation.canonical_document()
+                for evaluation in condition_evaluations
+            ],
+            "policies": [
+                contribution.canonical_document()
+                for contribution in policy_contributions
+            ],
+        }
+        if any(
+            finding.code
+            in {"DECISION_RESOURCE_KIND_INVALID", "DECISION_ACTION_MISMATCH"}
+            for finding in findings
+        ):
+            effect = DecisionEffect.DEFER
+        return self._decision_evaluation(
+            decision_id=definition.id,
+            decision_version=definition.version,
+            request_id=request_id,
+            action=definition.action,
+            resource_id=resource.metadata.id,
+            resource_revision=resource.metadata.revision,
+            evaluation_status=DecisionEvaluationStatus.COMPLETED,
+            outcome=self._outcome_from_decision_effect(effect),
+            effect=effect,
+            condition_evaluations=condition_evaluations,
+            policy_contributions=policy_contributions,
+            obligations=obligations,
+            constraints=definition.constraints,
+            advice=definition.advice,
+            findings=tuple(findings),
+            proof=proof,
+            evaluated_at=evaluated_at,
+            valid_until=(
+                evaluated_at + timedelta(seconds=definition.validity_seconds)
+                if definition.validity_seconds is not None
+                else None
+            ),
+        )
 
     def evaluate_state_transition(
         self,
@@ -625,6 +3254,13 @@ class InMemoryUPDLRegistry:
         current = self.get_object(object_id)
         if decision.target_state is None:
             raise RegistryError("TARGET_STATE_INVALID", transition_name)
+        state_machine = self._state_machine_for_kind(current.kind)
+        if state_machine is None:
+            raise RegistryError("STATE_MACHINE_NOT_FOUND", current.kind)
+        transition = self._find_transition(state_machine, transition_name, current.lifecycle.state)
+        if transition is None:
+            raise RegistryError("TRANSITION_NOT_FOUND", transition_name)
+        occurred_at = datetime.now(UTC)
         updated = self._object_envelope(
             kind=current.kind,
             object_id=current.metadata.id,
@@ -633,12 +3269,40 @@ class InMemoryUPDLRegistry:
             spec=current.spec,
             actor=actor,
             created_at=current.metadata.created_at,
-            updated_at=datetime.now(UTC),
+            updated_at=occurred_at,
             lifecycle_state=decision.target_state,
             relationships=current.relationships,
         )
         self._objects[object_id].append(updated)
+        self._record_transition_evidence(
+            current=current,
+            updated=updated,
+            state_machine=state_machine,
+            transition=transition,
+            decision=decision,
+            actor=actor,
+            action_id=action_id,
+            occurred_at=occurred_at,
+        )
         return updated
+
+    def list_state_transition_events(
+        self,
+        object_id: str | None = None,
+    ) -> tuple[StateTransitionEvent, ...]:
+        if object_id is None:
+            return tuple(self._transition_events)
+        return tuple(event for event in self._transition_events if event.object_id == object_id)
+
+    def list_state_transition_audit_records(
+        self,
+        object_id: str | None = None,
+    ) -> tuple[StateTransitionAuditRecord, ...]:
+        if object_id is None:
+            return tuple(self._transition_audit_records)
+        return tuple(
+            record for record in self._transition_audit_records if record.object_id == object_id
+        )
 
     def update_object(
         self,
@@ -938,6 +3602,824 @@ class InMemoryUPDLRegistry:
             return None
         return self._state_machines.get(type_definition.lifecycle.id)
 
+    def _require_registered_condition(self, condition_id: str, error_code: str) -> None:
+        if condition_id not in self._conditions:
+            raise RegistryError(error_code, condition_id)
+
+    @staticmethod
+    def _require_unique_task_outputs(outputs: tuple[TaskOutputDefinition, ...]) -> None:
+        output_ids = tuple(output.id for output in outputs)
+        if len(set(output_ids)) != len(output_ids):
+            raise RegistryError("TASK_OUTPUT_SCHEMA_INVALID", "duplicate output id")
+        for output in outputs:
+            if not output.id:
+                raise RegistryError("TASK_OUTPUT_SCHEMA_INVALID", "output id is required")
+
+    def _require_task_dependencies_resolvable(
+        self,
+        dependencies: tuple[TaskDependency, ...],
+    ) -> None:
+        for dependency in dependencies:
+            if dependency.task_id not in self._tasks:
+                raise RegistryError("TASK_DEPENDENCY_INVALID", dependency.task_id)
+            if dependency.dependency_type is TaskDependencyType.REQUIRES_OUTPUT:
+                dependency_task = self._tasks[dependency.task_id]
+                if dependency.output_id is None or dependency.output_id not in {
+                    output.id for output in dependency_task.outputs
+                }:
+                    raise RegistryError("TASK_OUTPUT_SCHEMA_INVALID", dependency.task_id)
+
+    def _require_task_dependencies_satisfied(self, task: TaskInstance) -> None:
+        for dependency in task.dependencies:
+            dependency_task = self.get_task(dependency.task_id)
+            if dependency.dependency_type is TaskDependencyType.START_AFTER:
+                if dependency_task.state is TaskLifecycleState.CREATED:
+                    raise RegistryError("TASK_DEPENDENCY_UNSATISFIED", dependency.task_id)
+                continue
+            if dependency.dependency_type in {
+                TaskDependencyType.COMPLETE_AFTER,
+                TaskDependencyType.REQUIRES_SUCCESS,
+            }:
+                if dependency_task.state is not TaskLifecycleState.COMPLETED:
+                    raise RegistryError("TASK_DEPENDENCY_UNSATISFIED", dependency.task_id)
+                continue
+            if dependency.dependency_type is TaskDependencyType.REQUIRES_OUTPUT:
+                if not any(
+                    value.output_id == dependency.output_id
+                    for value in dependency_task.output_values
+                ):
+                    raise RegistryError("TASK_DEPENDENCY_UNSATISFIED", dependency.task_id)
+                continue
+            if dependency.dependency_type is TaskDependencyType.REQUIRES_EVIDENCE:
+                raise RegistryError("TASK_DEPENDENCY_UNSATISFIED", dependency.task_id)
+
+    def _require_no_task_dependency_cycle(
+        self,
+        task_ids: tuple[str, ...] | None = None,
+    ) -> None:
+        scoped = set(task_ids or self._tasks.keys())
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(task_id: str) -> None:
+            if task_id in visited:
+                return
+            if task_id in visiting:
+                raise RegistryError("TASK_DEPENDENCY_CYCLE", task_id)
+            visiting.add(task_id)
+            task = self._tasks[task_id]
+            for dependency in task.dependencies:
+                if dependency.task_id in scoped:
+                    visit(dependency.task_id)
+            visiting.remove(task_id)
+            visited.add(task_id)
+
+        for task_id in sorted(scoped):
+            if task_id in self._tasks:
+                visit(task_id)
+
+    def _require_plan_tasks(self, goal_ref: str, task_ids: tuple[str, ...]) -> None:
+        if not task_ids:
+            raise RegistryError("PLAN_TASK_INVALID", "plan requires at least one task")
+        if len(set(task_ids)) != len(task_ids):
+            raise RegistryError("PLAN_TASK_INVALID", "duplicate task id")
+        for task_id in task_ids:
+            task = self.get_task(task_id)
+            if task.goal_ref != goal_ref:
+                raise RegistryError("PLAN_SCOPE_VIOLATION", task_id)
+
+    @staticmethod
+    def _constraint_result_from_condition(
+        requirement: ConstraintRequirement,
+        outcome: ConditionOutcome,
+    ) -> ConstraintEvaluationResult:
+        if outcome is ConditionOutcome.UNKNOWN:
+            return ConstraintEvaluationResult.UNKNOWN
+        if outcome is ConditionOutcome.EXEMPTED:
+            return ConstraintEvaluationResult.EXEMPTED
+        if requirement in {
+            ConstraintRequirement.MUST_HOLD,
+            ConstraintRequirement.MUST_REMAIN,
+            ConstraintRequirement.MUST_BECOME,
+        }:
+            return (
+                ConstraintEvaluationResult.SATISFIED
+                if outcome is ConditionOutcome.SATISFIED
+                else ConstraintEvaluationResult.VIOLATED
+            )
+        if requirement in {
+            ConstraintRequirement.MUST_NOT_HOLD,
+            ConstraintRequirement.MUST_CEASE,
+        }:
+            return (
+                ConstraintEvaluationResult.VIOLATED
+                if outcome is ConditionOutcome.SATISFIED
+                else ConstraintEvaluationResult.SATISFIED
+            )
+        return ConstraintEvaluationResult.UNKNOWN
+
+    def _record_constraint_violation(
+        self,
+        *,
+        definition: ConstraintDefinition,
+        subject: ObjectEnvelope,
+        condition_evaluation: ConditionEvaluation,
+        detected_at: datetime,
+    ) -> ConstraintViolation:
+        violation_key = self._constraint_violation_key(
+            definition=definition,
+            subject_id=subject.metadata.id,
+        )
+        existing_id = self._constraint_violation_keys.get(violation_key)
+        if existing_id is not None:
+            return self._constraint_violations[existing_id]
+        self._constraint_violation_sequence += 1
+        violation_id = f"VIO-{self._constraint_violation_sequence:06d}"
+        violation = ConstraintViolation(
+            id=violation_id,
+            violation_key=violation_key,
+            constraint_id=definition.id,
+            constraint_version=definition.version,
+            subject_ref=ObjectReference(
+                subject.metadata.id,
+                revision=subject.metadata.revision,
+            ),
+            condition_evaluation=condition_evaluation,
+            severity=definition.severity,
+            state=ConstraintViolationState.OPEN,
+            detected_at=detected_at,
+        )
+        self._constraint_violations[violation_id] = violation
+        self._constraint_violation_keys[violation_key] = violation_id
+        return violation
+
+    @staticmethod
+    def _constraint_violation_key(
+        *,
+        definition: ConstraintDefinition,
+        subject_id: str,
+    ) -> str:
+        key_document = {
+            "constraint": {
+                "id": definition.id,
+                "version": definition.version,
+            },
+            "subjectId": subject_id,
+        }
+        return f"sha256:{specification_hash(key_document)}"
+
+    def _preemption_structural_denial(
+        self,
+        *,
+        request: PreemptionRequest,
+        definition: PreemptionDefinition,
+        target: ReservationInstance,
+    ) -> str | None:
+        requester_priority = self._priorities.get(request.priority_id)
+        minimum_priority = self._priorities.get(definition.minimum_priority_id)
+        if requester_priority is None:
+            return "PREEMPTION_REQUESTER_PRIORITY_NOT_FOUND"
+        if requester_priority.status != "ACTIVE":
+            return "PREEMPTION_REQUESTER_PRIORITY_INACTIVE"
+        if minimum_priority is None:
+            return "PREEMPTION_MINIMUM_PRIORITY_UNKNOWN"
+        if target.state is not request.expected_target_state:
+            return "PREEMPTION_TARGET_STATE_INVALID"
+        if target.state is not ReservationLifecycleState.ACTIVE:
+            return "PREEMPTION_TARGET_NOT_ACTIVE"
+        if target.resource_ref != request.requested_resource_ref:
+            return "PREEMPTION_RESOURCE_MISMATCH"
+        if target.resource_type not in definition.resource_types:
+            return "PREEMPTION_RESOURCE_TYPE_NOT_APPLICABLE"
+        if target.preemption_mode not in definition.target_modes:
+            return "PREEMPTION_TARGET_NOT_PREEMPTIBLE"
+        if requester_priority.rank < minimum_priority.rank:
+            return "PREEMPTION_PRIORITY_INSUFFICIENT"
+        if requester_priority.rank - target.priority_rank < definition.minimum_priority_delta:
+            return "PREEMPTION_PRIORITY_DELTA_INSUFFICIENT"
+        return None
+
+    def _evaluate_preemption_conditions(
+        self,
+        *,
+        definition: PreemptionDefinition,
+        target: ReservationInstance,
+    ) -> tuple[ConditionEvaluation, ...]:
+        return tuple(
+            self.evaluate_condition(
+                condition_id=condition_id,
+                subject_id=target.resource_ref,
+            )
+            for condition_id in definition.condition_ids
+        )
+
+    @staticmethod
+    def _preemption_condition_denial(
+        condition_evaluations: tuple[ConditionEvaluation, ...],
+    ) -> str | None:
+        if any(
+            evaluation.outcome is ConditionOutcome.UNKNOWN
+            for evaluation in condition_evaluations
+        ):
+            return "PREEMPTION_CONDITION_UNKNOWN"
+        if any(
+            evaluation.outcome is not ConditionOutcome.SATISFIED
+            for evaluation in condition_evaluations
+        ):
+            return "PREEMPTION_CONDITION_NOT_SATISFIED"
+        return None
+
+    def _create_replacement_reservation(
+        self,
+        *,
+        request: PreemptionRequest,
+        target: ReservationInstance,
+    ) -> ReservationInstance:
+        priority = self._priorities[request.priority_id]
+        self._reservation_sequence += 1
+        replacement = ReservationInstance(
+            id=f"RSV-{self._reservation_sequence:06d}",
+            definition_id=target.definition_id,
+            definition_version=target.definition_version,
+            holder_ref=request.replacement_holder_ref,
+            resource_ref=target.resource_ref,
+            resource_type=target.resource_type,
+            priority_id=priority.id,
+            priority_rank=priority.rank,
+            preemption_mode=target.preemption_mode,
+            state=ReservationLifecycleState.ACTIVE,
+            quantity=target.quantity,
+            created_at=datetime.now(UTC),
+            expires_at=target.expires_at,
+        )
+        self._reservations[replacement.id] = replacement
+        return replacement
+
+    def _preemption_decision(
+        self,
+        *,
+        request: PreemptionRequest,
+        definition: PreemptionDefinition | None,
+        effect: PreemptionEffect,
+        reason_code: str,
+        condition_evaluations: tuple[ConditionEvaluation, ...],
+        replacement: ReservationInstance | None,
+        decided_at: datetime,
+        target: ReservationInstance | None = None,
+    ) -> PreemptionDecision:
+        self._preemption_decision_sequence += 1
+        proof = {
+            "request": request.canonical_document(),
+            "definition": (
+                definition.canonical_document() if definition is not None else None
+            ),
+            "targetBefore": (
+                target.canonical_document() if target is not None else None
+            ),
+            "replacement": (
+                replacement.canonical_document() if replacement is not None else None
+            ),
+            "conditions": [
+                evaluation.canonical_document()
+                for evaluation in condition_evaluations
+            ],
+            "effect": effect.value,
+            "reason": {"code": reason_code},
+        }
+        decision = PreemptionDecision(
+            id=f"PDEC-{self._preemption_decision_sequence:06d}",
+            request_id=request.id,
+            definition_id=definition.id if definition is not None else None,
+            definition_version=definition.version if definition is not None else None,
+            effect=effect,
+            target_reservation_id=request.target_reservation_id,
+            replacement_reservation_id=(
+                replacement.id if replacement is not None else None
+            ),
+            reason_code=reason_code,
+            condition_evaluations=condition_evaluations,
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            decided_at=decided_at,
+        )
+        self._preemption_decisions[decision.id] = decision
+        return decision
+
+    def _activate_obligation_from_decision(
+        self,
+        definition: ObligationDefinition,
+        decision: DecisionEvaluation,
+        evaluated_at: datetime,
+    ) -> ObligationActivation:
+        if definition.trigger.source is not ObligationTriggerSource.POLICY_DECISION:
+            return ObligationActivation(
+                definition_id=definition.id,
+                definition_version=definition.version,
+                outcome=ObligationActivationOutcome.NOT_APPLICABLE,
+                instance_id=None,
+                reason_code="OBLIGATION_TRIGGER_SOURCE_UNSUPPORTED",
+                evaluated_at=evaluated_at,
+            )
+        if definition.trigger.decision_effect is not decision.effect:
+            return ObligationActivation(
+                definition_id=definition.id,
+                definition_version=definition.version,
+                outcome=ObligationActivationOutcome.NOT_APPLICABLE,
+                instance_id=None,
+                reason_code="OBLIGATION_TRIGGER_EFFECT_NOT_MATCHED",
+                evaluated_at=evaluated_at,
+            )
+        if definition.trigger.policy_id is not None and not any(
+            contribution.policy_id == definition.trigger.policy_id
+            for contribution in decision.policy_contributions
+        ):
+            return ObligationActivation(
+                definition_id=definition.id,
+                definition_version=definition.version,
+                outcome=ObligationActivationOutcome.NOT_APPLICABLE,
+                instance_id=None,
+                reason_code="OBLIGATION_TRIGGER_POLICY_NOT_MATCHED",
+                evaluated_at=evaluated_at,
+            )
+        condition_evaluation: ConditionEvaluation | None = None
+        if definition.applicability_condition_id is not None:
+            condition_evaluation = self.evaluate_condition(
+                condition_id=definition.applicability_condition_id,
+                subject_id=decision.resource_id,
+            )
+            if condition_evaluation.outcome is ConditionOutcome.UNKNOWN:
+                return ObligationActivation(
+                    definition_id=definition.id,
+                    definition_version=definition.version,
+                    outcome=ObligationActivationOutcome.UNKNOWN,
+                    instance_id=None,
+                    reason_code="OBLIGATION_APPLICABILITY_UNKNOWN",
+                    evaluated_at=evaluated_at,
+                    condition_evaluation=condition_evaluation,
+                )
+            if condition_evaluation.outcome is not ConditionOutcome.SATISFIED:
+                return ObligationActivation(
+                    definition_id=definition.id,
+                    definition_version=definition.version,
+                    outcome=ObligationActivationOutcome.NOT_APPLICABLE,
+                    instance_id=None,
+                    reason_code="OBLIGATION_APPLICABILITY_NOT_SATISFIED",
+                    evaluated_at=evaluated_at,
+                    condition_evaluation=condition_evaluation,
+                )
+        if definition.subject.binding is not ObligationSubjectBinding.DECISION_RESOURCE:
+            return ObligationActivation(
+                definition_id=definition.id,
+                definition_version=definition.version,
+                outcome=ObligationActivationOutcome.UNKNOWN,
+                instance_id=None,
+                reason_code="OBLIGATION_SUBJECT_BINDING_UNSUPPORTED",
+                evaluated_at=evaluated_at,
+                condition_evaluation=condition_evaluation,
+            )
+        source_decision_ref = decision.request_id or decision.proof_hash
+        activation_key = self._obligation_activation_key(
+            definition=definition,
+            source_decision_ref=source_decision_ref,
+            subject_id=decision.resource_id,
+        )
+        existing_id = self._obligation_activation_keys.get(activation_key)
+        if existing_id is not None:
+            return ObligationActivation(
+                definition_id=definition.id,
+                definition_version=definition.version,
+                outcome=ObligationActivationOutcome.ACTIVATED,
+                instance_id=existing_id,
+                reason_code="OBLIGATION_ALREADY_ACTIVATED",
+                evaluated_at=evaluated_at,
+                condition_evaluation=condition_evaluation,
+            )
+        due_at = (
+            evaluated_at + _parse_duration(definition.timing.completion_within)
+            if definition.timing.completion_within is not None
+            else None
+        )
+        self._obligation_sequence += 1
+        instance_id = f"OBL-{self._obligation_sequence:06d}"
+        instance = ObligationInstance(
+            id=instance_id,
+            activation_key=activation_key,
+            definition_id=definition.id,
+            definition_version=definition.version,
+            source_decision_ref=source_decision_ref,
+            subject_ref=ObjectReference(
+                decision.resource_id,
+                revision=decision.resource_revision,
+            ),
+            assignee_ref=definition.responsibility.assignee_ref,
+            state=ObligationLifecycleState.ACTIVE,
+            activated_at=evaluated_at,
+            due_at=due_at,
+        )
+        self._obligation_instances[instance_id] = instance
+        self._obligation_activation_keys[activation_key] = instance_id
+        return ObligationActivation(
+            definition_id=definition.id,
+            definition_version=definition.version,
+            outcome=ObligationActivationOutcome.ACTIVATED,
+            instance_id=instance_id,
+            reason_code="OBLIGATION_ACTIVATED",
+            evaluated_at=evaluated_at,
+            condition_evaluation=condition_evaluation,
+        )
+
+    @staticmethod
+    def _obligation_activation_key(
+        *,
+        definition: ObligationDefinition,
+        source_decision_ref: str,
+        subject_id: str,
+    ) -> str:
+        key_document = {
+            'definition': {
+                'id': definition.id,
+                'version': definition.version,
+            },
+            'sourceDecisionRef': source_decision_ref,
+            'subjectId': subject_id,
+        }
+        return f"sha256:{specification_hash(key_document)}"
+
+    def _require_valid_condition_clause(
+        self,
+        definition: SemanticConditionDefinition,
+        clause: SemanticConditionClause,
+    ) -> None:
+        if clause.clause_type is ConditionClauseType.OBJECT_KIND_IS:
+            if not isinstance(clause.expected, str):
+                raise RegistryError("CONDITION_EXPECTED_VALUE_REQUIRED", definition.id)
+            if clause.expected not in self._types:
+                raise RegistryError("CONDITION_EXPECTED_KIND_UNKNOWN", clause.expected)
+            return
+        if clause.clause_type is ConditionClauseType.LIFECYCLE_STATE_IS:
+            if not isinstance(clause.expected, str):
+                raise RegistryError("CONDITION_EXPECTED_VALUE_REQUIRED", definition.id)
+            return
+        if clause.clause_type is ConditionClauseType.SPEC_EQUALS:
+            if not clause.path:
+                raise RegistryError("CONDITION_PATH_REQUIRED", definition.id)
+            return
+        if clause.clause_type in {
+            ConditionClauseType.RELATIONSHIP_EXISTS,
+            ConditionClauseType.RELATIONSHIP_COUNT,
+        }:
+            if clause.relationship_type_id is None:
+                raise RegistryError("CONDITION_RELATIONSHIP_TYPE_REQUIRED", definition.id)
+            relationship_type = self._relationship_types.get(clause.relationship_type_id)
+            if relationship_type is None:
+                raise RegistryError(
+                    "CONDITION_RELATIONSHIP_TYPE_UNKNOWN",
+                    clause.relationship_type_id,
+                )
+            if not set(definition.subject_kinds).intersection(relationship_type.source_kinds):
+                raise RegistryError(
+                    "CONDITION_RELATIONSHIP_SOURCE_KIND_INVALID",
+                    clause.relationship_type_id,
+                )
+            if clause.target_kind is not None and clause.target_kind not in self._types:
+                raise RegistryError("CONDITION_TARGET_KIND_UNKNOWN", clause.target_kind)
+            if clause.clause_type is ConditionClauseType.RELATIONSHIP_COUNT:
+                if clause.min_count is None and clause.max_count is None:
+                    raise RegistryError("CONDITION_COUNT_BOUND_REQUIRED", definition.id)
+                if clause.min_count is not None and clause.min_count < 0:
+                    raise RegistryError("CONDITION_COUNT_BOUND_INVALID", definition.id)
+                if clause.max_count is not None and clause.max_count < 0:
+                    raise RegistryError("CONDITION_COUNT_BOUND_INVALID", definition.id)
+                if (
+                    clause.min_count is not None
+                    and clause.max_count is not None
+                    and clause.min_count > clause.max_count
+                ):
+                    raise RegistryError("CONDITION_COUNT_BOUND_INVALID", definition.id)
+            return
+        raise RegistryError("CONDITION_CLAUSE_TYPE_UNKNOWN", clause.clause_type.value)
+
+    def _evaluate_condition_clause(
+        self,
+        subject: ObjectEnvelope,
+        clause: SemanticConditionClause,
+    ) -> tuple[ConditionFinding | None, dict[str, Any]]:
+        clause_document = clause.canonical_document()
+        if clause.clause_type is ConditionClauseType.OBJECT_KIND_IS:
+            proof = {
+                "clause": clause_document,
+                "actual": subject.kind,
+                "satisfied": subject.kind == clause.expected,
+            }
+            if proof["satisfied"]:
+                return None, proof
+            return (
+                ConditionFinding(
+                    "CONDITION_OBJECT_KIND_NOT_SATISFIED",
+                    f"Expected kind {clause.expected}, found {subject.kind}.",
+                    clause.clause_type.value,
+                ),
+                proof,
+            )
+        if clause.clause_type is ConditionClauseType.LIFECYCLE_STATE_IS:
+            proof = {
+                "clause": clause_document,
+                "actual": subject.lifecycle.state,
+                "satisfied": subject.lifecycle.state == clause.expected,
+            }
+            if proof["satisfied"]:
+                return None, proof
+            return (
+                ConditionFinding(
+                    "CONDITION_LIFECYCLE_STATE_NOT_SATISFIED",
+                    f"Expected lifecycle {clause.expected}, found {subject.lifecycle.state}.",
+                    clause.clause_type.value,
+                ),
+                proof,
+            )
+        if clause.clause_type is ConditionClauseType.SPEC_EQUALS:
+            actual = _value_at_path(subject.spec, clause.path or "")
+            proof = {
+                "clause": clause_document,
+                "actual": actual,
+                "satisfied": actual == clause.expected,
+            }
+            if actual is _MISSING:
+                proof["actual"] = None
+                return (
+                    ConditionFinding(
+                        "CONDITION_INPUT_UNKNOWN",
+                        f"Spec path '{clause.path}' is not present.",
+                        clause.clause_type.value,
+                    ),
+                    proof,
+                )
+            if proof["satisfied"]:
+                return None, proof
+            return (
+                ConditionFinding(
+                    "CONDITION_SPEC_NOT_SATISFIED",
+                    f"Expected spec.{clause.path}={clause.expected!r}, found {actual!r}.",
+                    clause.clause_type.value,
+                ),
+                proof,
+            )
+        if clause.clause_type in {
+            ConditionClauseType.RELATIONSHIP_EXISTS,
+            ConditionClauseType.RELATIONSHIP_COUNT,
+        }:
+            matches = self._matching_relationships(subject, clause)
+            min_count = clause.min_count
+            max_count = clause.max_count
+            if clause.clause_type is ConditionClauseType.RELATIONSHIP_EXISTS:
+                min_count = 1
+            count = len(matches)
+            min_satisfied = min_count is None or count >= min_count
+            max_satisfied = max_count is None or count <= max_count
+            proof = {
+                "clause": clause_document,
+                "count": count,
+                "relationships": matches,
+                "satisfied": min_satisfied and max_satisfied,
+            }
+            if proof["satisfied"]:
+                return None, proof
+            return (
+                ConditionFinding(
+                    "CONDITION_RELATIONSHIP_NOT_SATISFIED",
+                    f"Relationship count {count} does not satisfy bounds.",
+                    clause.clause_type.value,
+                ),
+                proof,
+            )
+        return (
+            ConditionFinding(
+                "CONDITION_CLAUSE_UNKNOWN",
+                f"Clause type '{clause.clause_type.value}' is not evaluable.",
+                clause.clause_type.value,
+            ),
+            {"clause": clause_document, "satisfied": False},
+        )
+
+    def _matching_relationships(
+        self,
+        subject: ObjectEnvelope,
+        clause: SemanticConditionClause,
+    ) -> list[dict[str, Any]]:
+        matches: list[dict[str, Any]] = []
+        for relationship in subject.relationships:
+            if relationship["type"]["$ref"]["id"] != clause.relationship_type_id:
+                continue
+            target_ref = relationship["target"]["$ref"]["id"]
+            if clause.target_id is not None and target_ref != clause.target_id:
+                continue
+            if clause.target_kind is not None:
+                target_resolution = self.resolve_reference(ObjectReference(target_ref))
+                if target_resolution.status is not ResolutionStatus.RESOLVED:
+                    continue
+                if (
+                    target_resolution.resolved is None
+                    or target_resolution.resolved.kind != clause.target_kind
+                ):
+                    continue
+            matches.append(
+                {
+                    "id": relationship["id"],
+                    "type": relationship["type"]["$ref"]["id"],
+                    "target": target_ref,
+                    "lifecycle": relationship.get("lifecycle", {}).get("state"),
+                }
+            )
+        return matches
+
+    @staticmethod
+    def _condition_evaluation(
+        *,
+        condition_id: str,
+        condition_version: str | None,
+        subject_id: str,
+        subject_revision: int | None,
+        outcome: ConditionOutcome,
+        findings: tuple[ConditionFinding, ...],
+        proof: dict[str, Any],
+        evaluated_at: datetime,
+    ) -> ConditionEvaluation:
+        proof_hash = f"sha256:{specification_hash(proof)}"
+        return ConditionEvaluation(
+            condition_id=condition_id,
+            condition_version=condition_version,
+            subject_id=subject_id,
+            subject_revision=subject_revision,
+            outcome=outcome,
+            findings=findings,
+            proof=proof,
+            proof_hash=proof_hash,
+            evaluated_at=evaluated_at,
+        )
+
+    def _decision_effect_from_conditions(
+        self,
+        definition: DecisionDefinition,
+        condition_evaluations: tuple[ConditionEvaluation, ...],
+        findings: list[DecisionFinding],
+    ) -> DecisionEffect | None:
+        if not condition_evaluations:
+            return None
+        outcomes = tuple(evaluation.outcome for evaluation in condition_evaluations)
+        if ConditionOutcome.UNKNOWN in outcomes:
+            findings.append(
+                DecisionFinding(
+                    "DECISION_CONDITION_UNKNOWN",
+                    "At least one required condition evaluated to UNKNOWN.",
+                )
+            )
+            return definition.unknown_condition_effect
+        if ConditionOutcome.NOT_SATISFIED in outcomes:
+            findings.append(
+                DecisionFinding(
+                    "DECISION_CONDITION_UNSATISFIED",
+                    "At least one required condition evaluated to NOT_SATISFIED.",
+                )
+            )
+            return definition.unsatisfied_condition_effect
+        if all(
+            outcome in {ConditionOutcome.SATISFIED, ConditionOutcome.EXEMPTED}
+            for outcome in outcomes
+        ):
+            return DecisionEffect.PERMIT
+        return DecisionEffect.DEFER
+
+    def _policy_contributions_for_decision(
+        self,
+        definition: DecisionDefinition,
+        resource: ObjectEnvelope,
+    ) -> tuple[PolicyContribution, ...]:
+        policies = (
+            tuple(self._policies[policy_id] for policy_id in definition.policy_ids)
+            if definition.policy_ids
+            else tuple(self._policies.values())
+        )
+        return tuple(
+            PolicyContribution(
+                policy_id=policy.id,
+                policy_revision=policy.revision,
+                effect=policy.effect,
+                obligations=policy.obligations,
+            )
+            for policy in sorted(policies, key=lambda item: item.id)
+            if policy.applies_to(definition.action, resource)
+        )
+
+    @staticmethod
+    def _decision_effect_from_policies(
+        definition: DecisionDefinition,
+        policy_contributions: tuple[PolicyContribution, ...],
+    ) -> DecisionEffect | None:
+        if not policy_contributions:
+            return None
+        effects = tuple(contribution.effect for contribution in policy_contributions)
+        if definition.combining_algorithm is DecisionCombiningAlgorithm.PERMIT_OVERRIDES:
+            if PolicyEffect.ALLOW in effects:
+                return DecisionEffect.PERMIT
+            if PolicyEffect.DENY in effects:
+                return DecisionEffect.PROHIBIT
+        if PolicyEffect.DENY in effects:
+            return DecisionEffect.PROHIBIT
+        if PolicyEffect.ESCALATE in effects:
+            return DecisionEffect.ESCALATE
+        if PolicyEffect.REQUIRE in effects:
+            return DecisionEffect.REQUIRE
+        if PolicyEffect.ALLOW in effects or PolicyEffect.WARN in effects:
+            return DecisionEffect.PERMIT
+        return DecisionEffect.ABSTAIN
+
+    @staticmethod
+    def _combine_decision_effects(
+        algorithm: DecisionCombiningAlgorithm,
+        effects: tuple[DecisionEffect, ...],
+    ) -> DecisionEffect:
+        if not effects:
+            return DecisionEffect.ABSTAIN
+        if algorithm is DecisionCombiningAlgorithm.PERMIT_OVERRIDES:
+            precedence = (
+                DecisionEffect.PERMIT,
+                DecisionEffect.PROHIBIT,
+                DecisionEffect.ESCALATE,
+                DecisionEffect.REQUIRE,
+                DecisionEffect.DEFER,
+                DecisionEffect.ABSTAIN,
+            )
+        else:
+            precedence = (
+                DecisionEffect.PROHIBIT,
+                DecisionEffect.ESCALATE,
+                DecisionEffect.REQUIRE,
+                DecisionEffect.DEFER,
+                DecisionEffect.PERMIT,
+                DecisionEffect.ABSTAIN,
+            )
+        for effect in precedence:
+            if effect in effects:
+                return effect
+        return DecisionEffect.ABSTAIN
+
+    @staticmethod
+    def _outcome_from_decision_effect(effect: DecisionEffect) -> str:
+        outcomes = {
+            DecisionEffect.PERMIT: "ALLOW",
+            DecisionEffect.PROHIBIT: "DENY",
+            DecisionEffect.REQUIRE: "REQUIRE",
+            DecisionEffect.DEFER: "DEFER",
+            DecisionEffect.ESCALATE: "ESCALATE",
+            DecisionEffect.ABSTAIN: "ABSTAIN",
+        }
+        return outcomes[effect]
+
+    @staticmethod
+    def _decision_evaluation(
+        *,
+        decision_id: str,
+        decision_version: str | None,
+        request_id: str | None,
+        action: str,
+        resource_id: str,
+        resource_revision: int | None,
+        evaluation_status: DecisionEvaluationStatus,
+        outcome: str,
+        effect: DecisionEffect,
+        condition_evaluations: tuple[ConditionEvaluation, ...],
+        policy_contributions: tuple[PolicyContribution, ...],
+        obligations: tuple[PolicyObligation, ...],
+        constraints: tuple[DecisionConstraint, ...],
+        advice: tuple[DecisionAdvice, ...],
+        findings: tuple[DecisionFinding, ...],
+        proof: dict[str, Any],
+        evaluated_at: datetime,
+        valid_until: datetime | None = None,
+    ) -> DecisionEvaluation:
+        proof_hash = f"sha256:{specification_hash(proof)}"
+        return DecisionEvaluation(
+            request_id=request_id,
+            decision_id=decision_id,
+            decision_version=decision_version,
+            action=action,
+            resource_id=resource_id,
+            resource_revision=resource_revision,
+            evaluation_status=evaluation_status,
+            outcome=outcome,
+            effect=effect,
+            condition_evaluations=condition_evaluations,
+            policy_contributions=policy_contributions,
+            obligations=obligations,
+            constraints=constraints,
+            advice=advice,
+            findings=findings,
+            proof=proof,
+            proof_hash=proof_hash,
+            evaluated_at=evaluated_at,
+            valid_until=valid_until,
+        )
+
     @staticmethod
     def _find_transition(
         state_machine: StateMachineDefinition,
@@ -953,6 +4435,160 @@ class InMemoryUPDLRegistry:
             ),
             None,
         )
+
+    def _resolve_relationship_evidence(
+        self,
+        relationship_type: RelationshipTypeDefinition,
+        evidence: dict[str, ObjectReference],
+    ) -> tuple[RelationshipEvidence, ...]:
+        missing = sorted(set(relationship_type.required_evidence) - set(evidence))
+        if missing:
+            raise RegistryError(
+                "RELATIONSHIP_EVIDENCE_INCOMPLETE",
+                f"{relationship_type.id}: missing {missing}",
+            )
+        resolved: list[RelationshipEvidence] = []
+        for evidence_type, reference in sorted(evidence.items()):
+            resolution = self.resolve_reference(reference)
+            if resolution.status is not ResolutionStatus.RESOLVED:
+                raise RegistryError(
+                    "RELATIONSHIP_EVIDENCE_INVALID",
+                    f"{evidence_type}: {resolution.code}",
+                )
+            if resolution.resolved is None:
+                raise RegistryError("RELATIONSHIP_EVIDENCE_INVALID", evidence_type)
+            resolved.append(
+                RelationshipEvidence(
+                    type=evidence_type,
+                    reference=ObjectReference(
+                        resolution.resolved.metadata.id,
+                        revision=resolution.resolved.metadata.revision,
+                    ),
+                )
+            )
+        return tuple(resolved)
+
+    def _require_relationship_cardinality(
+        self,
+        relationship_type: RelationshipTypeDefinition,
+        *,
+        source_id: str,
+        target_id: str,
+    ) -> None:
+        if relationship_type.cardinality in {
+            RelationshipCardinality.ONE_TO_ONE,
+            RelationshipCardinality.MANY_TO_ONE,
+        }:
+            source = self.get_object(source_id)
+            if any(
+                item["type"]["$ref"]["id"] == relationship_type.id
+                for item in source.relationships
+            ):
+                raise RegistryError(
+                    "RELATIONSHIP_CARDINALITY_VIOLATION",
+                    f"{relationship_type.id} already exists from {source_id}",
+                )
+        if relationship_type.cardinality not in {
+            RelationshipCardinality.ONE_TO_ONE,
+            RelationshipCardinality.ONE_TO_MANY,
+        }:
+            return
+        for revisions in self._objects.values():
+            current = revisions[-1]
+            for relationship in current.relationships:
+                relationship_ref = relationship["type"]["$ref"]["id"]
+                target_ref = relationship["target"]["$ref"]["id"]
+                if relationship_ref == relationship_type.id and target_ref == target_id:
+                    raise RegistryError(
+                        "RELATIONSHIP_CARDINALITY_VIOLATION",
+                        f"{relationship_type.id} already targets {target_id}",
+                    )
+
+    def _record_relationship_audit(
+        self,
+        *,
+        relationship_type: RelationshipTypeDefinition,
+        relationship: RelationshipInstance,
+        new_source_revision: int,
+        actor: ActorReference,
+        occurred_at: datetime,
+    ) -> None:
+        self._relationship_audit_sequence += 1
+        if relationship.source.revision is None or relationship.target.revision is None:
+            raise RegistryError("RELATIONSHIP_REVISION_REQUIRED", relationship.id)
+        self._relationship_audit_records.append(
+            RelationshipAuditRecord(
+                id=f"RELAUD-{self._relationship_audit_sequence:06d}",
+                sequence=self._relationship_audit_sequence,
+                relationship_id=relationship.id,
+                relationship_type_id=relationship_type.id,
+                relationship_type_version=relationship_type.version,
+                action="RELATIONSHIP_CREATED",
+                source_id=relationship.source.id,
+                target_id=relationship.target.id,
+                source_revision=relationship.source.revision,
+                target_revision=relationship.target.revision,
+                new_source_revision=new_source_revision,
+                actor=actor,
+                evidence_types=tuple(
+                    evidence.type
+                    for evidence in sorted(
+                        relationship.evidence,
+                        key=lambda item: item.type,
+                    )
+                ),
+                recorded_at=occurred_at,
+            )
+        )
+
+    def _record_transition_evidence(
+        self,
+        *,
+        current: ObjectEnvelope,
+        updated: ObjectEnvelope,
+        state_machine: StateMachineDefinition,
+        transition: StateTransitionDefinition,
+        decision: StateTransitionDecision,
+        actor: ActorReference,
+        action_id: str | None,
+        occurred_at: datetime,
+    ) -> None:
+        self._event_sequence += 1
+        event = StateTransitionEvent(
+            id=f"EVT-{self._event_sequence:06d}",
+            sequence=self._event_sequence,
+            event_type="StateTransitioned",
+            object_id=current.metadata.id,
+            object_kind=current.kind,
+            previous_revision=current.metadata.revision,
+            new_revision=updated.metadata.revision,
+            state_machine_id=state_machine.id,
+            state_machine_version=state_machine.version,
+            transition=transition.name,
+            from_state=current.lifecycle.state,
+            to_state=updated.lifecycle.state,
+            actor=actor,
+            action_id=action_id,
+            occurred_at=occurred_at,
+        )
+        audit_record = StateTransitionAuditRecord(
+            id=f"AUD-{self._event_sequence:06d}",
+            event_id=event.id,
+            object_id=current.metadata.id,
+            state_machine_id=state_machine.id,
+            state_machine_version=state_machine.version,
+            transition=transition.name,
+            action_id=action_id,
+            actor=actor,
+            previous_state=current.lifecycle.state,
+            new_state=updated.lifecycle.state,
+            previous_revision=current.metadata.revision,
+            new_revision=updated.metadata.revision,
+            decision=decision,
+            recorded_at=occurred_at,
+        )
+        self._transition_events.append(event)
+        self._transition_audit_records.append(audit_record)
 
     def _object_envelope(
         self,
@@ -1001,6 +4637,34 @@ def require_identifier(value: str) -> None:
 def require_namespace(value: str) -> None:
     if NAMESPACE.fullmatch(value) is None:
         raise RegistryError("NAMESPACE_INVALID", value)
+
+
+def _value_at_path(document: dict[str, Any], path: str) -> Any:
+    current: Any = document
+    for segment in path.split("."):
+        if not isinstance(current, dict) or segment not in current:
+            return _MISSING
+        current = current[segment]
+    return current
+
+
+def _parse_duration(value: str) -> timedelta:
+    match = re.fullmatch(
+        r"P(?:(?P<days>\d+)D)?"
+        r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?",
+        value,
+    )
+    if match is None:
+        raise RegistryError("OBLIGATION_TIMING_INVALID", value)
+    duration = timedelta(
+        days=int(match.group("days") or 0),
+        hours=int(match.group("hours") or 0),
+        minutes=int(match.group("minutes") or 0),
+        seconds=int(match.group("seconds") or 0),
+    )
+    if duration <= timedelta(0):
+        raise RegistryError("OBLIGATION_TIMING_INVALID", value)
+    return duration
 
 
 def _validate_value_type(
