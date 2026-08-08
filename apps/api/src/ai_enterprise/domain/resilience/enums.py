@@ -16,12 +16,76 @@ class DependencyRequirement(StrEnum):
     MANUAL = "manually_substitutable"
 
 
+class GovernanceAvailabilityClass(StrEnum):
+    NON_CRITICAL = "non_critical"
+    STANDARD = "standard"
+    HIGH = "high"
+    MISSION_CRITICAL = "mission_critical"
+    SAFETY_CRITICAL = "safety_critical"
+    CONTINUITY_MANDATORY = "continuity_mandatory"
+
+
+class GovernanceDependencyCriticality(StrEnum):
+    HARD_REQUIRED = "hard_required"
+    SAFETY_REQUIRED = "safety_required"
+    AUTHORITY_REQUIRED = "authority_required"
+    ASSURANCE_REQUIRED = "assurance_required"
+    DEGRADABLE = "degradable"
+    OPTIONAL = "optional"
+
+
+class GovernanceDependencyState(StrEnum):
+    AVAILABLE = "available"
+    DEGRADED = "degraded"
+    STALE = "stale"
+    PARTITIONED = "partitioned"
+    RATE_LIMITED = "rate_limited"
+    OVERLOADED = "overloaded"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+
+
 class ContinuityMode(StrEnum):
     NORMAL = "normal"
     READ_ONLY_GOVERNANCE = "read_only_governance"
     NO_EXTERNAL_ACTION = "no_external_action"
     AUDIT_PRESERVATION = "audit_preservation"
     INCIDENT_ONLY = "incident_only"
+    FAIL_CLOSED = "fail_closed"
+    QUEUE_ONLY = "queue_only"
+    PREAUTHORIZED_ONLY = "preauthorized_only"
+    CACHED_GOVERNANCE = "cached_governance"
+    SAFE_OPERATION_ONLY = "safe_operation_only"
+    EMERGENCY_OPERATION = "emergency_operation"
+    DEGRADED_AUTONOMY = "degraded_autonomy"
+    MANUAL_GOVERNANCE = "manual_governance"
+    RECOVERY_MODE = "recovery_mode"
+
+
+class GovernanceContinuityEffect(StrEnum):
+    CONTINUE_NORMAL = "continue_normal"
+    CONTINUE_DEGRADED = "continue_degraded"
+    QUEUE = "queue"
+    READ_ONLY = "read_only"
+    SAFE_OPERATION_ONLY = "safe_operation_only"
+    EMERGENCY_MODE = "emergency_mode"
+    BLOCK = "block"
+
+
+class GovernanceAdmissionEffect(StrEnum):
+    ADMIT = "admit"
+    ADMIT_DEGRADED = "admit_degraded"
+    QUEUE = "queue"
+    DEFER = "defer"
+    REJECT = "reject"
+    EMERGENCY_ONLY = "emergency_only"
+
+
+class GovernanceDeadlineClass(StrEnum):
+    HARD = "hard"
+    FIRM = "firm"
+    SOFT = "soft"
+    OBSERVATIONAL = "observational"
 
 
 class Capability(StrEnum):

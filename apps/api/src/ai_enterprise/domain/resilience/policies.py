@@ -8,6 +8,17 @@ from .entities import (
     CapabilityDecision,
     ContinuityActivation,
     DisasterRecoveryRun,
+    GovernanceAvailabilityBudget,
+    GovernanceAvailabilityBudgetUsage,
+    GovernanceAvailabilityContract,
+    GovernanceCachedAuthority,
+    GovernanceContinuityDecision,
+    GovernanceContinuityLease,
+    GovernanceDeadline,
+    GovernanceDependencyAvailability,
+    GovernanceLatencyBudget,
+    GovernancePerformanceEvidence,
+    GovernanceStalenessEnvelope,
     ReadinessResult,
     RecoveryObjective,
     RestoreVerification,
@@ -15,8 +26,13 @@ from .entities import (
 from .enums import (
     BackupStatus,
     Capability,
+    ContinuityMode,
     CriticalityTier,
     DisasterRecoveryStatus,
+    GovernanceContinuityEffect,
+    GovernanceDeadlineClass,
+    GovernanceDependencyCriticality,
+    GovernanceDependencyState,
     RestoreStatus,
 )
 
@@ -102,6 +118,232 @@ class CapabilityGate:
             reason,
             tuple(item.policy.policy_version for item in active),
             tuple(item.id for item in active),
+        )
+
+
+class GovernanceAvailabilityPolicy:
+    _NORMAL_STATES = {
+        GovernanceDependencyState.AVAILABLE,
+        GovernanceDependencyState.DEGRADED,
+    }
+    _FAILING_STATES = {
+        GovernanceDependencyState.STALE,
+        GovernanceDependencyState.PARTITIONED,
+        GovernanceDependencyState.RATE_LIMITED,
+        GovernanceDependencyState.OVERLOADED,
+        GovernanceDependencyState.UNAVAILABLE,
+        GovernanceDependencyState.UNKNOWN,
+    }
+
+    def decide(
+        self,
+        contract: GovernanceAvailabilityContract,
+        dependencies: tuple[GovernanceDependencyAvailability, ...],
+        *,
+        lease: GovernanceContinuityLease | None,
+        budget: GovernanceAvailabilityBudget | None,
+        usage: GovernanceAvailabilityBudgetUsage | None,
+        now: datetime,
+    ) -> GovernanceContinuityDecision:
+        self._validate_contract(contract)
+        states = {item.dependency_id: item.state for item in dependencies}
+        failing = tuple(item for item in dependencies if item.state in self._FAILING_STATES)
+        hard_failure = next(
+            (
+                item
+                for item in failing
+                if item.criticality
+                in {
+                    GovernanceDependencyCriticality.HARD_REQUIRED,
+                    GovernanceDependencyCriticality.AUTHORITY_REQUIRED,
+                    GovernanceDependencyCriticality.SAFETY_REQUIRED,
+                }
+            ),
+            None,
+        )
+        if not failing:
+            return GovernanceContinuityDecision(
+                contract.capability,
+                GovernanceContinuityEffect.CONTINUE_NORMAL,
+                contract.dependency_behaviors.get("normal", ContinuityMode.NORMAL),
+                "DEPENDENCIES_AVAILABLE",
+                contract.policy_version,
+                states,
+            )
+        if hard_failure:
+            mode = contract.dependency_behaviors.get(hard_failure.dependency_id)
+            if mode is None:
+                return GovernanceContinuityDecision(
+                    contract.capability,
+                    GovernanceContinuityEffect.BLOCK,
+                    contract.dependency_behaviors.get("default", ContinuityMode.FAIL_CLOSED),
+                    "HARD_REQUIRED_DEPENDENCY_UNAVAILABLE",
+                    contract.policy_version,
+                    states,
+                )
+        mode = next(
+            (
+                contract.dependency_behaviors[item.dependency_id]
+                for item in failing
+                if item.dependency_id in contract.dependency_behaviors
+            ),
+            contract.dependency_behaviors.get("default", ContinuityMode.FAIL_CLOSED),
+        )
+        if mode == ContinuityMode.FAIL_CLOSED:
+            effect = GovernanceContinuityEffect.BLOCK
+            reason = "CONTINUITY_MODE_FAIL_CLOSED"
+        elif mode == ContinuityMode.QUEUE_ONLY and contract.queue_allowed:
+            effect = GovernanceContinuityEffect.QUEUE
+            reason = "QUEUED_BY_CONTINUITY_CONTRACT"
+        elif mode == ContinuityMode.EMERGENCY_OPERATION and (
+            contract.capability in contract.emergency_capabilities
+        ):
+            effect = GovernanceContinuityEffect.EMERGENCY_MODE
+            reason = "EMERGENCY_OPERATION_AUTHORIZED"
+        else:
+            if not self._lease_valid(contract.capability, mode, lease, now=now):
+                return GovernanceContinuityDecision(
+                    contract.capability,
+                    GovernanceContinuityEffect.BLOCK,
+                    ContinuityMode.FAIL_CLOSED,
+                    "CONTINUITY_LEASE_INVALID",
+                    contract.policy_version,
+                    states,
+                )
+            if not self._budget_available(budget, usage, now=now):
+                return GovernanceContinuityDecision(
+                    contract.capability,
+                    GovernanceContinuityEffect.BLOCK,
+                    ContinuityMode.FAIL_CLOSED,
+                    "CONTINUITY_BUDGET_EXHAUSTED",
+                    contract.policy_version,
+                    states,
+                    lease.id if lease else None,
+                )
+            effect = GovernanceContinuityEffect.CONTINUE_DEGRADED
+            reason = "CONTINUE_DEGRADED_WITH_BOUNDED_AUTHORITY"
+        return GovernanceContinuityDecision(
+            contract.capability,
+            effect,
+            mode,
+            reason,
+            contract.policy_version,
+            states,
+            lease.id if lease else None,
+        )
+
+    def cached_authority_valid(
+        self,
+        authority: GovernanceCachedAuthority,
+        envelope: GovernanceStalenessEnvelope,
+        *,
+        dimension: str,
+        now: datetime,
+        revocation_state_available: bool,
+    ) -> bool:
+        if authority.capability != envelope.capability or authority.valid_until <= now:
+            return False
+        if authority.revocation_sensitive and not revocation_state_available:
+            return False
+        maximum_age = envelope.maximum_age_by_dimension_seconds.get(dimension)
+        if maximum_age is None:
+            return False
+        return (now - authority.captured_at).total_seconds() <= maximum_age
+
+    def _validate_contract(self, contract: GovernanceAvailabilityContract) -> None:
+        if contract.policy_version <= 0:
+            raise ResiliencePolicyError("Availability contract requires a policy version")
+        if contract.fail_open_allowed and not contract.required_evidence:
+            raise ResiliencePolicyError("Fail-open continuity requires evidence")
+        if (
+            contract.capability in contract.emergency_capabilities
+            and not contract.required_evidence
+        ):
+            raise ResiliencePolicyError("Emergency operation requires evidence")
+
+    def _lease_valid(
+        self,
+        capability: Capability,
+        mode: object,
+        lease: GovernanceContinuityLease | None,
+        *,
+        now: datetime,
+    ) -> bool:
+        return bool(
+            lease
+            and lease.capability == capability
+            and lease.mode == mode
+            and lease.issued_at <= now < lease.expires_at
+            and lease.authority
+            and lease.self_renewal_prohibited
+        )
+
+    def _budget_available(
+        self,
+        budget: GovernanceAvailabilityBudget | None,
+        usage: GovernanceAvailabilityBudgetUsage | None,
+        *,
+        now: datetime,
+    ) -> bool:
+        if budget is None or usage is None:
+            return False
+        if budget.maximum_duration_seconds <= 0:
+            return False
+        if (now - usage.started_at).total_seconds() > budget.maximum_duration_seconds:
+            return False
+        limits = (
+            (budget.maximum_executions, usage.executions),
+            (budget.maximum_external_effects, usage.external_effects),
+            (budget.maximum_ai_tool_calls, usage.ai_tool_calls),
+        )
+        return all(limit is None or value < limit for limit, value in limits)
+
+
+class GovernancePerformancePolicy:
+    def validate_budget(self, budget: GovernanceLatencyBudget) -> None:
+        if min(
+            budget.end_to_end_milliseconds,
+            budget.evaluation_milliseconds,
+            budget.authorization_milliseconds,
+            budget.evidence_milliseconds,
+            budget.revocation_milliseconds,
+        ) < 0:
+            raise ResiliencePolicyError("Latency budgets cannot be negative")
+        allocated = (
+            budget.evaluation_milliseconds
+            + budget.authorization_milliseconds
+            + budget.evidence_milliseconds
+            + budget.revocation_milliseconds
+        )
+        if allocated > budget.end_to_end_milliseconds:
+            raise ResiliencePolicyError("Latency allocation exceeds end-to-end budget")
+
+    def evaluate_deadline(
+        self,
+        deadline: GovernanceDeadline,
+        *,
+        started_at: datetime,
+        completed_at: datetime,
+        budget_milliseconds: int,
+    ) -> GovernancePerformanceEvidence:
+        elapsed = int((completed_at - started_at).total_seconds() * 1000)
+        met = completed_at <= deadline.due_at and elapsed <= budget_milliseconds
+        if met:
+            reason = "DEADLINE_MET"
+        elif deadline.deadline_class == GovernanceDeadlineClass.HARD:
+            reason = "HARD_DEADLINE_MISSED"
+        elif deadline.deadline_class == GovernanceDeadlineClass.FIRM:
+            reason = "FIRM_DEADLINE_MISSED"
+        else:
+            reason = "DEADLINE_OBSERVED_LATE"
+        return GovernancePerformanceEvidence(
+            deadline.capability,
+            started_at,
+            completed_at,
+            elapsed,
+            budget_milliseconds,
+            met,
+            reason,
         )
 
 

@@ -7,6 +7,17 @@ from ai_enterprise.domain.resilience.entities import (
     CapabilityDecision,
     ContinuityActivation,
     DisasterRecoveryRun,
+    GovernanceAvailabilityBudget,
+    GovernanceAvailabilityBudgetUsage,
+    GovernanceAvailabilityContract,
+    GovernanceCachedAuthority,
+    GovernanceContinuityDecision,
+    GovernanceContinuityLease,
+    GovernanceDeadline,
+    GovernanceDependencyAvailability,
+    GovernanceLatencyBudget,
+    GovernancePerformanceEvidence,
+    GovernanceStalenessEnvelope,
     ReadinessResult,
     RecoveryObjective,
     RestoreVerification,
@@ -16,6 +27,8 @@ from ai_enterprise.domain.resilience.policies import (
     BackupRecoveryPolicy,
     CapabilityGate,
     DisasterRecoveryStateMachine,
+    GovernanceAvailabilityPolicy,
+    GovernancePerformancePolicy,
     ReadinessPolicy,
     RecoveryObjectivePolicy,
 )
@@ -40,6 +53,60 @@ class ResilienceControlPlane:
         self, backup: BackupManifest, verification: RestoreVerification
     ) -> BackupManifest:
         return BackupRecoveryPolicy().mark_recoverable(backup, verification)
+
+    def decide_continuity(
+        self,
+        contract: GovernanceAvailabilityContract,
+        dependencies: tuple[GovernanceDependencyAvailability, ...],
+        *,
+        lease: GovernanceContinuityLease | None,
+        budget: GovernanceAvailabilityBudget | None,
+        usage: GovernanceAvailabilityBudgetUsage | None,
+        now: datetime,
+    ) -> GovernanceContinuityDecision:
+        return GovernanceAvailabilityPolicy().decide(
+            contract,
+            dependencies,
+            lease=lease,
+            budget=budget,
+            usage=usage,
+            now=now,
+        )
+
+    def cached_authority_valid(
+        self,
+        authority: GovernanceCachedAuthority,
+        envelope: GovernanceStalenessEnvelope,
+        *,
+        dimension: str,
+        now: datetime,
+        revocation_state_available: bool,
+    ) -> bool:
+        return GovernanceAvailabilityPolicy().cached_authority_valid(
+            authority,
+            envelope,
+            dimension=dimension,
+            now=now,
+            revocation_state_available=revocation_state_available,
+        )
+
+    def validate_latency_budget(self, budget: GovernanceLatencyBudget) -> None:
+        GovernancePerformancePolicy().validate_budget(budget)
+
+    def evaluate_deadline(
+        self,
+        deadline: GovernanceDeadline,
+        *,
+        started_at: datetime,
+        completed_at: datetime,
+        budget_milliseconds: int,
+    ) -> GovernancePerformanceEvidence:
+        return GovernancePerformancePolicy().evaluate_deadline(
+            deadline,
+            started_at=started_at,
+            completed_at=completed_at,
+            budget_milliseconds=budget_milliseconds,
+        )
 
     def advance_dr(
         self, run: DisasterRecoveryRun, target: DisasterRecoveryStatus

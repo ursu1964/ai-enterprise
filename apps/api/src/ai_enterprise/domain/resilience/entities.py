@@ -11,6 +11,12 @@ from .enums import (
     CriticalityTier,
     DependencyRequirement,
     DisasterRecoveryStatus,
+    GovernanceAdmissionEffect,
+    GovernanceAvailabilityClass,
+    GovernanceContinuityEffect,
+    GovernanceDeadlineClass,
+    GovernanceDependencyCriticality,
+    GovernanceDependencyState,
     RestoreStatus,
 )
 
@@ -39,12 +45,111 @@ class ServiceDependency:
 
 
 @dataclass(frozen=True, slots=True)
+class GovernanceDependencyAvailability:
+    dependency_id: str
+    state: GovernanceDependencyState
+    criticality: GovernanceDependencyCriticality
+    observed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceStalenessEnvelope:
+    capability: Capability
+    maximum_age_by_dimension_seconds: dict[str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceCachedAuthority:
+    authority_id: str
+    subject_id: str
+    capability: Capability
+    captured_at: datetime
+    valid_until: datetime
+    revocation_sensitive: bool
+    dimensions: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceAvailabilityBudget:
+    maximum_duration_seconds: int
+    maximum_executions: int | None = None
+    maximum_external_effects: int | None = None
+    maximum_ai_tool_calls: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceAvailabilityBudgetUsage:
+    started_at: datetime
+    executions: int = 0
+    external_effects: int = 0
+    ai_tool_calls: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceContinuityLease:
+    id: UUID
+    capability: Capability
+    mode: ContinuityMode
+    issued_at: datetime
+    expires_at: datetime
+    authority: str
+    issued_to: str
+    self_renewal_prohibited: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ContinuityPolicy:
     mode: ContinuityMode
     allowed: frozenset[Capability]
     prohibited: frozenset[Capability]
     maximum_duration_seconds: int
     policy_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceAvailabilityContract:
+    id: str
+    capability: Capability
+    availability_class: GovernanceAvailabilityClass
+    dependency_behaviors: dict[str, ContinuityMode]
+    fail_open_allowed: bool
+    cached_authority_allowed: bool
+    queue_allowed: bool
+    emergency_capabilities: frozenset[Capability]
+    required_evidence: bool
+    policy_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceContinuityDecision:
+    capability: Capability
+    effect: GovernanceContinuityEffect
+    mode: ContinuityMode
+    reason: str
+    policy_version: int
+    dependency_states: dict[str, GovernanceDependencyState]
+    lease_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceAdmissionToken:
+    id: UUID
+    capability: Capability
+    effect: GovernanceAdmissionEffect
+    mode: ContinuityMode
+    priority: str
+    valid_until: datetime
+    policy_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceContinuityEvidence:
+    id: UUID
+    capability: Capability
+    decision: GovernanceContinuityDecision
+    admitted_executions: int
+    blocked_executions: int
+    observed_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,3 +216,33 @@ class DisasterRecoveryRun:
 class ReadinessResult:
     ready: bool
     failures: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceDeadline:
+    id: str
+    capability: Capability
+    deadline_class: GovernanceDeadlineClass
+    due_at: datetime
+    miss_behavior: GovernanceContinuityEffect
+
+
+@dataclass(frozen=True, slots=True)
+class GovernanceLatencyBudget:
+    capability: Capability
+    end_to_end_milliseconds: int
+    evaluation_milliseconds: int
+    authorization_milliseconds: int
+    evidence_milliseconds: int
+    revocation_milliseconds: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class GovernancePerformanceEvidence:
+    capability: Capability
+    started_at: datetime
+    completed_at: datetime
+    elapsed_milliseconds: int
+    budget_milliseconds: int
+    deadline_met: bool
+    reason: str

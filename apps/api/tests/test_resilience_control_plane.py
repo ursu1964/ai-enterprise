@@ -10,6 +10,15 @@ from ai_enterprise.domain.resilience.entities import (
     ContinuityActivation,
     ContinuityPolicy,
     DisasterRecoveryRun,
+    GovernanceAvailabilityBudget,
+    GovernanceAvailabilityBudgetUsage,
+    GovernanceAvailabilityContract,
+    GovernanceCachedAuthority,
+    GovernanceContinuityLease,
+    GovernanceDeadline,
+    GovernanceDependencyAvailability,
+    GovernanceLatencyBudget,
+    GovernanceStalenessEnvelope,
     RecoveryObjective,
     RestoreVerification,
 )
@@ -19,6 +28,11 @@ from ai_enterprise.domain.resilience.enums import (
     ContinuityMode,
     CriticalityTier,
     DisasterRecoveryStatus,
+    GovernanceAvailabilityClass,
+    GovernanceContinuityEffect,
+    GovernanceDeadlineClass,
+    GovernanceDependencyCriticality,
+    GovernanceDependencyState,
     RestoreStatus,
 )
 from ai_enterprise.domain.resilience.policies import ResiliencePolicyError
@@ -182,3 +196,169 @@ def test_readiness_fails_closed_without_verified_foundations() -> None:
         mandatory_dependencies_ready=True,
     )
     assert ready.ready
+
+
+def test_availability_contract_fails_closed_for_unhandled_hard_dependency() -> None:
+    contract = GovernanceAvailabilityContract(
+        "availability-contract.ai-tools",
+        Capability.DISPATCH_EXTERNAL_COMMAND,
+        GovernanceAvailabilityClass.MISSION_CRITICAL,
+        {},
+        fail_open_allowed=False,
+        cached_authority_allowed=False,
+        queue_allowed=False,
+        emergency_capabilities=frozenset(),
+        required_evidence=True,
+        policy_version=1,
+    )
+    dependency = GovernanceDependencyAvailability(
+        "governance-evaluator",
+        GovernanceDependencyState.UNAVAILABLE,
+        GovernanceDependencyCriticality.HARD_REQUIRED,
+        NOW,
+    )
+
+    decision = ResilienceControlPlane().decide_continuity(
+        contract, (dependency,), lease=None, budget=None, usage=None, now=NOW
+    )
+
+    assert decision.effect == GovernanceContinuityEffect.BLOCK
+    assert decision.mode == ContinuityMode.FAIL_CLOSED
+    assert decision.reason == "HARD_REQUIRED_DEPENDENCY_UNAVAILABLE"
+
+
+def test_degraded_continuity_requires_valid_lease_and_remaining_budget() -> None:
+    contract = GovernanceAvailabilityContract(
+        "availability-contract.ai-tools",
+        Capability.DISPATCH_EXTERNAL_COMMAND,
+        GovernanceAvailabilityClass.HIGH,
+        {"risk": ContinuityMode.PREAUTHORIZED_ONLY},
+        fail_open_allowed=False,
+        cached_authority_allowed=True,
+        queue_allowed=False,
+        emergency_capabilities=frozenset(),
+        required_evidence=True,
+        policy_version=7,
+    )
+    dependency = GovernanceDependencyAvailability(
+        "risk",
+        GovernanceDependencyState.UNAVAILABLE,
+        GovernanceDependencyCriticality.DEGRADABLE,
+        NOW,
+    )
+    lease = GovernanceContinuityLease(
+        uuid4(),
+        Capability.DISPATCH_EXTERNAL_COMMAND,
+        ContinuityMode.PREAUTHORIZED_ONLY,
+        NOW,
+        NOW + timedelta(minutes=5),
+        "continuity-authority",
+        "tool-gateway",
+    )
+    budget = GovernanceAvailabilityBudget(
+        maximum_duration_seconds=300,
+        maximum_executions=2,
+        maximum_ai_tool_calls=1,
+    )
+    service = ResilienceControlPlane()
+
+    allowed = service.decide_continuity(
+        contract,
+        (dependency,),
+        lease=lease,
+        budget=budget,
+        usage=GovernanceAvailabilityBudgetUsage(NOW, executions=1),
+        now=NOW + timedelta(seconds=10),
+    )
+    exhausted = service.decide_continuity(
+        contract,
+        (dependency,),
+        lease=lease,
+        budget=budget,
+        usage=GovernanceAvailabilityBudgetUsage(NOW, executions=2),
+        now=NOW + timedelta(seconds=10),
+    )
+
+    assert allowed.effect == GovernanceContinuityEffect.CONTINUE_DEGRADED
+    assert allowed.lease_id == lease.id
+    assert exhausted.effect == GovernanceContinuityEffect.BLOCK
+    assert exhausted.reason == "CONTINUITY_BUDGET_EXHAUSTED"
+
+
+def test_cached_authority_is_rejected_when_stale_or_revocation_state_is_unknown() -> None:
+    authority = GovernanceCachedAuthority(
+        "permission.customer.read",
+        "support-service",
+        Capability.READ_GOVERNANCE,
+        NOW - timedelta(seconds=20),
+        NOW + timedelta(minutes=1),
+        revocation_sensitive=True,
+    )
+    envelope = GovernanceStalenessEnvelope(
+        Capability.READ_GOVERNANCE,
+        {"identity": 30},
+    )
+    service = ResilienceControlPlane()
+
+    assert service.cached_authority_valid(
+        authority,
+        envelope,
+        dimension="identity",
+        now=NOW,
+        revocation_state_available=True,
+    )
+    assert not service.cached_authority_valid(
+        authority,
+        envelope,
+        dimension="identity",
+        now=NOW,
+        revocation_state_available=False,
+    )
+    assert not service.cached_authority_valid(
+        authority,
+        envelope,
+        dimension="identity",
+        now=NOW + timedelta(seconds=20),
+        revocation_state_available=True,
+    )
+
+
+def test_performance_deadline_and_latency_budget_are_governance_constraints() -> None:
+    service = ResilienceControlPlane()
+    service.validate_latency_budget(
+        GovernanceLatencyBudget(
+            Capability.DISPATCH_EXTERNAL_COMMAND,
+            end_to_end_milliseconds=100,
+            evaluation_milliseconds=30,
+            authorization_milliseconds=30,
+            evidence_milliseconds=20,
+            revocation_milliseconds=10,
+        )
+    )
+    with pytest.raises(ResiliencePolicyError):
+        service.validate_latency_budget(
+            GovernanceLatencyBudget(
+                Capability.DISPATCH_EXTERNAL_COMMAND,
+                end_to_end_milliseconds=50,
+                evaluation_milliseconds=30,
+                authorization_milliseconds=30,
+                evidence_milliseconds=10,
+            )
+        )
+
+    deadline = GovernanceDeadline(
+        "commit-auth-deadline",
+        Capability.DISPATCH_EXTERNAL_COMMAND,
+        GovernanceDeadlineClass.HARD,
+        NOW + timedelta(milliseconds=50),
+        GovernanceContinuityEffect.BLOCK,
+    )
+    evidence = service.evaluate_deadline(
+        deadline,
+        started_at=NOW,
+        completed_at=NOW + timedelta(milliseconds=80),
+        budget_milliseconds=100,
+    )
+
+    assert not evidence.deadline_met
+    assert evidence.reason == "HARD_DEADLINE_MISSED"
