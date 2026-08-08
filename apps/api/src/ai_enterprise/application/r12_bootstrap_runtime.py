@@ -410,7 +410,7 @@ _PHASE_SIGNALS: tuple[tuple[int, str, tuple[str, ...]], ...] = (
         2,
         "Knowledge Graph and Registry",
         (
-            "graphify-out/graph.json",
+            "knowledge/graph.json",
             "apps/api/src/ai_enterprise/infrastructure/knowledge",
             "apps/api/src/ai_enterprise/api/routes/knowledge.py",
         ),
@@ -474,7 +474,7 @@ _REPOSITORY_ITEMS: tuple[tuple[str, str], ...] = (
     ("deploy/kubernetes", "Managed deployment manifests"),
     ("docker", "Container and observability configuration"),
     ("examples", "Reference manifests and validation examples"),
-    ("graphify-out/graph.json", "Repository knowledge graph"),
+    ("knowledge/graph.json", "Repository knowledge graph artifact"),
 )
 
 
