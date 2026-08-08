@@ -1,6 +1,12 @@
 from ai_enterprise.domain.updl_registry import (
     ActorReference,
     AdditionalPropertiesPolicy,
+    AdoptionScope,
+    ChangeAdoptionCompletionResult,
+    ChangeAdoptionDefinition,
+    ChangeAdoptionFailureType,
+    ChangeAdoptionStatus,
+    ChangeAdoptionVerificationResult,
     ConditionClauseType,
     ConditionDependency,
     ConditionDependencyType,
@@ -242,6 +248,37 @@ def _person(registry: InMemoryUPDLRegistry):
         namespace="commerce.orders",
         local_id="PERSON-001",
         spec={"display_name": "Alex Morgan", "active": True},
+        actor=_actor(),
+    )
+
+
+def _requirement(registry: InMemoryUPDLRegistry, local_id: str, statement: str):
+    try:
+        person = registry.get_object("commerce.orders.PERSON-001")
+    except RegistryError:
+        person = _person(registry)
+    return registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id=local_id,
+        spec={
+            "statement": statement,
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+
+
+def _evidence(registry: InMemoryUPDLRegistry, local_id: str, evidence_type: str):
+    return registry.create_object(
+        kind="Evidence",
+        namespace="commerce.orders",
+        local_id=local_id,
+        spec={
+            "evidence_type": evidence_type,
+            "summary": f"{evidence_type} evidence",
+        },
         actor=_actor(),
     )
 
@@ -2452,6 +2489,220 @@ def test_updl_registry_rejects_recurrence_without_governed_correlation() -> None
         assert exc.code == "RECURRENCE_THRESHOLD_INVALID"
     else:
         raise AssertionError("recurrence definition without valid threshold was accepted")
+
+
+def test_updl_registry_change_adoption_requires_evidence_before_verification() -> None:
+    registry = _registry()
+    governance = _requirement(
+        registry,
+        "REQ-050",
+        "Payment processing policy version three must be adopted.",
+    )
+    consumer = _requirement(
+        registry,
+        "REQ-051",
+        "Payment API must consume the active payment policy.",
+    )
+    deployment_evidence = _evidence(registry, "EVIDENCE-050", "DEPLOYMENT")
+    test_evidence = _evidence(registry, "EVIDENCE-051", "TEST_RESULT")
+    registry.register_change_adoption_definition(
+        ChangeAdoptionDefinition(
+            id="commerce.orders.adoption-definition.payment-policy-v3",
+            name="paymentPolicyV3Adoption",
+            governance_ref=ObjectReference(governance.metadata.id),
+            target_version="3.0.0",
+            required_evidence_types=("DEPLOYMENT", "TEST_RESULT"),
+        )
+    )
+
+    try:
+        registry.declare_change_adoption(
+            definition_id="commerce.orders.adoption-definition.payment-policy-v3",
+            consumer_ref=ObjectReference(consumer.metadata.id),
+            declared_by_ref="principal.payment-platform-owner",
+            evidence_refs=(ObjectReference(deployment_evidence.metadata.id),),
+            scope=AdoptionScope(environments=("production",)),
+        )
+    except RegistryError as exc:
+        assert exc.code == "ADOPTION_EVIDENCE_MISSING"
+    else:
+        raise AssertionError("adoption declaration without required evidence was accepted")
+
+    adoption = registry.declare_change_adoption(
+        definition_id="commerce.orders.adoption-definition.payment-policy-v3",
+        consumer_ref=ObjectReference(consumer.metadata.id),
+        declared_by_ref="principal.payment-platform-owner",
+        evidence_refs=(
+            ObjectReference(deployment_evidence.metadata.id),
+            ObjectReference(test_evidence.metadata.id),
+        ),
+        scope=AdoptionScope(environments=("production",)),
+    )
+
+    assert adoption.status is ChangeAdoptionStatus.ADOPTED
+
+    verification = registry.verify_change_adoption(
+        adoption_id=adoption.id,
+        verifier_ref="control.governance-adoption-verifier",
+        checks={
+            "governance-version-active": "PASS",
+            "deployment-version-matches": "PASS",
+            "runtime-policy-conformance": "PASS",
+        },
+        evidence_refs=(),
+    )
+    verified = registry.get_change_adoption(adoption.id)
+
+    assert verification.result is ChangeAdoptionVerificationResult.VERIFIED
+    assert verified.status is ChangeAdoptionStatus.VERIFIED
+    assert verified.verification_ref == verification.id
+    assert verified.target.version == "3.0.0"
+
+
+def test_updl_registry_adoption_coverage_separates_declared_from_verified() -> None:
+    registry = _registry()
+    governance = _requirement(registry, "REQ-052", "Payment policy v3.")
+    first_consumer = _requirement(registry, "REQ-053", "Payment API consumer.")
+    second_consumer = _requirement(registry, "REQ-054", "Checkout worker consumer.")
+    deployment_evidence = _evidence(registry, "EVIDENCE-052", "DEPLOYMENT")
+    test_evidence = _evidence(registry, "EVIDENCE-053", "TEST_RESULT")
+    registry.register_change_adoption_definition(
+        ChangeAdoptionDefinition(
+            id="commerce.orders.adoption-definition.payment-policy-v3-coverage",
+            name="paymentPolicyV3Coverage",
+            governance_ref=ObjectReference(governance.metadata.id),
+            target_version="3.0.0",
+            required_evidence_types=("DEPLOYMENT", "TEST_RESULT"),
+        )
+    )
+    first_adoption = registry.declare_change_adoption(
+        definition_id="commerce.orders.adoption-definition.payment-policy-v3-coverage",
+        consumer_ref=ObjectReference(first_consumer.metadata.id),
+        declared_by_ref="principal.payment-platform-owner",
+        evidence_refs=(
+            ObjectReference(deployment_evidence.metadata.id),
+            ObjectReference(test_evidence.metadata.id),
+        ),
+    )
+    second_adoption = registry.declare_change_adoption(
+        definition_id="commerce.orders.adoption-definition.payment-policy-v3-coverage",
+        consumer_ref=ObjectReference(second_consumer.metadata.id),
+        declared_by_ref="principal.checkout-owner",
+        evidence_refs=(
+            ObjectReference(deployment_evidence.metadata.id),
+            ObjectReference(test_evidence.metadata.id),
+        ),
+    )
+    registry.verify_change_adoption(
+        adoption_id=first_adoption.id,
+        verifier_ref="control.governance-adoption-verifier",
+        checks={"runtime-policy-conformance": "PASS"},
+        evidence_refs=(),
+    )
+
+    coverage = registry.calculate_adoption_coverage(
+        governance_ref=ObjectReference(governance.metadata.id),
+        target_version="3.0.0",
+        required_consumers=(
+            ObjectReference(first_consumer.metadata.id),
+            ObjectReference(second_consumer.metadata.id),
+        ),
+        population_complete=True,
+    )
+    completion = registry.decide_change_adoption_completion(
+        coverage_ref=coverage.id,
+        minimum_verification_coverage=1.0,
+    )
+
+    assert second_adoption.status is ChangeAdoptionStatus.ADOPTED
+    assert coverage.adoption_ratio == 1.0
+    assert coverage.verification_ratio == 0.5
+    assert completion.result is ChangeAdoptionCompletionResult.INCOMPLETE
+
+
+def test_updl_registry_change_completion_requires_resolved_population() -> None:
+    registry = _registry()
+    governance = _requirement(registry, "REQ-055", "Payment policy v3.")
+    consumer = _requirement(registry, "REQ-056", "Payment API consumer.")
+    deployment_evidence = _evidence(registry, "EVIDENCE-054", "DEPLOYMENT")
+    registry.register_change_adoption_definition(
+        ChangeAdoptionDefinition(
+            id="commerce.orders.adoption-definition.payment-policy-v3-complete",
+            name="paymentPolicyV3Completion",
+            governance_ref=ObjectReference(governance.metadata.id),
+            target_version="3.0.0",
+            required_evidence_types=("DEPLOYMENT",),
+        )
+    )
+    adoption = registry.declare_change_adoption(
+        definition_id="commerce.orders.adoption-definition.payment-policy-v3-complete",
+        consumer_ref=ObjectReference(consumer.metadata.id),
+        declared_by_ref="principal.payment-platform-owner",
+        evidence_refs=(ObjectReference(deployment_evidence.metadata.id),),
+    )
+    registry.verify_change_adoption(
+        adoption_id=adoption.id,
+        verifier_ref="control.governance-adoption-verifier",
+        checks={"deployment-version-matches": "PASS"},
+        evidence_refs=(),
+    )
+
+    unknown_population = registry.calculate_adoption_coverage(
+        governance_ref=ObjectReference(governance.metadata.id),
+        target_version="3.0.0",
+        required_consumers=(ObjectReference(consumer.metadata.id),),
+        population_complete=False,
+    )
+    unknown_decision = registry.decide_change_adoption_completion(
+        coverage_ref=unknown_population.id,
+        minimum_verification_coverage=1.0,
+    )
+    resolved_population = registry.calculate_adoption_coverage(
+        governance_ref=ObjectReference(governance.metadata.id),
+        target_version="3.0.0",
+        required_consumers=(ObjectReference(consumer.metadata.id),),
+        population_complete=True,
+    )
+    complete_decision = registry.decide_change_adoption_completion(
+        coverage_ref=resolved_population.id,
+        minimum_verification_coverage=1.0,
+    )
+
+    assert unknown_decision.result is ChangeAdoptionCompletionResult.UNKNOWN
+    assert complete_decision.result is ChangeAdoptionCompletionResult.COMPLETE
+
+
+def test_updl_registry_records_change_adoption_failure_as_governed_fact() -> None:
+    registry = _registry()
+    governance = _requirement(registry, "REQ-057", "Payment policy v3.")
+    consumer = _requirement(registry, "REQ-058", "Payment API consumer.")
+    deployment_evidence = _evidence(registry, "EVIDENCE-055", "DEPLOYMENT")
+    runtime_evidence = _evidence(registry, "EVIDENCE-056", "RUNTIME_VALIDATION")
+    registry.register_change_adoption_definition(
+        ChangeAdoptionDefinition(
+            id="commerce.orders.adoption-definition.payment-policy-v3-failure",
+            name="paymentPolicyV3Failure",
+            governance_ref=ObjectReference(governance.metadata.id),
+            target_version="3.0.0",
+            required_evidence_types=("DEPLOYMENT",),
+        )
+    )
+    adoption = registry.declare_change_adoption(
+        definition_id="commerce.orders.adoption-definition.payment-policy-v3-failure",
+        consumer_ref=ObjectReference(consumer.metadata.id),
+        declared_by_ref="principal.payment-platform-owner",
+        evidence_refs=(ObjectReference(deployment_evidence.metadata.id),),
+    )
+
+    failure = registry.record_change_adoption_failure(
+        adoption_id=adoption.id,
+        failure_type=ChangeAdoptionFailureType.RUNTIME_NONCONFORMANCE,
+        reason_code="RUNTIME_POLICY_MISMATCH",
+        evidence_refs=(ObjectReference(runtime_evidence.metadata.id),),
+    )
+
+    assert failure.failure_type is ChangeAdoptionFailureType.RUNTIME_NONCONFORMANCE
+    assert registry.get_change_adoption(adoption.id).status is ChangeAdoptionStatus.FAILED
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:

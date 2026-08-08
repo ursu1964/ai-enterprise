@@ -706,6 +706,64 @@ class RecurrenceConsequence(StrEnum):
     BLOCK_NEW_EXCEPTIONS = "BLOCK_NEW_EXCEPTIONS"
 
 
+class ChangeAdoptionStatus(StrEnum):
+    NOT_REQUIRED = "NOT_REQUIRED"
+    IDENTIFIED = "IDENTIFIED"
+    PLANNED = "PLANNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    PARTIALLY_ADOPTED = "PARTIALLY_ADOPTED"
+    ADOPTED = "ADOPTED"
+    VERIFICATION_PENDING = "VERIFICATION_PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    FAILED = "FAILED"
+    SUSPENDED = "SUSPENDED"
+    REVOKED = "REVOKED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class ChangeAdoptionVerificationResult(StrEnum):
+    VERIFIED = "VERIFIED"
+    PARTIALLY_VERIFIED = "PARTIALLY_VERIFIED"
+    FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    EVIDENCE_INSUFFICIENT = "EVIDENCE_INSUFFICIENT"
+    UNKNOWN = "UNKNOWN"
+
+
+class ChangeAdoptionFailureType(StrEnum):
+    TARGET_UNRESOLVED = "TARGET_UNRESOLVED"
+    CONSUMER_UNAVAILABLE = "CONSUMER_UNAVAILABLE"
+    COMPATIBILITY_FAILURE = "COMPATIBILITY_FAILURE"
+    DEPLOYMENT_FAILURE = "DEPLOYMENT_FAILURE"
+    CONFIGURATION_FAILURE = "CONFIGURATION_FAILURE"
+    MIGRATION_FAILURE = "MIGRATION_FAILURE"
+    TEST_FAILURE = "TEST_FAILURE"
+    VERIFICATION_FAILURE = "VERIFICATION_FAILURE"
+    EVIDENCE_INSUFFICIENT = "EVIDENCE_INSUFFICIENT"
+    AUTHORIZATION_FAILURE = "AUTHORIZATION_FAILURE"
+    RUNTIME_NONCONFORMANCE = "RUNTIME_NONCONFORMANCE"
+    DEPENDENCY_BLOCKED = "DEPENDENCY_BLOCKED"
+    DEADLINE_MISSED = "DEADLINE_MISSED"
+
+
+class ChangeAdoptionComplianceResult(StrEnum):
+    COMPLIANT = "COMPLIANT"
+    PARTIALLY_COMPLIANT = "PARTIALLY_COMPLIANT"
+    NON_COMPLIANT = "NON_COMPLIANT"
+    EXEMPT = "EXEMPT"
+    UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ChangeAdoptionCompletionResult(StrEnum):
+    COMPLETE = "COMPLETE"
+    COMPLETE_WITH_ACCEPTED_RESIDUAL_RISK = "COMPLETE_WITH_ACCEPTED_RESIDUAL_RISK"
+    INCOMPLETE = "INCOMPLETE"
+    BLOCKED = "BLOCKED"
+    UNKNOWN = "UNKNOWN"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -3063,6 +3121,237 @@ class RecurrenceDecisionRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class AdoptionTarget:
+    governance_ref: ObjectReference
+    version: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "governanceDefinition": {
+                "id": self.governance_ref.id,
+                "revision": self.governance_ref.revision,
+            },
+            "version": {"exact": self.version},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AdoptionScope:
+    environments: tuple[str, ...] = ()
+    regions: tuple[str, ...] = ()
+    capabilities: tuple[str, ...] = ()
+    tenants: tuple[str, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "environments": list(self.environments),
+            "regions": list(self.regions),
+            "capabilities": list(self.capabilities),
+            "tenants": list(self.tenants),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeAdoptionDefinition:
+    id: str
+    name: str
+    governance_ref: ObjectReference
+    target_version: str
+    required_evidence_types: tuple[str, ...]
+    version: str = "1.0.0"
+    require_consumer_declaration: bool = True
+    require_compatibility_assessment: bool = False
+    verification_required: bool = True
+    maximum_adoption_delay: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "governanceDefinition": {
+                "id": self.governance_ref.id,
+                "revision": self.governance_ref.revision,
+            },
+            "targetVersion": self.target_version,
+            "adoptionRequirements": {
+                "requireConsumerDeclaration": self.require_consumer_declaration,
+                "requireCompatibilityAssessment": self.require_compatibility_assessment,
+                "requireVerification": self.verification_required,
+            },
+            "evidenceRequirements": list(self.required_evidence_types),
+            "maximumAdoptionDelay": self.maximum_adoption_delay,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeAdoption:
+    id: str
+    definition_id: str
+    definition_version: str
+    consumer_ref: ObjectReference
+    target: AdoptionTarget
+    scope: AdoptionScope
+    status: ChangeAdoptionStatus
+    declared_by_ref: str
+    declared_at: datetime
+    adopted_at: datetime
+    evidence_refs: tuple[ObjectReference, ...]
+    deadline: datetime | None = None
+    change_ref: str | None = None
+    verification_ref: str | None = None
+    superseded_by_ref: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "changeRef": self.change_ref,
+            "consumer": {
+                "id": self.consumer_ref.id,
+                "revision": self.consumer_ref.revision,
+            },
+            "target": self.target.canonical_document(),
+            "scope": self.scope.canonical_document(),
+            "status": {"value": self.status.value},
+            "declaration": {
+                "declaredByRef": self.declared_by_ref,
+                "declaredAt": self.declared_at.isoformat(),
+            },
+            "adoption": {"adoptedAt": self.adopted_at.isoformat()},
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "deadline": (
+                {"requiredBy": self.deadline.isoformat()}
+                if self.deadline is not None
+                else None
+            ),
+            "verificationRef": self.verification_ref,
+            "supersededByRef": self.superseded_by_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeAdoptionVerification:
+    id: str
+    adoption_ref: str
+    verifier_ref: str
+    checks: dict[str, str]
+    result: ChangeAdoptionVerificationResult
+    evidence_refs: tuple[ObjectReference, ...]
+    verified_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "adoptionRef": self.adoption_ref,
+            "verifierRef": self.verifier_ref,
+            "checks": dict(sorted(self.checks.items())),
+            "result": {"status": self.result.value},
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "verifiedAt": self.verified_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeAdoptionFailure:
+    id: str
+    adoption_ref: str
+    failure_type: ChangeAdoptionFailureType
+    reason_code: str
+    detected_at: datetime
+    evidence_refs: tuple[ObjectReference, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "adoptionRef": self.adoption_ref,
+            "failureType": {"value": self.failure_type.value},
+            "reason": {"code": self.reason_code},
+            "detectedAt": self.detected_at.isoformat(),
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AdoptionCoverage:
+    id: str
+    governance_ref: ObjectReference
+    target_version: str
+    population_complete: bool
+    required_consumers: int
+    adopted_consumers: int
+    verified_consumers: int
+    exception_consumers: int
+    failed_consumers: int
+    calculated_at: datetime
+
+    @property
+    def adoption_ratio(self) -> float:
+        return self.adopted_consumers / self.required_consumers
+
+    @property
+    def verification_ratio(self) -> float:
+        return self.verified_consumers / self.required_consumers
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "governanceDefinition": {
+                "id": self.governance_ref.id,
+                "revision": self.governance_ref.revision,
+            },
+            "targetVersion": self.target_version,
+            "populationComplete": self.population_complete,
+            "requiredConsumers": self.required_consumers,
+            "adoptedConsumers": self.adopted_consumers,
+            "verifiedConsumers": self.verified_consumers,
+            "exceptionConsumers": self.exception_consumers,
+            "failedConsumers": self.failed_consumers,
+            "adoptionRatio": self.adoption_ratio,
+            "verificationRatio": self.verification_ratio,
+            "calculatedAt": self.calculated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeAdoptionCompletionDecision:
+    id: str
+    coverage_ref: str
+    result: ChangeAdoptionCompletionResult
+    adoption_coverage: float
+    verification_coverage: float
+    minimum_verification_coverage: float
+    unresolved_critical_failures: int
+    valid_exceptions: int
+    decided_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "coverageRef": self.coverage_ref,
+            "result": self.result.value,
+            "adoptionCoverage": self.adoption_coverage,
+            "verificationCoverage": self.verification_coverage,
+            "minimumVerificationCoverage": self.minimum_verification_coverage,
+            "unresolvedCriticalFailures": self.unresolved_critical_failures,
+            "validExceptions": self.valid_exceptions,
+            "decidedAt": self.decided_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -3254,6 +3543,14 @@ class InMemoryUPDLRegistry:
         self._recurrence_blast_radii: dict[str, RecurrenceBlastRadius] = {}
         self._systemic_failure_assessments: dict[str, SystemicFailureAssessment] = {}
         self._recurrence_decision_records: dict[str, RecurrenceDecisionRecord] = {}
+        self._change_adoption_definitions: dict[str, ChangeAdoptionDefinition] = {}
+        self._change_adoptions: dict[str, ChangeAdoption] = {}
+        self._change_adoption_verifications: dict[str, ChangeAdoptionVerification] = {}
+        self._change_adoption_failures: dict[str, ChangeAdoptionFailure] = {}
+        self._adoption_coverages: dict[str, AdoptionCoverage] = {}
+        self._change_adoption_completion_decisions: dict[
+            str, ChangeAdoptionCompletionDecision
+        ] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -3287,6 +3584,11 @@ class InMemoryUPDLRegistry:
         self._recurrence_blast_radius_sequence = 0
         self._systemic_failure_assessment_sequence = 0
         self._recurrence_decision_sequence = 0
+        self._change_adoption_sequence = 0
+        self._change_adoption_verification_sequence = 0
+        self._change_adoption_failure_sequence = 0
+        self._adoption_coverage_sequence = 0
+        self._change_adoption_completion_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -4519,6 +4821,295 @@ class InMemoryUPDLRegistry:
         if correlation is None:
             raise RegistryError("RECURRENCE_NOT_FOUND", recurrence_id)
         return correlation
+
+    def register_change_adoption_definition(
+        self,
+        definition: ChangeAdoptionDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("ADOPTION_DEFINITION_NAME_REQUIRED", definition.id)
+        resolved_governance = self._resolve_required_reference(
+            definition.governance_ref,
+            "ADOPTION_TARGET_NOT_FOUND",
+        )
+        if not definition.target_version:
+            raise RegistryError("ADOPTION_VERSION_INVALID", definition.id)
+        if definition.verification_required and not definition.required_evidence_types:
+            raise RegistryError("ADOPTION_EVIDENCE_MISSING", definition.id)
+        target_ref = ObjectReference(
+            resolved_governance.metadata.id,
+            revision=resolved_governance.metadata.revision,
+        )
+        self._change_adoption_definitions[definition.id] = replace(
+            definition,
+            governance_ref=target_ref,
+        )
+
+    def declare_change_adoption(
+        self,
+        *,
+        definition_id: str,
+        consumer_ref: ObjectReference,
+        declared_by_ref: str,
+        evidence_refs: tuple[ObjectReference, ...],
+        scope: AdoptionScope | None = None,
+        adopted_at: datetime | None = None,
+        deadline: datetime | None = None,
+        change_ref: str | None = None,
+        status: ChangeAdoptionStatus = ChangeAdoptionStatus.ADOPTED,
+    ) -> ChangeAdoption:
+        definition = self._change_adoption_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("ADOPTION_DEFINITION_NOT_FOUND", definition_id)
+        if status is ChangeAdoptionStatus.VERIFIED:
+            raise RegistryError("ADOPTION_VERIFICATION_REQUIRED", definition_id)
+        if status not in {
+            ChangeAdoptionStatus.ADOPTED,
+            ChangeAdoptionStatus.PARTIALLY_ADOPTED,
+            ChangeAdoptionStatus.VERIFICATION_PENDING,
+            ChangeAdoptionStatus.IN_PROGRESS,
+        }:
+            raise RegistryError("ADOPTION_STATUS_INVALID", status.value)
+        if not declared_by_ref:
+            raise RegistryError("ADOPTION_DECLARER_UNAUTHORIZED", definition_id)
+        consumer = self._resolve_required_reference(
+            consumer_ref,
+            "ADOPTION_CONSUMER_NOT_FOUND",
+        )
+        resolved_evidence = self._resolve_adoption_evidence(
+            evidence_refs,
+            required_types=definition.required_evidence_types,
+        )
+        now = datetime.now(UTC)
+        self._change_adoption_sequence += 1
+        adoption = ChangeAdoption(
+            id=f"ADOPT-{self._change_adoption_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            consumer_ref=ObjectReference(
+                consumer.metadata.id,
+                revision=consumer.metadata.revision,
+            ),
+            target=AdoptionTarget(
+                governance_ref=definition.governance_ref,
+                version=definition.target_version,
+            ),
+            scope=scope or AdoptionScope(),
+            status=status,
+            declared_by_ref=declared_by_ref,
+            declared_at=now,
+            adopted_at=adopted_at or now,
+            evidence_refs=resolved_evidence,
+            deadline=deadline,
+            change_ref=change_ref,
+        )
+        self._change_adoptions[adoption.id] = adoption
+        return adoption
+
+    def verify_change_adoption(
+        self,
+        *,
+        adoption_id: str,
+        verifier_ref: str,
+        checks: dict[str, str],
+        evidence_refs: tuple[ObjectReference, ...],
+        result: ChangeAdoptionVerificationResult = (
+            ChangeAdoptionVerificationResult.VERIFIED
+        ),
+    ) -> ChangeAdoptionVerification:
+        adoption = self.get_change_adoption(adoption_id)
+        definition = self._change_adoption_definitions[adoption.definition_id]
+        if not verifier_ref:
+            raise RegistryError("ADOPTION_VERIFIER_REQUIRED", adoption_id)
+        if not checks:
+            raise RegistryError("ADOPTION_VERIFICATION_MISSING", adoption_id)
+        if result is ChangeAdoptionVerificationResult.VERIFIED and any(
+            check_result != "PASS" for check_result in checks.values()
+        ):
+            raise RegistryError("ADOPTION_VERIFICATION_MISMATCH", adoption_id)
+        resolved_evidence = self._resolve_adoption_evidence(
+            tuple((*adoption.evidence_refs, *evidence_refs)),
+            required_types=definition.required_evidence_types,
+        )
+        self._change_adoption_verification_sequence += 1
+        verification = ChangeAdoptionVerification(
+            id=f"ADV-{self._change_adoption_verification_sequence:06d}",
+            adoption_ref=adoption.id,
+            verifier_ref=verifier_ref,
+            checks=dict(sorted(checks.items())),
+            result=result,
+            evidence_refs=resolved_evidence,
+            verified_at=datetime.now(UTC),
+        )
+        self._change_adoption_verifications[verification.id] = verification
+        next_status = (
+            ChangeAdoptionStatus.VERIFIED
+            if result is ChangeAdoptionVerificationResult.VERIFIED
+            else ChangeAdoptionStatus.FAILED
+            if result is ChangeAdoptionVerificationResult.FAILED
+            else ChangeAdoptionStatus.VERIFICATION_PENDING
+        )
+        self._change_adoptions[adoption.id] = replace(
+            adoption,
+            status=next_status,
+            verification_ref=verification.id,
+            evidence_refs=resolved_evidence,
+        )
+        return verification
+
+    def record_change_adoption_failure(
+        self,
+        *,
+        adoption_id: str,
+        failure_type: ChangeAdoptionFailureType,
+        reason_code: str,
+        evidence_refs: tuple[ObjectReference, ...] = (),
+    ) -> ChangeAdoptionFailure:
+        adoption = self.get_change_adoption(adoption_id)
+        if not reason_code:
+            raise RegistryError("ADOPTION_FAILURE_REASON_REQUIRED", adoption_id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "ADOPTION_EVIDENCE_INVALID",
+        )
+        self._change_adoption_failure_sequence += 1
+        failure = ChangeAdoptionFailure(
+            id=f"ADF-{self._change_adoption_failure_sequence:06d}",
+            adoption_ref=adoption.id,
+            failure_type=failure_type,
+            reason_code=reason_code,
+            detected_at=datetime.now(UTC),
+            evidence_refs=resolved_evidence,
+        )
+        self._change_adoption_failures[failure.id] = failure
+        self._change_adoptions[adoption.id] = replace(
+            adoption,
+            status=ChangeAdoptionStatus.FAILED,
+        )
+        return failure
+
+    def calculate_adoption_coverage(
+        self,
+        *,
+        governance_ref: ObjectReference,
+        target_version: str,
+        required_consumers: tuple[ObjectReference, ...],
+        population_complete: bool,
+    ) -> AdoptionCoverage:
+        resolved_governance = self._resolve_required_reference(
+            governance_ref,
+            "ADOPTION_TARGET_NOT_FOUND",
+        )
+        if not target_version:
+            raise RegistryError("ADOPTION_VERSION_INVALID", resolved_governance.metadata.id)
+        if not required_consumers:
+            raise RegistryError("ADOPTION_POPULATION_REQUIRED", target_version)
+        resolved_consumers = self._resolve_object_references(
+            required_consumers,
+            "ADOPTION_CONSUMER_NOT_FOUND",
+        )
+        consumer_ids = {reference.id for reference in resolved_consumers}
+        matched = [
+            adoption
+            for adoption in self._change_adoptions.values()
+            if adoption.consumer_ref.id in consumer_ids
+            and adoption.target.governance_ref.id == resolved_governance.metadata.id
+            and adoption.target.version == target_version
+        ]
+        adopted_statuses = {
+            ChangeAdoptionStatus.ADOPTED,
+            ChangeAdoptionStatus.PARTIALLY_ADOPTED,
+            ChangeAdoptionStatus.VERIFICATION_PENDING,
+            ChangeAdoptionStatus.VERIFIED,
+        }
+        adopted_consumers = {
+            adoption.consumer_ref.id
+            for adoption in matched
+            if adoption.status in adopted_statuses
+        }
+        verified_consumers = {
+            adoption.consumer_ref.id
+            for adoption in matched
+            if adoption.status is ChangeAdoptionStatus.VERIFIED
+        }
+        failed_consumers = {
+            adoption.consumer_ref.id
+            for adoption in matched
+            if adoption.status is ChangeAdoptionStatus.FAILED
+        }
+        exception_consumers = {
+            adoption.consumer_ref.id
+            for adoption in matched
+            if adoption.status is ChangeAdoptionStatus.NOT_REQUIRED
+        }
+        self._adoption_coverage_sequence += 1
+        coverage = AdoptionCoverage(
+            id=f"ADCOV-{self._adoption_coverage_sequence:06d}",
+            governance_ref=ObjectReference(
+                resolved_governance.metadata.id,
+                revision=resolved_governance.metadata.revision,
+            ),
+            target_version=target_version,
+            population_complete=population_complete,
+            required_consumers=len(resolved_consumers),
+            adopted_consumers=len(adopted_consumers),
+            verified_consumers=len(verified_consumers),
+            exception_consumers=len(exception_consumers),
+            failed_consumers=len(failed_consumers),
+            calculated_at=datetime.now(UTC),
+        )
+        self._adoption_coverages[coverage.id] = coverage
+        return coverage
+
+    def decide_change_adoption_completion(
+        self,
+        *,
+        coverage_ref: str,
+        minimum_verification_coverage: float,
+        unresolved_critical_failures: int = 0,
+        valid_exceptions: int = 0,
+        residual_risk_accepted: bool = False,
+    ) -> ChangeAdoptionCompletionDecision:
+        coverage = self._adoption_coverages.get(coverage_ref)
+        if coverage is None:
+            raise RegistryError("ADOPTION_COVERAGE_NOT_FOUND", coverage_ref)
+        if not 0 <= minimum_verification_coverage <= 1:
+            raise RegistryError("ADOPTION_COMPLETION_THRESHOLD_INVALID", coverage_ref)
+        if unresolved_critical_failures < 0 or valid_exceptions < 0:
+            raise RegistryError("ADOPTION_COMPLETION_INPUT_INVALID", coverage_ref)
+        if not coverage.population_complete:
+            result = ChangeAdoptionCompletionResult.UNKNOWN
+        elif unresolved_critical_failures:
+            result = ChangeAdoptionCompletionResult.BLOCKED
+        elif coverage.verification_ratio >= minimum_verification_coverage:
+            result = (
+                ChangeAdoptionCompletionResult.COMPLETE_WITH_ACCEPTED_RESIDUAL_RISK
+                if valid_exceptions or residual_risk_accepted
+                else ChangeAdoptionCompletionResult.COMPLETE
+            )
+        else:
+            result = ChangeAdoptionCompletionResult.INCOMPLETE
+        self._change_adoption_completion_sequence += 1
+        decision = ChangeAdoptionCompletionDecision(
+            id=f"ADCOMP-{self._change_adoption_completion_sequence:06d}",
+            coverage_ref=coverage.id,
+            result=result,
+            adoption_coverage=coverage.adoption_ratio,
+            verification_coverage=coverage.verification_ratio,
+            minimum_verification_coverage=minimum_verification_coverage,
+            unresolved_critical_failures=unresolved_critical_failures,
+            valid_exceptions=valid_exceptions,
+            decided_at=datetime.now(UTC),
+        )
+        self._change_adoption_completion_decisions[decision.id] = decision
+        return decision
+
+    def get_change_adoption(self, adoption_id: str) -> ChangeAdoption:
+        adoption = self._change_adoptions.get(adoption_id)
+        if adoption is None:
+            raise RegistryError("ADOPTION_NOT_FOUND", adoption_id)
+        return adoption
 
     def evaluate_decision_obligations(
         self,
@@ -7173,6 +7764,44 @@ class InMemoryUPDLRegistry:
                 )
             )
         return tuple(resolved)
+
+    def _resolve_required_reference(
+        self,
+        reference: ObjectReference,
+        error_code: str,
+    ) -> ObjectEnvelope:
+        resolution = self.resolve_reference(reference)
+        if resolution.status is not ResolutionStatus.RESOLVED:
+            raise RegistryError(error_code, f"{reference.id}: {resolution.code}")
+        if resolution.resolved is None:
+            raise RegistryError(error_code, reference.id)
+        return resolution.resolved
+
+    def _resolve_adoption_evidence(
+        self,
+        references: tuple[ObjectReference, ...],
+        *,
+        required_types: tuple[str, ...],
+    ) -> tuple[ObjectReference, ...]:
+        resolved_refs = self._resolve_object_references(
+            references,
+            "ADOPTION_EVIDENCE_INVALID",
+        )
+        if not required_types:
+            return resolved_refs
+        provided_types: set[str] = set()
+        for reference in resolved_refs:
+            evidence = self.get_object(reference.id, revision=reference.revision)
+            evidence_type = evidence.spec.get("evidence_type")
+            if isinstance(evidence_type, str):
+                provided_types.add(evidence_type)
+        missing_types = sorted(set(required_types) - provided_types)
+        if missing_types:
+            raise RegistryError(
+                "ADOPTION_EVIDENCE_MISSING",
+                ", ".join(missing_types),
+            )
+        return resolved_refs
 
     def _require_relationship_cardinality(
         self,
