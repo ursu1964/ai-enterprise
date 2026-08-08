@@ -145,6 +145,50 @@ class DecisionCombiningAlgorithm(StrEnum):
     PERMIT_OVERRIDES = "PERMIT_OVERRIDES"
 
 
+class DecisionType(StrEnum):
+    APPROVAL = "APPROVAL"
+    SELECTION = "SELECTION"
+    CLASSIFICATION = "CLASSIFICATION"
+    ACCEPTANCE = "ACCEPTANCE"
+    REJECTION = "REJECTION"
+    PRIORITIZATION = "PRIORITIZATION"
+    ALLOCATION = "ALLOCATION"
+    CERTIFICATION = "CERTIFICATION"
+    DETERMINATION = "DETERMINATION"
+    ADJUDICATION = "ADJUDICATION"
+    ESCALATION = "ESCALATION"
+    EXCEPTION = "EXCEPTION"
+    OVERRIDE = "OVERRIDE"
+
+
+class DecisionOutcome(StrEnum):
+    APPROVED = "APPROVED"
+    CONDITIONALLY_APPROVED = "CONDITIONALLY_APPROVED"
+    REJECTED = "REJECTED"
+    DEFERRED = "DEFERRED"
+    ESCALATED = "ESCALATED"
+    ABSTAINED = "ABSTAINED"
+    WITHDRAWN = "WITHDRAWN"
+    NO_DECISION = "NO_DECISION"
+
+
+class DecisionEvidenceCompleteness(StrEnum):
+    COMPLETE = "COMPLETE"
+    INCOMPLETE = "INCOMPLETE"
+    STALE = "STALE"
+    CONFLICTING = "CONFLICTING"
+    INVALID = "INVALID"
+    UNKNOWN = "UNKNOWN"
+
+
+class DecisionValidityResult(StrEnum):
+    VALID = "VALID"
+    INVALID = "INVALID"
+    SUSPENDED = "SUSPENDED"
+    EXPIRED = "EXPIRED"
+    UNKNOWN = "UNKNOWN"
+
+
 class ObligationTriggerSource(StrEnum):
     POLICY_DECISION = "POLICY_DECISION"
 
@@ -339,6 +383,8 @@ class ControlType(StrEnum):
     CORRECTIVE = "CORRECTIVE"
     RECOVERY = "RECOVERY"
     COMPENSATING = "COMPENSATING"
+    DIRECTIVE = "DIRECTIVE"
+    ASSURANCE = "ASSURANCE"
     DETERRENT = "DETERRENT"
 
 
@@ -357,6 +403,57 @@ class ControlEffectivenessResult(StrEnum):
     INEFFECTIVE = "INEFFECTIVE"
     NOT_TESTED = "NOT_TESTED"
     UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ControlExecutionModality(StrEnum):
+    MANUAL = "MANUAL"
+    AUTOMATED = "AUTOMATED"
+    HYBRID = "HYBRID"
+
+
+class ControlEnforcementMode(StrEnum):
+    BLOCKING = "BLOCKING"
+    NON_BLOCKING = "NON_BLOCKING"
+    ADVISORY = "ADVISORY"
+    OBSERVATIONAL = "OBSERVATIONAL"
+
+
+class ControlCriticality(StrEnum):
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ControlExecutionStatus(StrEnum):
+    SCHEDULED = "SCHEDULED"
+    STARTED = "STARTED"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    TIMED_OUT = "TIMED_OUT"
+    CANCELLED = "CANCELLED"
+    MISSING = "MISSING"
+
+
+class ControlEvaluationOutcome(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    EXEMPT = "EXEMPT"
+    PARTIAL = "PARTIAL"
+
+
+class ControlEnforcementOutcome(StrEnum):
+    ALLOWED = "ALLOWED"
+    BLOCKED = "BLOCKED"
+    QUARANTINED = "QUARANTINED"
+    REMEDIATED = "REMEDIATED"
+    ESCALATED = "ESCALATED"
+    NO_ACTION = "NO_ACTION"
+    NOT_REQUIRED = "NOT_REQUIRED"
+    ERROR = "ERROR"
 
 
 class RiskTreatmentStrategy(StrEnum):
@@ -744,19 +841,172 @@ class ControlDefinition:
     status: str = "ACTIVE"
     required_evidence: tuple[str, ...] = ()
     objective_ref: str | None = None
+    objective_refs: tuple[str, ...] = ()
+    requirement_refs: tuple[str, ...] = ()
+    owner_ref: str | None = None
+    operator_refs: tuple[str, ...] = ()
+    applicability_ref: str | None = None
+    implementation_refs: tuple[str, ...] = ()
+    trigger_refs: tuple[str, ...] = ()
+    frequency_ref: str | None = None
+    evidence_requirement_refs: tuple[str, ...] = ()
+    test_definition_refs: tuple[str, ...] = ()
+    monitoring_ref: str | None = None
+    dependency_refs: tuple[str, ...] = ()
+    failure_policy_ref: str | None = None
+    lifecycle_ref: str | None = None
+    ai_policy_ref: str | None = None
+    execution_modality: ControlExecutionModality = ControlExecutionModality.AUTOMATED
+    enforcement_mode: ControlEnforcementMode = ControlEnforcementMode.BLOCKING
+    criticality: ControlCriticality = ControlCriticality.MODERATE
     description: str | None = None
 
     def canonical_document(self) -> dict[str, Any]:
+        objective_refs = self.objective_refs
+        if self.objective_ref is not None and self.objective_ref not in objective_refs:
+            objective_refs = (self.objective_ref, *objective_refs)
+        evidence_requirement_refs = self.evidence_requirement_refs
+        for evidence_type in self.required_evidence:
+            if evidence_type not in evidence_requirement_refs:
+                evidence_requirement_refs = (*evidence_requirement_refs, evidence_type)
         return {
             "id": self.id,
             "name": self.name,
             "version": self.version,
             "status": self.status,
             "description": self.description,
-            "objectiveRef": self.objective_ref,
-            "controlType": self.control_type.value,
+            "objectiveRefs": list(objective_refs),
+            "requirementRefs": list(self.requirement_refs),
+            "classification": {
+                "purpose": self.control_type.value,
+                "execution": self.execution_modality.value,
+                "enforcement": self.enforcement_mode.value,
+                "criticality": self.criticality.value,
+            },
             "appliesToKinds": list(self.applies_to_kinds),
-            "evidence": {"required": list(self.required_evidence)},
+            "applicabilityRef": self.applicability_ref,
+            "implementationRefs": list(self.implementation_refs),
+            "triggerRefs": list(self.trigger_refs),
+            "ownerRef": self.owner_ref,
+            "operatorRefs": list(self.operator_refs),
+            "frequencyRef": self.frequency_ref,
+            "evidenceRequirementRefs": list(evidence_requirement_refs),
+            "testDefinitionRefs": list(self.test_definition_refs),
+            "monitoringRef": self.monitoring_ref,
+            "dependencyRefs": list(self.dependency_refs),
+            "failurePolicyRef": self.failure_policy_ref,
+            "lifecycleRef": self.lifecycle_ref,
+            "aiPolicyRef": self.ai_policy_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ControlResult:
+    execution_status: ControlExecutionStatus
+    evaluation_outcome: ControlEvaluationOutcome
+    enforcement_outcome: ControlEnforcementOutcome
+    evidence_refs: tuple[ObjectReference, ...] = ()
+    finding_codes: tuple[str, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "executionStatus": self.execution_status.value,
+            "evaluationOutcome": self.evaluation_outcome.value,
+            "enforcementOutcome": self.enforcement_outcome.value,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "findingCodes": list(self.finding_codes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ControlCoverage:
+    expected_population: int
+    evaluated_population: int
+    passed_population: int
+    failed_population: int = 0
+    unknown_population: int = 0
+    exempt_population: int = 0
+    missing_population: int = 0
+
+    def __post_init__(self) -> None:
+        populations = (
+            self.expected_population,
+            self.evaluated_population,
+            self.passed_population,
+            self.failed_population,
+            self.unknown_population,
+            self.exempt_population,
+            self.missing_population,
+        )
+        if any(population < 0 for population in populations):
+            raise RegistryError("CONTROL_COVERAGE_POPULATION_INVALID", "negative")
+        if self.evaluated_population > self.expected_population:
+            raise RegistryError("CONTROL_COVERAGE_POPULATION_INVALID", "evaluated")
+        classified_population = (
+            self.passed_population
+            + self.failed_population
+            + self.unknown_population
+            + self.exempt_population
+            + self.missing_population
+        )
+        if classified_population > self.expected_population:
+            raise RegistryError("CONTROL_COVERAGE_POPULATION_INVALID", "classified")
+
+    def canonical_document(self) -> dict[str, Any]:
+        coverage_ratio = (
+            self.evaluated_population / self.expected_population
+            if self.expected_population
+            else None
+        )
+        pass_ratio = (
+            self.passed_population / self.evaluated_population
+            if self.evaluated_population
+            else None
+        )
+        return {
+            "expectedPopulation": self.expected_population,
+            "evaluatedPopulation": self.evaluated_population,
+            "passedPopulation": self.passed_population,
+            "failedPopulation": self.failed_population,
+            "unknownPopulation": self.unknown_population,
+            "exemptPopulation": self.exempt_population,
+            "missingPopulation": self.missing_population,
+            "coverageRatio": coverage_ratio,
+            "passRatio": pass_ratio,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ControlEffectivenessAssessment:
+    id: str
+    control_ref: str
+    design_effectiveness: ControlEffectivenessResult
+    operating_effectiveness: ControlEffectivenessResult
+    coverage_effectiveness: ControlEffectivenessResult
+    conclusion: ControlEffectivenessResult
+    evidence_refs: tuple[ObjectReference, ...]
+    assessed_at: datetime
+    assessor_ref: str
+    valid_until: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "controlRef": self.control_ref,
+            "designEffectiveness": self.design_effectiveness.value,
+            "operatingEffectiveness": self.operating_effectiveness.value,
+            "coverageEffectiveness": self.coverage_effectiveness.value,
+            "conclusion": self.conclusion.value,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "assessedAt": self.assessed_at.isoformat(),
+            "assessorRef": self.assessor_ref,
+            "validUntil": self.valid_until.isoformat() if self.valid_until else None,
         }
 
 
@@ -833,11 +1083,93 @@ class DecisionAdvice:
 
 
 @dataclass(frozen=True, slots=True)
+class DecisionQuestion:
+    statement: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {"statement": self.statement}
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEvidenceRequirement:
+    required_types: tuple[str, ...]
+    freshness: str | None = None
+    missing_evidence_effect: DecisionEffect = DecisionEffect.DEFER
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "requiredTypes": list(self.required_types),
+            "freshness": self.freshness,
+            "missingEvidenceEffect": self.missing_evidence_effect.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionAuthorityRequirement:
+    operator: str
+    authority_refs: tuple[str, ...]
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "operator": self.operator,
+            "authorityRefs": list(self.authority_refs),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionBinding:
+    subject_ref: ObjectReference
+    subject_digest: str | None = None
+    evidence_set_digest: str | None = None
+    policy_version: str | None = None
+    authority_resolution_version: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "subjectDigest": self.subject_digest,
+            "evidenceSetDigest": self.evidence_set_digest,
+            "policyVersion": self.policy_version,
+            "authorityResolutionVersion": self.authority_resolution_version,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionValidity:
+    decision_ref: str
+    result: DecisionValidityResult
+    evaluated_at: datetime
+    checks: dict[str, str]
+    valid_until: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "decisionRef": self.decision_ref,
+            "result": self.result.value,
+            "evaluatedAt": self.evaluated_at.isoformat(),
+            "validUntil": self.valid_until.isoformat() if self.valid_until else None,
+            "checks": dict(sorted(self.checks.items())),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionDefinition:
     id: str
     name: str
     action: str
     resource_kinds: tuple[str, ...] = ()
+    decision_type: DecisionType = DecisionType.APPROVAL
+    question: DecisionQuestion | None = None
+    outcome_set: tuple[DecisionOutcome, ...] = ()
+    alternatives: tuple[str, ...] = ()
+    criteria_ids: tuple[str, ...] = ()
+    authority_requirement: DecisionAuthorityRequirement | None = None
+    evidence_requirement: DecisionEvidenceRequirement | None = None
+    validity_policy_ref: str | None = None
+    effect_ref: str | None = None
     condition_ids: tuple[str, ...] = ()
     policy_ids: tuple[str, ...] = ()
     combining_algorithm: DecisionCombiningAlgorithm = DecisionCombiningAlgorithm.DENY_OVERRIDES
@@ -853,6 +1185,25 @@ class DecisionDefinition:
             "id": self.id,
             "name": self.name,
             "version": self.version,
+            "decisionType": self.decision_type.value,
+            "question": (
+                self.question.canonical_document() if self.question is not None else None
+            ),
+            "outcomeSet": [outcome.value for outcome in self.outcome_set],
+            "alternatives": list(self.alternatives),
+            "criteriaIds": list(self.criteria_ids),
+            "authorityRequirement": (
+                self.authority_requirement.canonical_document()
+                if self.authority_requirement is not None
+                else None
+            ),
+            "evidenceRequirement": (
+                self.evidence_requirement.canonical_document()
+                if self.evidence_requirement is not None
+                else None
+            ),
+            "validityPolicyRef": self.validity_policy_ref,
+            "effectRef": self.effect_ref,
             "action": self.action,
             "resourceKinds": list(self.resource_kinds),
             "conditionIds": list(self.condition_ids),
@@ -1785,6 +2136,8 @@ class ControlImplementation:
     effectiveness: ControlEffectivenessResult
     evidence_refs: tuple[ObjectReference, ...]
     created_at: datetime
+    result: ControlResult | None = None
+    effectiveness_assessment_ref: str | None = None
 
     def canonical_document(self) -> dict[str, Any]:
         return {
@@ -1799,6 +2152,8 @@ class ControlImplementation:
             },
             "state": self.state.value,
             "effectiveness": self.effectiveness.value,
+            "effectivenessAssessmentRef": self.effectiveness_assessment_ref,
+            "result": self.result.canonical_document() if self.result else None,
             "evidenceRefs": [
                 {"id": reference.id, "revision": reference.revision}
                 for reference in self.evidence_refs
@@ -2229,6 +2584,27 @@ class InMemoryUPDLRegistry:
             raise RegistryError("DECISION_NAME_REQUIRED", definition.id)
         if not definition.action:
             raise RegistryError("DECISION_ACTION_REQUIRED", definition.id)
+        if definition.question is not None and not definition.question.statement:
+            raise RegistryError("DECISION_QUESTION_REQUIRED", definition.id)
+        if any(not alternative for alternative in definition.alternatives):
+            raise RegistryError("DECISION_ALTERNATIVE_INVALID", definition.id)
+        definition_outcomes: tuple[str, ...]
+        if not definition.outcome_set:
+            definition_outcomes = ()
+        else:
+            definition_outcomes = tuple(outcome.value for outcome in definition.outcome_set)
+        if len(set(definition_outcomes)) != len(definition_outcomes):
+            raise RegistryError("DECISION_OUTCOME_DUPLICATE", definition.id)
+        if definition.authority_requirement is not None:
+            if definition.authority_requirement.operator not in {"ALL_OF", "ANY_OF", "AT_LEAST"}:
+                raise RegistryError("DECISION_AUTHORITY_OPERATOR_INVALID", definition.id)
+            if not definition.authority_requirement.authority_refs:
+                raise RegistryError("DECISION_AUTHORITY_REQUIRED", definition.id)
+        if (
+            definition.evidence_requirement is not None
+            and not definition.evidence_requirement.required_types
+        ):
+            raise RegistryError("DECISION_EVIDENCE_REQUIREMENT_EMPTY", definition.id)
         if (
             definition.validity_seconds is not None
             and definition.validity_seconds <= 0
@@ -2244,6 +2620,12 @@ class InMemoryUPDLRegistry:
             if policy_id not in self._policies:
                 raise RegistryError("DECISION_POLICY_UNKNOWN", policy_id)
         self._decisions[definition.id] = definition
+
+    def get_decision_definition(self, decision_id: str) -> DecisionDefinition:
+        definition = self._decisions.get(decision_id)
+        if definition is None:
+            raise RegistryError("DECISION_NOT_FOUND", decision_id)
+        return definition
 
     def register_obligation(self, definition: ObligationDefinition) -> None:
         require_identifier(definition.id)
@@ -2541,6 +2923,29 @@ class InMemoryUPDLRegistry:
         for kind in definition.applies_to_kinds:
             if kind not in self._types:
                 raise RegistryError("CONTROL_APPLIES_TO_KIND_UNKNOWN", kind)
+        objective_refs = set(definition.objective_refs)
+        if definition.objective_ref is not None:
+            objective_refs.add(definition.objective_ref)
+        evidence_refs = set(definition.evidence_requirement_refs)
+        evidence_refs.update(definition.required_evidence)
+        if definition.status == "ACTIVE":
+            if not objective_refs:
+                raise RegistryError("CONTROL_OBJECTIVE_MISSING", definition.id)
+            if not definition.requirement_refs:
+                raise RegistryError("CONTROL_REQUIREMENT_MISSING", definition.id)
+            if definition.owner_ref is None:
+                raise RegistryError("CONTROL_OWNER_MISSING", definition.id)
+            if definition.applicability_ref is None:
+                raise RegistryError("CONTROL_APPLICABILITY_MISSING", definition.id)
+            if not definition.trigger_refs:
+                raise RegistryError("CONTROL_TRIGGER_MISSING", definition.id)
+            if not evidence_refs:
+                raise RegistryError("CONTROL_EVIDENCE_REQUIREMENT_MISSING", definition.id)
+            if (
+                definition.criticality is ControlCriticality.CRITICAL
+                and definition.failure_policy_ref is None
+            ):
+                raise RegistryError("CONTROL_FAILURE_POLICY_MISSING", definition.id)
         self._control_definitions[definition.id] = definition
 
     def create_control_implementation(
@@ -2551,6 +2956,8 @@ class InMemoryUPDLRegistry:
         state: ControlState = ControlState.PLANNED,
         effectiveness: ControlEffectivenessResult = ControlEffectivenessResult.NOT_TESTED,
         evidence_refs: tuple[ObjectReference, ...] = (),
+        result: ControlResult | None = None,
+        effectiveness_assessment_ref: str | None = None,
     ) -> ControlImplementation:
         definition = self._control_definitions.get(definition_id)
         if definition is None:
@@ -2568,6 +2975,18 @@ class InMemoryUPDLRegistry:
             evidence_refs,
             "CONTROL_EVIDENCE_INVALID",
         )
+        if effectiveness is ControlEffectivenessResult.EFFECTIVE:
+            if not resolved_evidence:
+                raise RegistryError("CONTROL_EFFECTIVENESS_EVIDENCE_REQUIRED", definition.id)
+            if effectiveness_assessment_ref is None:
+                raise RegistryError(
+                    "CONTROL_EFFECTIVENESS_ASSESSMENT_REQUIRED",
+                    definition.id,
+                )
+        if result is not None and result.evaluation_outcome is ControlEvaluationOutcome.PASS:
+            result_evidence = result.evidence_refs or resolved_evidence
+            if not result_evidence:
+                raise RegistryError("CONTROL_PASS_EVIDENCE_REQUIRED", definition.id)
         self._control_implementation_sequence += 1
         implementation = ControlImplementation(
             id=f"CTRL-{self._control_implementation_sequence:06d}",
@@ -2581,6 +3000,8 @@ class InMemoryUPDLRegistry:
             effectiveness=effectiveness,
             evidence_refs=resolved_evidence,
             created_at=datetime.now(UTC),
+            result=result,
+            effectiveness_assessment_ref=effectiveness_assessment_ref,
         )
         self._control_implementations[implementation.id] = implementation
         return implementation

@@ -7,16 +7,28 @@ from ai_enterprise.domain.updl_registry import (
     ConstraintEvaluationResult,
     ConstraintRequirement,
     ConstraintViolationState,
+    ControlCriticality,
     ControlDefinition,
     ControlEffectivenessResult,
+    ControlEnforcementMode,
+    ControlEnforcementOutcome,
+    ControlEvaluationOutcome,
+    ControlExecutionModality,
+    ControlExecutionStatus,
+    ControlResult,
     ControlState,
     ControlType,
     DecisionAdvice,
+    DecisionAuthorityRequirement,
     DecisionConstraint,
     DecisionDefinition,
     DecisionEffect,
     DecisionEvaluationStatus,
+    DecisionEvidenceRequirement,
+    DecisionOutcome,
+    DecisionQuestion,
     DecisionRequest,
+    DecisionType,
     InMemoryUPDLRegistry,
     LikelihoodType,
     NamespaceDefinition,
@@ -1507,6 +1519,16 @@ def test_updl_registry_assesses_risk_with_dimensional_impact_and_controls() -> N
             control_type=ControlType.PREVENTIVE,
             applies_to_kinds=("Requirement",),
             required_evidence=("control-test",),
+            objective_refs=("control-objective.admin-access-authorized",),
+            requirement_refs=("control-requirement.admin-mfa-before-access",),
+            owner_ref="role.security-control-owner",
+            operator_refs=("role.identity-operations",),
+            applicability_ref="control-applicability.admin-requirements",
+            trigger_refs=("control-trigger.admin-access-requested",),
+            failure_policy_ref="policy.control-failure.admin-mfa",
+            execution_modality=ControlExecutionModality.AUTOMATED,
+            enforcement_mode=ControlEnforcementMode.BLOCKING,
+            criticality=ControlCriticality.CRITICAL,
         )
     )
     control = registry.create_control_implementation(
@@ -1515,6 +1537,13 @@ def test_updl_registry_assesses_risk_with_dimensional_impact_and_controls() -> N
         state=ControlState.ACTIVE,
         effectiveness=ControlEffectivenessResult.EFFECTIVE,
         evidence_refs=(ObjectReference(evidence.metadata.id),),
+        result=ControlResult(
+            execution_status=ControlExecutionStatus.SUCCEEDED,
+            evaluation_outcome=ControlEvaluationOutcome.PASS,
+            enforcement_outcome=ControlEnforcementOutcome.ALLOWED,
+            evidence_refs=(ObjectReference(evidence.metadata.id),),
+        ),
+        effectiveness_assessment_ref="control-effectiveness.admin-mfa.current",
     )
     risk = registry.create_risk(
         definition_id="commerce.orders.risk-definition.customer-data-exposure",
@@ -1549,6 +1578,113 @@ def test_updl_registry_assesses_risk_with_dimensional_impact_and_controls() -> N
         "regulatory": "CRITICAL",
         "security": "HIGH",
     }
+
+
+def test_updl_registry_rejects_active_control_missing_contract_anchors() -> None:
+    registry = _relationship_registry()
+
+    try:
+        registry.register_control_definition(
+            ControlDefinition(
+                id="commerce.orders.control.weak-admin-mfa",
+                name="weakAdminMfa",
+                control_type=ControlType.PREVENTIVE,
+                applies_to_kinds=("Requirement",),
+                required_evidence=("control-test",),
+            )
+        )
+    except RegistryError as exc:
+        assert exc.code == "CONTROL_OBJECTIVE_MISSING"
+    else:
+        raise AssertionError("active control without objective was accepted")
+
+
+def test_updl_registry_rejects_effective_control_without_assessment_basis() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-036",
+        spec={
+            "statement": "Admin changes shall be governed.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.register_control_definition(
+        ControlDefinition(
+            id="commerce.orders.control.admin-change-approval",
+            name="adminChangeApproval",
+            control_type=ControlType.PREVENTIVE,
+            applies_to_kinds=("Requirement",),
+            required_evidence=("approval-record",),
+            objective_refs=("control-objective.admin-change-authorized",),
+            requirement_refs=("control-requirement.admin-change-approval",),
+            owner_ref="role.security-control-owner",
+            applicability_ref="control-applicability.admin-changes",
+            trigger_refs=("control-trigger.admin-change-requested",),
+        )
+    )
+
+    try:
+        registry.create_control_implementation(
+            definition_id="commerce.orders.control.admin-change-approval",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            state=ControlState.ACTIVE,
+            effectiveness=ControlEffectivenessResult.EFFECTIVE,
+        )
+    except RegistryError as exc:
+        assert exc.code == "CONTROL_EVIDENCE_INCOMPLETE"
+    else:
+        raise AssertionError("effective control without evidence was accepted")
+
+
+def test_updl_registry_rejects_pass_result_without_evidence() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-037",
+        spec={
+            "statement": "Production changes shall be approved.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.register_control_definition(
+        ControlDefinition(
+            id="commerce.orders.control.production-change-approval",
+            name="productionChangeApproval",
+            control_type=ControlType.PREVENTIVE,
+            applies_to_kinds=("Requirement",),
+            objective_refs=("control-objective.production-change-authorized",),
+            requirement_refs=("control-requirement.production-change-approval",),
+            owner_ref="role.release-control-owner",
+            applicability_ref="control-applicability.production-changes",
+            trigger_refs=("control-trigger.production-change-requested",),
+            evidence_requirement_refs=("control-evidence.approval-record",),
+        )
+    )
+
+    try:
+        registry.create_control_implementation(
+            definition_id="commerce.orders.control.production-change-approval",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            state=ControlState.ACTIVE,
+            result=ControlResult(
+                execution_status=ControlExecutionStatus.SUCCEEDED,
+                evaluation_outcome=ControlEvaluationOutcome.PASS,
+                enforcement_outcome=ControlEnforcementOutcome.ALLOWED,
+            ),
+        )
+    except RegistryError as exc:
+        assert exc.code == "CONTROL_PASS_EVIDENCE_REQUIRED"
+    else:
+        raise AssertionError("pass result without evidence was accepted")
 
 
 def test_updl_registry_risk_treatment_does_not_change_current_assessment() -> None:
@@ -1743,6 +1879,64 @@ def test_updl_registry_defers_decisions_when_required_condition_is_unknown() -> 
     assert [finding.code for finding in decision.findings] == ["DECISION_CONDITION_UNKNOWN"]
     assert decision.condition_evaluations[0].outcome is ConditionOutcome.UNKNOWN
     assert decision.proof_hash.startswith("sha256:")
+
+
+def test_updl_registry_decision_definition_preserves_contract_semantics() -> None:
+    registry = _relationship_registry()
+    registry.register_decision(
+        DecisionDefinition(
+            id="commerce.orders.decision.production-release",
+            name="productionRelease",
+            action="DEPLOY",
+            resource_kinds=("Requirement",),
+            decision_type=DecisionType.APPROVAL,
+            question=DecisionQuestion(
+                "May the specified release be deployed to production?"
+            ),
+            outcome_set=(
+                DecisionOutcome.APPROVED,
+                DecisionOutcome.CONDITIONALLY_APPROVED,
+                DecisionOutcome.REJECTED,
+                DecisionOutcome.ESCALATED,
+            ),
+            alternatives=("deploy-now", "deploy-after-remediation", "cancel-release"),
+            criteria_ids=(
+                "decision-criterion.release-controls-effective",
+                "decision-criterion.release-risk-acceptable",
+            ),
+            authority_requirement=DecisionAuthorityRequirement(
+                operator="ALL_OF",
+                authority_refs=(
+                    "authority.release.operations",
+                    "authority.release.security",
+                ),
+            ),
+            evidence_requirement=DecisionEvidenceRequirement(
+                required_types=(
+                    "RELEASE_ARTIFACT_INTEGRITY",
+                    "CONTROL_EFFECTIVENESS",
+                    "RESIDUAL_RISK_ASSESSMENT",
+                ),
+                freshness="P1D",
+            ),
+            validity_policy_ref="decision-validity.production-release",
+            effect_ref="decision-effect.production-release",
+        )
+    )
+
+    document = registry.get_decision_definition(
+        "commerce.orders.decision.production-release"
+    ).canonical_document()
+
+    assert document["question"]["statement"].startswith("May the specified release")
+    assert document["outcomeSet"] == [
+        "APPROVED",
+        "CONDITIONALLY_APPROVED",
+        "REJECTED",
+        "ESCALATED",
+    ]
+    assert document["authorityRequirement"]["operator"] == "ALL_OF"
+    assert document["evidenceRequirement"]["missingEvidenceEffect"] == "DEFER"
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:
