@@ -4,11 +4,22 @@ from ai_enterprise.domain.updl_registry import (
     ActorReference,
     AdditionalPropertiesPolicy,
     AdoptionScope,
+    AssuranceAuthority,
+    AssuranceClaimEvaluation,
+    AssuranceClaimRequirement,
+    AssuranceClaimResult,
+    AssuranceConclusion,
+    AssuranceDecisionResult,
+    AssuranceLevel,
+    AssuranceLevelDefinition,
+    AssuranceProfile,
+    AssuranceStatusValue,
     ChangeAdoptionCompletionResult,
     ChangeAdoptionDefinition,
     ChangeAdoptionFailureType,
     ChangeAdoptionStatus,
     ChangeAdoptionVerificationResult,
+    ClaimDefinition,
     ConditionClauseType,
     ConditionDependency,
     ConditionDependencyType,
@@ -53,6 +64,8 @@ from ai_enterprise.domain.updl_registry import (
     DecisionQuestion,
     DecisionRequest,
     DecisionType,
+    EvaluatorIndependence,
+    EvidenceStrength,
     InMemoryUPDLRegistry,
     LikelihoodType,
     NamespaceDefinition,
@@ -292,6 +305,46 @@ def _evidence(registry: InMemoryUPDLRegistry, local_id: str, evidence_type: str)
         },
         actor=_actor(),
     )
+
+
+def _register_assurance_basics(registry: InMemoryUPDLRegistry) -> None:
+    registry.register_assurance_level_definition(
+        AssuranceLevelDefinition(
+            id="commerce.orders.assurance-level.high",
+            name="highAssurance",
+            level=AssuranceLevel.HIGH,
+            minimum_evidence_strength=EvidenceStrength.STRONG,
+            maximum_evidence_age="P30D",
+            minimum_independence=EvaluatorIndependence.INDEPENDENT_FUNCTION,
+            required_approval_count=2,
+            continuous_monitoring_required=True,
+        )
+    )
+    registry.register_assurance_level_definition(
+        AssuranceLevelDefinition(
+            id="commerce.orders.assurance-level.critical",
+            name="criticalAssurance",
+            level=AssuranceLevel.CRITICAL,
+            minimum_evidence_strength=EvidenceStrength.VERY_STRONG,
+            maximum_evidence_age="P7D",
+            minimum_independence=EvaluatorIndependence.EXTERNAL_INDEPENDENT,
+            required_approval_count=3,
+            continuous_monitoring_required=True,
+        )
+    )
+    for claim_id, predicate in (
+        ("commerce.orders.claim.security-acceptable", "SECURITY_ACCEPTABLE"),
+        ("commerce.orders.claim.runtime-controls-effective", "RUNTIME_CONTROLS_EFFECTIVE"),
+        ("commerce.orders.claim.data-governance-satisfied", "DATA_GOVERNANCE_SATISFIED"),
+    ):
+        registry.register_claim_definition(
+            ClaimDefinition(
+                id=claim_id,
+                name=predicate.lower(),
+                predicate=predicate,
+                subject_kinds=("Requirement",),
+            )
+        )
 
 
 def _deployment(registry: InMemoryUPDLRegistry):
@@ -2940,6 +2993,276 @@ def test_updl_registry_advisory_consequence_does_not_create_deadline_failure() -
         registry.get_consequence_requirement(requirement.id).status
         is ConsequenceRequirementStatus.PENDING
     )
+
+
+def test_updl_registry_assurance_profiles_compose_strictest_requirements() -> None:
+    registry = _registry()
+    _register_assurance_basics(registry)
+    subject = _requirement(registry, "REQ-063", "Production AI deployment.")
+    registry.register_assurance_profile(
+        AssuranceProfile(
+            id="commerce.orders.assurance-profile.production-ai",
+            name="productionAiAssurance",
+            assurance_level=AssuranceLevel.HIGH,
+            subject_kinds=("Requirement",),
+            environments=("production",),
+            required_claims=(
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.security-acceptable",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.runtime-controls-effective",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+            ),
+            required_evidence_types=("SECURITY_REVIEW",),
+            maximum_evidence_age="P30D",
+        )
+    )
+    registry.register_assurance_profile(
+        AssuranceProfile(
+            id="commerce.orders.assurance-profile.eu-data",
+            name="euDataAssurance",
+            assurance_level=AssuranceLevel.CRITICAL,
+            subject_kinds=("Requirement",),
+            environments=("production",),
+            required_claims=(
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.data-governance-satisfied",
+                    criticality=ViolationSeverity.HIGH,
+                ),
+            ),
+            required_evidence_types=("DATA_REVIEW",),
+            maximum_evidence_age="P7D",
+        )
+    )
+
+    requirement_set = registry.resolve_assurance_requirements(
+        subject_ref=ObjectReference(subject.metadata.id),
+        profile_ids=(
+            "commerce.orders.assurance-profile.production-ai",
+            "commerce.orders.assurance-profile.eu-data",
+        ),
+        environment="production",
+    )
+
+    assert requirement_set.effective_assurance_level is AssuranceLevel.CRITICAL
+    assert requirement_set.maximum_evidence_age == "P7D"
+    assert requirement_set.minimum_independence is EvaluatorIndependence.EXTERNAL_INDEPENDENT
+    assert requirement_set.required_approval_count == 3
+    assert requirement_set.required_evidence_types == ("DATA_REVIEW", "SECURITY_REVIEW")
+    assert {
+        claim.claim_definition_ref for claim in requirement_set.required_claims
+    } == {
+        "commerce.orders.claim.security-acceptable",
+        "commerce.orders.claim.runtime-controls-effective",
+        "commerce.orders.claim.data-governance-satisfied",
+    }
+
+
+def test_updl_registry_assurance_requires_evaluation_and_authorized_decision() -> None:
+    registry = _registry()
+    _register_assurance_basics(registry)
+    subject = _requirement(registry, "REQ-064", "Production AI deployment.")
+    security_evidence = _evidence(registry, "EVIDENCE-062", "SECURITY_REVIEW")
+    runtime_evidence = _evidence(registry, "EVIDENCE-063", "RUNTIME_TEST")
+    registry.register_assurance_profile(
+        AssuranceProfile(
+            id="commerce.orders.assurance-profile.production-ai-status",
+            name="productionAiStatus",
+            assurance_level=AssuranceLevel.HIGH,
+            subject_kinds=("Requirement",),
+            required_claims=(
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.security-acceptable",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.runtime-controls-effective",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+            ),
+            required_evidence_types=("RUNTIME_TEST", "SECURITY_REVIEW"),
+        )
+    )
+    registry.register_assurance_authority(
+        AssuranceAuthority(
+            id="commerce.orders.assurance-authority.ai-risk",
+            name="aiRiskAuthority",
+            subject_kinds=("Requirement",),
+            may_approve=(AssuranceConclusion.ASSURED,),
+            maximum_assurance_level=AssuranceLevel.HIGH,
+        )
+    )
+    requirement_set = registry.resolve_assurance_requirements(
+        subject_ref=ObjectReference(subject.metadata.id),
+        profile_ids=("commerce.orders.assurance-profile.production-ai-status",),
+    )
+    evaluation = registry.evaluate_assurance(
+        requirement_set_id=requirement_set.id,
+        evaluated_by_ref="identity.ai-assurance-team",
+        evaluator_independence=EvaluatorIndependence.INDEPENDENT_FUNCTION,
+        evidence_strength=EvidenceStrength.STRONG,
+        claim_results=(
+            AssuranceClaimEvaluation(
+                claim_definition_ref="commerce.orders.claim.security-acceptable",
+                result=AssuranceClaimResult.SATISFIED,
+                confidence=AssuranceLevel.HIGH,
+                evidence_refs=(ObjectReference(security_evidence.metadata.id),),
+            ),
+            AssuranceClaimEvaluation(
+                claim_definition_ref="commerce.orders.claim.runtime-controls-effective",
+                result=AssuranceClaimResult.SATISFIED,
+                confidence=AssuranceLevel.HIGH,
+                evidence_refs=(ObjectReference(runtime_evidence.metadata.id),),
+            ),
+        ),
+    )
+
+    decision, status = registry.decide_assurance(
+        evaluation_id=evaluation.id,
+        authority_ref="commerce.orders.assurance-authority.ai-risk",
+        decided_by_ref="identity.ai-risk-officer",
+        decision=AssuranceDecisionResult.APPROVE_ASSURANCE,
+        valid_until=evaluation.evaluated_at + timedelta(days=30),
+    )
+
+    assert evaluation.conclusion is AssuranceConclusion.ASSURED
+    assert decision.resulting_status is AssuranceStatusValue.ASSURED
+    assert status.status is AssuranceStatusValue.ASSURED
+    assert status.evaluation_ref == evaluation.id
+
+
+def test_updl_registry_assurance_rejects_unsatisfied_critical_claim() -> None:
+    registry = _registry()
+    _register_assurance_basics(registry)
+    subject = _requirement(registry, "REQ-065", "Production AI deployment.")
+    security_evidence = _evidence(registry, "EVIDENCE-064", "SECURITY_REVIEW")
+    registry.register_assurance_profile(
+        AssuranceProfile(
+            id="commerce.orders.assurance-profile.production-ai-critical",
+            name="productionAiCritical",
+            assurance_level=AssuranceLevel.HIGH,
+            subject_kinds=("Requirement",),
+            required_claims=(
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.security-acceptable",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+            ),
+            required_evidence_types=("SECURITY_REVIEW",),
+        )
+    )
+    registry.register_assurance_authority(
+        AssuranceAuthority(
+            id="commerce.orders.assurance-authority.ai-risk-critical",
+            name="aiRiskAuthorityCritical",
+            subject_kinds=("Requirement",),
+            may_approve=(AssuranceConclusion.ASSURED,),
+            maximum_assurance_level=AssuranceLevel.HIGH,
+        )
+    )
+    requirement_set = registry.resolve_assurance_requirements(
+        subject_ref=ObjectReference(subject.metadata.id),
+        profile_ids=("commerce.orders.assurance-profile.production-ai-critical",),
+    )
+    evaluation = registry.evaluate_assurance(
+        requirement_set_id=requirement_set.id,
+        evaluated_by_ref="identity.ai-assurance-team",
+        evaluator_independence=EvaluatorIndependence.INDEPENDENT_FUNCTION,
+        evidence_strength=EvidenceStrength.STRONG,
+        claim_results=(
+            AssuranceClaimEvaluation(
+                claim_definition_ref="commerce.orders.claim.security-acceptable",
+                result=AssuranceClaimResult.NOT_SATISFIED,
+                evidence_refs=(ObjectReference(security_evidence.metadata.id),),
+            ),
+        ),
+    )
+
+    try:
+        registry.decide_assurance(
+            evaluation_id=evaluation.id,
+            authority_ref="commerce.orders.assurance-authority.ai-risk-critical",
+            decided_by_ref="identity.ai-risk-officer",
+            decision=AssuranceDecisionResult.APPROVE_ASSURANCE,
+            valid_until=evaluation.evaluated_at + timedelta(days=30),
+        )
+    except RegistryError as exc:
+        assert exc.code == "ASSURANCE_DECISION_INVALID"
+    else:
+        raise AssertionError("unsupported critical assurance claim was approved")
+
+    assert evaluation.conclusion is AssuranceConclusion.NOT_ASSURED
+
+
+def test_updl_registry_assurance_status_expires_deterministically() -> None:
+    registry = _registry()
+    _register_assurance_basics(registry)
+    subject = _requirement(registry, "REQ-066", "Production AI deployment.")
+    security_evidence = _evidence(registry, "EVIDENCE-065", "SECURITY_REVIEW")
+    registry.register_assurance_profile(
+        AssuranceProfile(
+            id="commerce.orders.assurance-profile.production-ai-expiry",
+            name="productionAiExpiry",
+            assurance_level=AssuranceLevel.HIGH,
+            subject_kinds=("Requirement",),
+            required_claims=(
+                AssuranceClaimRequirement(
+                    "commerce.orders.claim.security-acceptable",
+                    criticality=ViolationSeverity.CRITICAL,
+                    compensable=False,
+                ),
+            ),
+            required_evidence_types=("SECURITY_REVIEW",),
+        )
+    )
+    registry.register_assurance_authority(
+        AssuranceAuthority(
+            id="commerce.orders.assurance-authority.ai-risk-expiry",
+            name="aiRiskAuthorityExpiry",
+            subject_kinds=("Requirement",),
+            may_approve=(AssuranceConclusion.ASSURED,),
+            maximum_assurance_level=AssuranceLevel.HIGH,
+        )
+    )
+    requirement_set = registry.resolve_assurance_requirements(
+        subject_ref=ObjectReference(subject.metadata.id),
+        profile_ids=("commerce.orders.assurance-profile.production-ai-expiry",),
+    )
+    evaluation = registry.evaluate_assurance(
+        requirement_set_id=requirement_set.id,
+        evaluated_by_ref="identity.ai-assurance-team",
+        evaluator_independence=EvaluatorIndependence.INDEPENDENT_FUNCTION,
+        evidence_strength=EvidenceStrength.STRONG,
+        claim_results=(
+            AssuranceClaimEvaluation(
+                claim_definition_ref="commerce.orders.claim.security-acceptable",
+                result=AssuranceClaimResult.SATISFIED,
+                evidence_refs=(ObjectReference(security_evidence.metadata.id),),
+            ),
+        ),
+    )
+    _, status = registry.decide_assurance(
+        evaluation_id=evaluation.id,
+        authority_ref="commerce.orders.assurance-authority.ai-risk-expiry",
+        decided_by_ref="identity.ai-risk-officer",
+        decision=AssuranceDecisionResult.APPROVE_ASSURANCE,
+        valid_until=evaluation.evaluated_at + timedelta(minutes=5),
+    )
+
+    expired = registry.expire_assurance_statuses(
+        now=evaluation.evaluated_at + timedelta(minutes=6),
+    )
+
+    assert expired[0].id == status.id
+    assert registry.get_assurance_status(status.id).status is AssuranceStatusValue.EXPIRED
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:

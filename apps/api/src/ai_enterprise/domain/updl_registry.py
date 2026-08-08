@@ -849,6 +849,78 @@ class ConsequenceFailureType(StrEnum):
     REQUIRED_STATE_NOT_ACHIEVED = "REQUIRED_STATE_NOT_ACHIEVED"
 
 
+class AssuranceLevel(StrEnum):
+    MINIMAL = "MINIMAL"
+    BASIC = "BASIC"
+    STANDARD = "STANDARD"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class EvidenceStrength(StrEnum):
+    WEAK = "WEAK"
+    MODERATE = "MODERATE"
+    STRONG = "STRONG"
+    VERY_STRONG = "VERY_STRONG"
+    AUTHORITATIVE = "AUTHORITATIVE"
+
+
+class EvaluatorIndependence(StrEnum):
+    SELF = "SELF"
+    PEER = "PEER"
+    INDEPENDENT_TEAM = "INDEPENDENT_TEAM"
+    INDEPENDENT_FUNCTION = "INDEPENDENT_FUNCTION"
+    EXTERNAL_INDEPENDENT = "EXTERNAL_INDEPENDENT"
+    REGULATORY_AUTHORITY = "REGULATORY_AUTHORITY"
+
+
+class AssuranceClaimResult(StrEnum):
+    SATISFIED = "SATISFIED"
+    NOT_SATISFIED = "NOT_SATISFIED"
+    UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class AssuranceEvaluationState(StrEnum):
+    PLANNED = "PLANNED"
+    COLLECTING_EVIDENCE = "COLLECTING_EVIDENCE"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    CHALLENGED = "CHALLENGED"
+    COMPLETED = "COMPLETED"
+    SUPERSEDED = "SUPERSEDED"
+    INVALIDATED = "INVALIDATED"
+
+
+class AssuranceConclusion(StrEnum):
+    ASSURED = "ASSURED"
+    ASSURED_WITH_CONDITIONS = "ASSURED_WITH_CONDITIONS"
+    PARTIALLY_ASSURED = "PARTIALLY_ASSURED"
+    NOT_ASSURED = "NOT_ASSURED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    INDETERMINATE = "INDETERMINATE"
+    EXPIRED = "EXPIRED"
+    INVALIDATED = "INVALIDATED"
+
+
+class AssuranceDecisionResult(StrEnum):
+    APPROVE_ASSURANCE = "APPROVE_ASSURANCE"
+    APPROVE_WITH_CONDITIONS = "APPROVE_WITH_CONDITIONS"
+    REJECT_ASSURANCE = "REJECT_ASSURANCE"
+
+
+class AssuranceStatusValue(StrEnum):
+    ASSURED = "ASSURED"
+    ASSURED_WITH_CONDITIONS = "ASSURED_WITH_CONDITIONS"
+    PARTIALLY_ASSURED = "PARTIALLY_ASSURED"
+    NOT_ASSURED = "NOT_ASSURED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    INDETERMINATE = "INDETERMINATE"
+    EXPIRED = "EXPIRED"
+    SUSPENDED = "SUSPENDED"
+    INVALIDATED = "INVALIDATED"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -3675,6 +3747,300 @@ class ConsequenceFailure:
 
 
 @dataclass(frozen=True, slots=True)
+class ClaimDefinition:
+    id: str
+    name: str
+    predicate: str
+    subject_kinds: tuple[str, ...]
+    version: str = "1.0.0"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "predicate": self.predicate,
+            "subjectKinds": list(self.subject_kinds),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceLevelDefinition:
+    id: str
+    name: str
+    level: AssuranceLevel
+    minimum_evidence_strength: EvidenceStrength
+    maximum_evidence_age: str
+    minimum_independence: EvaluatorIndependence
+    required_approval_count: int = 1
+    material_contradiction_tolerance: int = 0
+    unresolved_critical_claim_tolerance: int = 0
+    continuous_monitoring_required: bool = False
+    version: str = "1.0.0"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "level": self.level.value,
+            "requirements": {
+                "evidenceStrength": {
+                    "minimum": self.minimum_evidence_strength.value,
+                },
+                "evidenceFreshness": {
+                    "maximumAge": self.maximum_evidence_age,
+                },
+                "evaluatorIndependence": {
+                    "minimum": self.minimum_independence.value,
+                },
+                "requiredApprovalCount": self.required_approval_count,
+                "contradictionTolerance": {
+                    "material": self.material_contradiction_tolerance,
+                },
+                "unresolvedClaimTolerance": {
+                    "critical": self.unresolved_critical_claim_tolerance,
+                },
+                "continuousMonitoringRequired": self.continuous_monitoring_required,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceClaimRequirement:
+    claim_definition_ref: str
+    criticality: ViolationSeverity = ViolationSeverity.HIGH
+    compensable: bool = True
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "claim": {"ref": self.claim_definition_ref},
+            "criticality": self.criticality.value,
+            "compensable": self.compensable,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceProfile:
+    id: str
+    name: str
+    assurance_level: AssuranceLevel
+    required_claims: tuple[AssuranceClaimRequirement, ...]
+    version: str = "1.0.0"
+    optional_claim_refs: tuple[str, ...] = ()
+    subject_kinds: tuple[str, ...] = ()
+    environments: tuple[str, ...] = ()
+    required_evidence_types: tuple[str, ...] = ()
+    minimum_evidence_strength: EvidenceStrength = EvidenceStrength.STRONG
+    minimum_independence: EvaluatorIndependence | None = None
+    maximum_evidence_age: str | None = None
+    required_approval_count: int | None = None
+    continuous_monitoring_required: bool | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "assuranceLevel": self.assurance_level.value,
+            "requiredClaims": [
+                claim.canonical_document() for claim in self.required_claims
+            ],
+            "optionalClaims": [{"ref": claim_ref} for claim_ref in self.optional_claim_refs],
+            "applicability": {
+                "subjectKinds": list(self.subject_kinds),
+                "environments": list(self.environments),
+            },
+            "evidence": {
+                "requiredTypes": list(self.required_evidence_types),
+                "minimumStrength": self.minimum_evidence_strength.value,
+                "maximumAge": self.maximum_evidence_age,
+            },
+            "evaluator": {
+                "minimumIndependence": (
+                    self.minimum_independence.value
+                    if self.minimum_independence is not None
+                    else None
+                ),
+            },
+            "approval": {"requiredApprovalCount": self.required_approval_count},
+            "continuousAssurance": {"required": self.continuous_monitoring_required},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceRequirementSet:
+    id: str
+    subject_ref: ObjectReference
+    derived_from_profiles: tuple[str, ...]
+    required_claims: tuple[AssuranceClaimRequirement, ...]
+    effective_assurance_level: AssuranceLevel
+    required_evidence_types: tuple[str, ...]
+    minimum_evidence_strength: EvidenceStrength
+    maximum_evidence_age: str
+    minimum_independence: EvaluatorIndependence
+    required_approval_count: int
+    continuous_monitoring_required: bool
+    resolved_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "derivedFromProfiles": list(self.derived_from_profiles),
+            "requiredClaims": [
+                claim.canonical_document() for claim in self.required_claims
+            ],
+            "effectiveAssuranceLevel": self.effective_assurance_level.value,
+            "requiredEvidenceTypes": list(self.required_evidence_types),
+            "minimumEvidenceStrength": self.minimum_evidence_strength.value,
+            "maximumEvidenceAge": self.maximum_evidence_age,
+            "minimumIndependence": self.minimum_independence.value,
+            "requiredApprovalCount": self.required_approval_count,
+            "continuousMonitoringRequired": self.continuous_monitoring_required,
+            "resolvedAt": self.resolved_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceClaimEvaluation:
+    claim_definition_ref: str
+    result: AssuranceClaimResult
+    confidence: AssuranceLevel = AssuranceLevel.STANDARD
+    evidence_refs: tuple[ObjectReference, ...] = ()
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "claim": {"ref": self.claim_definition_ref},
+            "result": self.result.value,
+            "confidence": self.confidence.value,
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceEvaluation:
+    id: str
+    subject_ref: ObjectReference
+    requirement_set_ref: str
+    profile_refs: tuple[str, ...]
+    evaluated_by_ref: str
+    evaluator_independence: EvaluatorIndependence
+    evidence_strength: EvidenceStrength
+    claim_results: tuple[AssuranceClaimEvaluation, ...]
+    conclusion: AssuranceConclusion
+    state: AssuranceEvaluationState
+    contradictions: tuple[str, ...]
+    findings: tuple[str, ...]
+    evaluated_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "requirementSetRef": self.requirement_set_ref,
+            "profileRefs": list(self.profile_refs),
+            "evaluatedByRef": self.evaluated_by_ref,
+            "evaluatorIndependence": self.evaluator_independence.value,
+            "evidenceStrength": self.evidence_strength.value,
+            "claimResults": [
+                claim.canonical_document() for claim in self.claim_results
+            ],
+            "conclusion": self.conclusion.value,
+            "state": self.state.value,
+            "contradictions": list(self.contradictions),
+            "findings": list(self.findings),
+            "evaluatedAt": self.evaluated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceAuthority:
+    id: str
+    name: str
+    subject_kinds: tuple[str, ...]
+    may_approve: tuple[AssuranceConclusion, ...]
+    version: str = "1.0.0"
+    maximum_assurance_level: AssuranceLevel = AssuranceLevel.CRITICAL
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "jurisdiction": {"subjectKinds": list(self.subject_kinds)},
+            "mayApprove": [conclusion.value for conclusion in self.may_approve],
+            "maximumAssuranceLevel": self.maximum_assurance_level.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceDecision:
+    id: str
+    evaluation_ref: str
+    authority_ref: str
+    decided_by_ref: str
+    decision: AssuranceDecisionResult
+    resulting_status: AssuranceStatusValue
+    valid_until: datetime
+    decided_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "evaluationRef": self.evaluation_ref,
+            "authorityRef": self.authority_ref,
+            "decidedByRef": self.decided_by_ref,
+            "decision": self.decision.value,
+            "resultingStatus": self.resulting_status.value,
+            "validUntil": self.valid_until.isoformat(),
+            "decidedAt": self.decided_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssuranceStatus:
+    id: str
+    subject_ref: ObjectReference
+    requirement_set_ref: str
+    assurance_level: AssuranceLevel
+    status: AssuranceStatusValue
+    evaluation_ref: str
+    decision_ref: str
+    valid_from: datetime
+    valid_until: datetime
+    active_conditions: tuple[str, ...] = ()
+    open_critical_findings: int = 0
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "requirementSetRef": self.requirement_set_ref,
+            "assuranceLevel": self.assurance_level.value,
+            "status": self.status.value,
+            "evaluationRef": self.evaluation_ref,
+            "decisionRef": self.decision_ref,
+            "validFrom": self.valid_from.isoformat(),
+            "validUntil": self.valid_until.isoformat(),
+            "activeConditions": list(self.active_conditions),
+            "openCriticalFindings": self.open_critical_findings,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -3880,6 +4246,14 @@ class InMemoryUPDLRegistry:
         self._consequence_instances: dict[str, ConsequenceInstance] = {}
         self._consequence_verifications: dict[str, ConsequenceVerification] = {}
         self._consequence_failures: dict[str, ConsequenceFailure] = {}
+        self._claim_definitions: dict[str, ClaimDefinition] = {}
+        self._assurance_level_definitions: dict[AssuranceLevel, AssuranceLevelDefinition] = {}
+        self._assurance_profiles: dict[str, AssuranceProfile] = {}
+        self._assurance_requirement_sets: dict[str, AssuranceRequirementSet] = {}
+        self._assurance_evaluations: dict[str, AssuranceEvaluation] = {}
+        self._assurance_authorities: dict[str, AssuranceAuthority] = {}
+        self._assurance_decisions: dict[str, AssuranceDecision] = {}
+        self._assurance_statuses: dict[str, AssuranceStatus] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -3923,6 +4297,10 @@ class InMemoryUPDLRegistry:
         self._consequence_instance_sequence = 0
         self._consequence_verification_sequence = 0
         self._consequence_failure_sequence = 0
+        self._assurance_requirement_set_sequence = 0
+        self._assurance_evaluation_sequence = 0
+        self._assurance_decision_sequence = 0
+        self._assurance_status_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -5699,6 +6077,363 @@ class InMemoryUPDLRegistry:
         if requirement is None:
             raise RegistryError("CONSEQUENCE_REQUIREMENT_NOT_FOUND", requirement_id)
         return requirement
+
+    def register_claim_definition(self, definition: ClaimDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("ASSURANCE_CLAIM_NAME_REQUIRED", definition.id)
+        if not definition.predicate:
+            raise RegistryError("ASSURANCE_CLAIM_PREDICATE_REQUIRED", definition.id)
+        if not definition.subject_kinds:
+            raise RegistryError("ASSURANCE_CLAIM_SUBJECT_KIND_REQUIRED", definition.id)
+        for kind in definition.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("ASSURANCE_CLAIM_SUBJECT_KIND_UNKNOWN", kind)
+        self._claim_definitions[definition.id] = definition
+
+    def register_assurance_level_definition(
+        self,
+        definition: AssuranceLevelDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("ASSURANCE_LEVEL_NAME_REQUIRED", definition.id)
+        if definition.required_approval_count < 1:
+            raise RegistryError("ASSURANCE_APPROVAL_COUNT_INVALID", definition.id)
+        _parse_duration(definition.maximum_evidence_age)
+        self._assurance_level_definitions[definition.level] = definition
+
+    def register_assurance_profile(self, profile: AssuranceProfile) -> None:
+        require_identifier(profile.id)
+        if not profile.name:
+            raise RegistryError("ASSURANCE_PROFILE_NAME_REQUIRED", profile.id)
+        if profile.assurance_level not in self._assurance_level_definitions:
+            raise RegistryError("ASSURANCE_LEVEL_UNDEFINED", profile.assurance_level.value)
+        if not profile.required_claims:
+            raise RegistryError("ASSURANCE_REQUIRED_CLAIM_MISSING", profile.id)
+        for claim in profile.required_claims:
+            definition = self._claim_definitions.get(claim.claim_definition_ref)
+            if definition is None:
+                raise RegistryError(
+                    "ASSURANCE_CLAIM_UNRESOLVED",
+                    claim.claim_definition_ref,
+                )
+            if (
+                claim.criticality is ViolationSeverity.CRITICAL
+                and claim.compensable
+            ):
+                raise RegistryError("ASSURANCE_CRITICAL_CLAIM_COMPENSABLE", profile.id)
+        for claim_ref in profile.optional_claim_refs:
+            if claim_ref not in self._claim_definitions:
+                raise RegistryError("ASSURANCE_CLAIM_UNRESOLVED", claim_ref)
+        for kind in profile.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("ASSURANCE_PROFILE_SUBJECT_KIND_UNKNOWN", kind)
+        if profile.maximum_evidence_age is not None:
+            _parse_duration(profile.maximum_evidence_age)
+        self._assurance_profiles[profile.id] = profile
+
+    def register_assurance_authority(self, authority: AssuranceAuthority) -> None:
+        require_identifier(authority.id)
+        if not authority.name:
+            raise RegistryError("ASSURANCE_AUTHORITY_NAME_REQUIRED", authority.id)
+        if not authority.subject_kinds:
+            raise RegistryError("ASSURANCE_AUTHORITY_SCOPE_REQUIRED", authority.id)
+        for kind in authority.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("ASSURANCE_AUTHORITY_SUBJECT_KIND_UNKNOWN", kind)
+        if not authority.may_approve:
+            raise RegistryError("ASSURANCE_AUTHORITY_APPROVAL_REQUIRED", authority.id)
+        self._assurance_authorities[authority.id] = authority
+
+    def resolve_assurance_requirements(
+        self,
+        *,
+        subject_ref: ObjectReference,
+        profile_ids: tuple[str, ...],
+        environment: str | None = None,
+    ) -> AssuranceRequirementSet:
+        subject = self._resolve_required_reference(
+            subject_ref,
+            "ASSURANCE_SUBJECT_NOT_FOUND",
+        )
+        if not profile_ids:
+            raise RegistryError("ASSURANCE_PROFILE_REQUIRED", subject.metadata.id)
+        profiles = tuple(self._require_assurance_profile(profile_id) for profile_id in profile_ids)
+        for profile in profiles:
+            if profile.subject_kinds and subject.kind not in profile.subject_kinds:
+                raise RegistryError("ASSURANCE_PROFILE_NOT_APPLICABLE", profile.id)
+            if (
+                environment is not None
+                and profile.environments
+                and environment not in profile.environments
+            ):
+                raise RegistryError("ASSURANCE_PROFILE_NOT_APPLICABLE", profile.id)
+        levels = tuple(profile.assurance_level for profile in profiles)
+        effective_level = max(levels, key=_assurance_level_rank)
+        level_definition = self._require_assurance_level_definition(effective_level)
+        claims_by_ref: dict[str, AssuranceClaimRequirement] = {}
+        for profile in profiles:
+            for claim in profile.required_claims:
+                existing = claims_by_ref.get(claim.claim_definition_ref)
+                if existing is None or _severity_rank(claim.criticality) > _severity_rank(
+                    existing.criticality
+                ):
+                    claims_by_ref[claim.claim_definition_ref] = claim
+        evidence_types = tuple(
+            sorted({item for profile in profiles for item in profile.required_evidence_types})
+        )
+        minimum_strength = max(
+            (profile.minimum_evidence_strength for profile in profiles),
+            key=_evidence_strength_rank,
+            default=level_definition.minimum_evidence_strength,
+        )
+        minimum_strength = max(
+            minimum_strength,
+            level_definition.minimum_evidence_strength,
+            key=_evidence_strength_rank,
+        )
+        minimum_independence = max(
+            (
+                profile.minimum_independence
+                for profile in profiles
+                if profile.minimum_independence is not None
+            ),
+            key=_evaluator_independence_rank,
+            default=level_definition.minimum_independence,
+        )
+        minimum_independence = max(
+            minimum_independence,
+            level_definition.minimum_independence,
+            key=_evaluator_independence_rank,
+        )
+        maximum_evidence_age = min(
+            (
+                profile.maximum_evidence_age
+                for profile in profiles
+                if profile.maximum_evidence_age is not None
+            ),
+            key=lambda value: _parse_duration(value),
+            default=level_definition.maximum_evidence_age,
+        )
+        maximum_evidence_age = min(
+            maximum_evidence_age,
+            level_definition.maximum_evidence_age,
+            key=lambda value: _parse_duration(value),
+        )
+        approval_count = max(
+            (
+                profile.required_approval_count
+                for profile in profiles
+                if profile.required_approval_count is not None
+            ),
+            default=level_definition.required_approval_count,
+        )
+        approval_count = max(approval_count, level_definition.required_approval_count)
+        continuous = level_definition.continuous_monitoring_required or any(
+            bool(profile.continuous_monitoring_required) for profile in profiles
+        )
+        self._assurance_requirement_set_sequence += 1
+        requirement_set = AssuranceRequirementSet(
+            id=f"ARS-{self._assurance_requirement_set_sequence:06d}",
+            subject_ref=ObjectReference(
+                subject.metadata.id,
+                revision=subject.metadata.revision,
+            ),
+            derived_from_profiles=tuple(profile.id for profile in profiles),
+            required_claims=tuple(
+                claims_by_ref[claim_ref] for claim_ref in sorted(claims_by_ref)
+            ),
+            effective_assurance_level=effective_level,
+            required_evidence_types=evidence_types,
+            minimum_evidence_strength=minimum_strength,
+            maximum_evidence_age=maximum_evidence_age,
+            minimum_independence=minimum_independence,
+            required_approval_count=approval_count,
+            continuous_monitoring_required=continuous,
+            resolved_at=datetime.now(UTC),
+        )
+        self._assurance_requirement_sets[requirement_set.id] = requirement_set
+        return requirement_set
+
+    def evaluate_assurance(
+        self,
+        *,
+        requirement_set_id: str,
+        evaluated_by_ref: str,
+        evaluator_independence: EvaluatorIndependence,
+        evidence_strength: EvidenceStrength,
+        claim_results: tuple[AssuranceClaimEvaluation, ...],
+        contradictions: tuple[str, ...] = (),
+        findings: tuple[str, ...] = (),
+        evaluated_at: datetime | None = None,
+    ) -> AssuranceEvaluation:
+        requirement_set = self._require_assurance_requirement_set(requirement_set_id)
+        if not evaluated_by_ref:
+            raise RegistryError("ASSURANCE_EVALUATOR_REQUIRED", requirement_set_id)
+        claim_result_by_ref = {
+            claim.claim_definition_ref: claim for claim in claim_results
+        }
+        if len(claim_result_by_ref) != len(claim_results):
+            raise RegistryError("ASSURANCE_CLAIM_DUPLICATE", requirement_set_id)
+        for claim in claim_results:
+            if claim.claim_definition_ref not in self._claim_definitions:
+                raise RegistryError("ASSURANCE_CLAIM_UNRESOLVED", claim.claim_definition_ref)
+            self._resolve_assurance_evidence(
+                claim.evidence_refs,
+                required_types=(),
+                maximum_age=requirement_set.maximum_evidence_age,
+                evaluated_at=evaluated_at or datetime.now(UTC),
+            )
+        self._resolve_assurance_evidence(
+            tuple(
+                reference
+                for claim in claim_results
+                for reference in claim.evidence_refs
+            ),
+            required_types=requirement_set.required_evidence_types,
+            maximum_age=requirement_set.maximum_evidence_age,
+            evaluated_at=evaluated_at or datetime.now(UTC),
+        )
+        required_refs = {
+            claim.claim_definition_ref for claim in requirement_set.required_claims
+        }
+        missing_refs = required_refs - set(claim_result_by_ref)
+        if missing_refs:
+            conclusion = AssuranceConclusion.INSUFFICIENT_EVIDENCE
+        elif _evidence_strength_rank(evidence_strength) < _evidence_strength_rank(
+            requirement_set.minimum_evidence_strength
+        ):
+            conclusion = AssuranceConclusion.INSUFFICIENT_EVIDENCE
+        elif _evaluator_independence_rank(
+            evaluator_independence
+        ) < _evaluator_independence_rank(requirement_set.minimum_independence):
+            conclusion = AssuranceConclusion.NOT_ASSURED
+        elif contradictions:
+            conclusion = AssuranceConclusion.INVALIDATED
+        elif any(
+            claim_result_by_ref[claim_ref].result is not AssuranceClaimResult.SATISFIED
+            for claim_ref in required_refs
+        ):
+            critical_unsatisfied = any(
+                claim.criticality is ViolationSeverity.CRITICAL
+                and claim_result_by_ref[claim.claim_definition_ref].result
+                is not AssuranceClaimResult.SATISFIED
+                for claim in requirement_set.required_claims
+            )
+            conclusion = (
+                AssuranceConclusion.NOT_ASSURED
+                if critical_unsatisfied
+                else AssuranceConclusion.PARTIALLY_ASSURED
+            )
+        else:
+            conclusion = AssuranceConclusion.ASSURED
+        self._assurance_evaluation_sequence += 1
+        evaluation = AssuranceEvaluation(
+            id=f"AEV-{self._assurance_evaluation_sequence:06d}",
+            subject_ref=requirement_set.subject_ref,
+            requirement_set_ref=requirement_set.id,
+            profile_refs=requirement_set.derived_from_profiles,
+            evaluated_by_ref=evaluated_by_ref,
+            evaluator_independence=evaluator_independence,
+            evidence_strength=evidence_strength,
+            claim_results=claim_results,
+            conclusion=conclusion,
+            state=AssuranceEvaluationState.COMPLETED,
+            contradictions=contradictions,
+            findings=findings,
+            evaluated_at=evaluated_at or datetime.now(UTC),
+        )
+        self._assurance_evaluations[evaluation.id] = evaluation
+        return evaluation
+
+    def decide_assurance(
+        self,
+        *,
+        evaluation_id: str,
+        authority_ref: str,
+        decided_by_ref: str,
+        decision: AssuranceDecisionResult,
+        valid_until: datetime,
+    ) -> tuple[AssuranceDecision, AssuranceStatus]:
+        evaluation = self._require_assurance_evaluation(evaluation_id)
+        requirement_set = self._require_assurance_requirement_set(
+            evaluation.requirement_set_ref
+        )
+        authority = self._assurance_authorities.get(authority_ref)
+        if authority is None:
+            raise RegistryError("ASSURANCE_AUTHORITY_MISSING", authority_ref)
+        subject = self.get_object(requirement_set.subject_ref.id)
+        if subject.kind not in authority.subject_kinds:
+            raise RegistryError("ASSURANCE_AUTHORITY_SCOPE_INVALID", authority_ref)
+        if not decided_by_ref:
+            raise RegistryError("ASSURANCE_DECIDER_REQUIRED", evaluation_id)
+        if valid_until <= evaluation.evaluated_at:
+            raise RegistryError("ASSURANCE_VALIDITY_INVALID", evaluation_id)
+        if _assurance_level_rank(
+            requirement_set.effective_assurance_level
+        ) > _assurance_level_rank(authority.maximum_assurance_level):
+            raise RegistryError("ASSURANCE_AUTHORITY_SCOPE_INVALID", authority_ref)
+        resulting_status = self._assurance_decision_status(evaluation, decision)
+        if (
+            resulting_status
+            in {AssuranceStatusValue.ASSURED, AssuranceStatusValue.ASSURED_WITH_CONDITIONS}
+            and evaluation.conclusion not in authority.may_approve
+        ):
+            raise RegistryError("ASSURANCE_AUTHORITY_SCOPE_INVALID", authority_ref)
+        self._assurance_decision_sequence += 1
+        decided_at = datetime.now(UTC)
+        assurance_decision = AssuranceDecision(
+            id=f"ADE-{self._assurance_decision_sequence:06d}",
+            evaluation_ref=evaluation.id,
+            authority_ref=authority.id,
+            decided_by_ref=decided_by_ref,
+            decision=decision,
+            resulting_status=resulting_status,
+            valid_until=valid_until,
+            decided_at=decided_at,
+        )
+        self._assurance_decisions[assurance_decision.id] = assurance_decision
+        self._assurance_status_sequence += 1
+        status = AssuranceStatus(
+            id=f"AST-{self._assurance_status_sequence:06d}",
+            subject_ref=requirement_set.subject_ref,
+            requirement_set_ref=requirement_set.id,
+            assurance_level=requirement_set.effective_assurance_level,
+            status=resulting_status,
+            evaluation_ref=evaluation.id,
+            decision_ref=assurance_decision.id,
+            valid_from=decided_at,
+            valid_until=valid_until,
+            open_critical_findings=sum(
+                1 for finding in evaluation.findings if finding.startswith("CRITICAL:")
+            ),
+        )
+        self._assurance_statuses[status.id] = status
+        return assurance_decision, status
+
+    def expire_assurance_statuses(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> tuple[AssuranceStatus, ...]:
+        evaluated_at = now or datetime.now(UTC)
+        expired: list[AssuranceStatus] = []
+        for status in tuple(self._assurance_statuses.values()):
+            if status.status is AssuranceStatusValue.EXPIRED:
+                continue
+            if evaluated_at <= status.valid_until:
+                continue
+            updated = replace(status, status=AssuranceStatusValue.EXPIRED)
+            self._assurance_statuses[status.id] = updated
+            expired.append(updated)
+        return tuple(expired)
+
+    def get_assurance_status(self, status_id: str) -> AssuranceStatus:
+        status = self._assurance_statuses.get(status_id)
+        if status is None:
+            raise RegistryError("ASSURANCE_STATUS_NOT_FOUND", status_id)
+        return status
 
     def evaluate_decision_obligations(
         self,
@@ -8479,6 +9214,97 @@ class InMemoryUPDLRegistry:
         self._consequence_failures[failure.id] = failure
         return failure
 
+    def _require_assurance_profile(self, profile_id: str) -> AssuranceProfile:
+        profile = self._assurance_profiles.get(profile_id)
+        if profile is None:
+            raise RegistryError("ASSURANCE_PROFILE_NOT_FOUND", profile_id)
+        return profile
+
+    def _require_assurance_level_definition(
+        self,
+        level: AssuranceLevel,
+    ) -> AssuranceLevelDefinition:
+        definition = self._assurance_level_definitions.get(level)
+        if definition is None:
+            raise RegistryError("ASSURANCE_LEVEL_UNDEFINED", level.value)
+        return definition
+
+    def _require_assurance_requirement_set(
+        self,
+        requirement_set_id: str,
+    ) -> AssuranceRequirementSet:
+        requirement_set = self._assurance_requirement_sets.get(requirement_set_id)
+        if requirement_set is None:
+            raise RegistryError("ASSURANCE_REQUIREMENT_SET_NOT_FOUND", requirement_set_id)
+        return requirement_set
+
+    def _require_assurance_evaluation(
+        self,
+        evaluation_id: str,
+    ) -> AssuranceEvaluation:
+        evaluation = self._assurance_evaluations.get(evaluation_id)
+        if evaluation is None:
+            raise RegistryError("ASSURANCE_EVALUATION_NOT_FOUND", evaluation_id)
+        if evaluation.state is not AssuranceEvaluationState.COMPLETED:
+            raise RegistryError("ASSURANCE_EVALUATION_INCOMPLETE", evaluation_id)
+        return evaluation
+
+    def _resolve_assurance_evidence(
+        self,
+        references: tuple[ObjectReference, ...],
+        *,
+        required_types: tuple[str, ...],
+        maximum_age: str,
+        evaluated_at: datetime,
+    ) -> tuple[ObjectReference, ...]:
+        resolved_refs = self._resolve_object_references(
+            references,
+            "ASSURANCE_EVIDENCE_INVALID",
+        )
+        if not resolved_refs:
+            raise RegistryError("ASSURANCE_EVIDENCE_MISSING", maximum_age)
+        provided_types: set[str] = set()
+        maximum_timedelta = _parse_duration(maximum_age)
+        for reference in resolved_refs:
+            evidence = self.get_object(reference.id, revision=reference.revision)
+            if evaluated_at - evidence.metadata.updated_at > maximum_timedelta:
+                raise RegistryError("ASSURANCE_EVIDENCE_STALE", evidence.metadata.id)
+            evidence_type = evidence.spec.get("evidence_type")
+            if isinstance(evidence_type, str):
+                provided_types.add(evidence_type)
+        missing_types = sorted(set(required_types) - provided_types)
+        if missing_types:
+            raise RegistryError(
+                "ASSURANCE_EVIDENCE_MISSING",
+                ", ".join(missing_types),
+            )
+        return resolved_refs
+
+    def _assurance_decision_status(
+        self,
+        evaluation: AssuranceEvaluation,
+        decision: AssuranceDecisionResult,
+    ) -> AssuranceStatusValue:
+        if decision is AssuranceDecisionResult.REJECT_ASSURANCE:
+            return AssuranceStatusValue.NOT_ASSURED
+        if (
+            decision is AssuranceDecisionResult.APPROVE_ASSURANCE
+            and evaluation.conclusion is not AssuranceConclusion.ASSURED
+        ):
+            raise RegistryError("ASSURANCE_DECISION_INVALID", evaluation.id)
+        if (
+            decision is AssuranceDecisionResult.APPROVE_WITH_CONDITIONS
+            and evaluation.conclusion
+            not in {
+                AssuranceConclusion.ASSURED,
+                AssuranceConclusion.ASSURED_WITH_CONDITIONS,
+            }
+        ):
+            raise RegistryError("ASSURANCE_DECISION_INVALID", evaluation.id)
+        if decision is AssuranceDecisionResult.APPROVE_WITH_CONDITIONS:
+            return AssuranceStatusValue.ASSURED_WITH_CONDITIONS
+        return AssuranceStatusValue.ASSURED
+
     def _require_relationship_cardinality(
         self,
         relationship_type: RelationshipTypeDefinition,
@@ -8676,6 +9502,46 @@ def _parse_duration(value: str) -> timedelta:
     if duration <= timedelta(0):
         raise RegistryError("OBLIGATION_TIMING_INVALID", value)
     return duration
+
+
+def _assurance_level_rank(level: AssuranceLevel) -> int:
+    return {
+        AssuranceLevel.MINIMAL: 0,
+        AssuranceLevel.BASIC: 1,
+        AssuranceLevel.STANDARD: 2,
+        AssuranceLevel.HIGH: 3,
+        AssuranceLevel.CRITICAL: 4,
+    }[level]
+
+
+def _evidence_strength_rank(strength: EvidenceStrength) -> int:
+    return {
+        EvidenceStrength.WEAK: 0,
+        EvidenceStrength.MODERATE: 1,
+        EvidenceStrength.STRONG: 2,
+        EvidenceStrength.VERY_STRONG: 3,
+        EvidenceStrength.AUTHORITATIVE: 4,
+    }[strength]
+
+
+def _evaluator_independence_rank(independence: EvaluatorIndependence) -> int:
+    return {
+        EvaluatorIndependence.SELF: 0,
+        EvaluatorIndependence.PEER: 1,
+        EvaluatorIndependence.INDEPENDENT_TEAM: 2,
+        EvaluatorIndependence.INDEPENDENT_FUNCTION: 3,
+        EvaluatorIndependence.EXTERNAL_INDEPENDENT: 4,
+        EvaluatorIndependence.REGULATORY_AUTHORITY: 5,
+    }[independence]
+
+
+def _severity_rank(severity: ViolationSeverity) -> int:
+    return {
+        ViolationSeverity.LOW: 0,
+        ViolationSeverity.MEDIUM: 1,
+        ViolationSeverity.HIGH: 2,
+        ViolationSeverity.CRITICAL: 3,
+    }[severity]
 
 
 def _validate_value_type(
