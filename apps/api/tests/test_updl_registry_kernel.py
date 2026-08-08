@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from ai_enterprise.domain.updl_registry import (
     ActorReference,
     AdditionalPropertiesPolicy,
@@ -17,6 +19,14 @@ from ai_enterprise.domain.updl_registry import (
     ConditionFailureSeverity,
     ConditionFailureTransitionType,
     ConditionOutcome,
+    ConsequenceDefinition,
+    ConsequenceEnforcementMode,
+    ConsequenceFailureType,
+    ConsequenceInstanceResult,
+    ConsequenceRequirementStatus,
+    ConsequenceRule,
+    ConsequenceType,
+    ConsequenceVerificationResult,
     ConstraintDefinition,
     ConstraintEvaluationResult,
     ConstraintRequirement,
@@ -116,6 +126,7 @@ from ai_enterprise.domain.updl_registry import (
     TaskOutputSource,
     TransitionClassification,
     TypeDefinition,
+    ViolationSeverity,
 )
 
 
@@ -2703,6 +2714,232 @@ def test_updl_registry_records_change_adoption_failure_as_governed_fact() -> Non
 
     assert failure.failure_type is ChangeAdoptionFailureType.RUNTIME_NONCONFORMANCE
     assert registry.get_change_adoption(adoption.id).status is ChangeAdoptionStatus.FAILED
+
+
+def test_updl_registry_consequence_definition_generates_mandatory_requirements() -> None:
+    registry = _registry()
+    subject = _requirement(
+        registry,
+        "REQ-059",
+        "Production deployments require approval.",
+    )
+    violation_evidence = _evidence(registry, "EVIDENCE-057", "VIOLATION_DETECTION")
+    registry.register_consequence_definition(
+        ConsequenceDefinition(
+            id="commerce.orders.consequence.unauthorized-deployment",
+            name="unauthorizedDeploymentConsequences",
+            applies_to_violation_types=("UNAUTHORIZED_DEPLOYMENT",),
+            consequences=(
+                ConsequenceRule(
+                    id="suspend-deployment-authority",
+                    consequence_type=ConsequenceType.AUTHORITY_REDUCTION,
+                    enforcement=ConsequenceEnforcementMode.MANDATORY,
+                    owner_ref="role.platform-governance-owner",
+                    action_ref="action.suspend-production-deployment-authority",
+                    deadline_duration="PT15M",
+                    target_from_violation="actor",
+                    required_evidence_types=("AUTHORITY_RESTRICTION",),
+                    verifier_ref="control.consequence-verifier",
+                ),
+                ConsequenceRule(
+                    id="notify-risk-owner",
+                    consequence_type=ConsequenceType.ESCALATION,
+                    enforcement=ConsequenceEnforcementMode.MANDATORY,
+                    owner_ref="role.platform-governance-owner",
+                    action_ref="action.notify-risk-owner",
+                    deadline_duration="PT1H",
+                    target_from_violation="violation",
+                ),
+            ),
+            applies_to_severities=(ViolationSeverity.HIGH, ViolationSeverity.CRITICAL),
+        )
+    )
+    detected_at = datetime(2026, 9, 18, 11, 3, tzinfo=UTC)
+    violation = registry.record_violation(
+        violation_type="UNAUTHORIZED_DEPLOYMENT",
+        violated_requirement_ref="obligation.production-change-approval",
+        subject_ref=ObjectReference(subject.metadata.id),
+        actor_ref="principal.user-817",
+        severity=ViolationSeverity.HIGH,
+        evidence_refs=(ObjectReference(violation_evidence.metadata.id),),
+        detected_at=detected_at,
+        occurred_at=detected_at - timedelta(minutes=5),
+    )
+
+    requirements = registry.evaluate_consequences(violation_id=violation.id)
+
+    assert [requirement.rule_id for requirement in requirements] == [
+        "notify-risk-owner",
+        "suspend-deployment-authority",
+    ]
+    authority_requirement = next(
+        requirement
+        for requirement in requirements
+        if requirement.rule_id == "suspend-deployment-authority"
+    )
+    assert authority_requirement.subject_ref == "principal.user-817"
+    assert authority_requirement.due_at == detected_at + timedelta(minutes=15)
+    assert authority_requirement.status is ConsequenceRequirementStatus.PENDING
+    assert authority_requirement.mandatory is True
+
+
+def test_updl_registry_consequence_execution_requires_evidence_and_verification() -> None:
+    registry = _registry()
+    subject = _requirement(registry, "REQ-060", "Production deployments require approval.")
+    violation_evidence = _evidence(registry, "EVIDENCE-058", "VIOLATION_DETECTION")
+    restriction_evidence = _evidence(registry, "EVIDENCE-059", "AUTHORITY_RESTRICTION")
+    registry.register_consequence_definition(
+        ConsequenceDefinition(
+            id="commerce.orders.consequence.authority-restriction",
+            name="authorityRestrictionConsequence",
+            applies_to_violation_types=("UNAUTHORIZED_DEPLOYMENT",),
+            consequences=(
+                ConsequenceRule(
+                    id="suspend-deployment-authority",
+                    consequence_type=ConsequenceType.AUTHORITY_REDUCTION,
+                    enforcement=ConsequenceEnforcementMode.MANDATORY,
+                    owner_ref="role.platform-governance-owner",
+                    action_ref="action.suspend-production-deployment-authority",
+                    deadline_duration="PT15M",
+                    target_from_violation="actor",
+                    required_evidence_types=("AUTHORITY_RESTRICTION",),
+                    verifier_ref="control.consequence-verifier",
+                ),
+            ),
+        )
+    )
+    violation = registry.record_violation(
+        violation_type="UNAUTHORIZED_DEPLOYMENT",
+        violated_requirement_ref="obligation.production-change-approval",
+        subject_ref=ObjectReference(subject.metadata.id),
+        actor_ref="principal.user-817",
+        severity=ViolationSeverity.HIGH,
+        evidence_refs=(ObjectReference(violation_evidence.metadata.id),),
+    )
+    requirement = registry.evaluate_consequences(violation_id=violation.id)[0]
+
+    try:
+        registry.record_consequence_instance(
+            requirement_id=requirement.id,
+            executor_ref="service.authorization-engine",
+            result=ConsequenceInstanceResult.SUCCEEDED,
+            evidence_refs=(),
+            resulting_state={"authority": "SUSPENDED"},
+        )
+    except RegistryError as exc:
+        assert exc.code == "CONSEQUENCE_EVIDENCE_MISSING"
+    else:
+        raise AssertionError("consequence execution without required evidence was accepted")
+
+    instance = registry.record_consequence_instance(
+        requirement_id=requirement.id,
+        executor_ref="service.authorization-engine",
+        result=ConsequenceInstanceResult.SUCCEEDED,
+        evidence_refs=(ObjectReference(restriction_evidence.metadata.id),),
+        resulting_state={"authority": "SUSPENDED"},
+    )
+    verification = registry.verify_consequence_requirement(
+        requirement_id=requirement.id,
+        instance_id=instance.id,
+        verifier_ref="control.consequence-verifier",
+        result=ConsequenceVerificationResult.VERIFIED,
+        evidence_refs=(),
+    )
+    verified_requirement = registry.get_consequence_requirement(requirement.id)
+
+    assert instance.result is ConsequenceInstanceResult.SUCCEEDED
+    assert verification.result is ConsequenceVerificationResult.VERIFIED
+    assert verified_requirement.status is ConsequenceRequirementStatus.VERIFIED
+
+
+def test_updl_registry_detects_overdue_mandatory_consequence_failure() -> None:
+    registry = _registry()
+    subject = _requirement(registry, "REQ-061", "Production deployments require approval.")
+    violation_evidence = _evidence(registry, "EVIDENCE-060", "VIOLATION_DETECTION")
+    registry.register_consequence_definition(
+        ConsequenceDefinition(
+            id="commerce.orders.consequence.overdue-authority-review",
+            name="overdueAuthorityReview",
+            applies_to_violation_types=("UNAUTHORIZED_DEPLOYMENT",),
+            consequences=(
+                ConsequenceRule(
+                    id="review-authority",
+                    consequence_type=ConsequenceType.REVIEW,
+                    enforcement=ConsequenceEnforcementMode.MANDATORY,
+                    owner_ref="role.platform-governance-owner",
+                    action_ref="action.review-deployment-authority",
+                    deadline_duration="PT30M",
+                ),
+            ),
+        )
+    )
+    detected_at = datetime(2026, 9, 18, 11, 3, tzinfo=UTC)
+    violation = registry.record_violation(
+        violation_type="UNAUTHORIZED_DEPLOYMENT",
+        violated_requirement_ref="obligation.production-change-approval",
+        subject_ref=ObjectReference(subject.metadata.id),
+        actor_ref="principal.user-817",
+        severity=ViolationSeverity.HIGH,
+        evidence_refs=(ObjectReference(violation_evidence.metadata.id),),
+        detected_at=detected_at,
+    )
+    requirement = registry.evaluate_consequences(violation_id=violation.id)[0]
+
+    failures = registry.detect_consequence_failures(
+        now=detected_at + timedelta(minutes=31),
+    )
+
+    assert failures[0].requirement_ref == requirement.id
+    assert failures[0].failure_type is ConsequenceFailureType.DEADLINE_EXCEEDED
+    assert (
+        registry.get_consequence_requirement(requirement.id).status
+        is ConsequenceRequirementStatus.OVERDUE
+    )
+
+
+def test_updl_registry_advisory_consequence_does_not_create_deadline_failure() -> None:
+    registry = _registry()
+    subject = _requirement(registry, "REQ-062", "Production deployments require approval.")
+    violation_evidence = _evidence(registry, "EVIDENCE-061", "VIOLATION_DETECTION")
+    registry.register_consequence_definition(
+        ConsequenceDefinition(
+            id="commerce.orders.consequence.advisory-review",
+            name="advisoryReview",
+            applies_to_violation_types=("UNAUTHORIZED_DEPLOYMENT",),
+            consequences=(
+                ConsequenceRule(
+                    id="consider-retrospective",
+                    consequence_type=ConsequenceType.REVIEW,
+                    enforcement=ConsequenceEnforcementMode.ADVISORY,
+                    owner_ref="role.platform-governance-owner",
+                    action_ref="action.consider-retrospective",
+                    deadline_duration="PT30M",
+                ),
+            ),
+        )
+    )
+    detected_at = datetime(2026, 9, 18, 11, 3, tzinfo=UTC)
+    violation = registry.record_violation(
+        violation_type="UNAUTHORIZED_DEPLOYMENT",
+        violated_requirement_ref="obligation.production-change-approval",
+        subject_ref=ObjectReference(subject.metadata.id),
+        actor_ref="principal.user-817",
+        severity=ViolationSeverity.HIGH,
+        evidence_refs=(ObjectReference(violation_evidence.metadata.id),),
+        detected_at=detected_at,
+    )
+    requirement = registry.evaluate_consequences(violation_id=violation.id)[0]
+
+    failures = registry.detect_consequence_failures(
+        now=detected_at + timedelta(days=1),
+    )
+
+    assert requirement.mandatory is False
+    assert failures == ()
+    assert (
+        registry.get_consequence_requirement(requirement.id).status
+        is ConsequenceRequirementStatus.PENDING
+    )
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:

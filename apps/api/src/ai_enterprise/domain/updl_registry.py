@@ -764,6 +764,91 @@ class ChangeAdoptionCompletionResult(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class ViolationSeverity(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ConsequenceType(StrEnum):
+    CORRECTION = "CORRECTION"
+    REMEDIATION = "REMEDIATION"
+    RESTRICTION = "RESTRICTION"
+    SUSPENSION = "SUSPENSION"
+    REVOCATION = "REVOCATION"
+    ESCALATION = "ESCALATION"
+    NOTIFICATION = "NOTIFICATION"
+    DISCLOSURE = "DISCLOSURE"
+    INVESTIGATION = "INVESTIGATION"
+    REVIEW = "REVIEW"
+    REASSESSMENT = "REASSESSMENT"
+    REAUTHORIZATION = "REAUTHORIZATION"
+    CONTROL_ENHANCEMENT = "CONTROL_ENHANCEMENT"
+    COMPENSATING_CONTROL = "COMPENSATING_CONTROL"
+    ADDITIONAL_EVIDENCE = "ADDITIONAL_EVIDENCE"
+    ADDITIONAL_MONITORING = "ADDITIONAL_MONITORING"
+    AUTHORITY_REDUCTION = "AUTHORITY_REDUCTION"
+    ACCESS_RESTRICTION = "ACCESS_RESTRICTION"
+    EXECUTION_BLOCK = "EXECUTION_BLOCK"
+    DECISION_INVALIDATION = "DECISION_INVALIDATION"
+    DECISION_SUSPENSION = "DECISION_SUSPENSION"
+    ROLLBACK = "ROLLBACK"
+    RESTORATION = "RESTORATION"
+    CONTRACTUAL_ACTION = "CONTRACTUAL_ACTION"
+    ORGANIZATIONAL_ACTION = "ORGANIZATIONAL_ACTION"
+
+
+class ConsequenceEnforcementMode(StrEnum):
+    MANDATORY = "MANDATORY"
+    CONDITIONAL = "CONDITIONAL"
+    ADVISORY = "ADVISORY"
+
+
+class ConsequenceExecutionMode(StrEnum):
+    IMMEDIATE = "IMMEDIATE"
+    DEADLINE_BOUND = "DEADLINE_BOUND"
+    SCHEDULED = "SCHEDULED"
+    CONDITIONAL = "CONDITIONAL"
+    MANUAL_AUTHORIZED = "MANUAL_AUTHORIZED"
+
+
+class ConsequenceRequirementStatus(StrEnum):
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    VERIFIED = "VERIFIED"
+    FAILED = "FAILED"
+    OVERDUE = "OVERDUE"
+    WAIVED = "WAIVED"
+
+
+class ConsequenceInstanceResult(StrEnum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    PARTIALLY_SUCCEEDED = "PARTIALLY_SUCCEEDED"
+
+
+class ConsequenceVerificationResult(StrEnum):
+    VERIFIED = "VERIFIED"
+    FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    EVIDENCE_INSUFFICIENT = "EVIDENCE_INSUFFICIENT"
+
+
+class ConsequenceFailureType(StrEnum):
+    NOT_STARTED = "NOT_STARTED"
+    DEADLINE_EXCEEDED = "DEADLINE_EXCEEDED"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+    EVIDENCE_MISSING = "EVIDENCE_MISSING"
+    EVIDENCE_INVALID = "EVIDENCE_INVALID"
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    WRONG_EXECUTOR = "WRONG_EXECUTOR"
+    WRONG_TARGET = "WRONG_TARGET"
+    PARTIAL_COMPLETION = "PARTIAL_COMPLETION"
+    REQUIRED_STATE_NOT_ACHIEVED = "REQUIRED_STATE_NOT_ACHIEVED"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -3352,6 +3437,244 @@ class ChangeAdoptionCompletionDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class ConsequenceRule:
+    id: str
+    consequence_type: ConsequenceType
+    enforcement: ConsequenceEnforcementMode
+    owner_ref: str
+    action_ref: str
+    deadline_duration: str
+    execution_mode: ConsequenceExecutionMode = ConsequenceExecutionMode.DEADLINE_BOUND
+    target_from_violation: str = "subject"
+    required_evidence_types: tuple[str, ...] = ()
+    verifier_ref: str | None = None
+
+    @property
+    def mandatory(self) -> bool:
+        return self.enforcement is ConsequenceEnforcementMode.MANDATORY
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.consequence_type.value,
+            "enforcement": {"mode": self.enforcement.value},
+            "mandatory": self.mandatory,
+            "ownerRef": self.owner_ref,
+            "action": {"ref": self.action_ref},
+            "deadline": {"duration": self.deadline_duration},
+            "executionMode": self.execution_mode.value,
+            "target": {"fromViolation": self.target_from_violation},
+            "evidenceRequirements": list(self.required_evidence_types),
+            "verifierRef": self.verifier_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceClosurePolicy:
+    evidence_required: bool = True
+    verification_required: bool = True
+    mode: str = "ALL_REQUIRED_CONSEQUENCES_COMPLETED"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode,
+            "evidenceRequired": self.evidence_required,
+            "verificationRequired": self.verification_required,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceDefinition:
+    id: str
+    name: str
+    applies_to_violation_types: tuple[str, ...]
+    consequences: tuple[ConsequenceRule, ...]
+    version: str = "1.0.0"
+    applies_to_severities: tuple[ViolationSeverity, ...] = (
+        ViolationSeverity.HIGH,
+        ViolationSeverity.CRITICAL,
+    )
+    recursion_enabled: bool = True
+    recursion_maximum_depth: int = 4
+    closure: ConsequenceClosurePolicy = field(default_factory=ConsequenceClosurePolicy)
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "appliesWhen": {
+                "violationTypes": list(self.applies_to_violation_types),
+                "severity": {
+                    "in": [severity.value for severity in self.applies_to_severities]
+                },
+            },
+            "consequences": [
+                consequence.canonical_document() for consequence in self.consequences
+            ],
+            "recursionPolicy": {
+                "enabled": self.recursion_enabled,
+                "maximumDepth": self.recursion_maximum_depth,
+                "cycleDetection": True,
+            },
+            "closure": self.closure.canonical_document(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Violation:
+    id: str
+    violation_type: str
+    violated_requirement_ref: str
+    subject_ref: ObjectReference
+    actor_ref: str
+    severity: ViolationSeverity
+    detected_at: datetime
+    occurred_at: datetime
+    evidence_refs: tuple[ObjectReference, ...]
+    source_ref: str | None = None
+    governance_context: dict[str, str] = field(default_factory=dict)
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "violationType": self.violation_type,
+            "violatedRequirementRef": self.violated_requirement_ref,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "actorRef": self.actor_ref,
+            "severity": self.severity.value,
+            "detectedAt": self.detected_at.isoformat(),
+            "occurredAt": self.occurred_at.isoformat(),
+            "sourceRef": self.source_ref,
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "governanceContext": dict(sorted(self.governance_context.items())),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceRequirement:
+    id: str
+    violation_ref: str
+    definition_id: str
+    definition_version: str
+    rule_id: str
+    consequence_type: ConsequenceType
+    enforcement: ConsequenceEnforcementMode
+    subject_ref: str
+    required_action_ref: str
+    owner_ref: str
+    generated_at: datetime
+    due_at: datetime
+    status: ConsequenceRequirementStatus = ConsequenceRequirementStatus.PENDING
+    required_evidence_types: tuple[str, ...] = ()
+    verifier_ref: str | None = None
+
+    @property
+    def mandatory(self) -> bool:
+        return self.enforcement is ConsequenceEnforcementMode.MANDATORY
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "generatedFrom": {
+                "violation": {"ref": self.violation_ref},
+                "definition": {
+                    "id": self.definition_id,
+                    "version": self.definition_version,
+                },
+                "rule": {"id": self.rule_id},
+            },
+            "consequenceType": self.consequence_type.value,
+            "enforcement": {"mode": self.enforcement.value},
+            "mandatory": self.mandatory,
+            "subjectRef": self.subject_ref,
+            "requiredAction": {"ref": self.required_action_ref},
+            "ownerRef": self.owner_ref,
+            "generatedAt": self.generated_at.isoformat(),
+            "dueAt": self.due_at.isoformat(),
+            "status": self.status.value,
+            "requiredEvidenceTypes": list(self.required_evidence_types),
+            "verifierRef": self.verifier_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceInstance:
+    id: str
+    requirement_ref: str
+    executor_ref: str
+    result: ConsequenceInstanceResult
+    started_at: datetime
+    completed_at: datetime
+    evidence_refs: tuple[ObjectReference, ...]
+    resulting_state: dict[str, str] = field(default_factory=dict)
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "requirementRef": self.requirement_ref,
+            "executorRef": self.executor_ref,
+            "result": self.result.value,
+            "startedAt": self.started_at.isoformat(),
+            "completedAt": self.completed_at.isoformat(),
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "resultingState": dict(sorted(self.resulting_state.items())),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceVerification:
+    id: str
+    requirement_ref: str
+    instance_ref: str
+    verifier_ref: str
+    result: ConsequenceVerificationResult
+    evidence_refs: tuple[ObjectReference, ...]
+    verified_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "requirementRef": self.requirement_ref,
+            "instanceRef": self.instance_ref,
+            "verifierRef": self.verifier_ref,
+            "result": self.result.value,
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "verifiedAt": self.verified_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ConsequenceFailure:
+    id: str
+    requirement_ref: str
+    failure_type: ConsequenceFailureType
+    detected_at: datetime
+    status: str = "OPEN"
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "requirementRef": self.requirement_ref,
+            "failureType": self.failure_type.value,
+            "detectedAt": self.detected_at.isoformat(),
+            "status": self.status,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -3551,6 +3874,12 @@ class InMemoryUPDLRegistry:
         self._change_adoption_completion_decisions: dict[
             str, ChangeAdoptionCompletionDecision
         ] = {}
+        self._consequence_definitions: dict[str, ConsequenceDefinition] = {}
+        self._violations: dict[str, Violation] = {}
+        self._consequence_requirements: dict[str, ConsequenceRequirement] = {}
+        self._consequence_instances: dict[str, ConsequenceInstance] = {}
+        self._consequence_verifications: dict[str, ConsequenceVerification] = {}
+        self._consequence_failures: dict[str, ConsequenceFailure] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -3589,6 +3918,11 @@ class InMemoryUPDLRegistry:
         self._change_adoption_failure_sequence = 0
         self._adoption_coverage_sequence = 0
         self._change_adoption_completion_sequence = 0
+        self._violation_sequence = 0
+        self._consequence_requirement_sequence = 0
+        self._consequence_instance_sequence = 0
+        self._consequence_verification_sequence = 0
+        self._consequence_failure_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -5110,6 +5444,261 @@ class InMemoryUPDLRegistry:
         if adoption is None:
             raise RegistryError("ADOPTION_NOT_FOUND", adoption_id)
         return adoption
+
+    def register_consequence_definition(
+        self,
+        definition: ConsequenceDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("CONSEQUENCE_DEFINITION_NAME_REQUIRED", definition.id)
+        if not definition.applies_to_violation_types:
+            raise RegistryError("CONSEQUENCE_VIOLATION_TYPE_REQUIRED", definition.id)
+        if not definition.applies_to_severities:
+            raise RegistryError("CONSEQUENCE_SEVERITY_REQUIRED", definition.id)
+        if not definition.consequences:
+            raise RegistryError("CONSEQUENCE_RULE_REQUIRED", definition.id)
+        if definition.recursion_maximum_depth < 1:
+            raise RegistryError("CONSEQUENCE_RECURSION_INVALID", definition.id)
+        seen_rules: set[str] = set()
+        for rule in definition.consequences:
+            if not rule.id or rule.id in seen_rules:
+                raise RegistryError("CONSEQUENCE_RULE_INVALID", definition.id)
+            seen_rules.add(rule.id)
+            if not rule.owner_ref:
+                raise RegistryError("CONSEQUENCE_OWNER_REQUIRED", rule.id)
+            if not rule.action_ref:
+                raise RegistryError("CONSEQUENCE_ACTION_REQUIRED", rule.id)
+            if rule.target_from_violation not in {"actor", "subject", "violation"}:
+                raise RegistryError("CONSEQUENCE_TARGET_INVALID", rule.id)
+            _parse_duration(rule.deadline_duration)
+        self._consequence_definitions[definition.id] = definition
+
+    def record_violation(
+        self,
+        *,
+        violation_type: str,
+        violated_requirement_ref: str,
+        subject_ref: ObjectReference,
+        actor_ref: str,
+        severity: ViolationSeverity,
+        evidence_refs: tuple[ObjectReference, ...],
+        occurred_at: datetime | None = None,
+        detected_at: datetime | None = None,
+        source_ref: str | None = None,
+        governance_context: dict[str, str] | None = None,
+    ) -> Violation:
+        if not violation_type:
+            raise RegistryError("VIOLATION_TYPE_REQUIRED", violated_requirement_ref)
+        if not violated_requirement_ref:
+            raise RegistryError("VIOLATED_REQUIREMENT_REQUIRED", violation_type)
+        if not actor_ref:
+            raise RegistryError("VIOLATION_ACTOR_REQUIRED", violation_type)
+        subject = self._resolve_required_reference(subject_ref, "VIOLATION_SUBJECT_NOT_FOUND")
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "VIOLATION_EVIDENCE_INVALID",
+        )
+        detected = detected_at or datetime.now(UTC)
+        occurred = occurred_at or detected
+        if occurred > detected:
+            raise RegistryError("VIOLATION_TEMPORAL_INVALID", violation_type)
+        self._violation_sequence += 1
+        violation = Violation(
+            id=f"VIO-{self._violation_sequence:06d}",
+            violation_type=violation_type,
+            violated_requirement_ref=violated_requirement_ref,
+            subject_ref=ObjectReference(subject.metadata.id, revision=subject.metadata.revision),
+            actor_ref=actor_ref,
+            severity=severity,
+            detected_at=detected,
+            occurred_at=occurred,
+            evidence_refs=resolved_evidence,
+            source_ref=source_ref,
+            governance_context=governance_context or {},
+        )
+        self._violations[violation.id] = violation
+        return violation
+
+    def evaluate_consequences(
+        self,
+        *,
+        violation_id: str,
+        definition_id: str | None = None,
+    ) -> tuple[ConsequenceRequirement, ...]:
+        violation = self.get_violation(violation_id)
+        definitions = self._applicable_consequence_definitions(
+            violation,
+            definition_id=definition_id,
+        )
+        generated: list[ConsequenceRequirement] = []
+        for definition in definitions:
+            for rule in sorted(definition.consequences, key=lambda item: item.id):
+                self._consequence_requirement_sequence += 1
+                generated_at = datetime.now(UTC)
+                requirement = ConsequenceRequirement(
+                    id=f"CRQ-{self._consequence_requirement_sequence:06d}",
+                    violation_ref=violation.id,
+                    definition_id=definition.id,
+                    definition_version=definition.version,
+                    rule_id=rule.id,
+                    consequence_type=rule.consequence_type,
+                    enforcement=rule.enforcement,
+                    subject_ref=self._consequence_target_ref(violation, rule),
+                    required_action_ref=rule.action_ref,
+                    owner_ref=rule.owner_ref,
+                    generated_at=generated_at,
+                    due_at=violation.detected_at + _parse_duration(rule.deadline_duration),
+                    required_evidence_types=rule.required_evidence_types,
+                    verifier_ref=rule.verifier_ref,
+                )
+                self._consequence_requirements[requirement.id] = requirement
+                generated.append(requirement)
+        return tuple(generated)
+
+    def record_consequence_instance(
+        self,
+        *,
+        requirement_id: str,
+        executor_ref: str,
+        result: ConsequenceInstanceResult,
+        evidence_refs: tuple[ObjectReference, ...],
+        resulting_state: dict[str, str] | None = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> ConsequenceInstance:
+        requirement = self.get_consequence_requirement(requirement_id)
+        if not executor_ref:
+            raise RegistryError("CONSEQUENCE_EXECUTOR_REQUIRED", requirement_id)
+        started = started_at or datetime.now(UTC)
+        completed = completed_at or started
+        if completed < started:
+            raise RegistryError("CONSEQUENCE_TEMPORAL_INVALID", requirement_id)
+        resolved_evidence = self._resolve_consequence_evidence(
+            evidence_refs,
+            required_types=requirement.required_evidence_types,
+        )
+        self._consequence_instance_sequence += 1
+        instance = ConsequenceInstance(
+            id=f"CIN-{self._consequence_instance_sequence:06d}",
+            requirement_ref=requirement.id,
+            executor_ref=executor_ref,
+            result=result,
+            started_at=started,
+            completed_at=completed,
+            evidence_refs=resolved_evidence,
+            resulting_state=resulting_state or {},
+        )
+        self._consequence_instances[instance.id] = instance
+        status = (
+            ConsequenceRequirementStatus.COMPLETED
+            if result is ConsequenceInstanceResult.SUCCEEDED
+            else ConsequenceRequirementStatus.FAILED
+        )
+        self._consequence_requirements[requirement.id] = replace(
+            requirement,
+            status=status,
+        )
+        if result is not ConsequenceInstanceResult.SUCCEEDED and requirement.mandatory:
+            self._record_consequence_failure(
+                requirement,
+                ConsequenceFailureType.EXECUTION_FAILED,
+                detected_at=completed,
+            )
+        return instance
+
+    def verify_consequence_requirement(
+        self,
+        *,
+        requirement_id: str,
+        instance_id: str,
+        verifier_ref: str,
+        result: ConsequenceVerificationResult,
+        evidence_refs: tuple[ObjectReference, ...],
+    ) -> ConsequenceVerification:
+        requirement = self.get_consequence_requirement(requirement_id)
+        instance = self._consequence_instances.get(instance_id)
+        if instance is None or instance.requirement_ref != requirement.id:
+            raise RegistryError("CONSEQUENCE_VERIFICATION_MISMATCH", requirement_id)
+        if not verifier_ref:
+            raise RegistryError("CONSEQUENCE_VERIFIER_REQUIRED", requirement_id)
+        expected_verifier = requirement.verifier_ref
+        if expected_verifier is not None and verifier_ref != expected_verifier:
+            raise RegistryError("CONSEQUENCE_VERIFIER_UNAUTHORIZED", requirement_id)
+        resolved_evidence = self._resolve_consequence_evidence(
+            tuple((*instance.evidence_refs, *evidence_refs)),
+            required_types=requirement.required_evidence_types,
+        )
+        self._consequence_verification_sequence += 1
+        verification = ConsequenceVerification(
+            id=f"CVR-{self._consequence_verification_sequence:06d}",
+            requirement_ref=requirement.id,
+            instance_ref=instance.id,
+            verifier_ref=verifier_ref,
+            result=result,
+            evidence_refs=resolved_evidence,
+            verified_at=datetime.now(UTC),
+        )
+        self._consequence_verifications[verification.id] = verification
+        status = (
+            ConsequenceRequirementStatus.VERIFIED
+            if result is ConsequenceVerificationResult.VERIFIED
+            else ConsequenceRequirementStatus.FAILED
+        )
+        self._consequence_requirements[requirement.id] = replace(
+            requirement,
+            status=status,
+        )
+        if result is not ConsequenceVerificationResult.VERIFIED and requirement.mandatory:
+            self._record_consequence_failure(
+                requirement,
+                ConsequenceFailureType.VERIFICATION_FAILED,
+                detected_at=verification.verified_at,
+            )
+        return verification
+
+    def detect_consequence_failures(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> tuple[ConsequenceFailure, ...]:
+        evaluated_at = now or datetime.now(UTC)
+        failures: list[ConsequenceFailure] = []
+        terminal_statuses = {
+            ConsequenceRequirementStatus.COMPLETED,
+            ConsequenceRequirementStatus.VERIFIED,
+            ConsequenceRequirementStatus.WAIVED,
+        }
+        for requirement in self._consequence_requirements.values():
+            if not requirement.mandatory or requirement.status in terminal_statuses:
+                continue
+            if evaluated_at <= requirement.due_at:
+                continue
+            updated = replace(requirement, status=ConsequenceRequirementStatus.OVERDUE)
+            self._consequence_requirements[requirement.id] = updated
+            failures.append(
+                self._record_consequence_failure(
+                    updated,
+                    ConsequenceFailureType.DEADLINE_EXCEEDED,
+                    detected_at=evaluated_at,
+                )
+            )
+        return tuple(failures)
+
+    def get_violation(self, violation_id: str) -> Violation:
+        violation = self._violations.get(violation_id)
+        if violation is None:
+            raise RegistryError("VIOLATION_NOT_FOUND", violation_id)
+        return violation
+
+    def get_consequence_requirement(
+        self,
+        requirement_id: str,
+    ) -> ConsequenceRequirement:
+        requirement = self._consequence_requirements.get(requirement_id)
+        if requirement is None:
+            raise RegistryError("CONSEQUENCE_REQUIREMENT_NOT_FOUND", requirement_id)
+        return requirement
 
     def evaluate_decision_obligations(
         self,
@@ -7802,6 +8391,93 @@ class InMemoryUPDLRegistry:
                 ", ".join(missing_types),
             )
         return resolved_refs
+
+    def _resolve_consequence_evidence(
+        self,
+        references: tuple[ObjectReference, ...],
+        *,
+        required_types: tuple[str, ...],
+    ) -> tuple[ObjectReference, ...]:
+        resolved_refs = self._resolve_object_references(
+            references,
+            "CONSEQUENCE_EVIDENCE_INVALID",
+        )
+        if not required_types:
+            return resolved_refs
+        provided_types: set[str] = set()
+        for reference in resolved_refs:
+            evidence = self.get_object(reference.id, revision=reference.revision)
+            evidence_type = evidence.spec.get("evidence_type")
+            if isinstance(evidence_type, str):
+                provided_types.add(evidence_type)
+        missing_types = sorted(set(required_types) - provided_types)
+        if missing_types:
+            raise RegistryError(
+                "CONSEQUENCE_EVIDENCE_MISSING",
+                ", ".join(missing_types),
+            )
+        return resolved_refs
+
+    def _applicable_consequence_definitions(
+        self,
+        violation: Violation,
+        *,
+        definition_id: str | None,
+    ) -> tuple[ConsequenceDefinition, ...]:
+        definitions: tuple[ConsequenceDefinition, ...]
+        if definition_id is not None:
+            definition = self._consequence_definitions.get(definition_id)
+            if definition is None:
+                raise RegistryError("CONSEQUENCE_DEFINITION_NOT_FOUND", definition_id)
+            definitions = (definition,)
+        else:
+            definitions = tuple(
+                sorted(self._consequence_definitions.values(), key=lambda item: item.id)
+            )
+        applicable = tuple(
+            definition
+            for definition in definitions
+            if violation.violation_type in definition.applies_to_violation_types
+            and violation.severity in definition.applies_to_severities
+        )
+        if not applicable:
+            raise RegistryError("CONSEQUENCE_DEFINITION_NOT_APPLICABLE", violation.id)
+        return applicable
+
+    def _consequence_target_ref(
+        self,
+        violation: Violation,
+        rule: ConsequenceRule,
+    ) -> str:
+        if rule.target_from_violation == "actor":
+            return violation.actor_ref
+        if rule.target_from_violation == "violation":
+            return violation.id
+        return violation.subject_ref.id
+
+    def _record_consequence_failure(
+        self,
+        requirement: ConsequenceRequirement,
+        failure_type: ConsequenceFailureType,
+        *,
+        detected_at: datetime,
+    ) -> ConsequenceFailure:
+        for failure in self._consequence_failures.values():
+            if (
+                failure.requirement_ref == requirement.id
+                and failure.failure_type is failure_type
+                and failure.status == "OPEN"
+            ):
+                return failure
+        self._consequence_failure_sequence += 1
+        failure = ConsequenceFailure(
+            id=f"CFL-{self._consequence_failure_sequence:06d}",
+            requirement_ref=requirement.id,
+            failure_type=failure_type,
+            detected_at=detected_at,
+        )
+        self._consequence_failures[failure.id] = failure
+        return failure
 
     def _require_relationship_cardinality(
         self,
