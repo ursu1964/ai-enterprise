@@ -591,6 +591,8 @@ def test_dashboard_page_links_operator_surfaces() -> None:
     assert "setInterval(refresh, 15000)" not in response.text
     assert "Economic Proof" in response.text
     assert "humanStatus" in response.text
+    assert "grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))" in response.text
+    assert "word-break: break-word" in response.text
     assert (
         "Project name, repository path, default branch, and project summary are required"
         in response.text

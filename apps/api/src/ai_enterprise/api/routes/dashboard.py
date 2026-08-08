@@ -2400,7 +2400,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 10px;
     }
 
@@ -2480,25 +2480,33 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
     .field-list {
       display: grid;
-      gap: 6px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 6px;
     }
     .field-row {
       display: grid;
-      grid-template-columns: 112px minmax(0, 1fr);
-      gap: 8px;
+      gap: 3px;
       align-items: start;
       color: var(--muted);
       font-size: 0.82rem;
-      line-height: 1.32;
+      line-height: 1.34;
+      min-width: 0;
+      padding-top: 7px;
+      border-top: 1px solid rgba(143, 166, 190, 0.12);
     }
+    .field-row:first-child { padding-top: 0; border-top: 0; }
     .field-row span:first-child {
       color: var(--muted);
       font-weight: 760;
+      font-size: 0.69rem;
+      line-height: 1.2;
+      text-transform: uppercase;
     }
     .field-row span:last-child {
       color: var(--text);
+      min-width: 0;
       overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .listbox {
       display: grid;
