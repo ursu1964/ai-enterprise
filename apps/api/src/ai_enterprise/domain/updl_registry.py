@@ -653,6 +653,59 @@ class RemediationAcceptanceResult(StrEnum):
     REJECTED = "REJECTED"
 
 
+class RecurrenceState(StrEnum):
+    NOT_ASSESSED = "NOT_ASSESSED"
+    POTENTIAL = "POTENTIAL"
+    CONFIRMED = "CONFIRMED"
+    DISPUTED = "DISPUTED"
+    SYSTEMIC = "SYSTEMIC"
+    CLOSED = "CLOSED"
+    REJECTED = "REJECTED"
+
+
+class RecurrenceClassification(StrEnum):
+    ISOLATED_RECURRENCE = "ISOLATED_RECURRENCE"
+    POST_REMEDIATION_RECURRENCE = "POST_REMEDIATION_RECURRENCE"
+    POST_VALIDATION_RECURRENCE = "POST_VALIDATION_RECURRENCE"
+    CROSS_SYSTEM_RECURRENCE = "CROSS_SYSTEM_RECURRENCE"
+    CROSS_CONTROL_RECURRENCE = "CROSS_CONTROL_RECURRENCE"
+    CROSS_ORGANIZATION_RECURRENCE = "CROSS_ORGANIZATION_RECURRENCE"
+    ROOT_CAUSE_RECURRENCE = "ROOT_CAUSE_RECURRENCE"
+    DEPENDENCY_RECURRENCE = "DEPENDENCY_RECURRENCE"
+    SYSTEMIC_RECURRENCE = "SYSTEMIC_RECURRENCE"
+
+
+class RecurrenceDeterminationSource(StrEnum):
+    AI_SUGGESTED = "AI_SUGGESTED"
+    RULE_CONFIRMED = "RULE_CONFIRMED"
+    HUMAN_CONFIRMED = "HUMAN_CONFIRMED"
+
+
+class RecurrenceEffectiveSeverity(StrEnum):
+    INFORMATIONAL = "INFORMATIONAL"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+    CRITICAL_SYSTEMIC = "CRITICAL_SYSTEMIC"
+
+
+class RecurrenceConsequence(StrEnum):
+    CONTROL_EFFECTIVENESS_REASSESSMENT = "CONTROL_EFFECTIVENESS_REASSESSMENT"
+    CONTROL_EFFECTIVENESS_INVALIDATED = "CONTROL_EFFECTIVENESS_INVALIDATED"
+    REMEDIATION_REASSESS = "REMEDIATION_REASSESS"
+    REMEDIATION_EFFECTIVENESS_INVALIDATED = "REMEDIATION_EFFECTIVENESS_INVALIDATED"
+    ROOT_CAUSE_REOPEN = "ROOT_CAUSE_REOPEN"
+    RISK_ACCEPTANCE_REASSESSMENT = "RISK_ACCEPTANCE_REASSESSMENT"
+    ASSURANCE_IMPACT_ANALYSIS = "ASSURANCE_IMPACT_ANALYSIS"
+    ASSURANCE_REASSESSMENT_REQUIRED = "ASSURANCE_REASSESSMENT_REQUIRED"
+    GOVERNANCE_ESCALATION = "GOVERNANCE_ESCALATION"
+    INDEPENDENT_REVIEW = "INDEPENDENT_REVIEW"
+    TEST_METHOD_REVIEW_REQUIRED = "TEST_METHOD_REVIEW_REQUIRED"
+    ATTESTATION_REVIEW_REQUIRED = "ATTESTATION_REVIEW_REQUIRED"
+    BLOCK_NEW_EXCEPTIONS = "BLOCK_NEW_EXCEPTIONS"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -2782,6 +2835,234 @@ class RemediationClosure:
 
 
 @dataclass(frozen=True, slots=True)
+class RecurrenceDefinition:
+    id: str
+    name: str
+    applies_to_kinds: tuple[str, ...]
+    version: str = "1.0.0"
+    correlation_dimensions: tuple[str, ...] = ()
+    window: str = "P365D"
+    occurrence_threshold: int = 2
+    remediation_awareness: bool = True
+    severity_escalation_enabled: bool = True
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "appliesTo": {"kinds": list(self.applies_to_kinds)},
+            "correlation": {"dimensions": list(self.correlation_dimensions)},
+            "window": {"duration": self.window},
+            "recurrenceThreshold": {"occurrences": self.occurrence_threshold},
+            "remediationAwareness": self.remediation_awareness,
+            "severityEscalation": {
+                "enabled": self.severity_escalation_enabled,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceCounter:
+    lifetime_count: int
+    active_window_count: int
+    post_remediation_count: int = 0
+    post_validation_count: int = 0
+    same_root_cause_count: int = 0
+    same_scope_count: int = 0
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "lifetimeCount": self.lifetime_count,
+            "activeWindowCount": self.active_window_count,
+            "postRemediationCount": self.post_remediation_count,
+            "postValidationCount": self.post_validation_count,
+            "sameRootCauseCount": self.same_root_cause_count,
+            "sameScopeCount": self.same_scope_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceSeverityPolicy:
+    id: str
+    name: str
+    version: str = "1.0.0"
+    increase_on_recurrence: bool = True
+    post_remediation_minimum: RecurrenceEffectiveSeverity = (
+        RecurrenceEffectiveSeverity.CRITICAL
+    )
+    systemic_post_validation_threshold: int = 2
+    systemic_minimum_occurrences: int = 3
+    systemic_consequences: tuple[RecurrenceConsequence, ...] = (
+        RecurrenceConsequence.GOVERNANCE_ESCALATION,
+        RecurrenceConsequence.INDEPENDENT_REVIEW,
+        RecurrenceConsequence.ROOT_CAUSE_REOPEN,
+    )
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "rules": {
+                "increaseOnRecurrence": self.increase_on_recurrence,
+                "postRemediationMinimum": self.post_remediation_minimum.value,
+                "systemicPostValidationThreshold": self.systemic_post_validation_threshold,
+                "systemicMinimumOccurrences": self.systemic_minimum_occurrences,
+            },
+            "systemicConsequences": [
+                consequence.value for consequence in self.systemic_consequences
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceCorrelation:
+    id: str
+    definition_id: str
+    definition_version: str
+    occurrence_refs: tuple[str, ...]
+    dimensions: dict[str, str]
+    confidence: float
+    determination: RecurrenceState
+    determined_by_ref: str
+    determined_at: datetime
+    source: RecurrenceDeterminationSource = RecurrenceDeterminationSource.RULE_CONFIRMED
+    supersedes_ref: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "occurrences": list(self.occurrence_refs),
+            "dimensions": dict(sorted(self.dimensions.items())),
+            "confidence": self.confidence,
+            "determination": self.determination.value,
+            "source": self.source.value,
+            "determinedByRef": self.determined_by_ref,
+            "determinedAt": self.determined_at.isoformat(),
+            "supersedesRef": self.supersedes_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PostRemediationRecurrence:
+    id: str
+    recurrence_ref: str
+    prior_remediation_refs: tuple[str, ...]
+    conclusion: str
+    confidence: float
+    assessed_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "recurrenceRef": self.recurrence_ref,
+            "priorRemediationRefs": list(self.prior_remediation_refs),
+            "conclusion": self.conclusion,
+            "confidence": self.confidence,
+            "assessedAt": self.assessed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceBlastRadius:
+    id: str
+    recurrence_ref: str
+    controls: tuple[str, ...] = ()
+    assurance_claims: tuple[str, ...] = ()
+    decisions: tuple[str, ...] = ()
+    risks: tuple[str, ...] = ()
+    systems: tuple[str, ...] = ()
+    ai_permissions: tuple[str, ...] = ()
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "recurrenceRef": self.recurrence_ref,
+            "blastRadius": {
+                "controls": list(self.controls),
+                "assuranceClaims": list(self.assurance_claims),
+                "decisions": list(self.decisions),
+                "risks": list(self.risks),
+                "systems": list(self.systems),
+                "aiPermissions": list(self.ai_permissions),
+            },
+            "calculatedAt": self.calculated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SystemicFailureAssessment:
+    id: str
+    recurrence_ref: str
+    affected_business_units: int
+    affected_controls: int
+    affected_systems: int
+    shared_root_cause_present: bool
+    prior_remediation_failures: int
+    determination: RecurrenceState
+    severity: RecurrenceEffectiveSeverity
+    required_governance: tuple[RecurrenceConsequence, ...]
+    assessed_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "recurrenceRef": self.recurrence_ref,
+            "indicators": {
+                "affectedBusinessUnits": self.affected_business_units,
+                "affectedControls": self.affected_controls,
+                "affectedSystems": self.affected_systems,
+                "sharedRootCause": {"present": self.shared_root_cause_present},
+                "priorRemediationFailures": self.prior_remediation_failures,
+            },
+            "determination": self.determination.value,
+            "severity": self.severity.value,
+            "requiredGovernance": [
+                consequence.value for consequence in self.required_governance
+            ],
+            "assessedAt": self.assessed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceDecisionRecord:
+    id: str
+    recurrence_ref: str
+    determination: RecurrenceState
+    classifications: tuple[RecurrenceClassification, ...]
+    previous_severity: RecurrenceEffectiveSeverity
+    effective_severity: RecurrenceEffectiveSeverity
+    consequences: tuple[RecurrenceConsequence, ...]
+    evidence_refs: tuple[str, ...]
+    decided_by_ref: str
+    policy_ref: str | None
+    decided_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "recurrenceRef": self.recurrence_ref,
+            "determination": self.determination.value,
+            "classification": [
+                classification.value for classification in self.classifications
+            ],
+            "previousSeverity": self.previous_severity.value,
+            "effectiveSeverity": self.effective_severity.value,
+            "consequences": [consequence.value for consequence in self.consequences],
+            "evidenceRefs": list(self.evidence_refs),
+            "decidedByRef": self.decided_by_ref,
+            "policyRef": self.policy_ref,
+            "decidedAt": self.decided_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -2965,6 +3246,14 @@ class InMemoryUPDLRegistry:
         self._remediation_effectiveness: dict[str, RemediationEffectivenessAssessment] = {}
         self._remediation_acceptances: dict[str, RemediationAcceptance] = {}
         self._remediation_closures: dict[str, RemediationClosure] = {}
+        self._recurrence_definitions: dict[str, RecurrenceDefinition] = {}
+        self._recurrence_severity_policies: dict[str, RecurrenceSeverityPolicy] = {}
+        self._recurrence_correlations: dict[str, RecurrenceCorrelation] = {}
+        self._recurrence_counters: dict[str, RecurrenceCounter] = {}
+        self._post_remediation_recurrences: dict[str, PostRemediationRecurrence] = {}
+        self._recurrence_blast_radii: dict[str, RecurrenceBlastRadius] = {}
+        self._systemic_failure_assessments: dict[str, SystemicFailureAssessment] = {}
+        self._recurrence_decision_records: dict[str, RecurrenceDecisionRecord] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -2993,6 +3282,11 @@ class InMemoryUPDLRegistry:
         self._remediation_effectiveness_sequence = 0
         self._remediation_acceptance_sequence = 0
         self._remediation_closure_sequence = 0
+        self._recurrence_correlation_sequence = 0
+        self._post_remediation_recurrence_sequence = 0
+        self._recurrence_blast_radius_sequence = 0
+        self._systemic_failure_assessment_sequence = 0
+        self._recurrence_decision_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -4016,6 +4310,215 @@ class InMemoryUPDLRegistry:
         if remediation_case is None:
             raise RegistryError("REMEDIATION_CASE_NOT_FOUND", case_id)
         return remediation_case
+
+    def register_recurrence_definition(
+        self,
+        definition: RecurrenceDefinition,
+    ) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("RECURRENCE_DEFINITION_NAME_REQUIRED", definition.id)
+        if not definition.applies_to_kinds:
+            raise RegistryError("RECURRENCE_APPLIES_TO_REQUIRED", definition.id)
+        if definition.occurrence_threshold < 2:
+            raise RegistryError("RECURRENCE_THRESHOLD_INVALID", definition.id)
+        if not definition.correlation_dimensions:
+            raise RegistryError("RECURRENCE_CORRELATION_REQUIRED", definition.id)
+        self._recurrence_definitions[definition.id] = definition
+
+    def register_recurrence_severity_policy(
+        self,
+        policy: RecurrenceSeverityPolicy,
+    ) -> None:
+        require_identifier(policy.id)
+        if not policy.name:
+            raise RegistryError("RECURRENCE_SEVERITY_POLICY_NAME_REQUIRED", policy.id)
+        if policy.systemic_post_validation_threshold < 1:
+            raise RegistryError("RECURRENCE_SEVERITY_POLICY_INVALID", policy.id)
+        if policy.systemic_minimum_occurrences < 2:
+            raise RegistryError("RECURRENCE_SEVERITY_POLICY_INVALID", policy.id)
+        self._recurrence_severity_policies[policy.id] = policy
+
+    def assess_recurrence(
+        self,
+        *,
+        definition_id: str,
+        occurrence_refs: tuple[str, ...],
+        dimensions: dict[str, str],
+        determined_by_ref: str,
+        confidence: float,
+        base_severity: RecurrenceEffectiveSeverity,
+        severity_policy_id: str | None = None,
+        prior_remediation_refs: tuple[str, ...] = (),
+        post_validation_count: int = 0,
+        same_root_cause_count: int = 0,
+        same_scope_count: int = 0,
+        source: RecurrenceDeterminationSource = RecurrenceDeterminationSource.RULE_CONFIRMED,
+    ) -> tuple[RecurrenceCorrelation, RecurrenceDecisionRecord]:
+        definition = self._recurrence_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("RECURRENCE_DEFINITION_NOT_FOUND", definition_id)
+        if len(occurrence_refs) < definition.occurrence_threshold:
+            raise RegistryError("RECURRENCE_THRESHOLD_NOT_MET", definition_id)
+        if not determined_by_ref:
+            raise RegistryError("RECURRENCE_DETERMINER_REQUIRED", definition_id)
+        if not 0 <= confidence <= 1:
+            raise RegistryError("RECURRENCE_CONFIDENCE_INVALID", definition_id)
+        missing_dimensions = sorted(set(definition.correlation_dimensions) - set(dimensions))
+        if missing_dimensions:
+            raise RegistryError(
+                "RECURRENCE_CORRELATION_INCOMPLETE",
+                f"{definition_id}: {missing_dimensions}",
+            )
+        for occurrence_ref in occurrence_refs:
+            kind = self._recurrence_occurrence_kind(occurrence_ref)
+            if kind not in definition.applies_to_kinds:
+                raise RegistryError("RECURRENCE_OCCURRENCE_KIND_INVALID", occurrence_ref)
+        for remediation_ref in prior_remediation_refs:
+            self.get_remediation_case(remediation_ref)
+        policy = self._resolve_recurrence_severity_policy(severity_policy_id)
+        counter = RecurrenceCounter(
+            lifetime_count=len(occurrence_refs),
+            active_window_count=len(occurrence_refs),
+            post_remediation_count=len(prior_remediation_refs),
+            post_validation_count=post_validation_count,
+            same_root_cause_count=same_root_cause_count,
+            same_scope_count=same_scope_count,
+        )
+        determination = self._recurrence_state(counter, policy)
+        classifications = self._recurrence_classifications(counter, determination)
+        effective_severity = self._recurrence_effective_severity(
+            base_severity=base_severity,
+            counter=counter,
+            policy=policy,
+            determination=determination,
+        )
+        consequences = self._recurrence_consequences(
+            counter=counter,
+            determination=determination,
+            policy=policy,
+        )
+        self._recurrence_correlation_sequence += 1
+        correlation = RecurrenceCorrelation(
+            id=f"RC-{self._recurrence_correlation_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            occurrence_refs=occurrence_refs,
+            dimensions=dict(sorted(dimensions.items())),
+            confidence=confidence,
+            determination=determination,
+            determined_by_ref=determined_by_ref,
+            determined_at=datetime.now(UTC),
+            source=source,
+        )
+        self._recurrence_correlations[correlation.id] = correlation
+        self._recurrence_counters[correlation.id] = counter
+        if prior_remediation_refs:
+            self._post_remediation_recurrence_sequence += 1
+            post_remediation = PostRemediationRecurrence(
+                id=f"PRR-{self._post_remediation_recurrence_sequence:06d}",
+                recurrence_ref=correlation.id,
+                prior_remediation_refs=prior_remediation_refs,
+                conclusion="REMEDIATION_INEFFECTIVE",
+                confidence=confidence,
+                assessed_at=correlation.determined_at,
+            )
+            self._post_remediation_recurrences[post_remediation.id] = post_remediation
+        self._recurrence_decision_sequence += 1
+        decision = RecurrenceDecisionRecord(
+            id=f"RD-{self._recurrence_decision_sequence:06d}",
+            recurrence_ref=correlation.id,
+            determination=determination,
+            classifications=classifications,
+            previous_severity=base_severity,
+            effective_severity=effective_severity,
+            consequences=consequences,
+            evidence_refs=occurrence_refs,
+            decided_by_ref=determined_by_ref,
+            policy_ref=policy.id if policy is not None else None,
+            decided_at=correlation.determined_at,
+        )
+        self._recurrence_decision_records[decision.id] = decision
+        return correlation, decision
+
+    def calculate_recurrence_blast_radius(
+        self,
+        *,
+        recurrence_id: str,
+        controls: tuple[str, ...] = (),
+        assurance_claims: tuple[str, ...] = (),
+        decisions: tuple[str, ...] = (),
+        risks: tuple[str, ...] = (),
+        systems: tuple[str, ...] = (),
+        ai_permissions: tuple[str, ...] = (),
+    ) -> RecurrenceBlastRadius:
+        self.get_recurrence_correlation(recurrence_id)
+        self._recurrence_blast_radius_sequence += 1
+        blast_radius = RecurrenceBlastRadius(
+            id=f"RBR-{self._recurrence_blast_radius_sequence:06d}",
+            recurrence_ref=recurrence_id,
+            controls=controls,
+            assurance_claims=assurance_claims,
+            decisions=decisions,
+            risks=risks,
+            systems=systems,
+            ai_permissions=ai_permissions,
+            calculated_at=datetime.now(UTC),
+        )
+        self._recurrence_blast_radii[blast_radius.id] = blast_radius
+        return blast_radius
+
+    def assess_systemic_failure(
+        self,
+        *,
+        recurrence_id: str,
+        affected_business_units: int,
+        affected_controls: int,
+        affected_systems: int,
+        shared_root_cause_present: bool,
+        prior_remediation_failures: int,
+    ) -> SystemicFailureAssessment:
+        correlation = self.get_recurrence_correlation(recurrence_id)
+        if min(affected_business_units, affected_controls, affected_systems) < 0:
+            raise RegistryError("SYSTEMIC_FAILURE_INDICATOR_INVALID", recurrence_id)
+        systemic = (
+            shared_root_cause_present
+            and prior_remediation_failures > 0
+            and (affected_business_units > 1 or affected_controls > 1 or affected_systems > 1)
+        )
+        determination = RecurrenceState.SYSTEMIC if systemic else correlation.determination
+        severity = (
+            RecurrenceEffectiveSeverity.CRITICAL_SYSTEMIC
+            if systemic
+            else RecurrenceEffectiveSeverity.CRITICAL
+        )
+        required_governance = (
+            RecurrenceConsequence.GOVERNANCE_ESCALATION,
+            RecurrenceConsequence.INDEPENDENT_REVIEW,
+            RecurrenceConsequence.ROOT_CAUSE_REOPEN,
+        )
+        self._systemic_failure_assessment_sequence += 1
+        assessment = SystemicFailureAssessment(
+            id=f"SFA-{self._systemic_failure_assessment_sequence:06d}",
+            recurrence_ref=recurrence_id,
+            affected_business_units=affected_business_units,
+            affected_controls=affected_controls,
+            affected_systems=affected_systems,
+            shared_root_cause_present=shared_root_cause_present,
+            prior_remediation_failures=prior_remediation_failures,
+            determination=determination,
+            severity=severity,
+            required_governance=required_governance,
+            assessed_at=datetime.now(UTC),
+        )
+        self._systemic_failure_assessments[assessment.id] = assessment
+        return assessment
+
+    def get_recurrence_correlation(self, recurrence_id: str) -> RecurrenceCorrelation:
+        correlation = self._recurrence_correlations.get(recurrence_id)
+        if correlation is None:
+            raise RegistryError("RECURRENCE_NOT_FOUND", recurrence_id)
+        return correlation
 
     def evaluate_decision_obligations(
         self,
@@ -6159,6 +6662,128 @@ class InMemoryUPDLRegistry:
             "to": current_evaluation.outcome.value,
         }
         return f"sha256:{specification_hash(document)}"
+
+    def _recurrence_occurrence_kind(self, occurrence_ref: str) -> str:
+        if occurrence_ref in self._condition_failures:
+            return "ConditionFailure"
+        if occurrence_ref in self._remediation_cases:
+            return "RemediationCase"
+        raise RegistryError("RECURRENCE_OCCURRENCE_NOT_FOUND", occurrence_ref)
+
+    def _resolve_recurrence_severity_policy(
+        self,
+        policy_id: str | None,
+    ) -> RecurrenceSeverityPolicy | None:
+        if policy_id is None:
+            return None
+        policy = self._recurrence_severity_policies.get(policy_id)
+        if policy is None:
+            raise RegistryError("RECURRENCE_SEVERITY_POLICY_NOT_FOUND", policy_id)
+        return policy
+
+    @staticmethod
+    def _recurrence_state(
+        counter: RecurrenceCounter,
+        policy: RecurrenceSeverityPolicy | None,
+    ) -> RecurrenceState:
+        systemic_threshold = (
+            policy.systemic_minimum_occurrences if policy is not None else 3
+        )
+        validation_threshold = (
+            policy.systemic_post_validation_threshold if policy is not None else 2
+        )
+        if (
+            counter.lifetime_count >= systemic_threshold
+            or counter.post_validation_count >= validation_threshold
+        ):
+            return RecurrenceState.SYSTEMIC
+        return RecurrenceState.CONFIRMED
+
+    @staticmethod
+    def _recurrence_classifications(
+        counter: RecurrenceCounter,
+        determination: RecurrenceState,
+    ) -> tuple[RecurrenceClassification, ...]:
+        classifications = [RecurrenceClassification.ISOLATED_RECURRENCE]
+        if counter.post_remediation_count:
+            classifications.append(RecurrenceClassification.POST_REMEDIATION_RECURRENCE)
+        if counter.post_validation_count:
+            classifications.append(RecurrenceClassification.POST_VALIDATION_RECURRENCE)
+        if counter.same_root_cause_count:
+            classifications.append(RecurrenceClassification.ROOT_CAUSE_RECURRENCE)
+        if determination is RecurrenceState.SYSTEMIC:
+            classifications.append(RecurrenceClassification.SYSTEMIC_RECURRENCE)
+        return tuple(classifications)
+
+    @staticmethod
+    def _recurrence_effective_severity(
+        *,
+        base_severity: RecurrenceEffectiveSeverity,
+        counter: RecurrenceCounter,
+        policy: RecurrenceSeverityPolicy | None,
+        determination: RecurrenceState,
+    ) -> RecurrenceEffectiveSeverity:
+        order = (
+            RecurrenceEffectiveSeverity.INFORMATIONAL,
+            RecurrenceEffectiveSeverity.LOW,
+            RecurrenceEffectiveSeverity.MEDIUM,
+            RecurrenceEffectiveSeverity.HIGH,
+            RecurrenceEffectiveSeverity.CRITICAL,
+            RecurrenceEffectiveSeverity.CRITICAL_SYSTEMIC,
+        )
+        severity_index = order.index(base_severity)
+        if policy is not None and policy.increase_on_recurrence:
+            severity_index = min(severity_index + 1, len(order) - 1)
+        if counter.post_remediation_count:
+            minimum = (
+                policy.post_remediation_minimum
+                if policy is not None
+                else RecurrenceEffectiveSeverity.CRITICAL
+            )
+            severity_index = max(severity_index, order.index(minimum))
+        if determination is RecurrenceState.SYSTEMIC:
+            severity_index = order.index(RecurrenceEffectiveSeverity.CRITICAL_SYSTEMIC)
+        return order[severity_index]
+
+    @staticmethod
+    def _recurrence_consequences(
+        *,
+        counter: RecurrenceCounter,
+        determination: RecurrenceState,
+        policy: RecurrenceSeverityPolicy | None,
+    ) -> tuple[RecurrenceConsequence, ...]:
+        consequences = [
+            RecurrenceConsequence.CONTROL_EFFECTIVENESS_REASSESSMENT,
+            RecurrenceConsequence.REMEDIATION_REASSESS,
+            RecurrenceConsequence.RISK_ACCEPTANCE_REASSESSMENT,
+        ]
+        if counter.post_remediation_count:
+            consequences.extend(
+                [
+                    RecurrenceConsequence.REMEDIATION_EFFECTIVENESS_INVALIDATED,
+                    RecurrenceConsequence.ROOT_CAUSE_REOPEN,
+                    RecurrenceConsequence.ASSURANCE_IMPACT_ANALYSIS,
+                ]
+            )
+        if counter.post_validation_count:
+            consequences.extend(
+                [
+                    RecurrenceConsequence.CONTROL_EFFECTIVENESS_INVALIDATED,
+                    RecurrenceConsequence.TEST_METHOD_REVIEW_REQUIRED,
+                    RecurrenceConsequence.ATTESTATION_REVIEW_REQUIRED,
+                ]
+            )
+        if determination is RecurrenceState.SYSTEMIC:
+            consequences.extend(
+                policy.systemic_consequences
+                if policy is not None
+                else (
+                    RecurrenceConsequence.GOVERNANCE_ESCALATION,
+                    RecurrenceConsequence.INDEPENDENT_REVIEW,
+                    RecurrenceConsequence.ROOT_CAUSE_REOPEN,
+                )
+            )
+        return tuple(dict.fromkeys(consequences))
 
     def _evaluate_condition_clause(
         self,

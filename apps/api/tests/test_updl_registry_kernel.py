@@ -65,6 +65,13 @@ from ai_enterprise.domain.updl_registry import (
     PriorityClass,
     PriorityDefinition,
     PropertyDefinition,
+    RecurrenceClassification,
+    RecurrenceConsequence,
+    RecurrenceDefinition,
+    RecurrenceDeterminationSource,
+    RecurrenceEffectiveSeverity,
+    RecurrenceSeverityPolicy,
+    RecurrenceState,
     RegistryError,
     RelationshipCardinality,
     RelationshipTypeDefinition,
@@ -2193,6 +2200,258 @@ def test_updl_registry_remediation_closure_requires_effectiveness_proof() -> Non
 
     assert closure.case_ref == remediation_case.id
     assert registry.get_remediation_case(remediation_case.id).status is RemediationStatus.CLOSED
+
+
+def test_updl_registry_escalates_post_remediation_recurrence() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    first_subject = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-040",
+        spec={
+            "statement": "First owner failure.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    second_subject = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-041",
+        spec={
+            "statement": "Second owner failure.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    first_failure = registry.record_condition_failure(
+        previous_evaluation=registry._condition_evaluation(  # noqa: SLF001
+            condition_id="commerce.orders.condition.owner-present",
+            condition_version="1.0.0",
+            subject_id=first_subject.metadata.id,
+            subject_revision=first_subject.metadata.revision,
+            outcome=ConditionOutcome.SATISFIED,
+            findings=(),
+            proof={"episode": 1, "state": "previous"},
+            evaluated_at=first_subject.metadata.created_at,
+        ),
+        current_evaluation=registry._condition_evaluation(  # noqa: SLF001
+            condition_id="commerce.orders.condition.owner-present",
+            condition_version="1.0.0",
+            subject_id=first_subject.metadata.id,
+            subject_revision=first_subject.metadata.revision,
+            outcome=ConditionOutcome.NOT_SATISFIED,
+            findings=(),
+            proof={"episode": 1, "state": "current"},
+            evaluated_at=first_subject.metadata.updated_at,
+        ),
+        transition_type=ConditionFailureTransitionType.BECAME_FALSE,
+    )
+    registry.register_remediation_definition(
+        RemediationDefinition(
+            id="commerce.orders.remediation-definition.recurrence-seed",
+            name="recurrenceSeed",
+            trigger_types=(RemediationTriggerType.CONDITION_FAILURE,),
+        )
+    )
+    remediation_case = registry.open_remediation_case(
+        definition_id="commerce.orders.remediation-definition.recurrence-seed",
+        trigger=RemediationTrigger(
+            RemediationTriggerType.CONDITION_FAILURE,
+            first_failure.id,
+        ),
+        subject_ref=ObjectReference(first_subject.metadata.id),
+        objective="Restore condition and prevent repeat failures.",
+        owner_ref="role.governance-owner",
+        severity=RemediationSeverity.HIGH,
+        priority=RemediationPriority.P1,
+    )
+    second_failure = registry.record_condition_failure(
+        previous_evaluation=registry._condition_evaluation(  # noqa: SLF001
+            condition_id="commerce.orders.condition.owner-present",
+            condition_version="1.0.0",
+            subject_id=second_subject.metadata.id,
+            subject_revision=second_subject.metadata.revision,
+            outcome=ConditionOutcome.SATISFIED,
+            findings=(),
+            proof={"episode": 2, "state": "previous"},
+            evaluated_at=second_subject.metadata.created_at,
+        ),
+        current_evaluation=registry._condition_evaluation(  # noqa: SLF001
+            condition_id="commerce.orders.condition.owner-present",
+            condition_version="1.0.0",
+            subject_id=second_subject.metadata.id,
+            subject_revision=second_subject.metadata.revision,
+            outcome=ConditionOutcome.NOT_SATISFIED,
+            findings=(),
+            proof={"episode": 2, "state": "current"},
+            evaluated_at=second_subject.metadata.updated_at,
+        ),
+        transition_type=ConditionFailureTransitionType.BECAME_FALSE,
+    )
+    registry.register_recurrence_definition(
+        RecurrenceDefinition(
+            id="commerce.orders.recurrence-definition.owner-condition",
+            name="ownerConditionRecurrence",
+            applies_to_kinds=("ConditionFailure",),
+            correlation_dimensions=("condition", "failureMode"),
+            occurrence_threshold=2,
+        )
+    )
+    registry.register_recurrence_severity_policy(
+        RecurrenceSeverityPolicy(
+            id="commerce.orders.recurrence-severity.owner-condition",
+            name="ownerConditionSeverity",
+            systemic_post_validation_threshold=2,
+            systemic_minimum_occurrences=3,
+        )
+    )
+
+    correlation, decision = registry.assess_recurrence(
+        definition_id="commerce.orders.recurrence-definition.owner-condition",
+        occurrence_refs=(first_failure.id, second_failure.id),
+        dimensions={
+            "condition": "commerce.orders.condition.owner-present",
+            "failureMode": "OWNER_MISSING",
+        },
+        determined_by_ref="principal.governance-engine",
+        confidence=0.96,
+        base_severity=RecurrenceEffectiveSeverity.HIGH,
+        severity_policy_id="commerce.orders.recurrence-severity.owner-condition",
+        prior_remediation_refs=(remediation_case.id,),
+        post_validation_count=1,
+        same_root_cause_count=2,
+        same_scope_count=2,
+        source=RecurrenceDeterminationSource.RULE_CONFIRMED,
+    )
+    blast_radius = registry.calculate_recurrence_blast_radius(
+        recurrence_id=correlation.id,
+        controls=("control.production-owner-governance",),
+        assurance_claims=("assurance.owner-governance-effective",),
+        decisions=("decision.production-release",),
+        risks=("risk.ownerless-production-change",),
+    )
+
+    assert correlation.determination is RecurrenceState.CONFIRMED
+    assert decision.effective_severity is RecurrenceEffectiveSeverity.CRITICAL
+    assert RecurrenceClassification.POST_REMEDIATION_RECURRENCE in decision.classifications
+    assert RecurrenceClassification.POST_VALIDATION_RECURRENCE in decision.classifications
+    assert RecurrenceConsequence.REMEDIATION_EFFECTIVENESS_INVALIDATED in decision.consequences
+    assert RecurrenceConsequence.TEST_METHOD_REVIEW_REQUIRED in decision.consequences
+    assert blast_radius.decisions == ("decision.production-release",)
+
+
+def test_updl_registry_marks_systemic_recurrence_from_shared_root_cause() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    subjects = tuple(
+        registry.create_object(
+            kind="Requirement",
+            namespace="commerce.orders",
+            local_id=f"REQ-04{index}",
+            spec={
+                "statement": f"Recurring owner failure {index}.",
+                "priority": "MUST",
+                "owner": {"$ref": {"id": person.metadata.id}},
+            },
+            actor=_actor(),
+        )
+        for index in range(2, 5)
+    )
+    failures = tuple(
+        registry.record_condition_failure(
+            previous_evaluation=registry._condition_evaluation(  # noqa: SLF001
+                condition_id="commerce.orders.condition.owner-present",
+                condition_version="1.0.0",
+                subject_id=subject.metadata.id,
+                subject_revision=subject.metadata.revision,
+                outcome=ConditionOutcome.SATISFIED,
+                findings=(),
+                proof={"index": index, "state": "previous"},
+                evaluated_at=subject.metadata.created_at,
+            ),
+            current_evaluation=registry._condition_evaluation(  # noqa: SLF001
+                condition_id="commerce.orders.condition.owner-present",
+                condition_version="1.0.0",
+                subject_id=subject.metadata.id,
+                subject_revision=subject.metadata.revision,
+                outcome=ConditionOutcome.NOT_SATISFIED,
+                findings=(),
+                proof={"index": index, "state": "current"},
+                evaluated_at=subject.metadata.updated_at,
+            ),
+            transition_type=ConditionFailureTransitionType.BECAME_FALSE,
+        )
+        for index, subject in enumerate(subjects, start=1)
+    )
+    registry.register_recurrence_definition(
+        RecurrenceDefinition(
+            id="commerce.orders.recurrence-definition.systemic-owner-condition",
+            name="systemicOwnerConditionRecurrence",
+            applies_to_kinds=("ConditionFailure",),
+            correlation_dimensions=("condition", "failureMode", "rootCause"),
+            occurrence_threshold=2,
+        )
+    )
+    registry.register_recurrence_severity_policy(
+        RecurrenceSeverityPolicy(
+            id="commerce.orders.recurrence-severity.systemic-owner-condition",
+            name="systemicOwnerConditionSeverity",
+            systemic_minimum_occurrences=3,
+        )
+    )
+
+    correlation, decision = registry.assess_recurrence(
+        definition_id="commerce.orders.recurrence-definition.systemic-owner-condition",
+        occurrence_refs=tuple(failure.id for failure in failures),
+        dimensions={
+            "condition": "commerce.orders.condition.owner-present",
+            "failureMode": "OWNER_MISSING",
+            "rootCause": "OWNERSHIP_SYNC_GAP",
+        },
+        determined_by_ref="principal.governance-engine",
+        confidence=0.91,
+        base_severity=RecurrenceEffectiveSeverity.HIGH,
+        severity_policy_id="commerce.orders.recurrence-severity.systemic-owner-condition",
+        same_root_cause_count=3,
+        same_scope_count=3,
+    )
+    systemic = registry.assess_systemic_failure(
+        recurrence_id=correlation.id,
+        affected_business_units=2,
+        affected_controls=3,
+        affected_systems=5,
+        shared_root_cause_present=True,
+        prior_remediation_failures=1,
+    )
+
+    assert correlation.determination is RecurrenceState.SYSTEMIC
+    assert decision.effective_severity is RecurrenceEffectiveSeverity.CRITICAL_SYSTEMIC
+    assert RecurrenceClassification.SYSTEMIC_RECURRENCE in decision.classifications
+    assert systemic.determination is RecurrenceState.SYSTEMIC
+    assert systemic.severity is RecurrenceEffectiveSeverity.CRITICAL_SYSTEMIC
+
+
+def test_updl_registry_rejects_recurrence_without_governed_correlation() -> None:
+    registry = _relationship_registry()
+
+    try:
+        registry.register_recurrence_definition(
+            RecurrenceDefinition(
+                id="commerce.orders.recurrence-definition.invalid",
+                name="invalidRecurrence",
+                applies_to_kinds=("ConditionFailure",),
+                correlation_dimensions=(),
+                occurrence_threshold=1,
+            )
+        )
+    except RegistryError as exc:
+        assert exc.code == "RECURRENCE_THRESHOLD_INVALID"
+    else:
+        raise AssertionError("recurrence definition without valid threshold was accepted")
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:
