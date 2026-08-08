@@ -921,6 +921,84 @@ class AssuranceStatusValue(StrEnum):
     INVALIDATED = "INVALIDATED"
 
 
+class TemporalWaitDependencyType(StrEnum):
+    ACTIVITY_COMPLETION = "ACTIVITY_COMPLETION"
+    STATE_TRANSITION = "STATE_TRANSITION"
+    DECISION = "DECISION"
+    APPROVAL = "APPROVAL"
+    EVIDENCE = "EVIDENCE"
+    CONTROL_EXECUTION = "CONTROL_EXECUTION"
+    RESOURCE_RELEASE = "RESOURCE_RELEASE"
+    RESERVATION_RELEASE = "RESERVATION_RELEASE"
+    OBLIGATION_COMPLETION = "OBLIGATION_COMPLETION"
+    EXTERNAL_RESPONSE = "EXTERNAL_RESPONSE"
+    LEASE_EXPIRATION = "LEASE_EXPIRATION"
+    LOCK_RELEASE = "LOCK_RELEASE"
+    CAPACITY_AVAILABILITY = "CAPACITY_AVAILABILITY"
+    AUTHORITY_GRANT = "AUTHORITY_GRANT"
+    POLICY_REEVALUATION = "POLICY_REEVALUATION"
+
+
+class TemporalWaitStatus(StrEnum):
+    WAITING = "WAITING"
+    SATISFIED = "SATISFIED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class TemporalDeadlockClassification(StrEnum):
+    NONE = "NONE"
+    POTENTIAL = "POTENTIAL"
+    SOFT = "SOFT"
+    HARD = "HARD"
+    SYSTEMIC = "SYSTEMIC"
+    UNKNOWN = "UNKNOWN"
+
+
+class TemporalDeadlockStatus(StrEnum):
+    DETECTED = "DETECTED"
+    CLASSIFYING = "CLASSIFYING"
+    CONFIRMED = "CONFIRMED"
+    RESOLUTION_PENDING = "RESOLUTION_PENDING"
+    RESOLVING = "RESOLVING"
+    VERIFYING = "VERIFYING"
+    RESOLVED = "RESOLVED"
+    RESOLUTION_FAILED = "RESOLUTION_FAILED"
+    ESCALATED = "ESCALATED"
+    DISMISSED = "DISMISSED"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    SUPERSEDED = "SUPERSEDED"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
+class TemporalDeadlockResolutionStrategy(StrEnum):
+    WAIT_FOR_EXTERNAL_PROGRESS = "WAIT_FOR_EXTERNAL_PROGRESS"
+    CANCEL_PARTICIPANT = "CANCEL_PARTICIPANT"
+    ABORT_PARTICIPANT = "ABORT_PARTICIPANT"
+    ROLLBACK_PARTICIPANT = "ROLLBACK_PARTICIPANT"
+    PREEMPT_RESOURCE = "PREEMPT_RESOURCE"
+    RELEASE_RESERVATION = "RELEASE_RESERVATION"
+    EXPIRE_LEASE = "EXPIRE_LEASE"
+    REVOKE_LOCK = "REVOKE_LOCK"
+    REORDER_EXECUTION = "REORDER_EXECUTION"
+    RETRY = "RETRY"
+    REPLAN = "REPLAN"
+    WAIVE_DEPENDENCY = "WAIVE_DEPENDENCY"
+    OVERRIDE_CONDITION = "OVERRIDE_CONDITION"
+    ESCALATE_FOR_AUTHORIZATION = "ESCALATE_FOR_AUTHORIZATION"
+    POLICY_REPAIR = "POLICY_REPAIR"
+    MANUAL_INTERVENTION = "MANUAL_INTERVENTION"
+    FAIL_WORKFLOW = "FAIL_WORKFLOW"
+    COMPENSATE_AND_RESTART = "COMPENSATE_AND_RESTART"
+
+
+class TemporalDeadlockResolutionResult(StrEnum):
+    RESOLVED = "RESOLVED"
+    FAILED = "FAILED"
+    PARTIALLY_RESOLVED = "PARTIALLY_RESOLVED"
+    ESCALATED = "ESCALATED"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -4041,6 +4119,178 @@ class AssuranceStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class TemporalWait:
+    id: str
+    waiter_ref: ObjectReference
+    waiting_for_ref: ObjectReference
+    dependency_type: TemporalWaitDependencyType
+    condition_ref: str
+    reason: str
+    started_at: datetime
+    deadline: datetime | None = None
+    status: TemporalWaitStatus = TemporalWaitStatus.WAITING
+    external_progress_possible: bool = False
+    evidence_refs: tuple[ObjectReference, ...] = ()
+    ended_at: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "waiter": {
+                "id": self.waiter_ref.id,
+                "revision": self.waiter_ref.revision,
+            },
+            "waitingFor": {
+                "id": self.waiting_for_ref.id,
+                "revision": self.waiting_for_ref.revision,
+            },
+            "dependency": {"type": self.dependency_type.value},
+            "conditionRef": self.condition_ref,
+            "reason": self.reason,
+            "startedAt": self.started_at.isoformat(),
+            "deadline": self.deadline.isoformat() if self.deadline is not None else None,
+            "status": self.status.value,
+            "externalProgressPossible": self.external_progress_possible,
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "endedAt": self.ended_at.isoformat() if self.ended_at is not None else None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalDeadlockCycleEdge:
+    wait_ref: str
+    waiter_ref: ObjectReference
+    waiting_for_ref: ObjectReference
+    dependency_type: TemporalWaitDependencyType
+    condition_ref: str
+    established_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "waitRef": self.wait_ref,
+            "waiter": {
+                "id": self.waiter_ref.id,
+                "revision": self.waiter_ref.revision,
+            },
+            "waitingFor": {
+                "id": self.waiting_for_ref.id,
+                "revision": self.waiting_for_ref.revision,
+            },
+            "dependencyType": self.dependency_type.value,
+            "conditionRef": self.condition_ref,
+            "establishedAt": self.established_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalDeadlockDetection:
+    id: str
+    detected_at: datetime
+    algorithm: str
+    candidate_cycle: tuple[str, ...]
+    determination: TemporalDeadlockClassification
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "detectedAt": self.detected_at.isoformat(),
+            "algorithm": self.algorithm,
+            "candidateCycle": list(self.candidate_cycle),
+            "determination": self.determination.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalDeadlock:
+    id: str
+    detection_ref: str
+    detected_at: datetime
+    participants: tuple[ObjectReference, ...]
+    cycle: tuple[TemporalDeadlockCycleEdge, ...]
+    classification: TemporalDeadlockClassification
+    severity: ViolationSeverity
+    status: TemporalDeadlockStatus
+    owner_ref: str
+    confidence: float
+    independent_progress_possible: bool
+    resolution_ref: str | None = None
+    victim_ref: ObjectReference | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "detectionRef": self.detection_ref,
+            "detectedAt": self.detected_at.isoformat(),
+            "participants": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.participants
+            ],
+            "cycle": [edge.canonical_document() for edge in self.cycle],
+            "classification": self.classification.value,
+            "severity": self.severity.value,
+            "status": self.status.value,
+            "ownerRef": self.owner_ref,
+            "confidence": self.confidence,
+            "independentProgressPossible": self.independent_progress_possible,
+            "resolutionRef": self.resolution_ref,
+            "victim": (
+                {
+                    "id": self.victim_ref.id,
+                    "revision": self.victim_ref.revision,
+                }
+                if self.victim_ref is not None
+                else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalDeadlockResolution:
+    id: str
+    deadlock_ref: str
+    strategy: TemporalDeadlockResolutionStrategy
+    result: TemporalDeadlockResolutionResult
+    resolved_by_ref: str
+    executed_at: datetime
+    evidence_refs: tuple[ObjectReference, ...]
+    released_wait_refs: tuple[str, ...] = ()
+    victim_ref: ObjectReference | None = None
+    verified_resolved: bool = False
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "deadlockRef": self.deadlock_ref,
+            "strategy": self.strategy.value,
+            "result": self.result.value,
+            "resolvedByRef": self.resolved_by_ref,
+            "executedAt": self.executed_at.isoformat(),
+            "evidence": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "releasedWaitRefs": list(self.released_wait_refs),
+            "victim": (
+                {
+                    "id": self.victim_ref.id,
+                    "revision": self.victim_ref.revision,
+                }
+                if self.victim_ref is not None
+                else None
+            ),
+            "verification": {
+                "cycleBroken": self.verified_resolved,
+                "result": "VERIFIED_RESOLVED"
+                if self.verified_resolved
+                else "NOT_VERIFIED",
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -4254,6 +4504,10 @@ class InMemoryUPDLRegistry:
         self._assurance_authorities: dict[str, AssuranceAuthority] = {}
         self._assurance_decisions: dict[str, AssuranceDecision] = {}
         self._assurance_statuses: dict[str, AssuranceStatus] = {}
+        self._temporal_waits: dict[str, TemporalWait] = {}
+        self._temporal_deadlock_detections: dict[str, TemporalDeadlockDetection] = {}
+        self._temporal_deadlocks: dict[str, TemporalDeadlock] = {}
+        self._temporal_deadlock_resolutions: dict[str, TemporalDeadlockResolution] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -4301,6 +4555,10 @@ class InMemoryUPDLRegistry:
         self._assurance_evaluation_sequence = 0
         self._assurance_decision_sequence = 0
         self._assurance_status_sequence = 0
+        self._temporal_wait_sequence = 0
+        self._temporal_deadlock_detection_sequence = 0
+        self._temporal_deadlock_sequence = 0
+        self._temporal_deadlock_resolution_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -6434,6 +6692,231 @@ class InMemoryUPDLRegistry:
         if status is None:
             raise RegistryError("ASSURANCE_STATUS_NOT_FOUND", status_id)
         return status
+
+    def record_temporal_wait(
+        self,
+        *,
+        waiter_ref: ObjectReference,
+        waiting_for_ref: ObjectReference,
+        dependency_type: TemporalWaitDependencyType,
+        condition_ref: str,
+        reason: str,
+        evidence_refs: tuple[ObjectReference, ...] = (),
+        deadline: datetime | None = None,
+        started_at: datetime | None = None,
+        external_progress_possible: bool = False,
+    ) -> TemporalWait:
+        waiter = self._resolve_required_reference(
+            waiter_ref,
+            "TEMPORAL_WAIT_WAITER_NOT_FOUND",
+        )
+        waiting_for = self._resolve_required_reference(
+            waiting_for_ref,
+            "TEMPORAL_WAIT_DEPENDENCY_NOT_FOUND",
+        )
+        if not condition_ref:
+            raise RegistryError("TEMPORAL_WAIT_CONDITION_REQUIRED", waiter.metadata.id)
+        if not reason:
+            raise RegistryError("TEMPORAL_WAIT_REASON_REQUIRED", waiter.metadata.id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "TEMPORAL_WAIT_EVIDENCE_INVALID",
+        )
+        effective_started_at = started_at or datetime.now(UTC)
+        if deadline is not None and deadline <= effective_started_at:
+            raise RegistryError("TEMPORAL_WAIT_DEADLINE_INVALID", waiter.metadata.id)
+        self._temporal_wait_sequence += 1
+        wait = TemporalWait(
+            id=f"TW-{self._temporal_wait_sequence:06d}",
+            waiter_ref=ObjectReference(
+                waiter.metadata.id,
+                revision=waiter.metadata.revision,
+            ),
+            waiting_for_ref=ObjectReference(
+                waiting_for.metadata.id,
+                revision=waiting_for.metadata.revision,
+            ),
+            dependency_type=dependency_type,
+            condition_ref=condition_ref,
+            reason=reason,
+            started_at=effective_started_at,
+            deadline=deadline,
+            external_progress_possible=external_progress_possible,
+            evidence_refs=resolved_evidence,
+        )
+        self._temporal_waits[wait.id] = wait
+        return wait
+
+    def close_temporal_wait(
+        self,
+        wait_id: str,
+        *,
+        status: TemporalWaitStatus = TemporalWaitStatus.SATISFIED,
+        ended_at: datetime | None = None,
+    ) -> TemporalWait:
+        wait = self._temporal_waits.get(wait_id)
+        if wait is None:
+            raise RegistryError("TEMPORAL_WAIT_NOT_FOUND", wait_id)
+        if status is TemporalWaitStatus.WAITING:
+            raise RegistryError("TEMPORAL_WAIT_CLOSE_STATUS_INVALID", wait_id)
+        updated = replace(
+            wait,
+            status=status,
+            ended_at=ended_at or datetime.now(UTC),
+        )
+        self._temporal_waits[wait.id] = updated
+        return updated
+
+    def detect_temporal_deadlocks(
+        self,
+        *,
+        owner_ref: str,
+        as_of: datetime | None = None,
+    ) -> tuple[TemporalDeadlock, ...]:
+        if not owner_ref:
+            raise RegistryError("TEMPORAL_DEADLOCK_OWNER_REQUIRED", "owner_ref")
+        evaluated_at = as_of or datetime.now(UTC)
+        cycles = self._temporal_wait_cycles(
+            self._active_temporal_waits(evaluated_at)
+        )
+        deadlocks: list[TemporalDeadlock] = []
+        for cycle in cycles:
+            independent_progress_possible = any(
+                wait.external_progress_possible for wait in cycle
+            )
+            classification = (
+                TemporalDeadlockClassification.SOFT
+                if independent_progress_possible
+                else TemporalDeadlockClassification.HARD
+            )
+            self._temporal_deadlock_detection_sequence += 1
+            detection = TemporalDeadlockDetection(
+                id=f"TDD-{self._temporal_deadlock_detection_sequence:06d}",
+                detected_at=evaluated_at,
+                algorithm="WAIT_GRAPH_CYCLE_ANALYSIS",
+                candidate_cycle=tuple(wait.id for wait in cycle),
+                determination=classification,
+            )
+            self._temporal_deadlock_detections[detection.id] = detection
+            participants = tuple(
+                ObjectReference(wait.waiter_ref.id, revision=wait.waiter_ref.revision)
+                for wait in cycle
+            )
+            self._temporal_deadlock_sequence += 1
+            deadlock = TemporalDeadlock(
+                id=f"TD-{self._temporal_deadlock_sequence:06d}",
+                detection_ref=detection.id,
+                detected_at=evaluated_at,
+                participants=participants,
+                cycle=self._temporal_deadlock_cycle_edges(cycle),
+                classification=classification,
+                severity=ViolationSeverity.MEDIUM
+                if independent_progress_possible
+                else ViolationSeverity.HIGH,
+                status=TemporalDeadlockStatus.CONFIRMED,
+                owner_ref=owner_ref,
+                confidence=0.75 if independent_progress_possible else 1.0,
+                independent_progress_possible=independent_progress_possible,
+            )
+            self._temporal_deadlocks[deadlock.id] = deadlock
+            deadlocks.append(deadlock)
+        return tuple(deadlocks)
+
+    def resolve_temporal_deadlock(
+        self,
+        *,
+        deadlock_id: str,
+        strategy: TemporalDeadlockResolutionStrategy,
+        resolved_by_ref: str,
+        evidence_refs: tuple[ObjectReference, ...],
+        released_wait_refs: tuple[str, ...] = (),
+        victim_ref: ObjectReference | None = None,
+        result: TemporalDeadlockResolutionResult = (
+            TemporalDeadlockResolutionResult.RESOLVED
+        ),
+        executed_at: datetime | None = None,
+    ) -> TemporalDeadlockResolution:
+        deadlock = self._temporal_deadlocks.get(deadlock_id)
+        if deadlock is None:
+            raise RegistryError("TEMPORAL_DEADLOCK_NOT_FOUND", deadlock_id)
+        if not resolved_by_ref:
+            raise RegistryError("TEMPORAL_DEADLOCK_AUTHORITY_REQUIRED", deadlock_id)
+        if not evidence_refs:
+            raise RegistryError("TEMPORAL_DEADLOCK_EVIDENCE_REQUIRED", deadlock_id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "TEMPORAL_DEADLOCK_EVIDENCE_REQUIRED",
+        )
+        cycle_wait_refs = {edge.wait_ref for edge in deadlock.cycle}
+        invalid_wait_refs = sorted(set(released_wait_refs) - cycle_wait_refs)
+        if invalid_wait_refs:
+            raise RegistryError(
+                "TEMPORAL_DEADLOCK_RESOLUTION_INVALID",
+                ",".join(invalid_wait_refs),
+            )
+        resolved_victim_ref: ObjectReference | None = None
+        if victim_ref is not None:
+            victim = self._resolve_required_reference(
+                victim_ref,
+                "TEMPORAL_DEADLOCK_VICTIM_NOT_ELIGIBLE",
+            )
+            participant_ids = {participant.id for participant in deadlock.participants}
+            if victim.metadata.id not in participant_ids:
+                raise RegistryError(
+                    "TEMPORAL_DEADLOCK_VICTIM_NOT_ELIGIBLE",
+                    victim.metadata.id,
+                )
+            resolved_victim_ref = ObjectReference(
+                victim.metadata.id,
+                revision=victim.metadata.revision,
+            )
+        for wait_ref in released_wait_refs:
+            self.close_temporal_wait(
+                wait_ref,
+                status=TemporalWaitStatus.CANCELLED,
+                ended_at=executed_at,
+            )
+        verified_resolved = not self._cycle_wait_refs_still_active(deadlock)
+        if result is TemporalDeadlockResolutionResult.RESOLVED and not verified_resolved:
+            raise RegistryError(
+                "TEMPORAL_DEADLOCK_RESOLUTION_NOT_VERIFIED",
+                deadlock_id,
+            )
+        self._temporal_deadlock_resolution_sequence += 1
+        resolution = TemporalDeadlockResolution(
+            id=f"TDR-{self._temporal_deadlock_resolution_sequence:06d}",
+            deadlock_ref=deadlock.id,
+            strategy=strategy,
+            result=result,
+            resolved_by_ref=resolved_by_ref,
+            executed_at=executed_at or datetime.now(UTC),
+            evidence_refs=resolved_evidence,
+            released_wait_refs=released_wait_refs,
+            victim_ref=resolved_victim_ref,
+            verified_resolved=verified_resolved,
+        )
+        self._temporal_deadlock_resolutions[resolution.id] = resolution
+        self._temporal_deadlocks[deadlock.id] = replace(
+            deadlock,
+            status=TemporalDeadlockStatus.RESOLVED
+            if verified_resolved
+            else TemporalDeadlockStatus.RESOLUTION_FAILED,
+            resolution_ref=resolution.id,
+            victim_ref=resolved_victim_ref,
+        )
+        return resolution
+
+    def get_temporal_wait(self, wait_id: str) -> TemporalWait:
+        wait = self._temporal_waits.get(wait_id)
+        if wait is None:
+            raise RegistryError("TEMPORAL_WAIT_NOT_FOUND", wait_id)
+        return wait
+
+    def get_temporal_deadlock(self, deadlock_id: str) -> TemporalDeadlock:
+        deadlock = self._temporal_deadlocks.get(deadlock_id)
+        if deadlock is None:
+            raise RegistryError("TEMPORAL_DEADLOCK_NOT_FOUND", deadlock_id)
+        return deadlock
 
     def evaluate_decision_obligations(
         self,
@@ -9068,6 +9551,69 @@ class InMemoryUPDLRegistry:
                 )
             )
         return tuple(resolved)
+
+    def _active_temporal_waits(self, as_of: datetime) -> tuple[TemporalWait, ...]:
+        return tuple(
+            wait
+            for wait in self._temporal_waits.values()
+            if wait.status is TemporalWaitStatus.WAITING and wait.started_at <= as_of
+        )
+
+    def _temporal_wait_cycles(
+        self,
+        waits: tuple[TemporalWait, ...],
+    ) -> tuple[tuple[TemporalWait, ...], ...]:
+        adjacency: dict[str, list[TemporalWait]] = {}
+        for wait in waits:
+            adjacency.setdefault(wait.waiter_ref.id, []).append(wait)
+        for wait_list in adjacency.values():
+            wait_list.sort(key=lambda item: (item.waiting_for_ref.id, item.id))
+        cycles: list[tuple[TemporalWait, ...]] = []
+        seen: set[tuple[str, ...]] = set()
+
+        def visit(
+            node_id: str,
+            path_nodes: tuple[str, ...],
+            path_waits: tuple[TemporalWait, ...],
+        ) -> None:
+            for wait in adjacency.get(node_id, []):
+                next_id = wait.waiting_for_ref.id
+                if next_id in path_nodes:
+                    start = path_nodes.index(next_id)
+                    cycle = path_waits[start:] + (wait,)
+                    key = tuple(sorted(edge.id for edge in cycle))
+                    if key not in seen:
+                        seen.add(key)
+                        cycles.append(cycle)
+                    continue
+                visit(next_id, path_nodes + (next_id,), path_waits + (wait,))
+
+        for node_id in sorted(adjacency):
+            visit(node_id, (node_id,), ())
+        return tuple(cycles)
+
+    def _temporal_deadlock_cycle_edges(
+        self,
+        cycle: tuple[TemporalWait, ...],
+    ) -> tuple[TemporalDeadlockCycleEdge, ...]:
+        return tuple(
+            TemporalDeadlockCycleEdge(
+                wait_ref=wait.id,
+                waiter_ref=wait.waiter_ref,
+                waiting_for_ref=wait.waiting_for_ref,
+                dependency_type=wait.dependency_type,
+                condition_ref=wait.condition_ref,
+                established_at=wait.started_at,
+            )
+            for wait in cycle
+        )
+
+    def _cycle_wait_refs_still_active(self, deadlock: TemporalDeadlock) -> bool:
+        return all(
+            (wait := self._temporal_waits.get(edge.wait_ref)) is not None
+            and wait.status is TemporalWaitStatus.WAITING
+            for edge in deadlock.cycle
+        )
 
     def _resolve_object_references(
         self,

@@ -137,6 +137,12 @@ from ai_enterprise.domain.updl_registry import (
     TaskLifecycleState,
     TaskOutputDefinition,
     TaskOutputSource,
+    TemporalDeadlockClassification,
+    TemporalDeadlockResolutionResult,
+    TemporalDeadlockResolutionStrategy,
+    TemporalDeadlockStatus,
+    TemporalWaitDependencyType,
+    TemporalWaitStatus,
     TransitionClassification,
     TypeDefinition,
     ViolationSeverity,
@@ -3263,6 +3269,200 @@ def test_updl_registry_assurance_status_expires_deterministically() -> None:
 
     assert expired[0].id == status.id
     assert registry.get_assurance_status(status.id).status is AssuranceStatusValue.EXPIRED
+
+
+def test_updl_registry_detects_hard_temporal_deadlock_cycle() -> None:
+    registry = _registry()
+    activity_a = _requirement(registry, "REQ-067", "Activity A waits on B.")
+    activity_b = _requirement(registry, "REQ-068", "Activity B waits on C.")
+    activity_c = _requirement(registry, "REQ-069", "Activity C waits on A.")
+    started_at = datetime(2026, 9, 20, 10, 14, tzinfo=UTC)
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_a.metadata.id),
+        waiting_for_ref=ObjectReference(activity_b.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-b.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_b.metadata.id),
+        waiting_for_ref=ObjectReference(activity_c.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-c.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_c.metadata.id),
+        waiting_for_ref=ObjectReference(activity_a.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-a.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+
+    deadlocks = registry.detect_temporal_deadlocks(
+        owner_ref="team.platform-governance",
+        as_of=started_at + timedelta(minutes=1),
+    )
+
+    assert len(deadlocks) == 1
+    deadlock = deadlocks[0]
+    assert deadlock.classification is TemporalDeadlockClassification.HARD
+    assert deadlock.severity is ViolationSeverity.HIGH
+    assert deadlock.status is TemporalDeadlockStatus.CONFIRMED
+    assert {participant.id for participant in deadlock.participants} == {
+        activity_a.metadata.id,
+        activity_b.metadata.id,
+        activity_c.metadata.id,
+    }
+    assert len(deadlock.cycle) == 3
+
+
+def test_updl_registry_classifies_soft_temporal_deadlock_with_escape_path() -> None:
+    registry = _registry()
+    activity_a = _requirement(registry, "REQ-070", "Activity A waits on B.")
+    activity_b = _requirement(registry, "REQ-071", "Activity B waits on A.")
+    started_at = datetime(2026, 9, 20, 10, 14, tzinfo=UTC)
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_a.metadata.id),
+        waiting_for_ref=ObjectReference(activity_b.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-b.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_b.metadata.id),
+        waiting_for_ref=ObjectReference(activity_a.metadata.id),
+        dependency_type=TemporalWaitDependencyType.EXTERNAL_RESPONSE,
+        condition_ref="condition.external-response.received",
+        reason="EXTERNAL_RESPONSE_PENDING",
+        started_at=started_at,
+        external_progress_possible=True,
+    )
+
+    deadlock = registry.detect_temporal_deadlocks(
+        owner_ref="team.platform-governance",
+        as_of=started_at + timedelta(minutes=1),
+    )[0]
+
+    assert deadlock.classification is TemporalDeadlockClassification.SOFT
+    assert deadlock.severity is ViolationSeverity.MEDIUM
+    assert deadlock.independent_progress_possible is True
+    assert deadlock.confidence == 0.75
+
+
+def test_updl_registry_verifies_deadlock_resolution_against_wait_graph() -> None:
+    registry = _registry()
+    activity_a = _requirement(registry, "REQ-072", "Activity A waits on B.")
+    activity_b = _requirement(registry, "REQ-073", "Activity B waits on C.")
+    activity_c = _requirement(registry, "REQ-074", "Activity C waits on A.")
+    evidence = _evidence(registry, "EVIDENCE-066", "DEADLOCK_RESOLUTION")
+    started_at = datetime(2026, 9, 20, 10, 14, tzinfo=UTC)
+    wait_ab = registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_a.metadata.id),
+        waiting_for_ref=ObjectReference(activity_b.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-b.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_b.metadata.id),
+        waiting_for_ref=ObjectReference(activity_c.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-c.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_c.metadata.id),
+        waiting_for_ref=ObjectReference(activity_a.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-a.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    deadlock = registry.detect_temporal_deadlocks(
+        owner_ref="team.platform-governance",
+        as_of=started_at + timedelta(minutes=1),
+    )[0]
+
+    try:
+        registry.resolve_temporal_deadlock(
+            deadlock_id=deadlock.id,
+            strategy=TemporalDeadlockResolutionStrategy.CANCEL_PARTICIPANT,
+            resolved_by_ref="authority.production-deadlock-resolution",
+            evidence_refs=(ObjectReference(evidence.metadata.id),),
+            victim_ref=ObjectReference(activity_c.metadata.id),
+        )
+    except RegistryError as exc:
+        assert exc.code == "TEMPORAL_DEADLOCK_RESOLUTION_NOT_VERIFIED"
+    else:
+        raise AssertionError("deadlock resolution succeeded without breaking the cycle")
+
+    resolution = registry.resolve_temporal_deadlock(
+        deadlock_id=deadlock.id,
+        strategy=TemporalDeadlockResolutionStrategy.CANCEL_PARTICIPANT,
+        resolved_by_ref="authority.production-deadlock-resolution",
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+        released_wait_refs=(wait_ab.id,),
+        victim_ref=ObjectReference(activity_c.metadata.id),
+        executed_at=started_at + timedelta(minutes=2),
+    )
+
+    assert resolution.result is TemporalDeadlockResolutionResult.RESOLVED
+    assert resolution.verified_resolved is True
+    assert (
+        registry.get_temporal_deadlock(deadlock.id).status
+        is TemporalDeadlockStatus.RESOLVED
+    )
+    assert registry.get_temporal_wait(wait_ab.id).status is TemporalWaitStatus.CANCELLED
+
+
+def test_updl_registry_rejects_temporal_deadlock_victim_outside_cycle() -> None:
+    registry = _registry()
+    activity_a = _requirement(registry, "REQ-075", "Activity A waits on B.")
+    activity_b = _requirement(registry, "REQ-076", "Activity B waits on A.")
+    activity_c = _requirement(registry, "REQ-077", "Activity C is unrelated.")
+    evidence = _evidence(registry, "EVIDENCE-067", "DEADLOCK_RESOLUTION")
+    started_at = datetime(2026, 9, 20, 10, 14, tzinfo=UTC)
+    wait_ab = registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_a.metadata.id),
+        waiting_for_ref=ObjectReference(activity_b.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-b.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    registry.record_temporal_wait(
+        waiter_ref=ObjectReference(activity_b.metadata.id),
+        waiting_for_ref=ObjectReference(activity_a.metadata.id),
+        dependency_type=TemporalWaitDependencyType.ACTIVITY_COMPLETION,
+        condition_ref="condition.activity-a.completed",
+        reason="DEPENDENCY_NOT_SATISFIED",
+        started_at=started_at,
+    )
+    deadlock = registry.detect_temporal_deadlocks(
+        owner_ref="team.platform-governance",
+        as_of=started_at + timedelta(minutes=1),
+    )[0]
+
+    try:
+        registry.resolve_temporal_deadlock(
+            deadlock_id=deadlock.id,
+            strategy=TemporalDeadlockResolutionStrategy.CANCEL_PARTICIPANT,
+            resolved_by_ref="authority.production-deadlock-resolution",
+            evidence_refs=(ObjectReference(evidence.metadata.id),),
+            released_wait_refs=(wait_ab.id,),
+            victim_ref=ObjectReference(activity_c.metadata.id),
+        )
+    except RegistryError as exc:
+        assert exc.code == "TEMPORAL_DEADLOCK_VICTIM_NOT_ELIGIBLE"
+    else:
+        raise AssertionError("deadlock victim outside the cycle was accepted")
 
 
 def test_updl_registry_combines_decision_policy_contributions_with_deny_overrides() -> None:
