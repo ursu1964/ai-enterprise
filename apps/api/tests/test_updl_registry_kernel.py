@@ -7,6 +7,10 @@ from ai_enterprise.domain.updl_registry import (
     ConstraintEvaluationResult,
     ConstraintRequirement,
     ConstraintViolationState,
+    ControlDefinition,
+    ControlEffectivenessResult,
+    ControlState,
+    ControlType,
     DecisionAdvice,
     DecisionConstraint,
     DecisionDefinition,
@@ -14,6 +18,7 @@ from ai_enterprise.domain.updl_registry import (
     DecisionEvaluationStatus,
     DecisionRequest,
     InMemoryUPDLRegistry,
+    LikelihoodType,
     NamespaceDefinition,
     ObjectReference,
     ObligationActivationOutcome,
@@ -47,6 +52,14 @@ from ai_enterprise.domain.updl_registry import (
     ReservationLifecycleState,
     ResolutionMode,
     ResolutionStatus,
+    RiskAcceptanceStatus,
+    RiskDefinition,
+    RiskDomain,
+    RiskLevel,
+    RiskLifecycleState,
+    RiskScenario,
+    RiskTreatmentStatus,
+    RiskTreatmentStrategy,
     SemanticConditionClause,
     SemanticConditionDefinition,
     StateDefinition,
@@ -1441,6 +1454,244 @@ def test_updl_registry_enforces_preemption_priority_delta() -> None:
     assert decision.reason_code == "PREEMPTION_PRIORITY_DELTA_INSUFFICIENT"
     assert decision.replacement_reservation_id is None
     assert registry.get_reservation(target.id).state is ReservationLifecycleState.ACTIVE
+
+
+def test_updl_registry_assesses_risk_with_dimensional_impact_and_controls() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-035",
+        spec={
+            "statement": "Payments API shall protect customer data.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    evidence = registry.create_object(
+        kind="Evidence",
+        namespace="commerce.orders",
+        local_id="EVIDENCE-035",
+        spec={
+            "evidence_type": "control-test",
+            "summary": "Phishing-resistant MFA configuration was verified.",
+        },
+        actor=_actor(),
+    )
+    registry.register_risk_definition(
+        RiskDefinition(
+            id="commerce.orders.risk-definition.customer-data-exposure",
+            name="customerDataExposure",
+            domain=RiskDomain.SECURITY,
+            subject_kinds=("Requirement",),
+            likelihood_model_ref="likelihood.enterprise.qualitative",
+            impact_model_ref="impact.enterprise.default",
+        )
+    )
+    registry.register_risk_scenario(
+        RiskScenario(
+            id="commerce.orders.risk-scenario.admin-compromise",
+            name="adminCompromise",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            threat_ref="threat.credential-theft",
+            vulnerability_ref="vulnerability.weak-admin-authentication",
+            adverse_outcome_ref="outcome.customer-data-exposed",
+        )
+    )
+    registry.register_control_definition(
+        ControlDefinition(
+            id="commerce.orders.control.admin-mfa",
+            name="adminMfa",
+            control_type=ControlType.PREVENTIVE,
+            applies_to_kinds=("Requirement",),
+            required_evidence=("control-test",),
+        )
+    )
+    control = registry.create_control_implementation(
+        definition_id="commerce.orders.control.admin-mfa",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        state=ControlState.ACTIVE,
+        effectiveness=ControlEffectivenessResult.EFFECTIVE,
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+    )
+    risk = registry.create_risk(
+        definition_id="commerce.orders.risk-definition.customer-data-exposure",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        scenario_id="commerce.orders.risk-scenario.admin-compromise",
+        accountable_ref="role.payments-risk-owner",
+    )
+
+    assessment = registry.assess_risk(
+        risk_id=risk.id,
+        likelihood_type=LikelihoodType.QUALITATIVE,
+        likelihood_level=RiskLevel.MEDIUM,
+        impact={
+            "security": RiskLevel.HIGH,
+            "regulatory": RiskLevel.CRITICAL,
+            "customer": RiskLevel.HIGH,
+        },
+        result_level=RiskLevel.CRITICAL,
+        confidence=RiskLevel.MEDIUM,
+        evidence_refs=(ObjectReference(evidence.metadata.id),),
+        control_refs=(control.id,),
+    )
+
+    assert risk.state is RiskLifecycleState.OPEN
+    assert assessment.result_level is RiskLevel.CRITICAL
+    assert assessment.impact["regulatory"] is RiskLevel.CRITICAL
+    assert assessment.control_refs == (control.id,)
+    assert assessment.proof["controls"][0]["effectiveness"] == "EFFECTIVE"
+    assert assessment.proof_hash.startswith("sha256:")
+    assert assessment.canonical_document()["impact"] == {
+        "customer": "HIGH",
+        "regulatory": "CRITICAL",
+        "security": "HIGH",
+    }
+
+
+def test_updl_registry_risk_treatment_does_not_change_current_assessment() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-036",
+        spec={
+            "statement": "Treatment plans shall not silently reduce risk.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.register_risk_definition(
+        RiskDefinition(
+            id="commerce.orders.risk-definition.outage",
+            name="serviceOutage",
+            domain=RiskDomain.OPERATIONAL,
+            subject_kinds=("Requirement",),
+            scenario_required=False,
+        )
+    )
+    risk = registry.create_risk(
+        definition_id="commerce.orders.risk-definition.outage",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        accountable_ref="role.service-owner",
+    )
+    assessment = registry.assess_risk(
+        risk_id=risk.id,
+        likelihood_level=RiskLevel.HIGH,
+        impact={"operational": RiskLevel.HIGH},
+        result_level=RiskLevel.HIGH,
+    )
+
+    plan = registry.create_risk_treatment_plan(
+        risk_id=risk.id,
+        strategy=RiskTreatmentStrategy.MITIGATE,
+        action_refs=("action.add-failover-capacity",),
+        target_level=RiskLevel.MEDIUM,
+    )
+
+    assert plan.status is RiskTreatmentStatus.NOT_STARTED
+    assert plan.target_level is RiskLevel.MEDIUM
+    assert assessment.result_level is RiskLevel.HIGH
+    assert registry.get_risk(risk.id).state is RiskLifecycleState.OPEN
+
+
+def test_updl_registry_accepts_risk_against_specific_assessment() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-037",
+        spec={
+            "statement": "Acceptance shall bind a concrete residual assessment.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.register_policy(
+        PolicyDefinition(
+            id="commerce.orders.POL-risk-acceptance",
+            revision=1,
+            effect=PolicyEffect.ALLOW,
+            actions=("ACCEPT_RISK",),
+            resource_kinds=("Requirement",),
+        )
+    )
+    registry.register_risk_definition(
+        RiskDefinition(
+            id="commerce.orders.risk-definition.supplier-outage",
+            name="supplierOutage",
+            domain=RiskDomain.SUPPLIER,
+            subject_kinds=("Requirement",),
+            scenario_required=False,
+            acceptance_policy_id="commerce.orders.POL-risk-acceptance",
+        )
+    )
+    risk = registry.create_risk(
+        definition_id="commerce.orders.risk-definition.supplier-outage",
+        subject_ref=ObjectReference(requirement.metadata.id),
+        accountable_ref="role.supplier-risk-owner",
+    )
+    assessment = registry.assess_risk(
+        risk_id=risk.id,
+        likelihood_level=RiskLevel.LOW,
+        impact={"operational": RiskLevel.MEDIUM},
+        result_level=RiskLevel.MEDIUM,
+    )
+
+    acceptance = registry.accept_risk(
+        risk_id=risk.id,
+        assessment_id=assessment.id,
+        accepted_by_ref="role.supplier-risk-owner",
+        rationale_code="TREATMENT_COST_NOT_JUSTIFIED",
+        valid_until=None,
+    )
+
+    assert acceptance.status is RiskAcceptanceStatus.ACTIVE
+    assert acceptance.assessment_id == assessment.id
+    assert acceptance.risk_id == risk.id
+    assert acceptance.proof["assessment"]["result"]["level"] == "MEDIUM"
+    assert acceptance.proof_hash.startswith("sha256:")
+
+
+def test_updl_registry_rejects_risk_without_required_scenario() -> None:
+    registry = _relationship_registry()
+    person = _person(registry)
+    requirement = registry.create_object(
+        kind="Requirement",
+        namespace="commerce.orders",
+        local_id="REQ-038",
+        spec={
+            "statement": "Scenario-required risks shall name a scenario.",
+            "priority": "MUST",
+            "owner": {"$ref": {"id": person.metadata.id}},
+        },
+        actor=_actor(),
+    )
+    registry.register_risk_definition(
+        RiskDefinition(
+            id="commerce.orders.risk-definition.privacy-exposure",
+            name="privacyExposure",
+            domain=RiskDomain.PRIVACY,
+            subject_kinds=("Requirement",),
+        )
+    )
+
+    try:
+        registry.create_risk(
+            definition_id="commerce.orders.risk-definition.privacy-exposure",
+            subject_ref=ObjectReference(requirement.metadata.id),
+            accountable_ref="role.privacy-owner",
+        )
+    except RegistryError as exc:
+        assert exc.code == "RISK_SCENARIO_REQUIRED"
+    else:
+        raise AssertionError("risk without required scenario was accepted")
 
 
 def test_updl_registry_defers_decisions_when_required_condition_is_unknown() -> None:

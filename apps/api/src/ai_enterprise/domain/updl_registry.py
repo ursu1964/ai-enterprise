@@ -293,6 +293,97 @@ class PreemptionEffect(StrEnum):
     INDETERMINATE = "INDETERMINATE"
 
 
+class RiskDomain(StrEnum):
+    SECURITY = "SECURITY"
+    PRIVACY = "PRIVACY"
+    OPERATIONAL = "OPERATIONAL"
+    FINANCIAL = "FINANCIAL"
+    LEGAL = "LEGAL"
+    REGULATORY = "REGULATORY"
+    SAFETY = "SAFETY"
+    MODEL = "MODEL"
+    SUPPLIER = "SUPPLIER"
+    STRATEGIC = "STRATEGIC"
+    REPUTATIONAL = "REPUTATIONAL"
+
+
+class RiskLifecycleState(StrEnum):
+    IDENTIFIED = "IDENTIFIED"
+    ASSESSING = "ASSESSING"
+    OPEN = "OPEN"
+    TREATING = "TREATING"
+    MONITORING = "MONITORING"
+    CLOSED = "CLOSED"
+    DEFERRED = "DEFERRED"
+    TRANSFERRED = "TRANSFERRED"
+    INVALIDATED = "INVALIDATED"
+
+
+class RiskLevel(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+    UNKNOWN = "UNKNOWN"
+
+
+class LikelihoodType(StrEnum):
+    QUALITATIVE = "QUALITATIVE"
+    PROBABILITY = "PROBABILITY"
+    FREQUENCY = "FREQUENCY"
+
+
+class ControlType(StrEnum):
+    PREVENTIVE = "PREVENTIVE"
+    DETECTIVE = "DETECTIVE"
+    CORRECTIVE = "CORRECTIVE"
+    RECOVERY = "RECOVERY"
+    COMPENSATING = "COMPENSATING"
+    DETERRENT = "DETERRENT"
+
+
+class ControlState(StrEnum):
+    PLANNED = "PLANNED"
+    ACTIVE = "ACTIVE"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+    SUSPENDED = "SUSPENDED"
+    RETIRED = "RETIRED"
+
+
+class ControlEffectivenessResult(StrEnum):
+    EFFECTIVE = "EFFECTIVE"
+    PARTIALLY_EFFECTIVE = "PARTIALLY_EFFECTIVE"
+    INEFFECTIVE = "INEFFECTIVE"
+    NOT_TESTED = "NOT_TESTED"
+    UNKNOWN = "UNKNOWN"
+
+
+class RiskTreatmentStrategy(StrEnum):
+    AVOID = "AVOID"
+    MITIGATE = "MITIGATE"
+    TRANSFER = "TRANSFER"
+    ACCEPT = "ACCEPT"
+    SHARE = "SHARE"
+    MONITOR = "MONITOR"
+
+
+class RiskTreatmentStatus(StrEnum):
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    BLOCKED = "BLOCKED"
+    COMPLETED = "COMPLETED"
+    VERIFIED = "VERIFIED"
+    FAILED = "FAILED"
+
+
+class RiskAcceptanceStatus(StrEnum):
+    REQUESTED = "REQUESTED"
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    REVOKED = "REVOKED"
+
+
 @dataclass(frozen=True, slots=True)
 class ActorReference:
     id: str
@@ -575,6 +666,97 @@ class PreemptionDefinition:
             "compensation": {"required": self.compensation_required},
             "evidence": {"required": list(self.required_evidence)},
             "priorityDelta": {"minimum": self.minimum_priority_delta},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RiskDefinition:
+    id: str
+    name: str
+    domain: RiskDomain
+    subject_kinds: tuple[str, ...]
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    scenario_required: bool = True
+    likelihood_model_ref: str | None = None
+    impact_model_ref: str | None = None
+    treatment_definition_ref: str | None = None
+    acceptance_policy_id: str | None = None
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "domain": self.domain.value,
+            "subjectKinds": list(self.subject_kinds),
+            "scenarios": {"required": self.scenario_required},
+            "assessment": {
+                "likelihood": {"ref": self.likelihood_model_ref},
+                "impact": {"ref": self.impact_model_ref},
+            },
+            "treatment": {"ref": self.treatment_definition_ref},
+            "acceptance": {"policyRef": self.acceptance_policy_id},
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RiskScenario:
+    id: str
+    name: str
+    subject_ref: ObjectReference
+    adverse_outcome_ref: str
+    threat_ref: str | None = None
+    vulnerability_ref: str | None = None
+    source_ref: str | None = None
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "sourceRef": self.source_ref,
+            "threatRef": self.threat_ref,
+            "vulnerabilityRef": self.vulnerability_ref,
+            "adverseOutcomeRef": self.adverse_outcome_ref,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ControlDefinition:
+    id: str
+    name: str
+    control_type: ControlType
+    applies_to_kinds: tuple[str, ...]
+    version: str = "1.0.0"
+    status: str = "ACTIVE"
+    required_evidence: tuple[str, ...] = ()
+    objective_ref: str | None = None
+    description: str | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "status": self.status,
+            "description": self.description,
+            "objectiveRef": self.objective_ref,
+            "controlType": self.control_type.value,
+            "appliesToKinds": list(self.applies_to_kinds),
+            "evidence": {"required": list(self.required_evidence)},
         }
 
 
@@ -1565,6 +1747,164 @@ class PreemptionDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class RiskInstance:
+    id: str
+    definition_id: str
+    definition_version: str
+    subject_ref: ObjectReference
+    scenario_id: str | None
+    accountable_ref: str
+    state: RiskLifecycleState
+    created_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "scenarioRef": self.scenario_id,
+            "accountableRef": self.accountable_ref,
+            "state": self.state.value,
+            "createdAt": self.created_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ControlImplementation:
+    id: str
+    definition_id: str
+    definition_version: str
+    subject_ref: ObjectReference
+    state: ControlState
+    effectiveness: ControlEffectivenessResult
+    evidence_refs: tuple[ObjectReference, ...]
+    created_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "definition": {
+                "id": self.definition_id,
+                "version": self.definition_version,
+            },
+            "subject": {
+                "id": self.subject_ref.id,
+                "revision": self.subject_ref.revision,
+            },
+            "state": self.state.value,
+            "effectiveness": self.effectiveness.value,
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "createdAt": self.created_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RiskAssessment:
+    id: str
+    risk_id: str
+    as_of: datetime
+    likelihood_type: LikelihoodType
+    likelihood_level: RiskLevel
+    impact: dict[str, RiskLevel]
+    result_level: RiskLevel
+    confidence: RiskLevel
+    evidence_refs: tuple[ObjectReference, ...]
+    control_refs: tuple[str, ...]
+    proof: dict[str, Any]
+    proof_hash: str
+    assessed_at: datetime
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "riskRef": self.risk_id,
+            "asOf": self.as_of.isoformat(),
+            "likelihood": {
+                "type": self.likelihood_type.value,
+                "level": self.likelihood_level.value,
+            },
+            "impact": {
+                dimension: level.value for dimension, level in sorted(self.impact.items())
+            },
+            "result": {"level": self.result_level.value},
+            "confidence": {"level": self.confidence.value},
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in self.evidence_refs
+            ],
+            "controlRefs": list(self.control_refs),
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+            "assessedAt": self.assessed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RiskTreatmentPlan:
+    id: str
+    risk_id: str
+    strategy: RiskTreatmentStrategy
+    action_refs: tuple[str, ...]
+    target_level: RiskLevel
+    status: RiskTreatmentStatus
+    created_at: datetime
+    deadline_at: datetime | None = None
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "riskRef": self.risk_id,
+            "strategy": self.strategy.value,
+            "actionRefs": list(self.action_refs),
+            "targetRisk": {"level": self.target_level.value},
+            "status": self.status.value,
+            "deadlineAt": (
+                self.deadline_at.isoformat() if self.deadline_at is not None else None
+            ),
+            "createdAt": self.created_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RiskAcceptance:
+    id: str
+    risk_id: str
+    assessment_id: str
+    accepted_by_ref: str
+    status: RiskAcceptanceStatus
+    rationale_code: str
+    accepted_at: datetime
+    valid_until: datetime | None
+    proof: dict[str, Any]
+    proof_hash: str
+
+    def canonical_document(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "riskRef": self.risk_id,
+            "assessmentRef": self.assessment_id,
+            "acceptedByRef": self.accepted_by_ref,
+            "status": self.status.value,
+            "rationale": {"code": self.rationale_code},
+            "acceptedAt": self.accepted_at.isoformat(),
+            "validUntil": (
+                self.valid_until.isoformat() if self.valid_until is not None else None
+            ),
+            "proof": self.proof,
+            "proofHash": self.proof_hash,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StateTransitionFinding:
     code: str
     message: str
@@ -1729,6 +2069,14 @@ class InMemoryUPDLRegistry:
         self._reservations: dict[str, ReservationInstance] = {}
         self._preemption_definitions: dict[str, PreemptionDefinition] = {}
         self._preemption_decisions: dict[str, PreemptionDecision] = {}
+        self._risk_definitions: dict[str, RiskDefinition] = {}
+        self._risk_scenarios: dict[str, RiskScenario] = {}
+        self._risks: dict[str, RiskInstance] = {}
+        self._control_definitions: dict[str, ControlDefinition] = {}
+        self._control_implementations: dict[str, ControlImplementation] = {}
+        self._risk_assessments: dict[str, RiskAssessment] = {}
+        self._risk_treatment_plans: dict[str, RiskTreatmentPlan] = {}
+        self._risk_acceptances: dict[str, RiskAcceptance] = {}
         self._decisions: dict[str, DecisionDefinition] = {}
         self._obligation_definitions: dict[str, ObligationDefinition] = {}
         self._obligation_instances: dict[str, ObligationInstance] = {}
@@ -1745,6 +2093,11 @@ class InMemoryUPDLRegistry:
         self._plan_sequence = 0
         self._reservation_sequence = 0
         self._preemption_decision_sequence = 0
+        self._risk_sequence = 0
+        self._control_implementation_sequence = 0
+        self._risk_assessment_sequence = 0
+        self._risk_treatment_sequence = 0
+        self._risk_acceptance_sequence = 0
 
     def register_type(self, definition: TypeDefinition) -> None:
         if not definition.kind_name:
@@ -2139,6 +2492,291 @@ class InMemoryUPDLRegistry:
             preemption_decision_id=decision.id,
         )
         return decision
+
+    def register_risk_definition(self, definition: RiskDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("RISK_DEFINITION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("RISK_DEFINITION_STATUS_INVALID", definition.status)
+        if not definition.subject_kinds:
+            raise RegistryError("RISK_SUBJECT_KIND_REQUIRED", definition.id)
+        for kind in definition.subject_kinds:
+            if kind not in self._types:
+                raise RegistryError("RISK_SUBJECT_KIND_UNKNOWN", kind)
+        if (
+            definition.acceptance_policy_id is not None
+            and definition.acceptance_policy_id not in self._policies
+        ):
+            raise RegistryError("RISK_ACCEPTANCE_POLICY_UNKNOWN", definition.id)
+        self._risk_definitions[definition.id] = definition
+
+    def register_risk_scenario(self, scenario: RiskScenario) -> None:
+        require_identifier(scenario.id)
+        if not scenario.name:
+            raise RegistryError("RISK_SCENARIO_NAME_REQUIRED", scenario.id)
+        if scenario.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("RISK_SCENARIO_STATUS_INVALID", scenario.status)
+        if not scenario.adverse_outcome_ref:
+            raise RegistryError("RISK_SCENARIO_OUTCOME_REQUIRED", scenario.id)
+        resolved = self.resolve_reference(scenario.subject_ref)
+        if resolved.status is not ResolutionStatus.RESOLVED or resolved.resolved is None:
+            raise RegistryError(resolved.status.value, scenario.subject_ref.id)
+        self._risk_scenarios[scenario.id] = replace(
+            scenario,
+            subject_ref=ObjectReference(
+                resolved.resolved.metadata.id,
+                revision=resolved.resolved.metadata.revision,
+            ),
+        )
+
+    def register_control_definition(self, definition: ControlDefinition) -> None:
+        require_identifier(definition.id)
+        if not definition.name:
+            raise RegistryError("CONTROL_DEFINITION_NAME_REQUIRED", definition.id)
+        if definition.status not in {"ACTIVE", "DRAFT", "DEPRECATED", "RETIRED"}:
+            raise RegistryError("CONTROL_DEFINITION_STATUS_INVALID", definition.status)
+        if not definition.applies_to_kinds:
+            raise RegistryError("CONTROL_APPLIES_TO_KIND_REQUIRED", definition.id)
+        for kind in definition.applies_to_kinds:
+            if kind not in self._types:
+                raise RegistryError("CONTROL_APPLIES_TO_KIND_UNKNOWN", kind)
+        self._control_definitions[definition.id] = definition
+
+    def create_control_implementation(
+        self,
+        *,
+        definition_id: str,
+        subject_ref: ObjectReference,
+        state: ControlState = ControlState.PLANNED,
+        effectiveness: ControlEffectivenessResult = ControlEffectivenessResult.NOT_TESTED,
+        evidence_refs: tuple[ObjectReference, ...] = (),
+    ) -> ControlImplementation:
+        definition = self._control_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("CONTROL_DEFINITION_NOT_FOUND", definition_id)
+        if definition.status != "ACTIVE":
+            raise RegistryError("CONTROL_DEFINITION_INACTIVE", definition_id)
+        subject = self.resolve_reference(subject_ref)
+        if subject.status is not ResolutionStatus.RESOLVED or subject.resolved is None:
+            raise RegistryError(subject.status.value, subject_ref.id)
+        if subject.resolved.kind not in definition.applies_to_kinds:
+            raise RegistryError("CONTROL_SUBJECT_KIND_INVALID", subject.resolved.kind)
+        if len(evidence_refs) < len(definition.required_evidence):
+            raise RegistryError("CONTROL_EVIDENCE_INCOMPLETE", definition.id)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "CONTROL_EVIDENCE_INVALID",
+        )
+        self._control_implementation_sequence += 1
+        implementation = ControlImplementation(
+            id=f"CTRL-{self._control_implementation_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            subject_ref=ObjectReference(
+                subject.resolved.metadata.id,
+                revision=subject.resolved.metadata.revision,
+            ),
+            state=state,
+            effectiveness=effectiveness,
+            evidence_refs=resolved_evidence,
+            created_at=datetime.now(UTC),
+        )
+        self._control_implementations[implementation.id] = implementation
+        return implementation
+
+    def create_risk(
+        self,
+        *,
+        definition_id: str,
+        subject_ref: ObjectReference,
+        accountable_ref: str,
+        scenario_id: str | None = None,
+        state: RiskLifecycleState = RiskLifecycleState.OPEN,
+    ) -> RiskInstance:
+        definition = self._risk_definitions.get(definition_id)
+        if definition is None:
+            raise RegistryError("RISK_DEFINITION_NOT_FOUND", definition_id)
+        if definition.status != "ACTIVE":
+            raise RegistryError("RISK_DEFINITION_INACTIVE", definition_id)
+        if not accountable_ref:
+            raise RegistryError("RISK_ACCOUNTABLE_REQUIRED", definition_id)
+        subject = self.resolve_reference(subject_ref)
+        if subject.status is not ResolutionStatus.RESOLVED or subject.resolved is None:
+            raise RegistryError(subject.status.value, subject_ref.id)
+        if subject.resolved.kind not in definition.subject_kinds:
+            raise RegistryError("RISK_SUBJECT_KIND_INVALID", subject.resolved.kind)
+        if definition.scenario_required and scenario_id is None:
+            raise RegistryError("RISK_SCENARIO_REQUIRED", definition_id)
+        if scenario_id is not None:
+            scenario = self._risk_scenarios.get(scenario_id)
+            if scenario is None:
+                raise RegistryError("RISK_SCENARIO_NOT_FOUND", scenario_id)
+            if scenario.status != "ACTIVE":
+                raise RegistryError("RISK_SCENARIO_INACTIVE", scenario_id)
+            if scenario.subject_ref.id != subject.resolved.metadata.id:
+                raise RegistryError("RISK_SCENARIO_SUBJECT_MISMATCH", scenario_id)
+        self._risk_sequence += 1
+        risk = RiskInstance(
+            id=f"RISK-{self._risk_sequence:06d}",
+            definition_id=definition.id,
+            definition_version=definition.version,
+            subject_ref=ObjectReference(
+                subject.resolved.metadata.id,
+                revision=subject.resolved.metadata.revision,
+            ),
+            scenario_id=scenario_id,
+            accountable_ref=accountable_ref,
+            state=state,
+            created_at=datetime.now(UTC),
+        )
+        self._risks[risk.id] = risk
+        return risk
+
+    def get_risk(self, risk_id: str) -> RiskInstance:
+        risk = self._risks.get(risk_id)
+        if risk is None:
+            raise RegistryError("RISK_NOT_FOUND", risk_id)
+        return risk
+
+    def assess_risk(
+        self,
+        *,
+        risk_id: str,
+        likelihood_level: RiskLevel,
+        impact: dict[str, RiskLevel],
+        result_level: RiskLevel,
+        confidence: RiskLevel = RiskLevel.MEDIUM,
+        likelihood_type: LikelihoodType = LikelihoodType.QUALITATIVE,
+        evidence_refs: tuple[ObjectReference, ...] = (),
+        control_refs: tuple[str, ...] = (),
+        as_of: datetime | None = None,
+    ) -> RiskAssessment:
+        risk = self.get_risk(risk_id)
+        if not impact:
+            raise RegistryError("RISK_IMPACT_REQUIRED", risk_id)
+        for control_ref in control_refs:
+            if control_ref not in self._control_implementations:
+                raise RegistryError("RISK_CONTROL_NOT_FOUND", control_ref)
+        resolved_evidence = self._resolve_object_references(
+            evidence_refs,
+            "RISK_EVIDENCE_INVALID",
+        )
+        assessed_at = datetime.now(UTC)
+        effective_as_of = as_of or assessed_at
+        controls = tuple(self._control_implementations[ref] for ref in control_refs)
+        proof = {
+            "risk": risk.canonical_document(),
+            "likelihood": {
+                "type": likelihood_type.value,
+                "level": likelihood_level.value,
+            },
+            "impact": {
+                dimension: level.value for dimension, level in sorted(impact.items())
+            },
+            "result": {"level": result_level.value},
+            "confidence": {"level": confidence.value},
+            "evidenceRefs": [
+                {"id": reference.id, "revision": reference.revision}
+                for reference in resolved_evidence
+            ],
+            "controls": [control.canonical_document() for control in controls],
+            "asOf": effective_as_of.isoformat(),
+        }
+        self._risk_assessment_sequence += 1
+        assessment = RiskAssessment(
+            id=f"RA-{self._risk_assessment_sequence:06d}",
+            risk_id=risk.id,
+            as_of=effective_as_of,
+            likelihood_type=likelihood_type,
+            likelihood_level=likelihood_level,
+            impact=dict(sorted(impact.items())),
+            result_level=result_level,
+            confidence=confidence,
+            evidence_refs=resolved_evidence,
+            control_refs=control_refs,
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+            assessed_at=assessed_at,
+        )
+        self._risk_assessments[assessment.id] = assessment
+        return assessment
+
+    def create_risk_treatment_plan(
+        self,
+        *,
+        risk_id: str,
+        strategy: RiskTreatmentStrategy,
+        action_refs: tuple[str, ...],
+        target_level: RiskLevel,
+        deadline_at: datetime | None = None,
+    ) -> RiskTreatmentPlan:
+        self.get_risk(risk_id)
+        if strategy in {
+            RiskTreatmentStrategy.AVOID,
+            RiskTreatmentStrategy.MITIGATE,
+            RiskTreatmentStrategy.TRANSFER,
+            RiskTreatmentStrategy.SHARE,
+        } and not action_refs:
+            raise RegistryError("RISK_TREATMENT_ACTION_REQUIRED", risk_id)
+        self._risk_treatment_sequence += 1
+        plan = RiskTreatmentPlan(
+            id=f"RTP-{self._risk_treatment_sequence:06d}",
+            risk_id=risk_id,
+            strategy=strategy,
+            action_refs=action_refs,
+            target_level=target_level,
+            status=RiskTreatmentStatus.NOT_STARTED,
+            deadline_at=deadline_at,
+            created_at=datetime.now(UTC),
+        )
+        self._risk_treatment_plans[plan.id] = plan
+        return plan
+
+    def accept_risk(
+        self,
+        *,
+        risk_id: str,
+        assessment_id: str,
+        accepted_by_ref: str,
+        rationale_code: str,
+        valid_until: datetime | None,
+    ) -> RiskAcceptance:
+        risk = self.get_risk(risk_id)
+        assessment = self._risk_assessments.get(assessment_id)
+        if assessment is None:
+            raise RegistryError("RISK_ASSESSMENT_NOT_FOUND", assessment_id)
+        if assessment.risk_id != risk.id:
+            raise RegistryError("RISK_ACCEPTANCE_ASSESSMENT_MISMATCH", assessment_id)
+        if not accepted_by_ref:
+            raise RegistryError("RISK_ACCEPTANCE_ACTOR_REQUIRED", risk_id)
+        if not rationale_code:
+            raise RegistryError("RISK_ACCEPTANCE_RATIONALE_REQUIRED", risk_id)
+        accepted_at = datetime.now(UTC)
+        proof = {
+            "risk": risk.canonical_document(),
+            "assessment": assessment.canonical_document(),
+            "acceptedByRef": accepted_by_ref,
+            "rationale": {"code": rationale_code},
+            "validUntil": (
+                valid_until.isoformat() if valid_until is not None else None
+            ),
+        }
+        self._risk_acceptance_sequence += 1
+        acceptance = RiskAcceptance(
+            id=f"RAC-{self._risk_acceptance_sequence:06d}",
+            risk_id=risk.id,
+            assessment_id=assessment.id,
+            accepted_by_ref=accepted_by_ref,
+            status=RiskAcceptanceStatus.ACTIVE,
+            rationale_code=rationale_code,
+            accepted_at=accepted_at,
+            valid_until=valid_until,
+            proof=proof,
+            proof_hash=f"sha256:{specification_hash(proof)}",
+        )
+        self._risk_acceptances[acceptance.id] = acceptance
+        return acceptance
 
     def evaluate_decision_obligations(
         self,
@@ -4464,6 +5102,26 @@ class InMemoryUPDLRegistry:
                         resolution.resolved.metadata.id,
                         revision=resolution.resolved.metadata.revision,
                     ),
+                )
+            )
+        return tuple(resolved)
+
+    def _resolve_object_references(
+        self,
+        references: tuple[ObjectReference, ...],
+        error_code: str,
+    ) -> tuple[ObjectReference, ...]:
+        resolved: list[ObjectReference] = []
+        for reference in references:
+            resolution = self.resolve_reference(reference)
+            if resolution.status is not ResolutionStatus.RESOLVED:
+                raise RegistryError(error_code, f"{reference.id}: {resolution.code}")
+            if resolution.resolved is None:
+                raise RegistryError(error_code, reference.id)
+            resolved.append(
+                ObjectReference(
+                    resolution.resolved.metadata.id,
+                    revision=resolution.resolved.metadata.revision,
                 )
             )
         return tuple(resolved)

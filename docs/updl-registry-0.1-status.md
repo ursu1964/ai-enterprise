@@ -68,6 +68,13 @@ Implemented scope:
   structural eligibility checks, priority-delta enforcement, optional condition
   evaluation, immutable PreemptionDecision proof records, and atomic transition
   from target `ACTIVE` to `PREEMPTED` with a replacement `ACTIVE` reservation.
+- RiskDefinition, RiskScenario, RiskInstance, ControlDefinition,
+  ControlImplementation, RiskAssessment, RiskTreatmentPlan, and RiskAcceptance
+  support for governed risk semantics, including domain and lifecycle
+  taxonomies, subject/scenario binding, control evidence and effectiveness,
+  multidimensional impact preservation, confidence, proof hashes, treatment
+  plans that do not silently reduce current risk, and acceptance records bound
+  to a concrete assessment.
 - DecisionDefinition registration for explicit governed decisions over a
   resource action, required conditions, selected policies, and a declared
   combining algorithm, with optional constraints, advice, and validity windows.
@@ -130,6 +137,11 @@ Intentionally deferred:
   semantic locks, fencing tokens, conflict sets, preemption impact graphs,
   starvation prevention, compensation workflows, break-glass preemption review,
   and scheduler/runtime integration.
+- Full RiskDomain/RiskLevel model registration, threat/hazard/vulnerability
+  primitives, quantitative likelihood/frequency distributions, risk matrices,
+  portfolio aggregation, correlated/common-cause risk graphs, risk limit
+  monitoring, risk appetite/tolerance/threshold enforcement, material-change
+  revalidation, and authority-engine integration for risk acceptance ceilings.
 - Full decision domains, decision persistence, decision audit events, human
   approval/escalation, conflict objects, policy applicability records, reusable
   decision snapshots, and action/state/reaction enforcement integration.

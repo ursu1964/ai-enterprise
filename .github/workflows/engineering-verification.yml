@@ -16,6 +16,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install application and verification dependencies
+        run: |
+          python -m pip install --upgrade "pip>=25.1"
+          python -m pip install -e ./apps/api
+          python -m pip install --group './apps/api/pyproject.toml:dev'
       - name: Static specification, contract, consistency, and determinism gates
         run: python tools/engineering_verify.py --static --json
       - name: Governed enterprise evolution assessment
@@ -26,14 +33,10 @@ jobs:
         run: python tools/intelligence_verify.py --json
       - name: Tooling invariants
         run: python tools/check_tooling_invariants.py
-      - name: Install application and verification dependencies
-        run: pip install -e ./apps/api pytest pytest-asyncio ruff==0.16.1 mypy psycopg[binary]
       - name: Full continuous engineering verification
         run: python tools/engineering_verify.py --full --json
       - name: Install Chromium journey runtime
-        run: |
-          pip install playwright==1.54.0
-          playwright install --with-deps chromium
+        run: python -m playwright install --with-deps chromium
       - name: Start dashboard stack
         run: |
           cp .env.example .env
