@@ -58,9 +58,33 @@ jobs:
       - name: Start dashboard stack
         run: |
           cp .env.example .env
-          POSTGRES_HOST_PORT=15432 REPOSITORY_ALLOWED_ROOT="$GITHUB_WORKSPACE" docker compose up --build -d api
+          POSTGRES_HOST_PORT=15432 \
+            REPOSITORY_ALLOWED_ROOT="$GITHUB_WORKSPACE" \
+            HOST_UID="$(id -u)" \
+            HOST_GID="$(id -g)" \
+            docker compose up --build -d api
+      - name: Wait for dashboard stack
+        run: |
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:8000/health/live; then
+              docker compose ps
+              exit 0
+            fi
+            docker compose ps
+            sleep 5
+          done
+          mkdir -p artifacts/browser
+          docker compose ps > artifacts/browser/docker-compose-ps.txt || true
+          docker compose logs --no-color --tail=300 api postgres migrate runtime-init > artifacts/browser/docker-compose.log || true
+          exit 1
       - name: Browser dashboard journeys
-        run: python tools/dashboard_browser_verify.py
+        run: python tools/dashboard_browser_verify.py --timeout-ms 30000
+      - name: Preserve dashboard stack failure evidence
+        if: failure()
+        run: |
+          mkdir -p artifacts/browser
+          docker compose ps > artifacts/browser/docker-compose-ps.txt || true
+          docker compose logs --no-color --tail=300 api postgres migrate runtime-init > artifacts/browser/docker-compose.log || true
       - name: Preserve browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
